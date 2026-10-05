@@ -1,0 +1,56 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Environment and status
+.env
+.env.*
+!.env.example
+status.json
+supabase/.env
+supabase/.env.*
+!supabase/.env.example
+.pres-*.json
+.pres-*
+
+# Production data snapshots (Phase 0 integrity backups).
+# These contain real user rows and must never leave this machine.
+snapshots/
+/snapshots/
+*.sql.bak
+*.dump
+scripts/.db-snapshot-*.json
+
+# Local UX research/audit working documents (not part of the codebase).
+UX_RESEARCH_PROMPT.md
+UX_UI_FULL_AUDIT.md
+UX_BEST_PRACTICE_RECOMMENDATIONS.md
+UX_IMPLEMENTATION_PLAN.md

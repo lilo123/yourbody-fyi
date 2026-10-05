@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" sizes="180x180" />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Yourbody.fyi" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Yourbody.fyi | Fitness & Nutrition</title>
+
+    <!-- Supabase Origin Resource Hints (Environment-Aware) -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_SUPABASE_URL%" />
+    <script>
+      (function () {
+        var preconnect = document.querySelector('link[rel="preconnect"]');
+        var dnsPrefetch = document.querySelector('link[rel="dns-prefetch"]');
+        [preconnect, dnsPrefetch].forEach(function (el) {
+          if (el) {
+            var href = el.getAttribute('href');
+            if (!href || href.startsWith('%') || href === 'undefined' || href === 'null') {
+              el.remove();
+            }
+          }
+        });
+      })();
+    </script>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100 antialiased selection:bg-cyan-500/20 selection:text-cyan-300">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

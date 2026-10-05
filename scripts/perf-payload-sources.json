@@ -1,0 +1,48 @@
+{
+  "_comment": [
+    "The set of non-test source files whose contents determine how many",
+    "bytes a route pulls from PostgREST. docs/perf-trace-results.json records a",
+    "fingerprint over exactly these files at measurement time; scripts/verify-perf-artifact.js",
+    "recomputes it at verification time and FAILS CLOSED when they differ.",
+    "",
+    "This exists because the committed artifact was found to be a recording of REVERTED",
+    "code: it contained `sets.limit=50` and `limit=25` (the rejected Defects 2 and 3),",
+    "which the source can no longer emit, and the verification command read it and",
+    "returned EXIT 0 while two routes were live over the ceiling.",
+    "",
+    "Add a file here whenever a new query starts contributing to a measured route."
+  ],
+  "ceilingBytes": 153600,
+  "requiredRoutes": [
+    "workout_seeded",
+    "nutrition",
+    "history",
+    "coach"
+  ],
+  "acceptedSeedProfiles": [
+    "payload-stress"
+  ],
+  "files": [
+    "src/components/workout/useWorkoutQueries.ts",
+    "src/components/workout/useWorkoutSession.ts",
+    "src/components/workout/useWorkoutMutations.ts",
+    "src/components/history/useHistoryData.ts",
+    "src/components/nutrition/useNutritionData.ts",
+    "src/components/nutrition/MealLogRow.tsx",
+    "src/components/coach/CoachCockpit.tsx",
+    "src/components/exercises/ExercisesView.tsx",
+    "src/context/CoachContext.tsx",
+    "src/components/settings/MyCoachCard.tsx",
+    "src/context/AuthContext.tsx",
+    "src/utils/promiseDedupe.ts",
+    "scripts/seed-payload-stress.sql",
+    "supabase/seed.sql",
+    "supabase/migrations/20260916160000_nutrition_has_components.sql",
+    "src/components/history/HistoryView.tsx",
+    "supabase/migrations/20260916215500_history_session_and_exercise_rpcs.sql",
+    "src/components/workout/RoutinePickerModal.tsx",
+    "supabase/migrations/20260916230000_get_ghost_sets_rpc.sql",
+    "supabase/migrations/20260916233000_get_ghost_sets_per_exercise_cap.sql",
+    "supabase/rollback/20260916233000_down.sql"
+  ]
+}

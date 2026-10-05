@@ -1,0 +1,22 @@
+{
+  "_ratified": {
+    "initialRouteJsGzip": 256000,
+    "note": "Ratified 250 KiB (256,000 B) initial-route JS gzip ceiling. Both verify-perf-budget.js and measure-baseline.js read from this single source of truth."
+  },
+  "budgets": {
+    "initialRouteJsGzip": 256000,
+    "initialRouteJsGzipMaxBytes": 256000,
+    "indexEntryRaw": 120000,
+    "indexRawMaxBytes": 120000,
+    "supabaseVendorRaw": 160000,
+    "reactVendorRaw": 185000,
+    "reactVendorRawMaxBytes": 185000,
+    "maxComponentLoc": 600
+  },
+  "maxSupabaseQueriesPerRoute": {
+    "workout_seeded": 9,
+    "nutrition": 6,
+    "history": 9,
+    "coach": 11
+  }
+}

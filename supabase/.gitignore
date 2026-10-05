@@ -1,0 +1,14 @@
+# Supabase
+.branches
+.temp
+
+# Environment and status
+status.json
+.env
+.env.*
+!.env.example
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local

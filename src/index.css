@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+@theme {
+  /* Macronutrient identity */
+  --color-macro-calories: #f59e0b;
+  --color-macro-calories-text: #fbbf24;
+  --color-macro-protein: #06b6d4;
+  --color-macro-protein-text: #22d3ee;
+  --color-macro-carbs: #10b981;
+  --color-macro-carbs-text: #34d399;
+  --color-macro-fat: #8b5cf6;
+  --color-macro-fat-text: #a78bfa;
+  --color-macro-fiber: #14b8a6;
+  --color-macro-fiber-text: #2dd4bf;
+
+  /* Semantic dark surfaces */
+  --color-surface-base: #09090b;
+  --color-surface-card: #18181b;
+  --color-surface-elevated: #27272a;
+
+  /* Boundary system (WCAG SC 1.4.11) */
+  --color-border-subtle: #27272a;
+  --color-border-boundary: #52525b;
+  --color-border-interactive: #71717a;
+  --color-border-focus: #06b6d4;
+
+  /* Micro-typography */
+  --text-2xs: 0.6875rem;
+  --text-3xs: 0.625rem;
+
+  /* Missing shade (NEW-29) */
+  --color-zinc-850: #1f1f23;
+}
+
+@utility input-text-xs {
+  font-size: 1rem;
+  min-height: 44px;
+  @media (width >= 40rem) { font-size: 0.75rem; }
+}
+
+@utility input-text-sm {
+  font-size: 1rem;
+  min-height: 44px;
+  @media (width >= 40rem) { font-size: 0.875rem; }
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: #09090b;
+    color: #f4f4f5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Universal Dark Mode Date Picker Indicator (Zero Invert Hack) */
+  input[type="date"] {
+    color-scheme: dark;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s ease;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
+  /* YB5: WebKit (iOS Safari/PWA) renders the value in ::-webkit-date-and-time-value, a fit-content box
+     with text-align:start, and draws no picker indicator, leaving the value flush-left in fixed-width
+     pills. text-align centres the glyphs inside that box; margin-inline auto centres the box in the
+     input (measured in Playwright WebKit: 16.4px -> 0.4px left/right imbalance). Opt-in for date pills. */
+  .date-pill { text-align: center; }
+  .date-pill::-webkit-date-and-time-value { text-align: center; margin-inline: auto; }
+  .date-pill::-webkit-datetime-edit { display: inline-flex; justify-content: center; }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #09090b;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+  }
+
+  /* Hide number spinner arrows */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  select, select option {
+    background-color: #09090b !important;
+    color: #ffffff !important;
+  }
+}
+
+.shadow-neon-cyan {
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+}
+
+.shadow-neon-emerald {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+}
+
+.shadow-neon-violet {
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+}
+
+.safe-area-pb {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}

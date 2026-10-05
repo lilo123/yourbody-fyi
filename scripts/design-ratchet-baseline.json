@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "description": "Yourbody V2 \u2014 Design Ratchet Baseline (STD-TYP-1..4, STD-INT-3, STD-CMP-7)",
+  "rules": [
+    "confirm",
+    "font-mono",
+    "font-black",
+    "font-extrabold",
+    "sub-12px",
+    "zinc-500",
+    "adhoc-success"
+  ],
+  "hardRuleDirectories": [
+    "src"
+  ],
+  "flaggedConfirm": {},
+  "totals": {
+    "confirm": 0,
+    "font-mono": 0,
+    "font-black": 0,
+    "sub-12px": 0,
+    "zinc-500": 0,
+    "font-extrabold": 0,
+    "adhoc-success": 0
+  },
+  "files": {}
+}
