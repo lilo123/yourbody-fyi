@@ -93,6 +93,7 @@ async function loginAsAthlete(page: Page) {
   await page.click('button[type="submit"]');
   await page.waitForURL('**/workout');
   await page.locator('[data-testid="workout-date-input"]').waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('[data-testid="nav-workout"]').waitFor({ state: 'visible', timeout: 15000 });
 }
 
 async function getAthleteSession(): Promise<{ token: string; userId: string }> {
@@ -229,7 +230,7 @@ test.describe('P4 Catalog & E2E Verification (p4-catalog)', () => {
     await loginAsAthlete(page);
 
     // 1. Verify Library (/exercises) renders all visible exercises with their name and body_part text
-    await page.goto('/exercises');
+    await page.locator('[data-testid="nav-exercises"]').click();
     await page.waitForURL('**/exercises');
     await expect(page.locator('h3:has-text("Exercise Library")')).toBeVisible({ timeout: 10000 });
 
@@ -248,7 +249,7 @@ test.describe('P4 Catalog & E2E Verification (p4-catalog)', () => {
     }
 
     // 2. Verify History (/history) renders the seeded 'Push Day Benchmark' session with its exercise names
-    await page.goto('/history');
+    await page.locator('[data-testid="nav-history"]').click();
     await page.waitForURL('**/history');
 
     const benchmarkSession = page.locator('div.rounded-3xl.p-5.shadow-2xl.space-y-3:has(h3:has-text("Push Day Benchmark"))');

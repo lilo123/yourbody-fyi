@@ -1,14 +1,19 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function loginAsAthlete(page: Page) {
+  await page.goto('/login');
+  await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
+  await page.fill('input[type="password"]', 'password123');
+  await page.click('button[type="submit"]');
+  await page.waitForURL('**/workout');
+  await page.locator('[data-testid="workout-date-input"]').waitFor({ state: 'visible', timeout: 15000 });
+}
 
 test.describe('Workout Flow E2E', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
-    await page.fill('input[type="password"]', 'password123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL('**/workout');
+    await loginAsAthlete(page);
   });
 
   test('loads workout engine with sticky rest timer and exercise routines', async ({ page }) => {
@@ -118,9 +123,13 @@ test.describe('Workout Flow E2E', () => {
     await expect(page.locator('text=Push Day Benchmark').first()).toBeVisible();
     await expect(page.locator('text=185 lbs').first()).toBeVisible();
   });
+});
 
+test.describe('Workout Flow E2E (failed workout queries)', () => {
   test('negative control: displays error banner and retry affordance if workout queries fail', async ({ page }) => {
-    // Intercept workouts queries with 400 Bad Request simulating P0 phantom column error
+    // Intercept workouts queries with 400 Bad Request simulating P0 phantom column error.
+    // Registered before sign-in so the first /workout render already sees the failure,
+    // instead of reloading the page while the post-sign-in render is still in flight.
     await page.route('**/rest/v1/workouts*', (route) =>
       route.fulfill({
         status: 400,
@@ -129,7 +138,7 @@ test.describe('Workout Flow E2E', () => {
       })
     );
 
-    await page.goto('/workout');
+    await loginAsAthlete(page);
     await expect(page.locator('[data-testid="workout-logs-error"]')).toBeVisible();
     await expect(page.locator('[data-testid="retry-logs-btn"]')).toBeVisible();
   });
