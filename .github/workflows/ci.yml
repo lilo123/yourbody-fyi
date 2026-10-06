@@ -1,41 +1,44 @@
 name: CI
 
-on:
+'on':
   push:
     branches:
       - main
-      - v2-rewrite
-      - master
   pull_request:
     branches:
       - main
-      - v2-rewrite
-      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # Pull Supabase service images (including pg_prove for pgTAP) from the ghcr.io mirror,
+  # authenticated in .github/actions/setup-supabase, instead of rate-limited public.ecr.aws.
+  SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
   VITE_SUPABASE_URL: http://127.0.0.1:58821
   VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
 
 jobs:
-  static-unit:
-    name: Static Analysis, Unit, Timezone, pgTAP & Deno Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  static:
+    name: Static Analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js (version 22)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: 'npm'
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
 
       - name: Install dependencies
         run: npm ci
@@ -68,78 +71,36 @@ jobs:
       - name: Verify brand guard
         run: npm run check:brand
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v3
-        with:
-          version: latest
-
-      # `supabase start` pulls its service images from ghcr.io. Anonymous pulls share a
-      # global rate-limit bucket that, when saturated, fails every image with
-      # "toomanyrequests" and takes the whole job down before a single test runs.
-      # Authenticating with the built-in GITHUB_TOKEN moves these pulls onto the
-      # per-user limit. No secret needs to be configured; GITHUB_TOKEN is automatic.
-      - name: Authenticate to ghcr.io for Supabase image pulls
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Only four services are actually exercised by the suite: postgres, kong (the API
-      # gateway VITE_SUPABASE_URL points at), postgrest and gotrue. Excluding the rest
-      # cuts the images pulled from 11 to 4, which both speeds the job up and shrinks the
-      # surface exposed to registry rate limiting.
-      - name: Start Supabase local emulator
-        run: |
-          set -u
-          EXCLUDE="studio,realtime,storage-api,imgproxy,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor"
-          for attempt in 1 2 3; do
-            if npx supabase start -x "$EXCLUDE"; then
-              echo "supabase start succeeded on attempt $attempt"
-              exit 0
-            fi
-            echo "::warning::supabase start failed on attempt $attempt/3"
-            if [ "$attempt" -lt 3 ]; then
-              npx supabase stop || true
-              sleep $((attempt * 30))
-            fi
-          done
-          echo "::error::supabase start failed after 3 attempts"
-          exit 1
-
-      - name: Reset database and seed
-        run: npx supabase db reset
-
-      - name: Seed performance benchmark data
-        run: npm run seed:stress
-
-      # After Supabase is up: ghostSets.test.ts includes a DB-backed fidelity check (127.0.0.1:58822).
-      - name: Run date-sensitive timezone tests (H19)
-        run: npm run test:tz
-
-      - name: Run vitest unit tests
-        run: npm run test
-
-      - name: Run pgTAP database tests
-        run: npm run test:db
-
-      - name: Run Deno edge function tests
-        run: npm run test:deno
-
       - name: Audit dependencies
         run: npm audit --omit=dev --audit-level=high
 
-  e2e-desktop-chrome:
-    name: E2E - Desktop Chrome & Performance Tracing
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  unit:
+    name: Unit Tests (${{ matrix.tz }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        tz:
+          - UTC
+          - America/Los_Angeles
+          - Asia/Tokyo
+
+    env:
+      TZ: ${{ matrix.tz }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js (version 22)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: 'npm'
@@ -147,41 +108,81 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v3
+      # ghostSets.test.ts includes a DB-backed fidelity check against local Postgres (127.0.0.1:58822)
+      - name: Setup and start Supabase
+        uses: ./.github/actions/setup-supabase
         with:
-          version: latest
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Authenticate to ghcr.io for Supabase image pulls
-        uses: docker/login-action@v4
+      - name: Run vitest unit tests
+        run: npm test
+
+  db:
+    name: Database & Deno Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
-      - name: Start Supabase local emulator
-        run: |
-          set -u
-          EXCLUDE="studio,realtime,storage-api,imgproxy,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor"
-          for attempt in 1 2 3; do
-            if npx supabase start -x "$EXCLUDE"; then
-              echo "supabase start succeeded on attempt $attempt"
-              exit 0
-            fi
-            echo "::warning::supabase start failed on attempt $attempt/3"
-            if [ "$attempt" -lt 3 ]; then
-              npx supabase stop || true
-              sleep $((attempt * 30))
-            fi
-          done
-          echo "::error::supabase start failed after 3 attempts"
-          exit 1
+      - name: Setup Node.js (version 22)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: 'npm'
 
-      - name: Reset database and seed
-        run: npx supabase db reset
+      - name: Setup Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.7
 
-      - name: Seed performance benchmark data
-        run: npm run seed:stress
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup and start Supabase
+        uses: ./.github/actions/setup-supabase
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run pgTAP database tests
+        run: npm run test:db
+
+      - name: Run Deno edge function tests
+        run: npm run test:deno
+
+  e2e-desktop-chrome:
+    name: E2E - Desktop Chrome
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js (version 22)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup and start Supabase
+        uses: ./.github/actions/setup-supabase
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browser (Chromium)
         run: npx playwright install --with-deps chromium
@@ -204,15 +205,20 @@ jobs:
 
   e2e-mobile-safari:
     name: E2E - Mobile Safari
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js (version 22)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: 'npm'
@@ -220,41 +226,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v3
+      - name: Setup and start Supabase
+        uses: ./.github/actions/setup-supabase
         with:
-          version: latest
-
-      - name: Authenticate to ghcr.io for Supabase image pulls
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Start Supabase local emulator
-        run: |
-          set -u
-          EXCLUDE="studio,realtime,storage-api,imgproxy,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor"
-          for attempt in 1 2 3; do
-            if npx supabase start -x "$EXCLUDE"; then
-              echo "supabase start succeeded on attempt $attempt"
-              exit 0
-            fi
-            echo "::warning::supabase start failed on attempt $attempt/3"
-            if [ "$attempt" -lt 3 ]; then
-              npx supabase stop || true
-              sleep $((attempt * 30))
-            fi
-          done
-          echo "::error::supabase start failed after 3 attempts"
-          exit 1
-
-      - name: Reset database and seed
-        run: npx supabase db reset
-
-      - name: Seed performance benchmark data
-        run: npm run seed:stress
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browser (WebKit)
         run: npx playwright install --with-deps webkit
@@ -263,16 +238,21 @@ jobs:
         run: npx playwright test tests/e2e --project='Mobile Safari' --workers=1
 
   e2e-narrow-safari:
-    name: E2E - Narrow Safari (320px)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: E2E - Narrow Safari
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js (version 22)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: 'npm'
@@ -280,41 +260,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v3
+      - name: Setup and start Supabase
+        uses: ./.github/actions/setup-supabase
         with:
-          version: latest
-
-      - name: Authenticate to ghcr.io for Supabase image pulls
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Start Supabase local emulator
-        run: |
-          set -u
-          EXCLUDE="studio,realtime,storage-api,imgproxy,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor"
-          for attempt in 1 2 3; do
-            if npx supabase start -x "$EXCLUDE"; then
-              echo "supabase start succeeded on attempt $attempt"
-              exit 0
-            fi
-            echo "::warning::supabase start failed on attempt $attempt/3"
-            if [ "$attempt" -lt 3 ]; then
-              npx supabase stop || true
-              sleep $((attempt * 30))
-            fi
-          done
-          echo "::error::supabase start failed after 3 attempts"
-          exit 1
-
-      - name: Reset database and seed
-        run: npx supabase db reset
-
-      - name: Seed performance benchmark data
-        run: npm run seed:stress
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browser (WebKit)
         run: npx playwright install --with-deps webkit
@@ -323,16 +272,21 @@ jobs:
         run: npx playwright test tests/e2e --project='Narrow Safari (320px)' --workers=1
 
   density:
-    name: Visual Density Gate (320px Roboto)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: Visual Density
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js (version 22)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: 'npm'
@@ -341,49 +295,18 @@ jobs:
         run: npm ci
 
       # The app uses the system font stack (-apple-system, ..., Roboto, Helvetica, Arial). Local
-      # Linux and Android resolve it to Roboto; ubuntu-latest has no Roboto and falls back to a
+      # Linux and Android resolve it to Roboto; ubuntu runner has no Roboto and falls back to a
       # wider sans, which shifts the px-exact density measurements. Match the local renderer.
       - name: Install Roboto for the density gate
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-roboto && fc-cache -f && fc-match Roboto
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v3
+      - name: Setup and start Supabase
+        uses: ./.github/actions/setup-supabase
         with:
-          version: latest
-
-      - name: Authenticate to ghcr.io for Supabase image pulls
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Start Supabase local emulator
-        run: |
-          set -u
-          EXCLUDE="studio,realtime,storage-api,imgproxy,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor"
-          for attempt in 1 2 3; do
-            if npx supabase start -x "$EXCLUDE"; then
-              echo "supabase start succeeded on attempt $attempt"
-              exit 0
-            fi
-            echo "::warning::supabase start failed on attempt $attempt/3"
-            if [ "$attempt" -lt 3 ]; then
-              npx supabase stop || true
-              sleep $((attempt * 30))
-            fi
-          done
-          echo "::error::supabase start failed after 3 attempts"
-          exit 1
-
-      - name: Reset database and seed
-        run: npx supabase db reset
-
-      - name: Seed performance benchmark data
-        run: npm run seed:stress
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browser (Chromium)
         run: npx playwright install --with-deps chromium
 
-      - name: Run visual density gate (W38)
+      - name: Run visual density gate
         run: npm run test:density
