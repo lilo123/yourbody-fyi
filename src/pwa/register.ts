@@ -11,6 +11,8 @@ export interface RegisterPWAOptions {
 }
 
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+// Upper bound between the user confirming an update reload and the reload happening.
+export const UPDATE_RELOAD_FALLBACK_MS = 5000;
 
 let periodicIntervalId: ReturnType<typeof setInterval> | null = null;
 let visibilityListener: (() => void) | null = null;
@@ -86,11 +88,71 @@ export function registerSW(
   } = options;
 
   let wb: Workbox | undefined;
+  let registration: ServiceWorkerRegistration | undefined;
   let registerPromise: Promise<void> | undefined;
+  let userRequestedReload = false;
+  let hasReloaded = false;
 
-  const updateServiceWorker = async (_reloadPage = true) => {
+  const doReload = () => {
+    if (!hasReloaded) {
+      hasReloaded = true;
+      if (typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+        try {
+          window.location.reload();
+        } catch (e) {
+          console.warn('[pwa] window.location.reload() error:', e);
+        }
+      }
+    }
+  };
+
+  const updateServiceWorker = async (reloadPage = true) => {
     await registerPromise;
+
+    if (reloadPage) {
+      userRequestedReload = true;
+
+      // For a page with no controller at the time updateServiceWorker is called
+      // (no clients.claim in prompt mode, so controllerchange never fires),
+      // reload when the waiting worker reaches state 'activated'.
+      const hasController =
+        typeof navigator !== 'undefined' && Boolean(navigator.serviceWorker?.controller);
+
+      if (!hasController) {
+        let waitingWorker: ServiceWorker | null | undefined = registration?.waiting;
+        if (!waitingWorker && typeof navigator !== 'undefined' && navigator.serviceWorker?.getRegistration) {
+          try {
+            const currentReg = await navigator.serviceWorker.getRegistration();
+            waitingWorker = currentReg?.waiting;
+          } catch {
+            // ignore
+          }
+        }
+
+        if (waitingWorker) {
+          if (waitingWorker.state === 'activated') {
+            doReload();
+          } else {
+            waitingWorker.addEventListener('statechange', () => {
+              if (waitingWorker?.state === 'activated') {
+                doReload();
+              }
+            });
+          }
+        }
+      }
+    }
+
     wb?.messageSkipWaiting();
+
+    if (reloadPage) {
+      // The browser can defer activating the waiting worker after SKIP_WAITING (it was
+      // observed to hold it in 'installed' indefinitely while offline). The user asked to
+      // reload, so do not leave the click without effect: reload after a bounded wait. The
+      // page then loads through the current worker, the update prompt reappears, and the
+      // new worker activates on a later reload. doReload() runs at most once.
+      setTimeout(doReload, UPDATE_RELOAD_FALLBACK_MS);
+    }
   };
 
   if (!isSWRegistrationEligible()) {
@@ -101,12 +163,16 @@ export function registerSW(
     try {
       wb = new Workbox('/sw.js', { scope: '/' });
 
+      // Single controlling listener attached once (not per 'waiting' event).
+      // Reloads exactly once and only after user requested it via updateServiceWorker(true).
+      // Trigger = workbox 'controlling' (regardless of isUpdate, since user asked).
+      wb.addEventListener('controlling', () => {
+        if (userRequestedReload) {
+          doReload();
+        }
+      });
+
       const showSkipWaitingPrompt = () => {
-        wb?.addEventListener('controlling', (event) => {
-          if (event.isUpdate && typeof window !== 'undefined') {
-            window.location.reload();
-          }
-        });
         onNeedRefresh?.();
       };
 
@@ -118,7 +184,7 @@ export function registerSW(
 
       wb.addEventListener('waiting', showSkipWaitingPrompt);
 
-      const registration = await wb.register({ immediate });
+      registration = await wb.register({ immediate });
       if (registration) {
         setupPeriodicUpdates(registration);
       }

@@ -1,0 +1,64 @@
+name: 'Setup and Start Supabase'
+description: 'Install Supabase CLI, authenticate to ghcr.io, start emulator, and seed database'
+
+inputs:
+  supabase-version:
+    description: 'Supabase CLI version to install'
+    required: false
+    default: '2.119.0'
+  github-token:
+    description: 'GitHub token for ghcr.io authentication'
+    required: false
+    default: ${{ github.token }}
+  seed-stress:
+    description: 'Whether to seed payload stress data'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Supabase CLI
+      uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+      with:
+        version: ${{ inputs.supabase-version }}
+
+    # The CLI pulls service images from public.ecr.aws by default, where anonymous pulls
+    # share a rate limit that intermittently fails with "toomanyrequests". The workflow
+    # sets SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io to use the ghcr.io mirror instead, and
+    # this login moves those pulls onto the per-token limit of the built-in GITHUB_TOKEN.
+    - name: Authenticate to ghcr.io for Supabase image pulls
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.github-token }}
+
+    # Exclude non-essential services to minimize image pulls and startup time
+    - name: Start Supabase local emulator
+      shell: bash
+      run: |
+        set -u
+        EXCLUDE="studio,realtime,storage-api,imgproxy,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor"
+        for attempt in 1 2 3; do
+          if npx supabase start -x "$EXCLUDE"; then
+            echo "supabase start succeeded on attempt $attempt"
+            exit 0
+          fi
+          echo "::warning::supabase start failed on attempt $attempt/3"
+          if [ "$attempt" -lt 3 ]; then
+            npx supabase stop || true
+            sleep $((attempt * 30))
+          fi
+        done
+        echo "::error::supabase start failed after 3 attempts"
+        exit 1
+
+    - name: Reset database and seed
+      shell: bash
+      run: npx supabase db reset
+
+    - name: Seed performance benchmark data
+      if: ${{ inputs.seed-stress == 'true' }}
+      shell: bash
+      run: npm run seed:stress

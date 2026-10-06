@@ -48,6 +48,7 @@ export {
   discardOp,
   subscribeToOutbox,
   notifyOutboxChanged,
+  broadcastSynced,
   setSyncingStatus,
   setAuthRequiredStatus,
   setLastSyncedCount,
