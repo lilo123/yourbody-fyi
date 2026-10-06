@@ -10,6 +10,8 @@ import {
   setAuthRequiredStatus,
   setLastSyncedCount,
   subscribeToOutbox,
+  broadcastSynced,
+  registerRemoteSyncedHandler,
 } from './outbox';
 import { executeReplayOp } from './replay';
 import { classifyError } from './classify';
@@ -73,6 +75,20 @@ function emitSynced(count: number): void {
   }
 }
 
+function initRemoteSyncedHandler(): void {
+  registerRemoteSyncedHandler((userId: string, count: number) => {
+    const currentUserId = activeUserId || flusherSessionUserId;
+    if (currentUserId === userId) {
+      if (count > 0) {
+        setLastSyncedCount(count);
+        emitSynced(count);
+      }
+    }
+  });
+}
+
+initRemoteSyncedHandler();
+
 let activeUserId: string | null = null;
 let flusherSessionUserId: string | null = null;
 let activeSupabaseClient: any = supabase;
@@ -126,6 +142,7 @@ export function resetFlusherForTesting(): void {
   activeUserId = null;
   flusherSessionUserId = null;
   activeSupabaseClient = supabase;
+  initRemoteSyncedHandler();
 }
 
 export function getActiveUserId(): string | null {
@@ -311,6 +328,7 @@ export async function flushNow(targetUserId?: string, callerOpId?: string): Prom
           callerOpId && syncedOpIds.has(callerOpId) ? syncedThisRun - 1 : syncedThisRun;
         if (queuedCountToEmit > 0) {
           emitSynced(queuedCountToEmit);
+          broadcastSynced(userId, queuedCountToEmit);
         }
       }
     }

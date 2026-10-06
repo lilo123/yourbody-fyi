@@ -6,7 +6,7 @@ import {
   setFlusherSessionUser,
   setFlusherSupabaseClient,
 } from '../flusher';
-import { enqueue, getOutboxOps, getAuthRequiredStatus, setAuthRequiredStatus } from '../outbox';
+import { enqueue, getOutboxOps, getAuthRequiredStatus, setAuthRequiredStatus, getLastSyncedCount } from '../outbox';
 import { closeAllOfflineDbs, deleteOfflineDb } from '../db';
 import { supabase } from '../../lib/supabase';
 
@@ -309,5 +309,69 @@ describe('Flusher & EnqueueAndAwait (§A4, §D)', () => {
     const synced = await flushNow(userA);
     expect(synced).toBe(0);
     expect(getAuthRequiredStatus()).toBe(true);
+  });
+
+  describe('Multi-tab Sync Broadcast (B.1, B.3)', () => {
+    it('synced broadcast from another tab for the same user emits once and updates last synced count', async () => {
+      setFlusherSessionUser(userA);
+      const emittedCounts: number[] = [];
+      const unsub = onSynced((count) => {
+        emittedCounts.push(count);
+      });
+
+      try {
+        const peerChannel = new BroadcastChannel('yourbody_outbox_channel');
+        peerChannel.postMessage({ type: 'synced', userId: userA, count: 3 });
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        peerChannel.close();
+
+        expect(emittedCounts).toEqual([3]);
+        expect(getLastSyncedCount()).toBe(3);
+      } finally {
+        unsub();
+      }
+    });
+
+    it('different user broadcast is ignored', async () => {
+      setFlusherSessionUser(userA);
+      const emittedCounts: number[] = [];
+      const unsub = onSynced((count) => {
+        emittedCounts.push(count);
+      });
+
+      try {
+        const peerChannel = new BroadcastChannel('yourbody_outbox_channel');
+        peerChannel.postMessage({ type: 'synced', userId: userB, count: 4 });
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        peerChannel.close();
+
+        expect(emittedCounts).toEqual([]);
+      } finally {
+        unsub();
+      }
+    });
+
+    it('count <= 0 broadcast is ignored', async () => {
+      setFlusherSessionUser(userA);
+      const emittedCounts: number[] = [];
+      const unsub = onSynced((count) => {
+        emittedCounts.push(count);
+      });
+
+      try {
+        const peerChannel = new BroadcastChannel('yourbody_outbox_channel');
+        peerChannel.postMessage({ type: 'synced', userId: userA, count: 0 });
+        peerChannel.postMessage({ type: 'synced', userId: userA, count: -2 });
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        peerChannel.close();
+
+        expect(emittedCounts).toEqual([]);
+      } finally {
+        unsub();
+      }
+    });
   });
 });
