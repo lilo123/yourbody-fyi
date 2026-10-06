@@ -55,7 +55,7 @@ export const QuickLogFavorites: React.FC<QuickLogFavoritesProps> = ({
     );
   }, [sortedDishes, isSearching, trimmedQuery]);
 
-  // Determine which dishes to render (D26):
+  // Determine which dishes to render:
   // - When searching: all matching dishes rendered (bypasses cap)
   // - When expanded: all dishes rendered
   // - When collapsed: top 3 rendered
@@ -69,7 +69,7 @@ export const QuickLogFavorites: React.FC<QuickLogFavoritesProps> = ({
     return sortedDishes.slice(0, 3);
   }, [isSearching, isExpanded, filteredDishes, sortedDishes]);
 
-  // Expander visibility (D26):
+  // Expander visibility:
   // - > 3 dishes: render expander to toggle between top 3 and full list
   // - <= 3 dishes: no expander needed
   const hasOverflow = sortedDishes.length > 3;

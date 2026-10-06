@@ -1,10 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * Measurement Debt Spec (NEW-11 & G2)
+ * Measurement Debt Spec (G2)
  *
  * Measures:
- * 1. NEW-11: StagedMealCard <select> rendered dimensions and typography
+ * 1. StagedMealCard <select> rendered dimensions and typography
  *    against 44px touch-target and 16px iOS auto-zoom thresholds.
  * 2. G2: Non-text contrast (WCAG 2.2 SC 1.4.11, 3:1) across all visible
  *    element boundaries (borders and box-shadows) against nearest opaque ancestor.
@@ -130,7 +130,7 @@ test.describe('Measurement Debt', () => {
       await stageMeal(page);
 
       // =========================================================================
-      // Measurement 1 — NEW-11, StagedMealCard <select>
+      // Measurement 1 — StagedMealCard <select>
       // =========================================================================
       const selectSelector = '[data-testid="staged-meal-card"] select[aria-label="Meal type"]';
       const select = page.locator(selectSelector);

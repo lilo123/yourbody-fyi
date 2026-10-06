@@ -17,7 +17,7 @@ export interface UsePrModeReturn {
  * Single source of truth is profile.pr_mode from AuthContext (mirroring useWeightUnit).
  * Optimistic update via in-memory state; writes to public.users via Supabase,
  * refreshes AuthContext profile, and rolls back inline on failure.
- * Decisions: D-P8.1-8, D-P8.1-9.
+ * Decisions: PR ranking mode profile setting.
  */
 export function usePrMode(): UsePrModeReturn {
   const { user, profile, refreshProfile } = useAuth();

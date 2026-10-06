@@ -62,7 +62,7 @@ export const ExerciseListRow: React.FC<ExerciseListRowProps> = ({
   const isHidden = Boolean(ex.is_hidden);
   const isArchived = Boolean(ex.is_archived);
 
-  // L1 & L4: masters show no Edit/Archive for anyone; only own non-master rows are editable/archivable
+  // Masters show no Edit/Archive for anyone; only own non-master rows are editable/archivable
   const isOwnRow = Boolean(currentUserId) && ex.user_id === currentUserId;
   const canEdit = !ex.is_master && !isArchived && !isHidden && isOwnRow && Boolean(onEdit);
   const canArchive = !ex.is_master && !isArchived && !isHidden && isOwnRow && (Boolean(onArchive) || Boolean(onDelete));

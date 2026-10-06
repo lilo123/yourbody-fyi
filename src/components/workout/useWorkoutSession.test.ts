@@ -4,7 +4,7 @@ import { useWorkoutSession } from './useWorkoutSession';
 import { workoutSessionStore } from '../../utils/workoutSessionStore';
 import type { Exercise, RoutineTemplate, WorkoutSet } from '../../types/database';
 
-describe('useWorkoutSession (W5, W24, W39, W46)', () => {
+describe('useWorkoutSession', () => {
   const targetUserId = 'user-test-123';
   const mockExercises: Exercise[] = [
     { id: 'ex-bench', name: 'Bench Press', body_parts: ['Chest'], is_master: true },
@@ -33,7 +33,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     vi.useRealTimers();
   });
 
-  it('W46: clamps target sets stepper to maximum of 20', () => {
+  it('clamps target sets stepper to maximum of 20', () => {
     const { result } = renderHook(() => useWorkoutSession(defaultProps));
 
     act(() => {
@@ -59,7 +59,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     expect(result.current.targetSetCounts['Bench Press']).toBe(20);
   });
 
-  it('W39: rapid sequential moveExercise preserves all intermediate movements without dropping', () => {
+  it('rapid sequential moveExercise preserves all intermediate movements without dropping', () => {
     const { result } = renderHook(() => useWorkoutSession(defaultProps));
 
     act(() => {
@@ -79,7 +79,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     expect(result.current.activeExercises).toEqual(['Barbell Row', 'Bench Press', 'Squat']);
   });
 
-  it('W5: typing weight keeps reps undefined in draft so visible/ghost reps are not blanked', () => {
+  it('typing weight keeps reps undefined in draft so visible/ghost reps are not blanked', () => {
     const { result } = renderHook(() => useWorkoutSession(defaultProps));
 
     act(() => {
@@ -94,11 +94,11 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     const draft = result.current.inputDrafts['Bench Press_1'];
     expect(draft).toBeDefined();
     expect(draft.weight).toBe('105');
-    // W5: Untouched reps field must remain undefined, NOT coerced to empty string ''
+    // Untouched reps field must remain undefined, NOT coerced to empty string ''
     expect(draft.reps).toBeUndefined();
   });
 
-  it('W24: saves session pointer for past dates so reload stays on past date', () => {
+  it('saves session pointer for past dates so reload stays on past date', () => {
     const pastDate = '2026-09-15';
     // Initialize a past-date session in the store
     workoutSessionStore.getOrInitSession(targetUserId, pastDate, {
@@ -122,7 +122,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     }
   });
 
-  it('W8: restoreExercise restores exercise at position with targets and drafts', () => {
+  it('restoreExercise restores exercise at position with targets and drafts', () => {
     const { result } = renderHook(() => useWorkoutSession(defaultProps));
 
     act(() => {
@@ -155,7 +155,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     expect(result.current.inputDrafts['Bench Press_1']).toEqual({ weight: '225', reps: '5' });
   });
 
-  it('W10: isScheduledRoutineDirty returns true when exercises or drafts differ from scheduled', () => {
+  it('isScheduledRoutineDirty returns true when exercises or drafts differ from scheduled', () => {
     const { result } = renderHook(() => useWorkoutSession(defaultProps));
 
     // Initially clean or on rest day
@@ -169,7 +169,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     expect(result.current.isScheduledRoutineDirty).toBe(true);
   });
 
-  it('W10: isScheduledRoutineDirty detects target set changes as dirty', () => {
+  it('isScheduledRoutineDirty detects target set changes as dirty', () => {
     const customTemplate: RoutineTemplate = {
       id: 'tpl-1',
       user_id: targetUserId,
@@ -208,7 +208,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     expect(result.current.targetSetCounts['Bench Press']).toBe(4);
     expect(result.current.isScheduledRoutineDirty).toBe(true);
   });
-  it('P4 W2: addExercises batch adds multiple exercises preserving order', () => {
+  it('addExercises batch adds multiple exercises preserving order', () => {
     const { result } = renderHook(() => useWorkoutSession(defaultProps));
 
     act(() => {
@@ -242,7 +242,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
     expect(result.current.activeExercises).toContain('Romanian Deadlift');
   });
 
-  it('P4 W2: addExercises ignores already added exercises', () => {
+  it('addExercises ignores already added exercises', () => {
     const { result } = renderHook(() => useWorkoutSession(defaultProps));
 
     act(() => {
@@ -257,7 +257,7 @@ describe('useWorkoutSession (W5, W24, W39, W46)', () => {
 
     expect(result.current.activeExercises.length).toBe(initialLen);
   });
-  it('W39/TZ regression: rapid sequential moveExercise is deterministic near midnight across timezones (23:59:59 and 00:00:01 local)', () => {
+  it('TZ regression: rapid sequential moveExercise is deterministic near midnight across timezones (23: 59: 59 and 00: 00: 01 local)', () => {
     // 1. Within a single civil date (Sunday Rest Day): 00:00:01 and 23:59:59 local behave identically
     for (const timeStr of ['2026-09-27T00:00:01', '2026-09-27T23:59:59']) {
       localStorage.clear();

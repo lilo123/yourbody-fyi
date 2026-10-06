@@ -49,7 +49,7 @@ function cleanupPollutedWorkouts() {
 // Logs "Poached Chicken Slices" (+132 kcal) from favorites.
 // Normalized: dynamic bottom style (style="bottom: \d+px;") normalized to [BOTTOM]
 // to account for dynamic nav/viewport calculation across devices.
-// P8.1 hotfix: toast background made opaque (bg-zinc-900/95 -> bg-zinc-900!) so list text no longer shows through.
+// Hotfix: toast background made opaque (bg-zinc-900/95 -> bg-zinc-900!) so list text no longer shows through.
 const EXPECTED_62BD8A5_TOAST_OUTER_HTML =
   '<div data-testid="quick-log-toast" class="border-emerald-500/30 bg-emerald-500/10 text-emerald-300 fixed left-1/2 -translate-x-1/2 z-[65] max-w-sm w-[calc(100%-2rem)] bg-zinc-900! border border-emerald-500/40 backdrop-blur-xl shadow-2xl shadow-emerald-500/20 rounded-2xl py-2 px-3 flex items-center justify-between gap-3 text-white transition-all duration-200 animate-in fade-in slide-in-from-bottom-3 select-none" style="bottom: [BOTTOM];"><div class="flex items-center gap-3 min-w-0 flex-1"><div class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check w-4 h-4 text-emerald-400" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m16 9-5.5 5.5L8 12"></path></svg></div><div class="min-w-0 flex-1"><div class="text-xs text-zinc-400 font-normal leading-none">Logged</div><div data-testid="toast-dish-text" title="Poached Chicken Slices · +132 kcal" class="text-sm font-semibold text-white truncate mt-1 leading-snug"><span>Poached Chicken Slices</span><span class="text-zinc-400 font-normal"> · </span><span>+132 kcal</span></div></div></div><button type="button" data-testid="toast-undo-btn" aria-label="Undo log Poached Chicken Slices" class="shrink-0 h-11 min-h-[44px] min-w-[48px] px-3.5 rounded-xl border border-emerald-400/40 bg-emerald-500/20 hover:bg-emerald-500/30 active:scale-95 text-xs font-bold text-emerald-200 transition touch-manipulation cursor-pointer flex items-center justify-center"><span data-testid="undo-add-favorite-btn">Undo</span></button></div>';
 
@@ -57,7 +57,7 @@ function normalizeToast(html: string): string {
   return html.replace(/style="bottom:\s*\d+px;?"/g, 'style="bottom: [BOTTOM];"').trim();
 }
 
-test.describe('P3a Set Edit and Delete Workflows (p3a-set-edit)', () => {
+test.describe('Set Edit and Delete Workflows (p3a-set-edit)', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async () => {
@@ -164,7 +164,7 @@ test.describe('P3a Set Edit and Delete Workflows (p3a-set-edit)', () => {
     }
   });
 
-  test('(2b) History (H1): open a session with 6 rows, Esc keeps 6 rows and returns focus; save 105 shows 105 with no "No sets recorded" flash', async ({
+  test('(2b) History: open a session with 6 rows, Esc keeps 6 rows and returns focus; save 105 shows 105 with no "No sets recorded" flash', async ({
     page,
   }) => {
     let setsData = [

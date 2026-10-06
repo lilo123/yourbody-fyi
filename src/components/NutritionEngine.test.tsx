@@ -342,7 +342,7 @@ describe('NutritionEngine', () => {
     expect(payload.protein).toBe(18);
   });
 
-  it('single-item meal (D14): modal edit updates item 0 nutrition and logged payload equals edited values', async () => {
+  it('single-item meal: modal edit updates item 0 nutrition and logged payload equals edited values', async () => {
     const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
     (supabase.from as any).mockImplementation((table: string) => {
       const b = createSupabaseBuilder(table, { data: [], error: null });
@@ -412,7 +412,7 @@ describe('NutritionEngine', () => {
     expect(payload.fiber).toBe(0);
   });
 
-  it('single-item meal (D14): modal edit updates item 0 nutrition, Day total and Log button reflect edited kcal, and save-as-dish payload equals edited values', async () => {
+  it('single-item meal: modal edit updates item 0 nutrition, Day total and Log button reflect edited kcal, and save-as-dish payload equals edited values', async () => {
     const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
     (supabase.from as any).mockImplementation((table: string) => {
       const b = createSupabaseBuilder(table, { data: [], error: null });
@@ -484,7 +484,7 @@ describe('NutritionEngine', () => {
     expect(payload.kind).toBe('food');
   });
 
-  it('single-item meal (D14): deleting from 2 items to 1 removes breakdown header and This meal row, and logs remaining item', async () => {
+  it('single-item meal: deleting from 2 items to 1 removes breakdown header and This meal row, and logs remaining item', async () => {
     const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
     (supabase.from as any).mockImplementation((table: string) => {
       const b = createSupabaseBuilder(table, { data: [], error: null });
@@ -617,7 +617,7 @@ describe('NutritionEngine', () => {
 
     fireEvent.click(screen.getByText('Log Meal'));
 
-    // D22: Submitting manual meal form stages into StagedMealCard without DB insert
+    // Submitting manual meal form stages into StagedMealCard without DB insert
     expect(mockInsert).not.toHaveBeenCalled();
     expect(screen.getByTestId('staged-meal-card')).toBeDefined();
     expect(screen.getByDisplayValue('Greek Yogurt & Honey')).toBeDefined();
@@ -635,7 +635,7 @@ describe('NutritionEngine', () => {
     expect(payload.protein).toBe(15);
   });
 
-  it('D22/D5: single-item manual meal with edited totals, then Add item logs displayed totals without silent discard', async () => {
+  it('single-item manual meal with edited totals, then Add item logs displayed totals without silent discard', async () => {
     const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
     (supabase.from as any).mockImplementation((table: string) => {
       const b = createSupabaseBuilder(table, { data: [], error: null });
@@ -699,7 +699,7 @@ describe('NutritionEngine', () => {
     expect(payload.items[1].calories).toBe(60);
   });
 
-  it('D22: AI-staged meal + Add item logs displayed totals to DB', async () => {
+  it('AI-staged meal + Add item logs displayed totals to DB', async () => {
     const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
     (supabase.from as any).mockImplementation((table: string) => {
       const b = createSupabaseBuilder(table, { data: [], error: null });
@@ -769,7 +769,7 @@ describe('NutritionEngine', () => {
     expect(payload.items).toHaveLength(3);
   });
 
-  it('D22: dish-staged meal + Add item logs displayed totals to DB', async () => {
+  it('dish-staged meal + Add item logs displayed totals to DB', async () => {
     const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'custom_dishes') {
@@ -1625,7 +1625,7 @@ Total Fiber: 1 g`;
       target: { value: 'Avocado Toast & 2 Poached Eggs' },
     });
     // Scale dish by x2
-    // D46: scale via the header Scale chip
+    // Scale via the header Scale chip
     fireEvent.click(screen.getByTestId('meal-scale-button'));
     fireEvent.change(screen.getByTestId('meal-scale-input'), { target: { value: '2' } });
     fireEvent.keyDown(screen.getByTestId('meal-scale-input'), { key: 'Enter' });
@@ -1761,7 +1761,7 @@ Total Fiber: 1 g`;
     });
   });
 
-  it('D44 edit sheet: open from row ⋯, scale dish, save, check update and toast Undo restore', async () => {
+  it('edit sheet: open from row ⋯, scale dish, save, check update and toast Undo restore', async () => {
     const todayStr = getLocalDateStr(new Date());
     const mockMeal = {
       id: 'today-log-4',
@@ -1831,7 +1831,7 @@ Total Fiber: 1 g`;
     expect(screen.getByTestId('edit-meal-sheet')).toBeDefined();
 
     // Scale dish by x1.5
-    // D46: scale via the header Scale chip
+    // Scale via the header Scale chip
     fireEvent.click(screen.getByTestId('meal-scale-button'));
     fireEvent.change(screen.getByTestId('meal-scale-input'), { target: { value: '1.5' } });
     fireEvent.keyDown(screen.getByTestId('meal-scale-input'), { key: 'Enter' });
@@ -2965,7 +2965,7 @@ Total Fiber: 1 g`;
       expect(screen.getByTestId('custom-dish-card-dish-perf-1')).toBeDefined();
     });
 
-    // Verify top 3 dishes are rendered inline in collapsed state (D26)
+    // Verify top 3 dishes are rendered inline in collapsed state
     for (let i = 1; i <= 3; i++) {
       expect(screen.getByTestId(`custom-dish-card-dish-perf-${i}`)).toBeDefined();
     }
@@ -3278,7 +3278,7 @@ Total Fiber: 1 g`;
 
     fireEvent.click(screen.getByTestId('modal-delete-dish-btn'));
 
-    // RD-7: Zero window.confirm call
+    // Zero window.confirm call
     expect(confirmSpy).not.toHaveBeenCalled();
 
     // Modal closes immediately
@@ -3353,7 +3353,7 @@ Total Fiber: 1 g`;
     expect(speakingStatus).toBeDefined();
   });
 
-  it('auto-dismisses floating Quick-Log Toast widget after 5s (D41)', async () => {
+  it('auto-dismisses floating Quick-Log Toast widget after 5s', async () => {
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'custom_dishes') {
         return createSupabaseBuilder('custom_dishes', {
@@ -3378,7 +3378,7 @@ Total Fiber: 1 g`;
 
     expect(screen.getByTestId('quick-log-toast')).toBeDefined();
 
-    // Advance 5000ms (D41)
+    // Advance 5000ms
     await act(async () => {
       vi.advanceTimersByTime(5000);
     });
@@ -3421,7 +3421,7 @@ Total Fiber: 1 g`;
     });
     expect(screen.getByTestId('quick-log-toast')).toBeDefined();
 
-    // Click Dish B before 5s timer finishes (D41)
+    // Click Dish B before 5s timer finishes
     fireEvent.click(screen.getByTestId('quick-log-btn-dish-b'));
     expect(within(screen.getByTestId('quick-log-toast')).getByText('Meal B')).toBeDefined();
     expect(within(screen.getByTestId('quick-log-toast')).getByText('+250 kcal')).toBeDefined();
@@ -3519,7 +3519,7 @@ Total Fiber: 1 g`;
     fireEvent.click(screen.getByTestId('edit-meal-today-log-scale'));
 
     expect(await screen.findByTestId('edit-meal-sheet')).toBeDefined();
-    // D46: scale via the header Scale chip
+    // Scale via the header Scale chip
     fireEvent.click(screen.getByTestId('meal-scale-button'));
     fireEvent.change(screen.getByTestId('meal-scale-input'), { target: { value: '0.5' } });
     fireEvent.keyDown(screen.getByTestId('meal-scale-input'), { key: 'Enter' });
@@ -3711,7 +3711,7 @@ Total Fiber: 1 g`;
     });
   });
 
-  describe('NEW-15: StatusBanner persistent live region integration', () => {
+  describe('StatusBanner persistent live region integration', () => {
     it('mounts persistent live regions for dish fetch error and quick-log toast while idle', async () => {
       const { container } = renderComponent();
 
@@ -3850,8 +3850,8 @@ Total Fiber: 1 g`;
     });
   });
 
-  describe('Batch 3 / D10: Staged meal card in-place replacement and AI input restore', () => {
-    it('hides AI input while meal is staged and restores previous text on discard (D10)', async () => {
+  describe('Batch 3: Staged meal card in-place replacement and AI input restore', () => {
+    it('hides AI input while meal is staged and restores previous text on discard', async () => {
       (supabase.functions.invoke as any).mockResolvedValue({
         data: {
           name: 'Eggs & Toast',
@@ -3900,7 +3900,7 @@ Total Fiber: 1 g`;
       expect(restoredInput).toHaveValue('2 eggs and toast');
     });
 
-    it('hides AI input while meal is staged and restores empty AI input after log (D10)', async () => {
+    it('hides AI input while meal is staged and restores empty AI input after log', async () => {
       (supabase.functions.invoke as any).mockResolvedValue({
         data: {
           name: 'Protein Shake',
@@ -4494,7 +4494,7 @@ Total Fiber: 1 g`;
       expect(document.activeElement).toBe(dateInput);
     });
 
-    it('D33: while meal is staged, Quick Log favorite appends items, updates Day total/This meal, shows banner with Undo, and "+" does not call log mutation', async () => {
+    it('while meal is staged, Quick Log favorite appends items, updates Day total/This meal, shows banner with Undo, and "+" does not call log mutation', async () => {
       const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
       const customDishes = [
         { id: 'dish-1', user_id: 'test-user', name: 'Almonds', calories: 160, protein: 6, carbs: 6, fat: 14, fiber: 3, kind: 'food', use_count: 5 },
@@ -4581,7 +4581,7 @@ Total Fiber: 1 g`;
 
   });
 
-  describe('RD-7 & STD-CMP-10 Nutrition Standards Suite', () => {
+  describe('STD-CMP-10 Nutrition Standards Suite', () => {
     it('meal log deferred delete: 0 DELETE before expiry, Undo zero writes, exactly 1 DELETE on expiry', async () => {
       vi.useFakeTimers();
       const mockDelete = vi.fn().mockReturnValue({
@@ -4734,7 +4734,7 @@ Total Fiber: 1 g`;
       expect(mockDelete).not.toHaveBeenCalled();
     });
 
-    it('RD-7: meal log DELETE failure on expiry restores item and displays error banner', async () => {
+    it('meal log DELETE failure on expiry restores item and displays error banner', async () => {
       vi.useFakeTimers();
       const mockDelete = vi.fn().mockReturnValue({
         eq: vi.fn().mockResolvedValue({ error: new Error('Network error deleting meal') }),
@@ -4796,7 +4796,7 @@ Total Fiber: 1 g`;
       });
     });
 
-    it('RD-7: custom dish DELETE failure on expiry restores item and displays error banner', async () => {
+    it('custom dish DELETE failure on expiry restores item and displays error banner', async () => {
       vi.useFakeTimers();
       const mockDelete = vi.fn().mockReturnValue({
         eq: vi.fn().mockResolvedValue({ error: new Error('Network error deleting dish') }),

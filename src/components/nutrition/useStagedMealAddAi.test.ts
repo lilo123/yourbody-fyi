@@ -91,7 +91,7 @@ describe('useStagedMealAddAi', () => {
     expect(setStagedMeal).toHaveBeenLastCalledWith(baseMeal);
   });
 
-  it('merges identical items per D36', () => {
+  it('merges identical items', () => {
     let currentMeal: StagedMeal | null = baseMeal;
     const setStagedMeal = vi.fn((m) => {
       currentMeal = m;

@@ -39,7 +39,7 @@ test.describe('Error States & Retry Affordance E2E', () => {
     await page.click('button[type="submit"]');
     await page.waitForURL('**/workout');
 
-    // 2. Intercept PostgREST history read query with 400 Bad Request (M5 v2 RPC)
+    // 2. Intercept PostgREST history read query with 400 Bad Request (v2 RPC)
     await page.route('**/rest/v1/rpc/get_history_sessions_v2*', (route) =>
       route.fulfill({
         status: 400,

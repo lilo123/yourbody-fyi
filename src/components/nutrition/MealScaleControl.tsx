@@ -9,7 +9,7 @@ export interface MealScaleControlProps {
 }
 
 /**
- * D46: the "Scale" chip in the staged-card header, next to "+ Add".
+ * The "Scale" chip in the staged-card header, next to "+ Add".
  *
  * Idle it reads "Scale" (or "×0.2" in cyan when the meal is scaled). Tapping
  * it swaps the chip in place for a small "× [ 1 ]" box with the decimal

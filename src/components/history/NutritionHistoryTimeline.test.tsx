@@ -40,7 +40,7 @@ describe('NutritionHistoryTimeline', () => {
     percentages: { protein: 32, carbs: 43, fat: 25 },
   };
 
-  describe('formatNutritionDayHeader (H41 / STD-DAT-5)', () => {
+  describe('formatNutritionDayHeader (STD DAT 5)', () => {
     it('formats date correctly for current year without year suffix', () => {
       const currentYear = new Date().getFullYear();
       const dateStr = `${currentYear}-09-27`;
@@ -70,7 +70,7 @@ describe('NutritionHistoryTimeline', () => {
     });
   });
 
-  describe('H23: Skeleton & Empty States', () => {
+  describe('Skeleton & Empty States', () => {
     it('renders skeleton cards with aria-busy="true" while isNutritionPending=true', () => {
       render(
         <NutritionHistoryTimeline
@@ -134,7 +134,7 @@ describe('NutritionHistoryTimeline', () => {
     });
   });
 
-  describe('H11: Load Older Days Pagination', () => {
+  describe('Load Older Days Pagination', () => {
     it('renders "Load older days" button when hasMoreNutrition is true', () => {
       const handleLoadMore = vi.fn();
       render(
@@ -194,7 +194,7 @@ describe('NutritionHistoryTimeline', () => {
     });
   });
 
-  describe('RD-7 / H27: Deferred Delete Filtering', () => {
+  describe('Deferred Delete Filtering', () => {
     it('filters out pendingDeleteMealId and recalculates daily totals', () => {
       render(
         <NutritionHistoryTimeline

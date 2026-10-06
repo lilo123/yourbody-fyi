@@ -505,7 +505,7 @@ describe('workoutSessionStore', () => {
     expect(session?.inputDrafts['Leg Press 45° (Plate-Loaded)_0']).toBeUndefined();
   });
 
-  it('20. W24: persists session pointer for active past-date sessions and reloads them', () => {
+  it('20. persists session pointer for active past-date sessions and reloads them', () => {
     const pastDate = '2026-09-15';
     const session = workoutSessionStore.getOrInitSession('user-w24', pastDate, {
       routineName: 'Past Session',

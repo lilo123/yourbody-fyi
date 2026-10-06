@@ -72,7 +72,7 @@ function postgresMd5Uuid(input: string): string {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
 }
 
-describe('M8 Catalog Seed & CSV Parity', () => {
+describe('Catalog Seed & CSV Parity', () => {
   const projectRoot = path.resolve(__dirname, '../..');
   const csvPath = path.join(projectRoot, 'supabase/catalog/default_exercises.csv');
   const migrationPath = path.join(projectRoot, 'supabase/migrations/20260929010000_default_catalog_seed.sql');
@@ -116,7 +116,7 @@ describe('M8 Catalog Seed & CSV Parity', () => {
     expect(normalizedSet.size).toBe(csvRows.length);
   });
 
-  it('asserts M8 migration VALUES match CSV rows exactly', () => {
+  it('asserts migration VALUES match CSV rows exactly', () => {
     for (const row of csvRows) {
       const escapedName = row.name.replace(/'/g, "''");
       const arrayElements = row.bodyParts.map((bp: string) => `'${bp.replace(/'/g, "''")}'`).join(', ');

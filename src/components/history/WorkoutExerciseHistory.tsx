@@ -123,7 +123,7 @@ export const WorkoutExerciseHistory: React.FC<WorkoutExerciseHistoryProps> = ({
         className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-3"
       >
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3 gap-2">
-          {/* H21-ex: min-w-0 flex-1 truncate with title, H51: Tag */}
+          {/* ex: min-w-0 flex-1 truncate with title,: Tag */}
           <div className="min-w-0 flex-1 space-y-1">
             <h3
               className="text-sm font-bold text-white truncate"
@@ -137,7 +137,7 @@ export const WorkoutExerciseHistory: React.FC<WorkoutExerciseHistoryProps> = ({
             />
           </div>
 
-          {/* H47: PR line shows formatted pr_date */}
+          {/* PR line shows formatted pr_date */}
           {totalSets > 0 ? (() => {
             const calculatedE1rm =
               prMode === 'e1rm'
@@ -175,7 +175,7 @@ export const WorkoutExerciseHistory: React.FC<WorkoutExerciseHistoryProps> = ({
           )}
         </div>
 
-        {/* H37: 'All-time: N sets · Last 3:' + year when not current year */}
+        {/* 'All-time: N sets · Last 3:' + year when not current year */}
         {totalSets > 0 && (
           <div className="space-y-1.5">
             <span className="text-xs font-bold uppercase text-zinc-400 tracking-wider block mb-1">
@@ -218,7 +218,7 @@ export const WorkoutExerciseHistory: React.FC<WorkoutExerciseHistoryProps> = ({
     <div className="space-y-4">
       {/* Exercise Filter Bar */}
       <div className="space-y-2">
-        {/* H36: search input text-base min-h-[44px] bg-zinc-950 cyan focus ring */}
+        {/* search input text-base min-h-[44px] bg-zinc-950 cyan focus ring */}
         <div className="relative">
           <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input

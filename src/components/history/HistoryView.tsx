@@ -98,7 +98,7 @@ export const HistoryView: React.FC = () => {
     queryClient,
   });
 
-  // Calendar Jump hook (H29, D-P5b-5)
+  // Calendar Jump hook
   const {
     isCalendarOpen,
     setIsCalendarOpen,
@@ -131,7 +131,7 @@ export const HistoryView: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Deferred set deletion hook (RD-7)
+  // Deferred set deletion hook
   const {
     handleDeleteSetRequested,
     handleSetSaved,
@@ -147,7 +147,7 @@ export const HistoryView: React.FC = () => {
     setMutationError,
   });
 
-  // By-Session filtering (H43, D-P5b-6)
+  // By-Session filtering
   const {
     filtered: filteredSessions,
     isFiltering: isSessionFiltering,
@@ -174,7 +174,7 @@ export const HistoryView: React.FC = () => {
     setSessionCategory('All');
   }, []);
 
-  // Nutrition Data hook (H11 window infinite query, D-P5b-2)
+  // Nutrition Data hook (window infinite query)
   const {
     nutritionLogs,
     hasMoreNutrition,
@@ -187,7 +187,7 @@ export const HistoryView: React.FC = () => {
     refetchNutritionLogs,
   } = useHistoryData(targetUserId, setMutationError, effectiveTimeZone);
 
-  // Nutrition Deferred Delete hook (RD-7, H27, D-P5b-3)
+  // Nutrition Deferred Delete hook
   const {
     handleDeleteMealRequested,
     pendingDeleteMealId,
@@ -269,7 +269,7 @@ export const HistoryView: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      {/* Mutation Error Notification (H33: Dismiss aria-label) */}
+      {/* Mutation Error Notification (Dismiss aria label) */}
       <StatusBanner
         message={mutationError}
         tone="error"
@@ -287,7 +287,7 @@ export const HistoryView: React.FC = () => {
         }
       />
 
-      {/* Calendar Jump StatusBanner (H29) */}
+      {/* Calendar Jump StatusBanner */}
       {jumpStatusMessage && (
         <StatusBanner
           message={jumpStatusMessage}
@@ -441,7 +441,7 @@ export const HistoryView: React.FC = () => {
         )
       )}
 
-      {/* History Calendar Sheet (H29) */}
+      {/* History Calendar Sheet */}
       <HistoryCalendarSheet
         open={isCalendarOpen}
         onClose={() => setIsCalendarOpen(false)}

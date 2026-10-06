@@ -58,7 +58,7 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
         // which bubbles last). Without this guard, Escape inside the unit
         // bottom-sheet or an overflow menu would close the entire dialog and
         // discard the user's edits instead of dismissing the inner control.
-        // Inline editors that own Escape (the D46 Scale box) opt in with
+        // Inline editors that own Escape (the Scale box) opt in with
         // data-captures-escape so Escape cancels the edit, not the dialog.
         if (containerRef.current?.querySelector('[role="dialog"], [role="menu"], [data-captures-escape]')) return;
         e.stopPropagation();

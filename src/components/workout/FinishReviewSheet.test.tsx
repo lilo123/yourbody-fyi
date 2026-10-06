@@ -30,7 +30,7 @@ const renderWithAuth = (ui: React.ReactElement, weightUnit: 'lb' | 'kg' = 'lb') 
   );
 };
 
-describe('FinishReviewSheet (W18, STD-CMP-1/4/7)', () => {
+describe('FinishReviewSheet (STD CMP 1 4 7)', () => {
   const mockPendingSets: PendingReviewSet[] = [
     { exerciseName: 'Bench Press', weight: 185, reps: 8, setIndex: 2 },
     { exerciseName: 'Bench Press', weight: 185, reps: 8, setIndex: 3 },

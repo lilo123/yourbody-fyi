@@ -1669,7 +1669,7 @@ describe('WorkoutEngine', () => {
       const reloadBtn = await screen.findByTestId('reload-scheduled-routine-btn');
       fireEvent.click(reloadBtn);
 
-      // Confirm reload dialog (W10)
+      // Confirm reload dialog
       const confirmReloadBtn = await screen.findByRole('button', { name: 'Reload routine' });
       fireEvent.click(confirmReloadBtn);
 
@@ -2419,7 +2419,7 @@ describe('WorkoutEngine', () => {
         });
       });
 
-      it('mounts workout-logs-error live region empty while idle and retains same DOM node on error (NEW-15)', async () => {
+      it('mounts workout-logs-error live region empty while idle and retains same DOM node on error', async () => {
         let failWorkouts = true;
         (supabase.from as any).mockImplementation((table: string) => {
           if (table === 'workouts') {
@@ -2460,7 +2460,7 @@ describe('WorkoutEngine', () => {
       });
 
 
-      it('disambiguates 90-day workout history cache from all-time history cache without cross-pollution (FIX-05)', async () => {
+      it('disambiguates 90-day workout history cache from all-time history cache without cross-pollution', async () => {
         const targetUserId = '00000000-0000-4000-8000-000000000001';
         const ninetyDaysOldDate = '2026-08-01';
         const oneYearOldDate = '2025-01-01';
@@ -2792,7 +2792,7 @@ describe('WorkoutEngine', () => {
           expect(screen.queryByTestId('commit-set-btn-0-0')).toBeNull();
         });
       });
-    describe('P1-6d Negative Controls (Template Row Coverage & Detail Fetch)', () => {
+    describe('6d Negative Controls (Template Row Coverage & Detail Fetch)', () => {
       it('NC-A (the regression itself): self-coached template with days_of_week=[] resolves all 6 exercises and targets on cold paint when 2 exercises are logged', async () => {
         const myUserId = '00000000-0000-4000-8000-000000000001';
         const templateExercises = [
@@ -3220,7 +3220,7 @@ describe('WorkoutEngine', () => {
   });
 });
 
-  it('W4: retains uncommitted draft in input field and session store when set insertion fails and surfaces error banner', async () => {
+  it('retains uncommitted draft in input field and session store when set insertion fails and surfaces error banner', async () => {
     mockEnqueueAndAwait.mockRejectedValueOnce(new Error('Database insert failed: connection refused'));
 
     (supabase.from as any).mockImplementation((table: string) => {
@@ -3260,7 +3260,7 @@ describe('WorkoutEngine', () => {
   });
 
 
-  describe("P3a B1: Set Deletion and EditSetSheet Host Wiring (W3, RD-7)", () => {
+  describe("B1: Set Deletion and EditSetSheet Host Wiring", () => {
     const today = "2026-09-06";
     const workoutId = "w-edit-1";
     const exerciseUUID = "e1e1e1e1-0000-4000-8000-000000000001";
@@ -3331,7 +3331,7 @@ describe('WorkoutEngine', () => {
       });
     };
 
-    it("tapping a logged set row opens EditSetSheet (W3)", async () => {
+    it("tapping a logged set row opens EditSetSheet", async () => {
       setupLoggedSet();
       renderComponent(true);
 

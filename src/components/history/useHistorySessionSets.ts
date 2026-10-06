@@ -22,7 +22,7 @@ export function useHistorySessionSets({
   const lastAutoExpandedUserIdRef = useRef<string | null>(null);
   const pendingOps = useWorkoutPendingOps(targetUserId);
 
-  // H3: Reset expansion/sets maps when targetUserId changes
+  // Reset expansion/sets maps when targetUserId changes
   const [prevUserId, setPrevUserId] = useState(targetUserId);
   if (prevUserId !== targetUserId) {
     setPrevUserId(targetUserId);
@@ -32,7 +32,7 @@ export function useHistorySessionSets({
     setSessionErrorIds(new Set());
   }
 
-  // H6: Per-session set-fetch error handling & offline pending overlay
+  // Per-session set-fetch error handling & offline pending overlay
   const loadSetsForSession = useCallback(async (sessionId: string) => {
     setSessionErrorIds((prev) => {
       const next = new Set(prev);

@@ -8,7 +8,7 @@ import * as invalidateLib from '../../lib/invalidate';
 import { workoutSessionStore } from '../../utils/workoutSessionStore';
 import { supabase } from '../../lib/supabase';
 
-describe('useWorkoutMutations (P2 / W4 / W20 / W35 / H2)', () => {
+describe('useWorkoutMutations', () => {
   let queryClient: QueryClient;
   const mockSetMutationError = vi.fn();
   const targetUserId = '00000000-0000-0000-0000-000000000001';
@@ -32,7 +32,7 @@ describe('useWorkoutMutations (P2 / W4 / W20 / W35 / H2)', () => {
   const wrapper = ({ children }: { children: React.ReactNode }) =>
     React.createElement(QueryClientProvider, { client: queryClient }, children);
 
-  it('W35: optimistically updates cache on logSet and rolls back on failure', async () => {
+  it('optimistically updates cache on logSet and rolls back on failure', async () => {
     const queryKey = ['workout_sets', targetUserId, workoutDate];
     queryClient.setQueryData(queryKey, [
       { id: 'existing-1', weight: 185, reps: 5, set_index: 1, workout_date: workoutDate },
@@ -78,7 +78,7 @@ describe('useWorkoutMutations (P2 / W4 / W20 / W35 / H2)', () => {
     expect(currentData?.[0].id).toBe('existing-1');
   });
 
-  it('W4: preserves draft inputs on mutation failure and clears them on success', async () => {
+  it('preserves draft inputs on mutation failure and clears them on success', async () => {
     // Stage draft input in workoutSessionStore
     workoutSessionStore.getOrInitSession(targetUserId, workoutDate, {
       routineName: 'Chest Day',
@@ -155,7 +155,7 @@ describe('useWorkoutMutations (P2 / W4 / W20 / W35 / H2)', () => {
     expect(sessionAfterSuccess?.inputDrafts[`${exerciseId}_1`]).toBeUndefined();
   });
 
-  it('W20 & H2: invalidates workout-derived queries via invalidateWorkoutDerived', async () => {
+  it('invalidates workout-derived queries via invalidateWorkoutDerived', async () => {
     const invalidateSpy = vi.spyOn(invalidateLib, 'invalidateWorkoutDerived').mockResolvedValue();
     vi.spyOn(setsLib, 'getOrCreateWorkout').mockResolvedValue('w-123');
     vi.spyOn(setsLib, 'insertSet').mockResolvedValue({

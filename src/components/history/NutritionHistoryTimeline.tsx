@@ -24,18 +24,18 @@ export interface NutritionHistoryTimelineProps {
   onEditMeal: (meal: NutritionLog) => void;
   onDeleteMeal: (mealId: string, meal?: NutritionLog) => void;
   onScaleMeal?: (log: NutritionLog, items: NutritionItem[]) => Promise<unknown>;
-  // H23
+  // Initial loading and navigation state
   isNutritionPending?: boolean;
   onNavigateToNutrition?: () => void;
-  // H11
+  // Pagination state
   hasMoreNutrition?: boolean;
   isLoadingMoreNutrition?: boolean;
   onLoadMoreNutrition?: () => void;
-  // RD-7 pending delete hiding
+  // Pending delete hiding
   pendingDeleteMealId?: string | null;
 }
 
-// D-YB4-2: Realistic collapsed day-card height estimate derived from 390px/320px browser measurements
+// Realistic collapsed day-card height estimate derived from 390px/320px browser measurements
 const COLLAPSED_DAY_CARD_ESTIMATE_PX = 156;
 
 export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> = ({
@@ -70,7 +70,7 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
     });
   };
 
-  // Filter out pending delete meals from days (RD-7, H27)
+  // Filter out pending delete meals from days
   const displayDays = React.useMemo(() => {
     if (!pendingDeleteMealId) return filteredNutritionDays;
     return filteredNutritionDays
@@ -191,7 +191,7 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   const virtualItems = virtualizer.getVirtualItems();
   const isVirtual = virtualItems.length > 0;
 
-  // H23: Skeleton cards (aria-busy) while initial fetch is pending
+  // Skeleton cards (aria-busy) while initial fetch is pending
   if (isNutritionPending) {
     return (
       <div data-testid="nutrition-history-skeleton" className="space-y-4">
@@ -200,7 +200,7 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
     );
   }
 
-  // H23: Empty state with 'Log a meal' CTA
+  // Empty state with 'Log a meal' CTA
   if (displayDays.length === 0) {
     return (
       <div
@@ -406,7 +406,7 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
         </div>
       )}
 
-      {/* H11: Load older days button when hasMoreNutrition */}
+      {/* Load older days button when hasMoreNutrition */}
       {hasMoreNutrition && displayDays.length > 0 && (
         <div className="text-center pt-2">
           <button

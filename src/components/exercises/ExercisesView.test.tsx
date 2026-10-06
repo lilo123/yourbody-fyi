@@ -372,7 +372,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     });
   });
 
-  it('L5: template-save RPC error sends NO fallback table writes and displays error banner', async () => {
+  it('template-save RPC error sends NO fallback table writes and displays error banner', async () => {
     const errTpl = {
       id: 'tpl-master-err',
       user_id: 'coach-999',
@@ -450,7 +450,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     const saveBtn = screen.getByTestId('save-template-btn');
     fireEvent.click(saveBtn);
 
-    // L5: Should display error banner and execute NO fallback writes
+    // Should display error banner and execute NO fallback writes
     await waitFor(() => {
       expect(screen.getByTestId('template-error')).toBeDefined();
       expect(mockInsertTpl).not.toHaveBeenCalled();
@@ -722,7 +722,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     });
   });
 
-  it('prevents query string injection and rejects invalid UUIDs in user.id and targetUserId (FIX-13)', async () => {
+  it('prevents query string injection and rejects invalid UUIDs in user.id and targetUserId', async () => {
     mockCoachState.selectedAthleteId = "malformed-id',is_master.eq.true";
     mockAthleteSession.user.id = "malformed-id',is_master.eq.true";
 
@@ -741,7 +741,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     });
   });
 
-  it('mounts exercises-read-error live region empty while idle and retains same node on error (NEW-15)', async () => {
+  it('mounts exercises-read-error live region empty while idle and retains same node on error', async () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === 'exercises') {
         return createSupabaseBuilder('exercises', {
@@ -770,7 +770,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     expect(container.querySelectorAll('[role="alert"]')[0]).toBe(readAlert);
   });
 
-  it('mounts deleteError live region empty while idle and updates on delete failure (NEW-15)', async () => {
+  it('mounts deleteError live region empty while idle and updates on delete failure', async () => {
     mockCoachState.isCoach = true;
     const mockDelete = vi.fn();
     vi.mocked(supabase.from).mockImplementation((table: string) => {
@@ -824,7 +824,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     }
 
     await waitFor(() => {
-      // L3: archive failure never falls back to DELETE
+      // Archive failure never falls back to DELETE
       expect(mockDelete).not.toHaveBeenCalled();
       expect(deleteAlert.textContent).toContain('Update failed');
     });
@@ -929,7 +929,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     });
   });
 
-  it('L6: create-exercise error shows StatusBanner and keeps form input', async () => {
+  it('create-exercise error shows StatusBanner and keeps form input', async () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === 'exercises') {
         const b = createSupabaseBuilder('exercises', { data: [], error: null });
@@ -966,7 +966,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     expect(screen.getByLabelText(/exercise name/i)).toHaveValue('Standing Overhead Press');
   });
 
-  it('L7: inserts personal exercise (user_id = user.id, is_master = false) when coach has 0 athletes', async () => {
+  it('inserts personal exercise (user_id = user.id, is_master = false) when coach has 0 athletes', async () => {
     mockCoachState.isCoach = true;
     mockCoachState.selectedAthleteId = '';
 
@@ -1013,7 +1013,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     });
   });
 
-  it('L12: ExercisesView disables save button and displays inline error on whitespace name', async () => {
+  it('ExercisesView disables save button and displays inline error on whitespace name', async () => {
     renderComponent();
     fireEvent.click(await screen.findByTestId('open-create-exercise-btn'));
     await screen.findByText(/Create Custom Exercise/i);

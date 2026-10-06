@@ -204,7 +204,7 @@ describe('ManualMealForm', () => {
   });
 
   describe('useManualMealForm', () => {
-    it('stages blank P/C/F/Fib as 0 in staged data (D22)', () => {
+    it('stages blank P/C/F/Fib as 0 in staged data', () => {
       const onStageMeal = vi.fn();
       const { result } = renderHook(() =>
         useManualMealForm({
@@ -276,7 +276,7 @@ describe('ManualMealForm', () => {
       expect(onStageMeal).not.toHaveBeenCalled();
     });
 
-    it('stages meal via onStageMeal with complete macro data (D22)', () => {
+    it('stages meal via onStageMeal with complete macro data', () => {
       const onStageMeal = vi.fn();
       const { result } = renderHook(() =>
         useManualMealForm({
@@ -331,7 +331,7 @@ describe('ManualMealForm', () => {
       });
       expect(onStageMeal).not.toHaveBeenCalled();
     });
-    it('D23: soft kcal-vs-macros hint appears/disappears as values change and does not block submit', () => {
+    it('soft kcal-vs-macros hint appears/disappears as values change and does not block submit', () => {
       const onSubmit = vi.fn();
       const { rerender } = renderForm({
         manualName: 'Oatmeal',

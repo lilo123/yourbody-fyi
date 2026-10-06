@@ -95,7 +95,7 @@
 
 | ID | Rule | In Nutrition | Other tabs |
 |---|---|---|---|
-| STD-TYP-1 | **Three sizes:** 16px (inputs only), 14px (the main text of each spot: item/exercise names, dish names, sheet titles, key values), 12px (everything else: labels, buttons, chips, units, status lines, numbers in cells). **Nothing below 12px.** | guard "D43 nutrition type scale" | Sub-12px text (10/11px, ×19 in History) moves to this scale (**not** text-3xs/2xs tokens). Shell labels (BottomNav, Header tag, timer pill) are in Phase 8. |
+| STD-TYP-1 | **Three sizes:** 16px (inputs only), 14px (the main text of each spot: item/exercise names, dish names, sheet titles, key values), 12px (everything else: labels, buttons, chips, units, status lines, numbers in cells). **Nothing below 12px.** | guard "nutrition type scale" | Sub-12px text (10/11px, ×19 in History) moves to this scale (**not** text-3xs/2xs tokens). Shell labels (BottomNav, Header tag, timer pill) are in Phase 8. |
 | STD-TYP-2 | **Three weights:** 400/600/700. No 500/800/900 (`font-black` is banned). | 400/600/700 weights | History `font-black` headers (e.g. `NutritionHistoryTimeline.tsx:128`), Workout headings. |
 | STD-TYP-3 | **One family** (system sans) + `tabular-nums` on every number. **No `font-mono`.** | System sans + tabular-nums | Mono chips, History pills, Header/timer pill mono tags. |
 | STD-TYP-4 | **Section headers** 12px/700 uppercase `tracking-wider`; **buttons** in written case (no uppercase transform). | Uppercase section headers, written-case buttons | "ADD" button, Library/History headers. |
@@ -205,7 +205,7 @@
 ## 11. Guards that enforce these standards (extend per tab)
 | Guard | Enforces | Extend in |
 |---|---|---|
-| D43 nutrition type scale (`visual-density.test.ts`) | STD-TYP-1..3 | Workout (Phase 3a), History (5a), Library (7a), shell (8) |
+| Nutrition type scale (`visual-density.test.ts`) | STD-TYP-1..3 | Workout (Phase 3a), History (5a), Library (7a), shell (8) |
 | Tap/elementFromPoint grids | STD-INT-9, STD-LAY-4 | every sheet and sticky row |
 | Overflow check at 320 | STD-LAY-3 | every tab route |
 | No `window.confirm` (lint grep in CI) | STD-CMP-7 | Phase 3a adds the check; Phase 8 removes the last callers |

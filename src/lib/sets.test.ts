@@ -22,7 +22,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-  describe('getNextSetIndex (W19)', () => {
+  describe('getNextSetIndex', () => {
     it('returns 1 for an empty set list', () => {
       expect(getNextSetIndex([])).toBe(1);
     });
@@ -31,7 +31,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
       expect(getNextSetIndex([{ set_index: 1 }, { set_index: 2 }, { set_index: 3 }])).toBe(4);
     });
 
-    it('returns 4 when set 1 was deleted from [1, 2, 3] (W19 acceptance)', () => {
+    it('returns 4 when set 1 was deleted from [1, 2, 3] (acceptance)', () => {
       // Deleting set 1 leaves [2, 3]; next set must be max(2,3) + 1 = 4, preventing index collision
       expect(getNextSetIndex([{ set_index: 2 }, { set_index: 3 }])).toBe(4);
     });
@@ -42,7 +42,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
     });
   });
 
-  describe('getOrCreateWorkout (W40, W41)', () => {
+  describe('getOrCreateWorkout', () => {
     it('returns existing workout id if one already exists for that user and civil date', async () => {
       const mockClient: any = {
         ['from']: vi.fn().mockReturnValue({
@@ -91,7 +91,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
       expect(id).toBe('w-new-456');
     });
 
-    it('handles concurrent race condition 23505 (unique_violation) and returns winning row (W41 acceptance)', async () => {
+    it('handles concurrent race condition 23505 (unique_violation) and returns winning row (acceptance)', async () => {
       let callCount = 0;
       const mockClient: any = {
         ['from']: vi.fn().mockImplementation(() => ({
@@ -208,7 +208,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
       expect(id).toBe('w-tokyo-row');
     });
 
-    it('pre-M2 fallback path still works when workout_date column does not exist', async () => {
+    it('pre-migration fallback path still works when workout_date column does not exist', async () => {
       let queryCount = 0;
       let dateWindowQueryMade = false;
 
@@ -237,7 +237,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
             maybeSingle: vi.fn().mockImplementation(() => {
               queryCount++;
               if (eqCol === 'workout_date') {
-                // Pre-M2 DB: column does not exist error
+                // Pre-migration DB: column does not exist error
                 return Promise.resolve({
                   data: null,
                   error: {
@@ -266,7 +266,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
       expect(dateWindowQueryMade).toBe(true);
     });
 
-    it('handles W41 two concurrent calls returning one single workout id', async () => {
+    it('handles two concurrent calls returning one single workout id', async () => {
       let createdRow: { id: string; date: string; workout_date: string } | null = null;
 
       const mockClient: any = {
@@ -298,7 +298,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
                 return { data: null, error: null };
               }
 
-              // Post-M2 workout_date lookup
+              // Post-migration workout_date lookup
               if (eqFilters.workout_date === createdRow.workout_date) {
                 return { data: { id: createdRow.id }, error: null };
               }
@@ -413,7 +413,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
     });
   });
 
-  describe('insertSet (resolves by exercise_id UUID, W35)', () => {
+  describe('insertSet (resolves by exercise_id UUID)', () => {
     it('offline -> exactly one set.create op with client id and zero supabase calls', async () => {
       const mockClient: any = { ['from']: vi.fn() };
       vi.mocked(enqueueAndAwait).mockResolvedValueOnce({

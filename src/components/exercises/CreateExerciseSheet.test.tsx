@@ -60,7 +60,7 @@ describe('CreateExerciseSheet', () => {
     await expectNoA11yViolationsForRules(container, ['label']);
   });
 
-  it('L32: pressing Enter submits the form and calls onCreated with created exercise', async () => {
+  it('pressing Enter submits the form and calls onCreated with created exercise', async () => {
     const mockCreated = {
       id: 'ex-new',
       name: 'Romanian Deadlift',
@@ -98,7 +98,7 @@ describe('CreateExerciseSheet', () => {
     });
   });
 
-  it('L35: duplicate message + no insert: shows duplicate alert naming existing exercise with View CTA and prevents insert', async () => {
+  it('duplicate message + no insert: shows duplicate alert naming existing exercise with View CTA and prevents insert', async () => {
     const existingExercise = {
       id: 'ex-bench-default',
       name: 'Bench Press',
@@ -166,7 +166,7 @@ describe('CreateExerciseSheet', () => {
     expect(mockProps.onCreated).not.toHaveBeenCalled();
   });
 
-  it('L35: duplicate hidden default shows "Unhide" CTA calling onViewExisting', async () => {
+  it('duplicate hidden default shows "Unhide" CTA calling onViewExisting', async () => {
     const existingHidden = {
       id: 'ex-squat-hidden',
       name: 'Back Squat',
@@ -221,7 +221,7 @@ describe('CreateExerciseSheet', () => {
     });
   });
 
-  it('L48: single-select equipment chips saved to exercises.equipment via insertCustomExercise', async () => {
+  it('single-select equipment chips saved to exercises.equipment via insertCustomExercise', async () => {
     const insertSpy = vi.spyOn(exercisesLib, 'insertCustomExercise').mockResolvedValue({
       id: 'new-id',
       name: 'Overhead Press',
@@ -263,7 +263,7 @@ describe('CreateExerciseSheet', () => {
     });
   });
 
-  it('L13: dismiss blocked while saving (dismissible={!isSubmitting})', async () => {
+  it('dismiss blocked while saving (dismissible={!isSubmitting})', async () => {
     let resolveInsert: (val: any) => void;
     const insertPromise = new Promise((resolve) => {
       resolveInsert = resolve;
@@ -310,7 +310,7 @@ describe('CreateExerciseSheet', () => {
     });
   });
 
-  it('L13: double-submit = one insert: rapid submits trigger exactly one insert call', async () => {
+  it('double-submit = one insert: rapid submits trigger exactly one insert call', async () => {
     let resolveInsert: (val: any) => void;
     const insertPromise = new Promise((resolve) => {
       resolveInsert = resolve;
@@ -343,7 +343,7 @@ describe('CreateExerciseSheet', () => {
     });
   });
 
-  it('L12: whitespace-only name disables save button and shows inline whitespace error', () => {
+  it('whitespace-only name disables save button and shows inline whitespace error', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <CreateExerciseSheet {...mockProps} />

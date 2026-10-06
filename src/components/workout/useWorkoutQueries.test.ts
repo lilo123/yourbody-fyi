@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase';
 import * as pendingOpsModule from './useWorkoutPendingOps';
 import { AuthContext } from '../../context/AuthContextTypes';
 
-describe('useWorkoutQueries (P2 / W1 / W2 / W11 / W16 / W50 / L11)', () => {
+describe('useWorkoutQueries', () => {
   let queryClient: QueryClient;
   const targetUserId = '00000000-0000-0000-0000-000000000001';
 
@@ -23,7 +23,7 @@ describe('useWorkoutQueries (P2 / W1 / W2 / W11 / W16 / W50 / L11)', () => {
   const wrapper = ({ children }: { children: React.ReactNode }) =>
     React.createElement(QueryClientProvider, { client: queryClient }, children);
 
-  it('W11: exposes isExercisesError and exercisesError when exercises query fails', async () => {
+  it('exposes isExercisesError and exercisesError when exercises query fails', async () => {
     const errorSpy = vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
       if (table === 'exercises') {
         const b: any = {
@@ -66,7 +66,7 @@ describe('useWorkoutQueries (P2 / W1 / W2 / W11 / W16 / W50 / L11)', () => {
     errorSpy.mockRestore();
   });
 
-  it('W16 & L11: queries exercises with is_archived = false', async () => {
+  it('queries exercises with is_archived = false', async () => {
     const eqSpy = vi.fn().mockReturnThis();
     const selectSpy = vi.fn().mockReturnValue({
       eq: eqSpy,
@@ -117,7 +117,7 @@ describe('useWorkoutQueries (P2 / W1 / W2 / W11 / W16 / W50 / L11)', () => {
     expect(eqSpy).toHaveBeenCalledWith('is_archived', false);
   });
 
-  it('W2: refetches when workoutDate changes', async () => {
+  it('refetches when workoutDate changes', async () => {
     let queriedDate = '';
     vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
       if (table === 'workouts') {
@@ -161,7 +161,7 @@ describe('useWorkoutQueries (P2 / W1 / W2 / W11 / W16 / W50 / L11)', () => {
     });
   });
 
-  it('W1, W31, W42, H10: queries get_exercise_benchmarks RPC and merges today sets', async () => {
+  it('queries get_exercise_benchmarks RPC and merges today sets', async () => {
     const exerciseUUID = '00000000-0000-4000-8000-000000000010';
     (supabase as any).rpc = vi.fn().mockImplementation((fn: string) => {
       if (fn === 'get_exercise_benchmarks') {
@@ -231,7 +231,7 @@ describe('useWorkoutQueries (P2 / W1 / W2 / W11 / W16 / W50 / L11)', () => {
     expect(result.current.benchmarks[exerciseUUID].lastSession?.summaryText).toBe('185×8, 185×8');
   });
 
-  it('W3: queries get_routine_catalog RPC with p_limit: 200 and projects narrow columns', async () => {
+  it('queries get_routine_catalog RPC with p_limit: 200 and projects narrow columns', async () => {
     const routineId = '00000000-0000-4000-8000-000000000020';
     let rpcCalledWith: any = null;
     let selectCalledWith: any = null;
@@ -314,7 +314,7 @@ describe('useWorkoutQueries (P2 / W1 / W2 / W11 / W16 / W50 / L11)', () => {
     expect((loadedRoutine as any)?.exercises).toBeUndefined();
   });
 
-  it('W3: falls back to legacy REST routine_templates query and logs warning when get_routine_catalog RPC errors', async () => {
+  it('falls back to legacy REST routine_templates query and logs warning when get_routine_catalog RPC errors', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const rpcError = new Error('RPC connection failure');
 

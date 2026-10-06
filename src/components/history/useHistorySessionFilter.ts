@@ -15,7 +15,7 @@ export interface UseHistorySessionFilterResult {
 }
 
 /**
- * useHistorySessionFilter (H43, D-P5b-6)
+ * UseHistorySessionFilter
  *
  * Pure hook to filter workout sessions in History By-Session view.
  *

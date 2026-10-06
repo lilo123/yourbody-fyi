@@ -25,7 +25,7 @@ describe('ComponentRow', () => {
     const item = component();
     render(<ComponentRow item={item} reference={item} onChange={() => {}} />);
 
-    // Name & absence of portion chip (D1)
+    // Name & absence of portion chip
     expect(screen.getByTestId('component-name').textContent).toBe(item.name);
     expect(screen.queryByTestId('component-portion-chip')).toBeNull();
 
@@ -45,7 +45,7 @@ describe('ComponentRow', () => {
     expect(screen.getByTestId('component-unit-chip')).toBeDefined();
   });
 
-  it('does not render portion chip and drops raw portion string (D1)', () => {
+  it('does not render portion chip and drops raw portion string', () => {
     const item = component({
       quantity: 540,
       unit: 'g',
@@ -57,7 +57,7 @@ describe('ComponentRow', () => {
     expect(screen.queryByText('1 serving')).toBeNull();
   });
 
-  it('hides zero-value macros when filtered, and displays muted 0 + suffix in visible columns (D2)', () => {
+  it('hides zero-value macros when filtered, and displays muted 0 + suffix in visible columns', () => {
     const item = component({
       calories: 104,
       protein: 10,
@@ -492,10 +492,10 @@ describe('ComponentRow', () => {
     expect(scaled.calories).toBeCloseTo(364, 1);
   });
 
-  it('while unit change is pending, re-anchoring preserves per-item D7 nutrition edit and uses it for subsequent scaling', () => {
+  it('while unit change is pending, re-anchoring preserves per-item nutrition edit and uses it for subsequent scaling', () => {
     // Reference has initial values
     const reference = component({ quantity: 1, unit: 'unit', calories: 100, protein: 5, carbs: 10, fat: 2, fiber: 1 });
-    // Item has custom D7 edited nutrition (e.g. corrected via ItemNutritionModal)
+    // Item has custom edited nutrition (e.g. corrected via ItemNutritionModal)
     let currentItem = component({
       quantity: 1,
       unit: 'unit',
@@ -539,7 +539,7 @@ describe('ComponentRow', () => {
     const reanchored = onReanchor.mock.calls[0][0] as NutritionItem;
     expect(reanchored.quantity).toBe(120);
     expect(reanchored.unit).toBe('g');
-    // D7 edited values preserved, NOT reset to reference's 100 kcal / 5 P
+    // Edited values preserved, NOT reset to reference's 100 kcal / 5 P
     expect(reanchored.calories).toBe(250);
     expect(reanchored.protein).toBe(30);
     expect(reanchored.carbs).toBe(15);
@@ -563,7 +563,7 @@ describe('ComponentRow', () => {
     const scaled = onChange.mock.calls[0][0] as NutritionItem;
     expect(scaled.quantity).toBe(240);
     expect(scaled.unit).toBe('g');
-    // Scales linearly from the D7 edited macros: 2x 250 = 500 kcal, 2x 30 = 60 P
+    // Scales linearly from the edited macros: 2x 250 = 500 kcal, 2x 30 = 60 P
     expect(scaled.calories).toBe(500);
     expect(scaled.protein).toBe(60);
     expect(scaled.carbs).toBe(30);
@@ -609,7 +609,7 @@ describe('ComponentRow', () => {
     expect(applied.calories).toBe(2500);
   });
 
-  it('selects input text on focus for rapid single-tap replacement (defect F3/NEW-01)', () => {
+  it('selects input text on focus for rapid single-tap replacement (defect F3)', () => {
     const item = component({ quantity: 150 });
     render(<ComponentRow item={item} reference={item} onChange={() => {}} />);
     const input = screen.getByTestId('component-quantity-input') as HTMLInputElement;
@@ -785,7 +785,7 @@ describe('ComponentRow', () => {
     expect(nameEl.textContent).toBe(item.name);
   });
 
-  it('applies D24 minmax responsive grid template and whitespace-nowrap on macro cells', () => {
+  it('applies minmax responsive grid template and whitespace-nowrap on macro cells', () => {
     const item = component();
     render(<ComponentRow item={item} reference={item} onChange={() => {}} />);
 

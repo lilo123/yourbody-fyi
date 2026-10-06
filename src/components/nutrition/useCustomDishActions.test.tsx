@@ -424,7 +424,7 @@ describe('useCustomDishActions', () => {
     }
   });
 
-  describe('D33: handleAddCustomDishToStaged', () => {
+  describe('handleAddCustomDishToStaged', () => {
     it('appends favorite items to staged meal without replacing it', async () => {
       const initialStagedMeal = {
         name: 'Breakfast Bowl',

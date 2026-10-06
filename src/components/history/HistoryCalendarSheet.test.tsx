@@ -27,7 +27,7 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
-describe('HistoryCalendarSheet (H29, D-P5b-5)', () => {
+describe('HistoryCalendarSheet', () => {
   let queryClient: QueryClient;
   const mockOnClose = vi.fn();
   const mockOnSelectDate = vi.fn();

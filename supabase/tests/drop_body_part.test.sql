@@ -2,7 +2,7 @@ BEGIN;
 SELECT plan(8);
 
 -- ============================================================================
--- 1. Apply M9 Up: Drop legacy column and associated routines
+-- 1. Apply Up: Drop legacy column and associated routines
 -- ============================================================================
 DROP TRIGGER IF EXISTS trg_sync_exercise_body_parts ON public.exercises;
 DROP FUNCTION IF EXISTS public.sync_exercise_body_parts();
@@ -183,7 +183,7 @@ $$;
 
 ALTER TABLE public.exercises DROP COLUMN IF EXISTS body_part;
 
--- Assert M9 Up State
+-- Assert Up State
 SELECT hasnt_column('public', 'exercises', 'body_part', 'After M9, exercises.body_part column is absent');
 SELECT hasnt_function('public', 'parse_exercise_body_parts', 'parse_exercise_body_parts function is dropped');
 SELECT hasnt_function('public', 'sync_exercise_body_parts', 'sync_exercise_body_parts trigger function is dropped');
@@ -209,7 +209,7 @@ $$;
 SELECT pass('get_exercise_catalog functions correctly after dropping body_part column');
 
 -- ============================================================================
--- 2. Rehearse M9 Down (Rollback)
+-- 2. Rehearse Down (Rollback)
 -- ============================================================================
 ALTER TABLE public.exercises ADD COLUMN IF NOT EXISTS body_part text;
 UPDATE public.exercises
@@ -458,7 +458,7 @@ BEGIN
 END;
 $$;
 
--- Assert M9 Down State
+-- Assert Down State
 SELECT has_column('public', 'exercises', 'body_part', 'M9 rollback restores exercises.body_part column');
 SELECT has_function('public', 'parse_exercise_body_parts', 'M9 rollback restores parse_exercise_body_parts');
 SELECT has_trigger('public', 'exercises', 'trg_sync_exercise_body_parts', 'M9 rollback restores trg_sync_exercise_body_parts');

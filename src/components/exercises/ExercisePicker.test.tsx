@@ -161,7 +161,7 @@ describe('ExercisePicker', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('filters exercises by prefix search "zer" and alias "rdl" (L8, H32)', async () => {
+  it('filters exercises by prefix search "zer" and alias "rdl"', async () => {
     const user = userEvent.setup();
     renderPicker();
 
@@ -190,7 +190,7 @@ describe('ExercisePicker', () => {
     });
   });
 
-  it('shows duplicate message when searching an existing exercise (L35)', async () => {
+  it('shows duplicate message when searching an existing exercise', async () => {
     const user = userEvent.setup();
     renderPicker();
 

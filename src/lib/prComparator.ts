@@ -3,7 +3,7 @@
  *
  * Implements single source of truth for PR ranking across the application,
  * mirroring PostgreSQL get_exercise_benchmarks and get_exercise_stats RPCs exactly.
- * Decisions: D-P8.1-8, D-P8.1-9, D-P8.1-10.
+ * Decisions: PR ranking mode profile setting.
  */
 
 export type PrMode = 'weight' | 'e1rm';

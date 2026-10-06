@@ -84,20 +84,20 @@ describe('ExerciseCard', () => {
     onBatchLogExercise: vi.fn(),
   };
 
-  it('renders card title, index badge and chips (W7, W13)', () => {
+  it('renders card title, index badge and chips', () => {
     renderWithAuth(<ExerciseCard {...defaultProps} />);
 
     expect(screen.getByText('Bench Press')).toBeInTheDocument();
     expect(screen.getByTestId('exercise-index-0')).toHaveTextContent('1');
 
-    // W13: Last chip text visible without 140px clipping
+    // Last chip text visible without 140px clipping
     const lastChip = screen.getByTestId('last-chip-0');
     expect(lastChip).toBeInTheDocument();
     expect(lastChip.textContent).toContain('Last: 185×8, 185×8, 185×7');
     expect(lastChip.className).toContain('truncate');
     expect(lastChip.className).not.toContain('max-w-none');
 
-    // W7: PR chip formatted
+    // PR chip formatted
     const prChip = screen.getByTestId('pr-chip-0');
     expect(prChip).toBeInTheDocument();
     expect(prChip.textContent).toContain('PR: 225×5');
@@ -106,7 +106,7 @@ describe('ExerciseCard', () => {
     expect(screen.getByTestId('sets-progress-chip-0')).toHaveTextContent('1/3 Sets');
   });
 
-  it('renders bodyweight PR as BW×reps (W7)', () => {
+  it('renders bodyweight PR as BW×reps', () => {
     const bwProps: ExerciseCardProps = {
       ...defaultProps,
       exName: 'Pull Up',
@@ -183,7 +183,7 @@ describe('ExerciseCard', () => {
     expect(onToggleAccordion).toHaveBeenCalledWith('Bench Press');
   });
 
-  describe('W36 memo comparator', () => {
+  describe('memo comparator', () => {
     it('does not re-render when typing in another exercise card', () => {
       let renderCount = 0;
       const SpyCard = (props: ExerciseCardProps) => {
@@ -249,7 +249,7 @@ describe('ExerciseCard', () => {
     await expectNoA11yViolations(container);
   });
 
-  it('formats PR chip and prefills ghost weight in kg mode (P6, W3)', () => {
+  it('formats PR chip and prefills ghost weight in kg mode', () => {
     const kgProps: ExerciseCardProps = {
       ...defaultProps,
       benchmarks: {
@@ -312,7 +312,7 @@ describe('ExerciseCard', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
     await expectNoA11yViolations(container);
   });
-  it('displays e1RM suffix on PR chip when pr_mode is e1rm (D-P8.1-8)', () => {
+  it('displays e1RM suffix on PR chip when pr_mode is e1rm', () => {
     const prProps: ExerciseCardProps = {
       ...defaultProps,
       benchmarks: {

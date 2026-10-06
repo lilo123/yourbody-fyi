@@ -447,7 +447,7 @@ describe('HistoryView', () => {
     openMealAction('log-items', 'edit');
 
     expect(await screen.findByTestId('edit-meal-sheet')).toBeDefined();
-    // D46: scale via the header Scale chip
+    // Scale via the header Scale chip
     fireEvent.click(screen.getByTestId('meal-scale-button'));
     fireEvent.change(screen.getByTestId('meal-scale-input'), { target: { value: '0.5' } });
     fireEvent.keyDown(screen.getByTestId('meal-scale-input'), { key: 'Enter' });
@@ -526,7 +526,7 @@ describe('HistoryView', () => {
     openMealAction('log-scale-test', 'edit');
     expect(await screen.findByTestId('edit-meal-sheet')).toBeDefined();
     await screen.findByTestId('meal-scale-button');
-    // D46: scale via the header Scale chip
+    // Scale via the header Scale chip
     fireEvent.click(screen.getByTestId('meal-scale-button'));
     fireEvent.change(screen.getByTestId('meal-scale-input'), { target: { value: '0.5' } });
     fireEvent.keyDown(screen.getByTestId('meal-scale-input'), { key: 'Enter' });
@@ -640,7 +640,7 @@ describe('HistoryView', () => {
     });
   });
 
-  it('mounts history-mutation-error live region empty while idle and updates on mutation failure (NEW-15)', async () => {
+  it('mounts history-mutation-error live region empty while idle and updates on mutation failure', async () => {
     mockDeleteEq.mockResolvedValueOnce({ error: { message: 'Database deletion failed' } });
 
     const { container } = renderComponent();
@@ -673,7 +673,7 @@ describe('HistoryView', () => {
     expect(container.querySelectorAll('[role="alert"]')[0]).toBe(mutationAlert);
   });
 
-  it('mounts history-read-error live region empty while idle and updates on read failure (NEW-15)', async () => {
+  it('mounts history-read-error live region empty while idle and updates on read failure', async () => {
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'workouts') {
         const b = createSupabaseBuilder('workouts', { data: null, error: { message: 'Network connection lost' } });
@@ -698,7 +698,7 @@ describe('HistoryView', () => {
   });
 
 
-  it('opens Edit Meal sheet pre-filled with meal values when Edit button is clicked in nutrition history (D44)', async () => {
+  it('opens Edit Meal sheet pre-filled with meal values when Edit button is clicked in nutrition history', async () => {
     renderComponent();
 
     fireEvent.click(screen.getByTestId('history-tab-nutrition'));
@@ -720,7 +720,7 @@ describe('HistoryView', () => {
     expect(screen.getByTestId('meal-type-select')).toHaveValue('Lunch');
   });
 
-  it('submits updated meal changes and executes update mutation on supabase (D44)', async () => {
+  it('submits updated meal changes and executes update mutation on supabase', async () => {
     renderComponent();
 
     fireEvent.click(screen.getByTestId('history-tab-nutrition'));
@@ -759,7 +759,7 @@ describe('HistoryView', () => {
     });
   });
 
-  it('displays error notification in Edit Meal sheet when meal update fails (D44)', async () => {
+  it('displays error notification in Edit Meal sheet when meal update fails', async () => {
     mockUpdateEq.mockReturnValueOnce({
       select: vi.fn().mockResolvedValue({ data: null, error: { message: 'Database update failed' } }),
     });
@@ -789,7 +789,7 @@ describe('HistoryView', () => {
     });
   });
 
-  it('allows canceling edit sheet without submitting update (D44)', async () => {
+  it('allows canceling edit sheet without submitting update', async () => {
     renderComponent();
 
     fireEvent.click(screen.getByTestId('history-tab-nutrition'));
@@ -812,7 +812,7 @@ describe('HistoryView', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it('validates meal name is required before submitting update (D44)', async () => {
+  it('validates meal name is required before submitting update', async () => {
     renderComponent();
 
     fireEvent.click(screen.getByTestId('history-tab-nutrition'));
@@ -837,7 +837,7 @@ describe('HistoryView', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it('allows changing date in Edit Meal sheet (D44/D29)', async () => {
+  it('allows changing date in Edit Meal sheet', async () => {
     renderComponent();
 
     fireEvent.click(screen.getByTestId('history-tab-nutrition'));
@@ -863,7 +863,7 @@ describe('HistoryView', () => {
     });
   });
 
-  it('dismisses edit sheet on backdrop click and Escape key when clean (D44)', async () => {
+  it('dismisses edit sheet on backdrop click and Escape key when clean', async () => {
     renderComponent();
 
     fireEvent.click(screen.getByTestId('history-tab-nutrition'));
@@ -1777,7 +1777,7 @@ describe('HistoryView', () => {
 
       expect(await screen.findByText('Barbell Bench Press')).toBeDefined();
       expect(await screen.findByText('PR: 225 lbs × 8')).toBeDefined();
-      // Expand unlogged exercises collapsed by default under H14/D4
+      // Expand unlogged exercises collapsed by default under /
       fireEvent.click(screen.getByTestId('toggle-unlogged-exercises'));
       expect(screen.getByText('Barbell Back Squat')).toBeDefined();
       expect(screen.getByText('No logs yet')).toBeDefined();
@@ -2144,7 +2144,7 @@ describe('HistoryView', () => {
     expect(range1y.className).toContain('min-h-[44px]');
   });
 
-  describe('P5b HistoryView Wiring (D-P5b-2..6)', () => {
+  describe('HistoryView Wiring (..6)', () => {
     it('calendar jump loads pages until the date then highlights', async () => {
       let currentSessions = [
         {

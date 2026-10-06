@@ -248,7 +248,7 @@ export interface InsertCustomExerciseParams {
 }
 
 /**
- * Single custom-exercise insert path with client duplicate check (L35)
+ * Single custom-exercise insert path with client duplicate check
  * and typed DuplicateExerciseError.
  */
 export async function insertCustomExercise(
@@ -267,7 +267,7 @@ export async function insertCustomExercise(
       ? params.equipment.toLowerCase().trim()
       : null;
 
-  // 1. Client-side duplicate check (L35: (normalized name, equipment))
+  // 1. Client-side duplicate check (normalized name, equipment)
   if (existingCatalog && existingCatalog.length > 0) {
     const isDuplicate = existingCatalog.some((ex) => {
       const existingName = normalizeSearch(ex.name);

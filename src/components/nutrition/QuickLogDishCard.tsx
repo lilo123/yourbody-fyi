@@ -47,7 +47,7 @@ export const QuickLogDishCard: React.FC<QuickLogDishCardProps> = memo(({
       aria-labelledby={`dish-name-${dish.id}`}
       className="h-14 min-h-[56px] bg-zinc-950 hover:bg-zinc-850 border border-zinc-800 hover:border-cyan-500/40 rounded-2xl p-2 flex items-center justify-between gap-2 transition shadow-sm group select-none"
     >
-      {/* Primary Hit Zone: Staging or Appending the Dish (D33) */}
+      {/* Primary Hit Zone: Staging or Appending the Dish */}
       <button
         type="button"
         onClick={handlePrimaryClick}

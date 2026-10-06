@@ -10,15 +10,15 @@ import { createSupabaseBuilder } from './supabaseBuilderMock';
 import type { NutritionLog } from '../types/database';
 
 /**
- * Scaffolding for History behavioural tests (H13).
+ * Scaffolding for History behavioural tests.
  *
  * References:
  * - HISTORY_AUDIT_REPORT.md line 105:
- *   "H13 | Chips, search and category behaviour have no tests (only CSS class / placeholder checks) |
- *    Tests | P2 | HistoryView.test.tsx:231,1907-1922; Virtualization.test.tsx:201 V-s |
- *    Add behavioural tests (see H9/H5 acceptance) | S | 12 | n"
+ *   "Chips, search and category behaviour have no tests (only CSS class / placeholder checks) |
+ *    Tests | HistoryView.test.tsx:231,1907-1922; Virtualization.test.tsx:201 V-s |
+ *    Add behavioural tests (see acceptance)"
  * - HISTORY_AUDIT_REPORT.md line 255:
- *   "B0 Test infra | H19, H28, H13 scaffolding, H46 | ... Land first so the other batches' tests
+ *   "B0 Test infra | Test scaffolding | ... Land first so the other batches' tests
  *    actually exercise the caps and timezones. Other batches add new test files only; nobody edits
  *    HistoryView.test.tsx except B2."
  *
@@ -130,7 +130,7 @@ export function createMockNutritionLog(overrides: Partial<NutritionLog> = {}): N
 
 /**
  * Creates boundary sessions around -29, -30, and -31 days relative to referenceDate,
- * used for testing date filter chips (30d boundary acceptance per H9/H13).
+ * used for testing date filter chips (30d boundary acceptance).
  */
 export function createBoundarySessions(referenceDate: Date = new Date()): MockWorkoutSession[] {
   const refMs = referenceDate.getTime();
@@ -263,7 +263,7 @@ export function renderHistoryView(customQueryClient?: QueryClient) {
   );
 }
 
-// User interaction helpers for behavioural testing (H13)
+// User interaction helpers for behavioural testing
 export function clickTimeRangeChip(range: 'all' | '90d' | '30d' | '1y') {
   const chip = screen.getByTestId(`history-range-${range}`);
   fireEvent.click(chip);

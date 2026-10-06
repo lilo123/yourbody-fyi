@@ -77,7 +77,7 @@ export function computeVisibleMacroColumns(
  * Generates an identical gridTemplateColumns template for rows and totals.
  */
 /**
- * Per-column responsive widths (D24):
+ * Per-column responsive widths:
  * - Kcal: minmax(3rem, 4.5rem) (48px - 72px)
  * - P/C/F/Fib: minmax(2.5rem, 3.5rem) (40px - 56px)
  * Generates an identical gridTemplateColumns template for rows and totals.

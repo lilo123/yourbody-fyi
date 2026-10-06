@@ -202,7 +202,7 @@ describe("EditTemplateSheet", () => {
     return res;
   }
 
-  it("has accessible label association for Template Name and uses input-text-sm (NEW-17)", async () => {
+  it("has accessible label association for Template Name and uses input-text-sm", async () => {
     await renderSheetAndWait(<EditTemplateSheet {...mockProps} />);
     const input = screen.getByLabelText(/template name/i);
     expect(input).toBeDefined();
@@ -215,7 +215,7 @@ describe("EditTemplateSheet", () => {
     await expectNoA11yViolationsForRules(container, ["label"]);
   });
 
-  it("mounts template-error live region empty while idle and retains same node on error (NEW-15)", async () => {
+  it("mounts template-error live region empty while idle and retains same node on error", async () => {
     const { container } = await renderSheetAndWait(<EditTemplateSheet {...mockProps} />);
 
     // Live region exists and is empty while idle
@@ -325,7 +325,7 @@ describe("EditTemplateSheet", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
 
-    it("focus returns to Add exercise button after closing ExercisePicker (L36)", async () => {
+    it("focus returns to Add exercise button after closing ExercisePicker", async () => {
       await renderSheetAndWait(<EditTemplateSheet {...mockProps} />);
 
       const addBtn = screen.getByTestId("open-exercise-picker");
@@ -368,7 +368,7 @@ describe("EditTemplateSheet", () => {
     expect(getRecordedTables()).toContain("template_exercises");
   });
 
-  it("L2: passes p_is_master: true when saving an existing master routine template", async () => {
+  it("passes p_is_master: true when saving an existing master routine template", async () => {
     const masterTpl: RoutineTemplate = {
       id: "tpl-master-1",
       user_id: "user-1",
@@ -421,7 +421,7 @@ describe("EditTemplateSheet", () => {
     });
   });
 
-  it("L5: when save_routine_template RPC fails, no fallback queries are executed and error is shown", async () => {
+  it("when save_routine_template RPC fails, no fallback queries are executed and error is shown", async () => {
     const tpl: RoutineTemplate = {
       id: "tpl-1",
       user_id: "user-1",
@@ -492,7 +492,7 @@ describe("EditTemplateSheet", () => {
     expect(mockFromSpy).not.toHaveBeenCalled();
   });
 
-  it("L12: disables save button and displays inline error on whitespace name", async () => {
+  it("disables save button and displays inline error on whitespace name", async () => {
     const tpl: RoutineTemplate = {
       id: "tpl-1",
       user_id: "user-1",
@@ -539,7 +539,7 @@ describe("EditTemplateSheet", () => {
     ).toBeDefined();
   });
 
-  it("L15: day toggles have role=group aria-label='Scheduled days' and aria-pressed attributes", async () => {
+  it("day toggles have role=group aria-label='Scheduled days' and aria-pressed attributes", async () => {
     await renderSheetAndWait(<EditTemplateSheet {...mockProps} />);
 
     const group = screen.getByRole("group", { name: "Scheduled days" });
@@ -555,7 +555,7 @@ describe("EditTemplateSheet", () => {
     expect(tuePill).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("L17: reorder polite live region announces 'Moved <name> to position N of M'", async () => {
+  it("reorder polite live region announces 'Moved <name> to position N of M'", async () => {
     const tpl: RoutineTemplate = {
       id: "tpl-1",
       user_id: "user-1",
@@ -590,7 +590,7 @@ describe("EditTemplateSheet", () => {
     expect(liveRegion.textContent).toBe("Moved Overhead Press to position 1 of 2");
   });
 
-  it("L29: displays StatusBanner info for master routine (replaces hand-rolled banner)", async () => {
+  it("displays StatusBanner info for master routine (replaces hand-rolled banner)", async () => {
     const masterTpl: RoutineTemplate = {
       id: "tpl-master-1",
       user_id: "user-1",
@@ -608,7 +608,7 @@ describe("EditTemplateSheet", () => {
     expect(screen.getAllByText(/Editing Master Routine — changes will apply to all athletes/i).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("L43: single RPC call with p_expected_updated_at", async () => {
+  it("single RPC call with p_expected_updated_at", async () => {
     const tplWithDate = {
       ...mockTemplate,
       updated_at: "2026-09-28T12:00:00Z",
@@ -642,7 +642,7 @@ describe("EditTemplateSheet", () => {
     });
   });
 
-  it("L43: displays stale 409 StatusBanner with Reload action, no second write, and reload refetches", async () => {
+  it("displays stale 409 StatusBanner with Reload action, no second write, and reload refetches", async () => {
     const tplWithDate = {
       ...mockTemplate,
       updated_at: "2026-09-28T12:00:00Z",
@@ -725,7 +725,7 @@ describe("EditTemplateSheet", () => {
     });
   });
 
-  it("L13: dismiss blocked while saving (dismissible={!saving}) and buttons disabled", async () => {
+  it("dismiss blocked while saving (dismissible={!saving}) and buttons disabled", async () => {
     let resolveRpc: (val: any) => void;
     const rpcPromise = new Promise((resolve) => {
       resolveRpc = resolve;
@@ -768,7 +768,7 @@ describe("EditTemplateSheet", () => {
     });
   });
 
-  it("L43: fetch-on-open queries routine_templates with exact projection on mount", async () => {
+  it("fetch-on-open queries routine_templates with exact projection on mount", async () => {
     const existingTpl: RoutineTemplate = {
       id: "tpl-1",
       user_id: "user-1",
@@ -823,7 +823,7 @@ describe("EditTemplateSheet", () => {
     });
   });
 
-  it("L43: displays loading skeleton and disables save while loading template", async () => {
+  it("displays loading skeleton and disables save while loading template", async () => {
     let resolveQuery: (val: any) => void;
     const queryPromise = new Promise((resolve) => {
       resolveQuery = resolve;
@@ -863,7 +863,7 @@ describe("EditTemplateSheet", () => {
     expect(screen.getByTestId("template-name-input")).toHaveValue("Loaded Push");
   });
 
-  it("L43: displays StatusBanner with Retry on fetch error and retries fetch on click", async () => {
+  it("displays StatusBanner with Retry on fetch error and retries fetch on click", async () => {
     mockFetchError = new Error("Network timeout loading routine template");
 
     render(<EditTemplateSheet {...mockProps} />);
@@ -888,7 +888,7 @@ describe("EditTemplateSheet", () => {
     });
   });
 
-  it("L17: polite live region announces remove and add to routine", async () => {
+  it("polite live region announces remove and add to routine", async () => {
     const tpl: RoutineTemplate = {
       id: "tpl-1",
       user_id: "user-1",
@@ -927,7 +927,7 @@ describe("EditTemplateSheet", () => {
     expect(liveRegion.textContent).toBe("Added Incline Dumbbell Press to routine");
   });
 
-  it("L13: double-submit guard calls save_routine_template only once on rapid multiple clicks", async () => {
+  it("double-submit guard calls save_routine_template only once on rapid multiple clicks", async () => {
     let resolveRpc: (val: any) => void;
     const rpcPromise = new Promise((resolve) => {
       resolveRpc = resolve;

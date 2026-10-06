@@ -13,7 +13,7 @@ vi.mock('../../hooks/useAuth', () => ({
   }),
 }));
 
-describe('CoachAthleteTimeline accessibility (NEW-15)', () => {
+describe('CoachAthleteTimeline accessibility', () => {
   beforeEach(() => {
     mockCoachWeightUnit = 'lb';
   });
@@ -38,7 +38,7 @@ describe('CoachAthleteTimeline accessibility (NEW-15)', () => {
     await expectNoA11yViolations(container);
   });
 
-  it('NEW-15: mounts live regions unconditionally and mutates assertive region on workout error', () => {
+  it('mounts live regions unconditionally and mutates assertive region on workout error', () => {
     const politeOf = (c: HTMLElement) => c.querySelector('[role="status"]');
     const assertiveOf = (c: HTMLElement) => c.querySelector('[role="alert"]');
 
@@ -69,7 +69,7 @@ describe('CoachAthleteTimeline accessibility (NEW-15)', () => {
     expect(politeAfter!.textContent).toBe('');
   });
 
-  it('H4: renders civil date in timeline day header with zero raw ISO timestamp text', () => {
+  it('renders civil date in timeline day header with zero raw ISO timestamp text', () => {
     const timelineDays = [
       {
         date: '2026-09-15',

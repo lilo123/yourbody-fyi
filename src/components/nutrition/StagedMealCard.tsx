@@ -319,7 +319,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
         >
           {isMultiItem ? (
             <>
-              {/* D46: the short label keeps label + Scale + Add on one line below 390px */}
+              {/* the short label keeps label + Scale + Add on one line below 390px */}
               <span className="max-[389px]:hidden">Itemized Breakdown ({stagedMeal.items.length})</span>
               <span className="hidden max-[389px]:inline">Items ({stagedMeal.items.length})</span>
             </>
@@ -419,7 +419,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
           </div>
         )}
 
-        {/* Macro Totals: Read-only for multi-item (Fix D5) directly under the rows */}
+        {/* Macro Totals: Read-only for multi-item directly under the rows */}
         {isMultiItem && (
           <div
             data-testid="staged-meal-totals"
@@ -451,7 +451,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
           </div>
         )}
 
-        {/* Day total row (Fix D8 redesign, D14: drop isMultiItem gate so single-item meals show Day total) */}
+        {/* Day total row (drop isMultiItem gate so single item meals show Day total) */}
         {(dailyTotals || targets) && (
           <DayTotalRow
             macroColumns={macroColumns}
@@ -468,7 +468,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
         )}
       </div>
 
-      {/* Accessible math explanation for screen readers (Fix D4: visual formula box removed) */}
+      {/* Accessible math explanation for screen readers (visual formula box removed) */}
       {stagedMeal.explanation && (
         <span className="sr-only" aria-live="polite">{stagedMeal.explanation}</span>
       )}

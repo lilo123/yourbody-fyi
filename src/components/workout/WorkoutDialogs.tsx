@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { ExercisePicker, type ExercisePickerProps } from '../exercises/ExercisePicker';
 
 export interface WorkoutDialogsProps {
-  // Edit Set Sheet (W3, W17)
+  // Edit Set Sheet
   isEditSheetOpen: boolean;
   editingSet: (WorkoutSet & { workout_date?: string; workout_name?: string }) | null;
   exercises: Exercise[];
@@ -19,7 +19,7 @@ export interface WorkoutDialogsProps {
   onSavedEditSet: (set: WorkoutSet) => void;
   onDeleteRequested: (set: WorkoutSet) => void;
 
-  // Remove Exercise Sheet (W8)
+  // Remove Exercise Sheet
   removeSheetState: {
     isOpen: boolean;
     exerciseName: string;
@@ -30,7 +30,7 @@ export interface WorkoutDialogsProps {
   onKeepSetsAndCollapse: () => void;
   isDeletingSet: boolean;
 
-  // Finish Review Sheet (W18)
+  // Finish Review Sheet
   isFinishReviewOpen: boolean;
   onCloseFinishReview: () => void;
   pendingReviewSets: PendingReviewSet[];
@@ -38,21 +38,21 @@ export interface WorkoutDialogsProps {
   onFinishWithoutSets: () => void;
   isSubmittingFinishReview: boolean;
 
-  // Clear Workout Confirm Dialog (W9)
+  // Clear Workout Confirm Dialog
   isClearConfirmOpen: boolean;
   onCancelClearConfirm: () => void;
   onConfirmClearWorkout: () => void;
 
-  // Reload Scheduled Routine Confirm Dialog (W10)
+  // Reload Scheduled Routine Confirm Dialog
   isReloadConfirmOpen: boolean;
   onCancelReloadConfirm: () => void;
   onConfirmReloadRoutine: () => void;
 
-  // Deferred Delete Undo Toasts (W3, W8, RD-7)
+  // Deferred Delete Undo Toasts
   exerciseRemovalToast: UndoToastItem | null;
   deleteToast: UndoToastItem | null;
 
-  // Exercise Picker Sheet (P4-W2)
+  // Exercise Picker Sheet
   isExercisePickerOpen: boolean;
   onCloseExercisePicker: () => void;
   onAddExercisesFromPicker: (chosen: CatalogExercise[]) => void;
@@ -93,7 +93,7 @@ export const WorkoutDialogs: React.FC<WorkoutDialogsProps> = ({
 }) => {
   return (
     <>
-      {/* Edit Set Sheet (W3, W17) */}
+      {/* Edit Set Sheet */}
       <EditSetSheet
         isOpen={isEditSheetOpen}
         set={editingSet}
@@ -104,7 +104,7 @@ export const WorkoutDialogs: React.FC<WorkoutDialogsProps> = ({
         onDeleteRequested={onDeleteRequested}
       />
 
-      {/* Remove Exercise Sheet (W8) */}
+      {/* Remove Exercise Sheet */}
       <RemoveExerciseSheet
         isOpen={removeSheetState.isOpen}
         onClose={onCloseRemoveSheet}
@@ -115,7 +115,7 @@ export const WorkoutDialogs: React.FC<WorkoutDialogsProps> = ({
         isDeleting={isDeletingSet}
       />
 
-      {/* Finish Review Sheet (W18) */}
+      {/* Finish Review Sheet */}
       <FinishReviewSheet
         isOpen={isFinishReviewOpen}
         onClose={onCloseFinishReview}
@@ -125,7 +125,7 @@ export const WorkoutDialogs: React.FC<WorkoutDialogsProps> = ({
         isSubmitting={isSubmittingFinishReview}
       />
 
-      {/* Clear Workout Confirm Dialog (W9) */}
+      {/* Clear Workout Confirm Dialog */}
       <ConfirmDialog
         isOpen={isClearConfirmOpen}
         onCancel={onCancelClearConfirm}
@@ -138,7 +138,7 @@ export const WorkoutDialogs: React.FC<WorkoutDialogsProps> = ({
         testId="clear-workout-dialog"
       />
 
-      {/* Reload Scheduled Routine Confirm Dialog (W10) */}
+      {/* Reload Scheduled Routine Confirm Dialog */}
       <ConfirmDialog
         isOpen={isReloadConfirmOpen}
         onCancel={onCancelReloadConfirm}
@@ -153,7 +153,7 @@ export const WorkoutDialogs: React.FC<WorkoutDialogsProps> = ({
 
 
 
-      {/* Exercise Picker Sheet (P4-W2) */}
+      {/* Exercise Picker Sheet */}
       <ExercisePicker
         isOpen={isExercisePickerOpen}
         onClose={onCloseExercisePicker}

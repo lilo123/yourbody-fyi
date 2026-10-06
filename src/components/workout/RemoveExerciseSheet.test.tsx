@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { RemoveExerciseSheet } from './RemoveExerciseSheet';
 
-describe('RemoveExerciseSheet (W8, STD-CMP-1/4/7)', () => {
+describe('RemoveExerciseSheet (STD CMP 1 4 7)', () => {
   const defaultProps = {
     isOpen: true,
     onClose: vi.fn(),

@@ -1,5 +1,5 @@
 /**
- * Canonical Muscle Groups and Equipment Taxonomy (P4, L22, L48)
+ * Canonical Muscle Groups and Equipment Taxonomy
  *
  * Single source of truth for body parts, equipment, and category synonyms.
  * Covers all production database body_parts values:

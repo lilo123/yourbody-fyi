@@ -622,7 +622,7 @@ describe('Canonical Date Utility (src/utils/date.ts)', () => {
       });
     });
 
-    describe('FIX-04: Multi-Timezone 24-Hour Sweep and DST Transition Calculations', () => {
+    describe('Multi-Timezone 24-Hour Sweep and DST Transition Calculations', () => {
       describe('24 hourly timestamps sweep across UTC, NY, Tokyo, Lord Howe, and London', () => {
         const timezones = [
           { tz: 'UTC', label: 'UTC' },
@@ -812,7 +812,7 @@ describe('Canonical Date Utility (src/utils/date.ts)', () => {
   });
 
 
-  describe("Civil date helpers (H4, RD-5)", () => {
+  describe("Civil date helpers", () => {
     it("isCivilDate correctly validates YYYY-MM-DD format", () => {
       expect(isCivilDate("2026-09-15")).toBe(true);
       expect(isCivilDate("2026-01-01")).toBe(true);
@@ -821,7 +821,7 @@ describe('Canonical Date Utility (src/utils/date.ts)', () => {
       expect(isCivilDate("")).toBe(false);
     });
 
-    it("formatCivilDate formats YYYY-MM-DD directly without timezone shifts (H4 acceptance)", () => {
+    it("formatCivilDate formats YYYY-MM-DD directly without timezone shifts (acceptance)", () => {
       expect(formatCivilDate("2026-09-15")).toBe("Sep 15");
       expect(formatCivilDate("2026-01-01")).toBe("Jan 1");
       expect(formatCivilDate("2026-12-31")).toBe("Dec 31");

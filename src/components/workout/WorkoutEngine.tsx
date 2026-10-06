@@ -145,7 +145,7 @@ export const WorkoutEngine: React.FC = () => {
     customTemplates, autoRestTimer, onDraftSuccess: handleDraftSuccess,
   });
 
-  // 5. Deferred Set Deletion with Undo Toast (W3, RD-7)
+  // 5. Deferred Set Deletion with Undo Toast
   const {
     pendingSetId,
     scheduleDelete,
@@ -157,7 +157,7 @@ export const WorkoutEngine: React.FC = () => {
     timeoutMs: 6000,
   });
 
-  // 6. Exercise Removal with Undo Toast & RemoveExerciseSheet (W8)
+  // 6. Exercise Removal with Undo Toast & RemoveExerciseSheet
   const {
     sheetState: removeSheetState,
     requestRemoveExercise,
@@ -188,7 +188,7 @@ export const WorkoutEngine: React.FC = () => {
     },
   });
 
-  // 7. Edit Set Sheet (W3, W17)
+  // 7. Edit Set Sheet
   const {
     editingSet,
     isEditSheetOpen,
@@ -220,7 +220,7 @@ export const WorkoutEngine: React.FC = () => {
     logSetMutation, batchLogSetsMutation, setMutationError, setExerciseError,
   });
 
-  // 9. Finish Workout Review Sheet (W18)
+  // 9. Finish Workout Review Sheet
   const {
     isFinishReviewOpen,
     setIsFinishReviewOpen,

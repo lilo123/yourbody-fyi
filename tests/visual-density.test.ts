@@ -261,7 +261,7 @@ async function setupPageAndLogin(page: Page) {
   await page.waitForSelector("text=Today's Nutrition");
 }
 
-// Check helper: Staged card meal-type select chevron geometry (D27)
+// Check helper: Staged card meal-type select chevron geometry
 async function checkSelectChevronGeometry(card: Locator) {
   return await card.evaluate((cardEl) => {
     const select = cardEl.querySelector<HTMLSelectElement>('select[aria-label="Meal type"]');
@@ -353,7 +353,7 @@ async function checkSelectChevronGeometry(card: Locator) {
   });
 }
 
-// D46: the Scale chip sits next to + Add without overlap, clipping or tap stealing.
+// The Scale chip sits next to + Add without overlap, clipping or tap stealing.
 function expectScaleChipFits(result: Awaited<ReturnType<typeof checkBreakdownHeaderGeometry>>) {
   const s = result.scale;
   expect(s.present, 'D46 Scale chip must be in the breakdown header').toBe(true);
@@ -365,25 +365,25 @@ function expectScaleChipFits(result: Awaited<ReturnType<typeof checkBreakdownHea
   expect(s.headerOverflows, 'Breakdown header overflows horizontally').toBe(false);
 }
 
-// Check helper: Breakdown header row height and Add item button geometry (D28)
+// Check helper: Breakdown header row height and Add item button geometry
 async function checkBreakdownHeaderGeometry(card: Locator) {
   return await card.evaluate((cardEl) => {
     const addItemBtn = cardEl.querySelector<HTMLElement>('[data-testid="add-item-button"]');
     if (!addItemBtn) throw new Error('add-item-button not found');
 
-    // D46: + Add now shares an action group with the Scale chip; the row is breakdown-header.
+    // + Add now shares an action group with the Scale chip; the row is breakdown-header.
     const headerRow = addItemBtn.closest<HTMLElement>('[data-testid="breakdown-header"]') ?? addItemBtn.parentElement;
     if (!headerRow) throw new Error('header row (breakdown-header) not found');
 
     const headerRowRect = headerRow.getBoundingClientRect();
     const btnRect = addItemBtn.getBoundingClientRect();
 
-    // The visible label (full or D46 short variant); display:none spans have a 0-width rect.
+    // The visible label (full or short variant); display:none spans have a 0-width rect.
     const headerLabel = Array.from(headerRow.querySelectorAll<HTMLElement>(':scope > span:not(.sr-only)'))
       .find((el) => el.getBoundingClientRect().width > 0) ?? null;
     const labelRect = headerLabel ? headerLabel.getBoundingClientRect() : null;
 
-    // D46 Scale chip geometry
+    // Scale chip geometry
     const scaleBtn = headerRow.querySelector<HTMLElement>('[data-testid="meal-scale-button"]');
     const scaleRect = scaleBtn ? scaleBtn.getBoundingClientRect() : null;
     const overlap = (a: DOMRect | null, b: DOMRect | null) => {
@@ -599,7 +599,7 @@ async function checkTapTargets(surface: Locator) {
     for (const el of tapCandidates) {
       if (!isVis(el)) continue;
       candidateCount++;
-      // Controls enclosed in a dedicated touch-target wrapper (e.g. D32 qty/unit box) measure the enclosing hit area
+      // Controls enclosed in a dedicated touch-target wrapper (e.g. qty unit box) measure the enclosing hit area
       const hitArea = el.matches('[data-testid="component-quantity-input"]')
         ? el.closest<HTMLElement>('[data-testid="component-quantity-field"]')
         : null;
@@ -662,15 +662,15 @@ async function checkClipping(surface: Locator) {
       candidateCount++;
       const s = window.getComputedStyle(el);
 
-      // Exemption 1 (D19, D31): Staged-card meal-name input is exempt from horizontal scroll check
+      // Exemption 1: Staged-card meal-name input is exempt from horizontal scroll check
       const isStagedMealNameInput = el.getAttribute('data-testid') === 'dish-name-input';
 
-      // Exemption 2 (D26): Quick Log dish names use CSS truncate with title attribute by design
+      // Exemption 2: Quick Log dish names use CSS truncate with title attribute by design
       const isQuickLogDishName =
         Boolean(el.id && el.id.startsWith('dish-name-')) &&
         el.classList.contains('truncate');
 
-      // Exemption 3 (D41): Quick Log toast dish text uses CSS truncate with title attribute by design
+      // Exemption 3: Quick Log toast dish text uses CSS truncate with title attribute by design
       const isToastDishText =
         el.getAttribute('data-testid') === 'toast-dish-text' &&
         el.classList.contains('truncate');
@@ -789,7 +789,7 @@ async function waitForScrollPosition(page: Page, target: number | 'bottom') {
 
 // ---------------------------------------------------------------------------
 
-// Check helper: Staged card item row qty/unit box geometry (D32)
+// Check helper: Staged card item row qty/unit box geometry
 async function checkQtyUnitBoxGeometry(card: Locator) {
   return await card.evaluate((cardEl) => {
     const itemRows = Array.from(cardEl.querySelectorAll<HTMLElement>('[data-testid="component-row"]'));
@@ -927,7 +927,7 @@ test.describe('Surface A: Staged card with 4 items', () => {
     expect(cardBox.y).toBeLessThanOrEqual(firstRowBox.y + 0.5);
     expect(cardBox.y + cardBox.height).toBeGreaterThanOrEqual(actionRowBox.y + actionRowBox.height - 0.5);
 
-    // Height cap assert: <= 480px (tightened from 500px per D28)
+    // Height cap assert: <= 480px (tightened from 500px per)
     expect(cardBox.height).toBeLessThanOrEqual(480);
   });
 
@@ -1122,10 +1122,10 @@ test.describe('Surface A: Staged card with 4 items', () => {
     expectScaleChipFits(result);
     console.log(JSON.stringify({ test: 'A: breakdown header geometry at 390px', surface: 'A', ...result }));
 
-    // Header row height <= pre-D22 value (16px) with +0.5px tolerance max
+    // Header row height <= pre- value (16px) with +0.5px tolerance max
     expect(result.headerRowHeight, `Header row height (${result.headerRowHeight}px) exceeds pre-D22 value 16px (+0.5px tolerance)`).toBeLessThanOrEqual(16.5);
 
-    // D34: label text '+ Manual', aria-label 'Add manual item', no clip
+    // Label text '+ Manual', aria-label 'Add manual item', no clip
     expect(result.buttonText, 'Breakdown header button label must be "+ Add"').toBe('+ Add');
     expect(result.ariaLabel, 'Breakdown header button aria-label must be "Add item"').toBe('Add item');
     expect(result.isClipped, 'Breakdown header button must fit with no clipping').toBe(false);
@@ -1158,7 +1158,7 @@ test.describe('Surface A: Staged card with 4 items', () => {
     expect(Math.abs(result.textLabelDeltaY!), `Add item text center-Y deviates from label center-Y by ${result.textLabelDeltaY}px`).toBeLessThanOrEqual(1.0);
   });
 
-  test('A: staged item row qty/unit box geometry and hit testing at 390px (D32)', async () => {
+  test('A: staged item row qty/unit box geometry and hit testing at 390px', async () => {
     await waitForScrollSettled(page);
 
     const rows = cardLocator.locator('[data-testid="component-row"]');
@@ -1223,7 +1223,7 @@ test.describe('Surface A: Staged card with 4 items', () => {
     }
   });
 
-  test('A: D46 Scale box open at 390px keeps the header on one line, 16px input, no overlap, and Escape restores', async () => {
+  test('A: Scale box open at 390px keeps the header on one line, 16px input, no overlap, and Escape restores', async () => {
     expect(page.viewportSize()?.width).toBe(390);
     await cardLocator.locator('[data-testid="meal-scale-button"]').click();
     const input = cardLocator.locator('[data-testid="meal-scale-input"]');
@@ -1390,7 +1390,7 @@ test.describe('Surface B: Staged card with 1 item', () => {
     ).toEqual([]);
   });
 
-  test('B: breakdown header row height <= 16px, + Add button geometry at 390px (D34/D45)', async () => {
+  test('B: breakdown header row height <= 16px, + Add button geometry at 390px', async () => {
     expect(page.viewportSize()?.width).toBe(390);
     await waitForScrollSettled(page);
 
@@ -1547,10 +1547,10 @@ test.describe('Surface C: Manual entry form', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Surface D: staged card placement (D10)
+// Surface D: staged card placement
 // ---------------------------------------------------------------------------
 
-test.describe('Surface D: staged card placement (D10)', () => {
+test.describe('Surface D: staged card placement', () => {
   let page: Page;
   let cardLocator: Locator;
   let navLocator: Locator;
@@ -1578,7 +1578,7 @@ test.describe('Surface D: staged card placement (D10)', () => {
     await page.close();
   });
 
-  test('D1: after staging card top in [0, 200]', async () => {
+  test('after staging card top in [0, 200]', async () => {
     // Wait for smooth scroll to settle
     await waitForScrollSettled(page);
 
@@ -1597,7 +1597,7 @@ test.describe('Surface D: staged card placement (D10)', () => {
     expect(cardTop, `Card top (${cardTop}px) must be <= 200`).toBeLessThanOrEqual(200);
   });
 
-  test('D2: action row visible above nav at staging and mid scroll', async () => {
+  test('action row visible above nav at staging and mid scroll', async () => {
     // 1. Right after staging
     const navBoxAtStaging = (await navLocator.boundingBox())!;
     const actionBoxAtStaging = (await actionRowLocator.boundingBox())!;
@@ -1666,7 +1666,7 @@ test.describe('Surface D: staged card placement (D10)', () => {
     ).toBeGreaterThanOrEqual(0);
   });
 
-  test('D3: last row not covered at end of scroll', async () => {
+  test('last row not covered at end of scroll', async () => {
     // Scroll page to end
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await waitForScrollPosition(page, 'bottom');
@@ -1709,7 +1709,7 @@ test.describe('Surface D: staged card placement (D10)', () => {
     ).toBeLessThanOrEqual(navTop);
   });
 
-  test('D4: D1 with reducedMotion reduce emulated', async () => {
+  test('with reducedMotion reduce emulated', async () => {
     // Discard current staged meal
     await cardLocator.locator('button[aria-label="Discard staged meal"]').click();
     await expect(cardLocator).not.toBeVisible();
@@ -1741,7 +1741,7 @@ test.describe('Surface D: staged card placement (D10)', () => {
     }
   });
 
-  test('D5: page end content not covered by nav', async () => {
+  test('page end content not covered by nav', async () => {
     const navBox = (await navLocator.boundingBox())!;
     const navTop = Math.round(navBox.y * 10) / 10;
 
@@ -1839,10 +1839,10 @@ test.describe('Surface D: staged card placement (D10)', () => {
 
 
 // ---------------------------------------------------------------------------
-// Surface E: Staged card at 320px width (D24)
+// Surface E: Staged card at 320px width
 // ---------------------------------------------------------------------------
 
-test.describe('Surface E: Staged card at 320px width (D24)', () => {
+test.describe('Surface E: Staged card at 320px width', () => {
   let page: Page;
   let cardLocator: Locator;
 
@@ -2070,12 +2070,12 @@ test.describe('Surface E: Staged card at 320px width (D24)', () => {
     expectScaleChipFits(result);
     console.log(JSON.stringify({ test: 'E: breakdown header geometry at 320px', surface: 'E', ...result }));
 
-    // D34: label text '+ Manual', aria-label 'Add manual item', no clip
+    // Label text '+ Manual', aria-label 'Add manual item', no clip
     expect(result.buttonText, 'Breakdown header button label must be "+ Add"').toBe('+ Add');
     expect(result.ariaLabel, 'Breakdown header button aria-label must be "Add item"').toBe('Add item');
     expect(result.isClipped, 'Breakdown header button must fit with no clipping').toBe(false);
 
-    // Header row height <= pre-D22 value (16px) with +0.5px tolerance max
+    // Header row height <= pre- value (16px) with +0.5px tolerance max
     expect(result.headerRowHeight, `Header row height (${result.headerRowHeight}px) exceeds pre-D22 value 16px (+0.5px tolerance)`).toBeLessThanOrEqual(16.5);
 
     // Add item tap box >= 40 tall and >= 40 wide
@@ -2106,7 +2106,7 @@ test.describe('Surface E: Staged card at 320px width (D24)', () => {
     expect(Math.abs(result.textLabelDeltaY!), `Add item text center-Y deviates from label center-Y by ${result.textLabelDeltaY}px`).toBeLessThanOrEqual(1.0);
   });
 
-  test('E: staged item row qty/unit box geometry and hit testing at 320px (D32)', async () => {
+  test('E: staged item row qty/unit box geometry and hit testing at 320px', async () => {
     expect(page.viewportSize()?.width).toBe(320);
     await waitForScrollSettled(page);
 
@@ -2172,7 +2172,7 @@ test.describe('Surface E: Staged card at 320px width (D24)', () => {
     }
   });
 
-  test('E: D46 Scale box open at 320px keeps the header on one line, 16px input, no overlap, and Escape restores', async () => {
+  test('E: Scale box open at 320px keeps the header on one line, 16px input, no overlap, and Escape restores', async () => {
     expect(page.viewportSize()?.width).toBe(320);
     await cardLocator.locator('[data-testid="meal-scale-button"]').click();
     const input = cardLocator.locator('[data-testid="meal-scale-input"]');
@@ -2216,7 +2216,7 @@ test.describe('Surface E: Staged card at 320px width (D24)', () => {
     await expect(cardLocator.locator('[data-testid="meal-scale-button"]')).toHaveText('Scale');
   });
 
-  test('E: single-item and manual card breakdown header geometry at 320px (D34)', async () => {
+  test('E: single-item and manual card breakdown header geometry at 320px', async () => {
     expect(page.viewportSize()?.width).toBe(320);
 
     // 1. Single-item card at 320px
@@ -2278,7 +2278,7 @@ test.describe('Surface E: Staged card at 320px width (D24)', () => {
 
 
 // ---------------------------------------------------------------------------
-// Surface F: Manual-staged card and Add-item at 390×844 (D22)
+// Surface F: Manual-staged card and Add-item at 390×844
 // ---------------------------------------------------------------------------
 
 test.describe('Surface F: Manual-staged card and Add-item at 390×844', () => {
@@ -2338,7 +2338,7 @@ test.describe('Surface F: Manual-staged card and Add-item at 390×844', () => {
     expect(cardBox.height).toBeLessThanOrEqual(260);
   });
 
-  test('F: breakdown header row height <= 16px, + Add button geometry on manual-staged card at 390px (D34/D45)', async () => {
+  test('F: breakdown header row height <= 16px, + Add button geometry on manual-staged card at 390px', async () => {
     await waitForScrollSettled(page);
 
     const result = await checkBreakdownHeaderGeometry(cardLocator);
@@ -2394,7 +2394,7 @@ test.describe('Surface F: Manual-staged card and Add-item at 390×844', () => {
     expect(result.clippedElements, `Found clipped elements: ${JSON.stringify(result.clippedElements)}`).toEqual([]);
   });
 
-  test('F: D10 placement (cardTop in [0, 200], actionRowBottom <= navTop)', async () => {
+  test('F: placement (cardTop in [0, 200], actionRowBottom <= navTop)', async () => {
     await waitForScrollSettled(page);
     const cardBox = (await cardLocator.boundingBox())!;
     const cardTop = Math.round(cardBox.y * 10) / 10;
@@ -2535,10 +2535,10 @@ test.describe('Surface F: Manual-staged card and Add-item at 390×844', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Surface G: Quick Log surface at 390×844 and 320×568 (D26 / D18)
+// Surface G: Quick Log surface at 390×844 and 320×568
 // ---------------------------------------------------------------------------
 
-test.describe('Surface G: Quick Log surface at 390×844 (D26)', () => {
+test.describe('Surface G: Quick Log surface at 390×844', () => {
   let page: Page;
   let sectionLocator: Locator;
 
@@ -2620,7 +2620,7 @@ test.describe('Surface G: Quick Log surface at 390×844 (D26)', () => {
   });
 });
 
-test.describe('Surface G: Quick Log surface at 320×568 (D26)', () => {
+test.describe('Surface G: Quick Log surface at 320×568', () => {
   let page: Page;
   let sectionLocator: Locator;
 
@@ -2703,11 +2703,11 @@ test.describe('Surface G: Quick Log surface at 320×568 (D26)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D35: Type and input consistency (D18, D26, D31, D35)
+// Type and input consistency
 // ---------------------------------------------------------------------------
 
-test.describe('D35 type/input consistency', () => {
-  test('D35: Quick Log row height <= 60px at 320px and 390px', async ({ browser }) => {
+test.describe('type/input consistency', () => {
+  test('Quick Log row height <= 60px at 320px and 390px', async ({ browser }) => {
     for (const width of [320, 390]) {
       const page = await browser.newPage({
         viewport: { width, height: width === 320 ? 568 : 844 },
@@ -2731,7 +2731,7 @@ test.describe('D35 type/input consistency', () => {
     }
   });
 
-  test('D35: Quick Log dish name is 14px semibold (600) and all fonts in Quick Log >= 12px', async ({ browser }) => {
+  test('Quick Log dish name is 14px semibold (600) and all fonts in Quick Log >= 12px', async ({ browser }) => {
     for (const width of [320, 390, 700]) {
       const page = await browser.newPage({
         viewport: { width, height: 844 },
@@ -2766,7 +2766,7 @@ test.describe('D35 type/input consistency', () => {
     }
   });
 
-  test('D35: computed font-size of every input/select/textarea in the nutrition tab == 16px at 390px and 700px', async ({ browser }) => {
+  test('computed font-size of every input/select/textarea in the nutrition tab == 16px at 390px and 700px', async ({ browser }) => {
     for (const width of [390, 700]) {
       const page = await browser.newPage({
         viewport: { width, height: 844 },
@@ -2842,7 +2842,7 @@ test.describe('D35 type/input consistency', () => {
     }
   });
 
-  test('D35: select label not clipped at 700px (D31)', async ({ browser }) => {
+  test('select label not clipped at 700px', async ({ browser }) => {
     const page = await browser.newPage({
       viewport: { width: 700, height: 844 },
       deviceScaleFactor: 1,
@@ -2890,10 +2890,10 @@ test.describe('D35 type/input consistency', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D37: Macro Ring Clearance (>= 4px clearance from stroke inner edge)
+// Macro Ring Clearance (>= 4px clearance from stroke inner edge)
 // ---------------------------------------------------------------------------
 
-test.describe("D37 ring clearance", () => {
+test.describe("ring clearance", () => {
   const WORST_CASE_TARGETS = {
     calories: 1900,
     protein: 150,
@@ -3056,7 +3056,7 @@ test.describe("D37 ring clearance", () => {
     }, ringIds);
   }
 
-  test("D37: 320px worst-case values clearance >= 4px, font >= 12px, no clipping", async ({ browser }) => {
+  test("320px worst-case values clearance >= 4px, font >= 12px, no clipping", async ({ browser }) => {
     const { page, sectionLocator } = await setupRingsPage(browser, 320, 568);
     try {
       const clearances = await measureRingClearances(page);
@@ -3080,7 +3080,7 @@ test.describe("D37 ring clearance", () => {
     }
   });
 
-  test("D37: 390px worst-case values clearance >= 4px, section height <= base + 8, font >= 12px, no clipping", async ({ browser }) => {
+  test("390px worst-case values clearance >= 4px, section height <= base + 8, font >= 12px, no clipping", async ({ browser }) => {
     const { page, sectionLocator } = await setupRingsPage(browser, 390, 844);
     try {
       const clearances = await measureRingClearances(page);
@@ -3109,7 +3109,7 @@ test.describe("D37 ring clearance", () => {
     }
   });
 
-  test("D37: 700px worst-case values clearance >= 4px, font >= 12px, no clipping", async ({ browser }) => {
+  test("700px worst-case values clearance >= 4px, font >= 12px, no clipping", async ({ browser }) => {
     const { page, sectionLocator } = await setupRingsPage(browser, 700, 900);
     try {
       const clearances = await measureRingClearances(page);
@@ -3130,7 +3130,7 @@ test.describe("D37 ring clearance", () => {
     }
   });
 
-  test("D37: 390px 4-digit over-target calories (2450/1900) clearance >= 4px", async ({ browser }) => {
+  test("390px 4-digit over-target calories (2450/1900) clearance >= 4px", async ({ browser }) => {
     const overLogs = { ...WORST_CASE_DAILY_LOGS, calories: 2450 };
     const { page } = await setupRingsPage(browser, 390, 844, overLogs);
     try {
@@ -3148,11 +3148,11 @@ test.describe("D37 ring clearance", () => {
 });
 
 // ---------------------------------------------------------------------------
-// D23: Soft kcal-vs-macros hint density tests
+// Soft kcal-vs-macros hint density tests
 // ---------------------------------------------------------------------------
 
-test.describe('D23 kcal-vs-macros hint', () => {
-  test('D23: manual form at 320px height hidden == base (592px), visible <= base + 20 (612px), font 12px, not clipped, single line', async ({ browser }, testInfo) => {
+test.describe('kcal-vs-macros hint', () => {
+  test('manual form at 320px height hidden == base (592px), visible <= base + 20 (612px), font 12px, not clipped, single line', async ({ browser }, testInfo) => {
     const page = await browser.newPage({ viewport: { width: 320, height: 844 }, deviceScaleFactor: 1 });
     try {
       await setupPageAndLogin(page);
@@ -3220,7 +3220,7 @@ test.describe('D23 kcal-vs-macros hint', () => {
     }
   });
 
-  test('D23: manual form at 390px height hidden == base (592px), visible <= base + 20 (612px), font 12px, not clipped, single line', async ({ browser }) => {
+  test('manual form at 390px height hidden == base (592px), visible <= base + 20 (612px), font 12px, not clipped, single line', async ({ browser }) => {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     try {
       await setupPageAndLogin(page);
@@ -3283,7 +3283,7 @@ test.describe('D23 kcal-vs-macros hint', () => {
     }
   });
 
-  test('D23: AddItemForm at 320px height hidden == base (434px), visible <= base + 20 (454px), font 12px, not clipped, single line', async ({ browser }) => {
+  test('AddItemForm at 320px height hidden == base (434px), visible <= base + 20 (454px), font 12px, not clipped, single line', async ({ browser }) => {
     const page = await browser.newPage({ viewport: { width: 320, height: 844 }, deviceScaleFactor: 1 });
     try {
       await setupPageAndLogin(page);
@@ -3363,7 +3363,7 @@ test.describe('D23 kcal-vs-macros hint', () => {
     }
   });
 
-  test('D23: AddItemForm at 390px height hidden == base (418px), visible <= base + 20 (438px), font 12px, not clipped, single line', async ({ browser }) => {
+  test('AddItemForm at 390px height hidden == base (418px), visible <= base + 20 (438px), font 12px, not clipped, single line', async ({ browser }) => {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     try {
       await setupPageAndLogin(page);
@@ -3446,12 +3446,12 @@ test.describe('D23 kcal-vs-macros hint', () => {
 
 
 // ---------------------------------------------------------------------------
-// Surface F: D41 Floating Toast (320px and 390px)
+// Surface F: Floating Toast (320px and 390px)
 // ---------------------------------------------------------------------------
 
-test.describe('D41 floating toast', () => {
+test.describe('floating toast', () => {
   for (const width of [390, 320]) {
-    test(`D41: direct log toast clearance, typography, tap target and no clipping at ${width}px`, async ({ browser }) => {
+    test(`direct log toast clearance, typography, tap target and no clipping at ${width}px`, async ({ browser }) => {
       const page = await browser.newPage({
         viewport: { width, height: 844 },
         deviceScaleFactor: 1,
@@ -3497,7 +3497,7 @@ test.describe('D41 floating toast', () => {
         const clipResult = await checkClipping(toast);
         expect(clipResult.clippedElements, `Found clipped elements in toast: ${JSON.stringify(clipResult.clippedElements)}`).toEqual([]);
 
-        // 5. Verify D42 Undo button click dismisses toast and deletes created log
+        // 5. Verify Undo button click dismisses toast and deletes created log
         await undoBtn.click();
         await expect(toast).not.toBeVisible();
 
@@ -3516,7 +3516,7 @@ test.describe('D41 floating toast', () => {
       }
     });
 
-    test(`D41: staged meal add toast clearance and no layout shift at ${width}px`, async ({ browser }) => {
+    test(`staged meal add toast clearance and no layout shift at ${width}px`, async ({ browser }) => {
       const page = await browser.newPage({
         viewport: { width, height: 844 },
         deviceScaleFactor: 1,
@@ -3534,7 +3534,7 @@ test.describe('D41 floating toast', () => {
         // Record staged card layout position in document before toast
         const offsetTopBefore = await stagedCard.evaluate((el) => (el as HTMLElement).offsetTop);
 
-        // Click '+' on a favorite to add to staged meal (D33)
+        // Click '+' on a favorite to add to staged meal
         const addFavBtn = page.locator('[data-testid^="quick-log-btn-"]').first();
         await expect(addFavBtn).toBeVisible();
         await addFavBtn.click();
@@ -3588,7 +3588,7 @@ test.describe('D41 floating toast', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D43: Nutrition Type Scale Density Guard
+// Nutrition Type Scale Density Guard
 // ---------------------------------------------------------------------------
 
 async function checkTypeScale(
@@ -3632,7 +3632,7 @@ async function checkTypeScale(
       const fvn = cs.fontVariantNumeric;
       const text = (el.innerText || el.textContent || '').trim().slice(0, 30);
       const isInput = Boolean(el.closest('input, select, textarea'));
-      // Named exception (user decision, P8.1 hotfix): logged set values sit in the
+      // Named exception (user decision hotfix): logged set values sit in the
       // input column and mirror the 16px inputs; only exactly 16px is allowed.
       const isInputMirror = Boolean(el.closest('[data-input-mirror="true"]'));
 
@@ -3643,7 +3643,7 @@ async function checkTypeScale(
       // Check 1: Size
       if (!ALLOWED_SIZES.has(size)) {
         if (size === 16 && (isInput || isInputMirror)) {
-          // Allowed: inputs are 16px to prevent iOS auto-zoom (D18/D26)
+          // Allowed: inputs are 16px to prevent iOS auto-zoom
         } else if (opts?.allowSizes16Plus && size >= 16) {
           // Allowed: page headings/titles on full routes when allowSizes16Plus is enabled
         } else {
@@ -3673,7 +3673,7 @@ async function checkTypeScale(
   }, options);
 }
 
-test.describe('D43 nutrition type scale', () => {
+test.describe('nutrition type scale', () => {
   for (const width of [390, 320] as const) {
     test(`type scale compliance on nutrition tab surfaces at ${width}px`, async ({ browser }) => {
       const page = await browser.newPage({
@@ -3789,7 +3789,7 @@ ${JSON.stringify(nutrientModalViolations, null, 2)}`).toHaveLength(0);
         await page.keyboard.press('Escape');
         await expect(nutrientModal).not.toBeVisible();
 
-        // 3. Surface: EditMealSheet (D44 replaces EditMealModal)
+        // 3. Surface: EditMealSheet (replaces EditMealModal)
         const rowMenuBtn = page.locator('button[aria-haspopup="menu"]').first();
         await expect(rowMenuBtn).toBeVisible({ timeout: 5000 });
         await rowMenuBtn.click();
@@ -3829,7 +3829,7 @@ ${JSON.stringify(toastViolations, null, 2)}`).toHaveLength(0);
         expect(stagedViolations, `StagedMealCard type violations at ${width}px:
 ${JSON.stringify(stagedViolations, null, 2)}`).toHaveLength(0);
 
-        // D45: AddItemsComposer typography in D43 walker
+        // AddItemsComposer typography in walker
         const addBtn = cardLocator.locator('[data-testid="add-item-button"]');
         await addBtn.click();
         const composerLocator = cardLocator.locator('[data-testid="add-items-composer"]');
@@ -3887,10 +3887,10 @@ ${JSON.stringify(composerViolations, null, 2)}`).toHaveLength(0);
 
 
 // ---------------------------------------------------------------------------
-// D44 edit sheet density & layout (320x640 and 390x844)
+// Edit sheet density & layout (320x640 and 390x844)
 // ---------------------------------------------------------------------------
 
-test.describe('D44 edit sheet density & layout', () => {
+test.describe('edit sheet density & layout', () => {
   const VIEWPORTS = [
     { width: 320, height: 640 },
     { width: 390, height: 844 },
@@ -4031,7 +4031,7 @@ test.describe('D44 edit sheet density & layout', () => {
           ).toBe(true);
         }
 
-        // 5. Fonts conform to D43 walker (12, 14, 16px only; weights 400, 600, 700 only)
+        // 5. Fonts conform to walker (12, 14, 16px only; weights 400, 600, 700 only)
         const typeViolations = await checkTypeScale(sheet);
         expect(typeViolations, `D44 EditMealSheet typography violations at ${width}px:
 ${JSON.stringify(typeViolations, null, 2)}`).toHaveLength(0);
@@ -4048,10 +4048,10 @@ ${JSON.stringify(typeViolations, null, 2)}`).toHaveLength(0);
 
 
 // ---------------------------------------------------------------------------
-// D45 add composer density & layout (320x640 and 390x844)
+// Add composer density & layout (320x640 and 390x844)
 // ---------------------------------------------------------------------------
 
-test.describe('D45 add composer', () => {
+test.describe('add composer', () => {
   const VIEWPORTS = [
     { width: 320, height: 640 },
     { width: 390, height: 844 },
@@ -4131,7 +4131,7 @@ test.describe('D45 add composer', () => {
           ).toBe(true);
         }
 
-        // 5. Typography conforms to D43 type scale
+        // 5. Typography conforms to type scale
         const typeViolations = await checkTypeScale(composer);
         expect(typeViolations, `D45 composer typography violations at ${width}px:
 ${JSON.stringify(typeViolations, null, 2)}`).toHaveLength(0);
@@ -4161,7 +4161,7 @@ ${JSON.stringify(typeViolations, null, 2)}`).toHaveLength(0);
 });
 
 // ---------------------------------------------------------------------------
-// P3a Workout: Density, Hit Targets, Typography & Accessibility
+// Workout: Density, Hit Targets, Typography & Accessibility
 // ---------------------------------------------------------------------------
 
 async function setupWorkoutDensityPage(page: Page) {
@@ -4198,9 +4198,9 @@ async function setupWorkoutDensityPage(page: Page) {
   return card;
 }
 
-test.describe('P3a Workout', () => {
-  // (a) D43 type walker on Workout tab with logged + pending set, and EditSetSheet open
-  test('D43 typography on workout set rows and EditSetSheet', async ({ browser }) => {
+test.describe('Workout', () => {
+  // (a) type walker on Workout tab with logged + pending set, and EditSetSheet open
+  test('typography on workout set rows and EditSetSheet', async ({ browser }) => {
     const page = await browser.newPage({
       viewport: { width: 375, height: 812 },
       deviceScaleFactor: 1,
@@ -4444,10 +4444,10 @@ return {
 });
 
 // ---------------------------------------------------------------------------
-// P3b Workout: Density, Hit Targets, Typography & Accessibility
+// Workout: Density, Hit Targets, Typography & Accessibility
 // ---------------------------------------------------------------------------
 
-test.describe('P3b Workout', () => {
+test.describe('Workout', () => {
   // (a) Hit-area + visible labels + no overflow at 320/375/414px on WorkoutHeader & GlobalRestTimerPill
   for (const width of [320, 375, 414] as const) {
     test(`hit-area and layout acceptance at ${width}px for WorkoutHeader and GlobalRestTimerPill`, async ({ browser }) => {
@@ -4561,8 +4561,8 @@ test.describe('P3b Workout', () => {
     });
   }
 
-  // (b) D43 checkTypeScale on WorkoutHeader, GlobalRestTimerPill, RestDayView, FinishReviewSheet, RemoveExerciseSheet
-  test('D43 typography on WorkoutHeader, GlobalRestTimerPill, RestDayView, FinishReviewSheet, and RemoveExerciseSheet', async ({ browser }) => {
+  // (b) checkTypeScale on WorkoutHeader, GlobalRestTimerPill, RestDayView, FinishReviewSheet, RemoveExerciseSheet
+  test('typography on WorkoutHeader, GlobalRestTimerPill, RestDayView, FinishReviewSheet, and RemoveExerciseSheet', async ({ browser }) => {
     const page = await browser.newPage({
       viewport: { width: 375, height: 812 },
       deviceScaleFactor: 1,
@@ -4708,11 +4708,11 @@ test.describe('P3b Workout', () => {
 });
 
 // ---------------------------------------------------------------------------
-// P4 Picker: Density, Hit Targets, Typography & Accessibility
+// Picker: Density, Hit Targets, Typography & Accessibility
 // ---------------------------------------------------------------------------
 
 
-test.describe("P4 Picker", () => {
+test.describe("Picker", () => {
   // (a) Hit-area + visible labels + no overflow at 320/375/414px on RoutinePickerModal and ExercisePicker
   for (const width of [320, 375, 414] as const) {
     test(`hit-area and layout acceptance at ${width}px for Picker Sheet`, async ({ browser }) => {
@@ -4897,8 +4897,8 @@ test.describe("P4 Picker", () => {
     });
   }
 
-  // (b) D43 checkTypeScale on ExercisePicker
-  test("D43 typography on ExercisePicker", async ({ browser }) => {
+  // (b) checkTypeScale on ExercisePicker
+  test("typography on ExercisePicker", async ({ browser }) => {
     const page = await browser.newPage({
       viewport: { width: 375, height: 812 },
       deviceScaleFactor: 1,
@@ -4974,7 +4974,7 @@ test.describe("P4 Picker", () => {
 });
 
 // ---------------------------------------------------------------------------
-// P5a History: Density, Hit Targets, Typography & Accessibility
+// History: Density, Hit Targets, Typography & Accessibility
 // ---------------------------------------------------------------------------
 
 const P5_NUTRITION_LOG_ID = 'e8000000-0000-0000-0000-000000000095';
@@ -5019,7 +5019,7 @@ async function setupHistoryDensityPage(page: Page) {
   await expect(page.getByRole("heading", { name: "Workout History" })).toBeVisible({ timeout: 10000 });
 }
 
-test.describe("P5a History", () => {
+test.describe("History", () => {
   test.afterAll(() => {
     cleanupHistoryNutritionLog();
   });
@@ -5043,7 +5043,7 @@ test.describe("P5a History", () => {
           `Viewport ${width}px must not have horizontal overflow on /history (By Session)`
         ).toBe(false);
 
-        // D-P5a-7 / H50: Verify session card has required classes
+        // Verify session card has required classes
         const sessionCard = page.locator("div.rounded-3xl.p-5.shadow-2xl.space-y-3").first();
         await expect(sessionCard).toBeVisible({ timeout: 10000 });
 
@@ -5227,10 +5227,10 @@ test.describe("P5a History", () => {
 });
 
 // ---------------------------------------------------------------------------
-// P5b History: Exercise Sheet, Calendar, Nutrition Timeline & Accessibility
+// History: Exercise Sheet, Calendar, Nutrition Timeline & Accessibility
 // ---------------------------------------------------------------------------
 
-test.describe("P5b History", () => {
+test.describe("History", () => {
   test.afterAll(() => {
     cleanupHistoryNutritionLog();
   });
@@ -5439,7 +5439,7 @@ test.describe("P5b History", () => {
 
 
 // ---------------------------------------------------------------------------
-// P6 Weight Units: Settings WeightUnitCard, kg-mode /workout and /history
+// Weight Units: Settings WeightUnitCard, kg-mode /workout and /history
 // ---------------------------------------------------------------------------
 
 async function setupSettingsDensityPage(page: Page) {
@@ -5454,7 +5454,7 @@ async function setupSettingsDensityPage(page: Page) {
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 10000 });
 }
 
-test.describe("P6 Weight Units", () => {
+test.describe("Weight Units", () => {
   // (a) Settings WeightUnitCard: 44px hit targets and layout at 320px and 390px
   for (const width of [320, 390] as const) {
     test(`Settings WeightUnitCard 44px hit targets and layout at ${width}px`, async ({ browser }) => {
@@ -5729,7 +5729,7 @@ test.describe("P6 Weight Units", () => {
 
 
 // ---------------------------------------------------------------------------
-// P7a Library: Density, Hit Targets (>=44px), Layout at 320/390px & Axe Audit
+// Library: Density, Hit Targets (>=44px), Layout at 320/390px & Axe Audit
 // ---------------------------------------------------------------------------
 
 async function setupLibraryDensityPage(page: Page) {
@@ -5744,7 +5744,7 @@ async function setupLibraryDensityPage(page: Page) {
   await expect(page.getByRole("tab", { name: "Exercises" })).toBeVisible({ timeout: 10000 });
 }
 
-test.describe("P7a Library", () => {
+test.describe("Library", () => {
   // (a) Hit-area and layout acceptance at 320px and 390px on /exercises (both subviews)
   for (const width of [320, 390] as const) {
     test(`Library hit-area and layout acceptance at ${width}px on /exercises`, async ({ browser }) => {
@@ -5881,10 +5881,10 @@ test.describe("P7a Library", () => {
 });
 
 // ---------------------------------------------------------------------------
-// P7b Template Builder: Density, Hit Targets (>=44px), 320/390px & Axe Audit
+// Template Builder: Density, Hit Targets (>=44px), 320/390px & Axe Audit
 // ---------------------------------------------------------------------------
 
-test.describe("P7b Template Builder", () => {
+test.describe("Template Builder", () => {
   for (const width of [320, 390] as const) {
     test(`Template sheet hit-area and layout acceptance at ${width}px`, async ({ browser }) => {
       const page = await browser.newPage({
@@ -6078,10 +6078,10 @@ test.describe("Route-Wide Density & Tap Grid", () => {
     }, routeName);
   }
 
-  // 1. D43 Route Walker on every route at 320px and 390px (including Header and BottomNav)
+  // 1. Route Walker on every route at 320px and 390px (including Header and BottomNav)
   for (const width of [320, 390] as const) {
     for (const route of ATHLETE_ROUTES) {
-      test(`D43 type scale on ${route} at ${width}px`, async ({ browser }) => {
+      test(`type scale on ${route} at ${width}px`, async ({ browser }) => {
         const page = await browser.newPage({
           viewport: { width, height: 844 },
           deviceScaleFactor: 1,
@@ -6112,7 +6112,7 @@ test.describe("Route-Wide Density & Tap Grid", () => {
       });
     }
 
-    test(`D43 type scale on /coach at ${width}px`, async ({ browser }) => {
+    test(`type scale on /coach at ${width}px`, async ({ browser }) => {
       const page = await browser.newPage({
         viewport: { width, height: 844 },
         deviceScaleFactor: 1,
@@ -6983,10 +6983,10 @@ test.describe("Route-Wide Density & Tap Grid", () => {
 });
 
 // ---------------------------------------------------------------------------
-// P8.1 HF-B: Workout Shell & Overlays Acceptance (D-HF-B-1 .. D-HF-B-5)
+// HF-B: Workout Shell & Overlays Acceptance (D-HF-B-1.. D-HF-B-5)
 // ---------------------------------------------------------------------------
 
-test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
+test.describe("HF-B: Workout Shell & Overlays", () => {
   // (a) 320/390: page scrollWidth <= innerWidth on /workout and every control in routine/date card right <= card right
   for (const width of [320, 390] as const) {
     test(`HF-B: /workout routine/date card has zero control overflow and page scrollWidth <= innerWidth at ${width}px`, async ({ browser }) => {
@@ -7363,7 +7363,7 @@ test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
   }
 
   // ---------------------------------------------------------------------------
-  // W4: Offline & Sync Visual Density Tests (320px)
+  // Offline & Sync Visual Density Tests (320px)
   // ---------------------------------------------------------------------------
 
   function getRealAthleteExerciseId(): string {
@@ -7378,7 +7378,7 @@ test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
     return id;
   }
 
-  test('W4 Density: Header connection status badge displays "Offline · 12 pending", fits 320px without clip or wrap, tap target >= 44x44px', async ({ browser }) => {
+  test('Density: Header connection status badge displays "Offline · 12 pending", fits 320px without clip or wrap, tap target >= 44x44px', async ({ browser }) => {
     const context = await browser.newContext({
       viewport: { width: 320, height: 844 },
       deviceScaleFactor: 1,
@@ -7545,7 +7545,7 @@ test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
     }
   });
 
-  test('W4 Density: SetRow pending mark fits in index cell and preserves grid column alignment with header at 320px', async ({ browser }) => {
+  test('Density: SetRow pending mark fits in index cell and preserves grid column alignment with header at 320px', async ({ browser }) => {
     const context = await browser.newContext({
       viewport: { width: 320, height: 844 },
       deviceScaleFactor: 1,
@@ -7738,7 +7738,7 @@ test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
     }
   });
 
-  test('W4 Density: AttentionBanner and SyncStatusSheet fit 320px without overflow with >=44px tap targets', async ({ browser }) => {
+  test('Density: AttentionBanner and SyncStatusSheet fit 320px without overflow with >=44px tap targets', async ({ browser }) => {
     const context = await browser.newContext({
       viewport: { width: 320, height: 844 },
       deviceScaleFactor: 1,
@@ -7936,7 +7936,7 @@ test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
     }
   });
 
-  test('O2 Density: PendingReviewList with 3 items (queued/ready/failed) fits 320px without overflow, >=44px tap targets, and toast/pill layering contract intact', async ({ browser }) => {
+  test('Density: PendingReviewList with 3 items (queued/ready/failed) fits 320px without overflow, >=44px tap targets, and toast/pill layering contract intact', async ({ browser }) => {
     const context = await browser.newContext({
       viewport: { width: 320, height: 844 },
       deviceScaleFactor: 1,
@@ -8148,7 +8148,7 @@ test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
     }
   });
 
-  test('O2 Density: StagedMealCard with Parsed locally badge + Analyze with AI instead fits 320px without overflow, >=44px tap targets, and toast/pill layering contract intact', async ({ browser }) => {
+  test('Density: StagedMealCard with Parsed locally badge + Analyze with AI instead fits 320px without overflow, >=44px tap targets, and toast/pill layering contract intact', async ({ browser }) => {
     const context = await browser.newContext({
       viewport: { width: 320, height: 844 },
       deviceScaleFactor: 1,
@@ -8364,7 +8364,7 @@ test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
     }
   });
 
-  test('D-YB2-1: Header content edges align with page content column across routes and viewports', async ({ browser }) => {
+  test('Header content edges align with page content column across routes and viewports', async ({ browser }) => {
     test.setTimeout(120000);
     const viewports = [320, 390, 768, 993, 1280, 1440];
     const shotsDir = test.info().outputPath('shots');
@@ -8497,7 +8497,7 @@ test.describe("P8.1 HF-B: Workout Shell & Overlays", () => {
     }
   });
 
-  test('D-YB2-1: 320px header wordmark relational geometry under widest pill states (athlete and coach)', async ({ browser }) => {
+  test('320px header wordmark relational geometry under widest pill states (athlete and coach)', async ({ browser }) => {
     test.setTimeout(120000);
     const width = 320;
 

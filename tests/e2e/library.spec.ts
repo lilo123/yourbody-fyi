@@ -134,7 +134,7 @@ async function goToLibrary(page: Page) {
   await expect(page.locator('[data-testid="exercise-search-input"]')).toBeVisible({ timeout: 10000 });
 }
 
-test.describe('P7a Library Acceptance Proofs', () => {
+test.describe('Library Acceptance Proofs', () => {
   test.beforeEach(() => {
     cleanupLibraryTestData();
   });
@@ -548,7 +548,7 @@ test.describe('P7a Library Acceptance Proofs', () => {
   });
 });
 
-test.describe('P7b Library Template Builder and Catalog Acceptance Proofs', () => {
+test.describe('Library Template Builder and Catalog Acceptance Proofs', () => {
   test.beforeEach(() => {
     cleanupLibraryTestData();
   });
@@ -557,8 +557,8 @@ test.describe('P7b Library Template Builder and Catalog Acceptance Proofs', () =
     cleanupLibraryTestData();
   });
 
-  // Proof (a): L35 PostgREST duplicate insert 409 & UI create sheet duplicate guard
-  test('Proof (a): L35 PostgREST insert of custom BENCH PRESS fails with 409 duplicate_exercise_name; UI shows inline duplicate error with zero inserts', async ({ page }) => {
+  // Proof (a): PostgREST duplicate insert 409 & UI create sheet duplicate guard
+  test('Proof (a): PostgREST insert of custom BENCH PRESS fails with 409 duplicate_exercise_name; UI shows inline duplicate error with zero inserts', async ({ page }) => {
     const token = await getAthleteToken();
 
     // 1. Direct PostgREST insert with equipment: null
@@ -669,8 +669,8 @@ test.describe('P7b Library Template Builder and Catalog Acceptance Proofs', () =
     await expect(zercherRow).toContainText('Zercher Squat');
   });
 
-  // Proof (c): L17 template sheet moving exercise down updates order and polite live region
-  test('Proof (c): L17 reordering template exercise down updates order and reorder-live-region announces position', async ({ page }) => {
+  // Proof (c): template sheet moving exercise down updates order and polite live region
+  test('Proof (c): reordering template exercise down updates order and reorder-live-region announces position', async ({ page }) => {
     const templateId = randomUUID();
     const templateName = `P7B Reorder Routine ${Date.now()}`;
     const benchExId = masterExerciseId('Bench Press');
@@ -713,8 +713,8 @@ test.describe('P7b Library Template Builder and Catalog Acceptance Proofs', () =
     await page.locator('[data-testid="cancel-template-btn"]').click();
   });
 
-  // Proof (d): L40 clearing a sets stepper input leaves it empty while focused; blur clamps to min
-  test('Proof (d): L40 clearing a sets stepper input leaves it empty while focused; blur clamps to min', async ({ page }) => {
+  // Proof (d): clearing a sets stepper input leaves it empty while focused; blur clamps to min
+  test('Proof (d): clearing a sets stepper input leaves it empty while focused; blur clamps to min', async ({ page }) => {
     const templateId = randomUUID();
     const templateName = `P7B Stepper Routine ${Date.now()}`;
     const benchExId = masterExerciseId('Bench Press');
@@ -753,8 +753,8 @@ test.describe('P7b Library Template Builder and Catalog Acceptance Proofs', () =
     await page.locator('[data-testid="cancel-template-btn"]').click();
   });
 
-  // Proof (e): L43 open for edit, bump server-side, save in UI -> stale banner, server row kept, reload shows latest
-  test('Proof (e): L43 stale template edit shows stale banner, preserves server change, reload shows latest', async ({ page }) => {
+  // Proof (e): open for edit, bump server-side, save in UI -> stale banner, server row kept, reload shows latest
+  test('Proof (e): stale template edit shows stale banner, preserves server change, reload shows latest', async ({ page }) => {
     const templateId = randomUUID();
     const initialName = `P7B Stale Routine ${Date.now()}`;
     const bumpedName = `P7B Bumped Routine ${Date.now()}`;
@@ -885,7 +885,7 @@ test.describe('P7b Library Template Builder and Catalog Acceptance Proofs', () =
     }
   });
 
-  // Proof (g): L9 Coach single save_routine_template RPC with p_assigned_to, zero table writes, and failure path 500 produces no orphan
+  // Proof (g): Coach single save_routine_template RPC with p_assigned_to, zero table writes, and failure path 500 produces no orphan
   test('Proof (g): as coach, creates template for athlete via single save_routine_template RPC (p_assigned_to) with zero direct table writes', async ({ page }) => {
     // 1. Resolve athlete id dynamically from database
     const athleteId = execSync(

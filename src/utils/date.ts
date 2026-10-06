@@ -364,7 +364,7 @@ export function isCivilDate(str: string): boolean {
 
 /**
  * Formats a civil date (YYYY-MM-DD) or ISO timestamp into short human format (e.g. "Sep 15").
- * Directly parses calendar components without astronomical timezone shifting (H4, RD-5).
+ * Directly parses calendar components without astronomical timezone shifting.
  */
 export function formatCivilDate(dateStr: string): string {
   if (!dateStr || typeof dateStr !== "string") return "";

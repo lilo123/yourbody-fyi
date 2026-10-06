@@ -123,7 +123,7 @@ export const workoutExercisesQueryOptions = {
   staleTime: 5 * 60 * 1000,
 };
 
-// usePrMode added for D-P8.1-8
+// UsePrMode added for
 export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
   const queryClient = useQueryClient();
   const isOnline = useOnlineStatus();

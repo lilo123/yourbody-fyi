@@ -124,7 +124,7 @@ export const EditExerciseSheet: React.FC<EditExerciseSheetProps> = ({
     const combinedCatalog: CatalogExercise[] = [];
 
     try {
-      // Duplicate check on rename / equipment change (L35)
+      // Duplicate check on rename / equipment change
       if (isNameChanged || isEquipmentChanged) {
         const cached = queryClient.getQueriesData<InfiniteData<ExerciseCatalogPage>>({
           queryKey: queryKeys.exerciseCatalog.all,

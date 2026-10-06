@@ -95,7 +95,7 @@ describe('List Virtualization with @tanstack/react-virtual', () => {
     // Count all DOM elements mounted inside the rendered container
     const allMountedNodes = container.querySelectorAll('*');
     // Without virtualization, 400 sessions × ~45 nodes each would be ~18,000 DOM nodes.
-    // H30 overscan 5 (D-P5a-8): measured 661 nodes at rest, threshold is 661 + <=10% = 728
+    // Overscan 5: measured 661 nodes at rest, threshold is 661 + <=10% = 728
     expect(allMountedNodes.length).toBeLessThanOrEqual(728);
     // Ensure the list container is present and has virtualized dimensions
     expect(container.firstChild).toBeDefined();
@@ -507,7 +507,7 @@ describe('List Virtualization with @tanstack/react-virtual', () => {
       </MemoryRouter>
     );
 
-    // H30 overscan 5 (D-P5a-8): measured 204 nodes in fallback, threshold is 204 + <=10% = 225 (includes H45 controls)
+    // Overscan 5: measured 204 nodes in fallback, threshold is 204 + <=10% = 225 (includes controls)
     const allMountedNodes = container.querySelectorAll('*');
     expect(allMountedNodes.length).toBeLessThanOrEqual(225);
 

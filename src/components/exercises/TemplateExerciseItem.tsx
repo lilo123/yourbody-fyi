@@ -130,7 +130,7 @@ export const TemplateExerciseItem: React.FC<TemplateExerciseItemProps> = memo(({
         </div>
       </div>
 
-      {/* Steppers Row: L27 flex nowrap at 320px, 44px hit targets */}
+      {/* Steppers Row: flex nowrap at 320px, 44px hit targets */}
       <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800/80 flex-nowrap min-w-0">
         {/* Sets Stepper */}
         <div ref={setsRef} className="flex items-center gap-1.5 shrink-0">

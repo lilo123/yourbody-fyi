@@ -8,7 +8,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 /**
  * Settings card allowing user to toggle PR ranking mode between
  * 'Max weight' (traditional) and 'Estimated 1RM' (Epley formula).
- * Decisions: D-P8.1-8, D-P8.1-9, D-P8.1-10.
+ * Decisions: PR ranking mode profile setting.
  */
 export const PrModeCard: React.FC = () => {
   const { mode, setMode, isSaving, error } = usePrMode();

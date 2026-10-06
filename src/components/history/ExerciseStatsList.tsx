@@ -248,7 +248,7 @@ export const ExerciseStatsList: React.FC<ExerciseStatsListProps> = ({
               />
             </div>
 
-            {/* H47: PR line shows formatted pr_date */}
+            {/* PR line shows formatted pr_date */}
             {totalSets > 0 ? (() => {
               const prE1rm =
                 prMode === 'e1rm'
@@ -290,7 +290,7 @@ export const ExerciseStatsList: React.FC<ExerciseStatsListProps> = ({
           </div>
         </div>
 
-        {/* H37: 'All-time: N sets · Last 3:' + year when not current year */}
+        {/* 'All-time: N sets · Last 3:' + year when not current year */}
         {totalSets > 0 && (
           <div className="space-y-1.5">
             <span className="text-xs font-bold uppercase text-zinc-400 tracking-wider block mb-1">
@@ -319,7 +319,7 @@ export const ExerciseStatsList: React.FC<ExerciseStatsListProps> = ({
     <div className="space-y-4">
       {/* Exercise Filter Bar */}
       <div className="space-y-2">
-        {/* H36: search input text-base min-h-[44px] bg-zinc-950 cyan focus ring */}
+        {/* search input text-base min-h-[44px] bg-zinc-950 cyan focus ring */}
         <div className="relative">
           <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -390,7 +390,7 @@ export const ExerciseStatsList: React.FC<ExerciseStatsListProps> = ({
         </div>
       )}
 
-      {/* Exercise History Drill-Down Sheet (H8) */}
+      {/* Exercise History Drill-Down Sheet */}
       <ExerciseHistorySheet
         open={Boolean(selectedStatForSheet)}
         onClose={handleSheetClose}

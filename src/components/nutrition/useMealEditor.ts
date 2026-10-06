@@ -344,7 +344,7 @@ export function useMealEditor({
       const isSingle = items.length <= 1;
       const item0 = items[0];
 
-      // D29 / logged_date semantics:
+      // Logged_date semantics:
       // If date changed, move logged_at to same time of day on new date; else preserve logged_at
       let loggedAt = meal.logged_at;
       if (draftDate !== initialDate) {

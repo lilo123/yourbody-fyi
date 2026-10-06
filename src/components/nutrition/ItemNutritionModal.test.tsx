@@ -218,7 +218,7 @@ describe('ItemNutritionModal', () => {
 
     await expectNoA11yViolations(container);
   });
-  it('D23: soft kcal-vs-macros hint appears/disappears as values change and does not block save', () => {
+  it('soft kcal-vs-macros hint appears/disappears as values change and does not block save', () => {
     const item = makeItem({
       calories: 104,
       protein: 10,

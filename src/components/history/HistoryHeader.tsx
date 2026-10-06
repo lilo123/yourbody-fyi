@@ -26,7 +26,7 @@ export const HistoryHeader: React.FC<HistoryHeaderProps> = ({
     <div className="bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-transparent border border-cyan-500/20 rounded-3xl p-5 shadow-2xl space-y-4">
       <div className="flex items-center gap-2">
         <Activity className="w-5 h-5 text-cyan-400" />
-        {/* H33: Exactly one h1 heading on the page */}
+        {/* Exactly one h1 heading on the page */}
         <h1 className="text-base font-bold text-white uppercase tracking-wider">
           {historyDomain === 'workouts' ? 'Workout History' : 'Nutrition History'}
         </h1>
@@ -37,7 +37,7 @@ export const HistoryHeader: React.FC<HistoryHeaderProps> = ({
           : 'Review daily caloric distribution, macronutrient breakdowns, and logged meals.'}
       </p>
 
-      {/* H12: Top-Level Domain Segmented Control via SegmentedTabs */}
+      {/* Top-Level Domain Segmented Control via SegmentedTabs */}
       <SegmentedTabs
         ariaLabel="History domain"
         tabs={[
@@ -60,7 +60,7 @@ export const HistoryHeader: React.FC<HistoryHeaderProps> = ({
         onChange={(tab) => onHistoryDomainChange(tab as 'workouts' | 'nutrition')}
       />
 
-      {/* H12: Sub-view switcher for Workouts via SegmentedTabs */}
+      {/* Sub-view switcher for Workouts via SegmentedTabs */}
       {historyDomain === 'workouts' && (
         <SegmentedTabs
           ariaLabel="Workout view mode"
@@ -87,7 +87,7 @@ export const HistoryHeader: React.FC<HistoryHeaderProps> = ({
         />
       )}
 
-      {/* H5 & H34: Date chips fit 320px width; hidden in By-Exercise with 'All-time stats' caption */}
+      {/* Date chips fit 320px width; hidden in By-Exercise with 'All-time stats' caption */}
       {isExerciseView ? (
         <div data-testid="all-time-stats-caption" className="text-xs font-bold text-zinc-400 tracking-wider uppercase py-1">
           All-time stats

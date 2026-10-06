@@ -35,7 +35,7 @@ export const CreateExerciseRow: React.FC<CreateExerciseRowProps> = ({
       ? selectedEquipment.toLowerCase().trim()
       : null;
 
-  // L35: duplicate check against visible catalog (normalized name, equipment)
+  // Duplicate check against visible catalog (normalized name, equipment)
   const isDuplicate = catalog.some((ex) => {
     const existingName = normalizeSearch(ex.name);
     const existingEq = ex.equipment ? ex.equipment.toLowerCase().trim() : null;

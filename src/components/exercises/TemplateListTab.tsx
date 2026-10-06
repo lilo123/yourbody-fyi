@@ -45,7 +45,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
 
-  // L33: Load library routine list via get_routine_catalog RPC
+  // Load library routine list via get_routine_catalog RPC
   const {
     data: catalogTemplates = [],
     isError: isCatalogError,
@@ -165,7 +165,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
         </div>
       </div>
 
-      {/* Day Filter Toolbar (L15: role=radiogroup/radio, aria-checked) */}
+      {/* Day Filter Toolbar (role=radiogroup radio aria checked) */}
       <div
         role="radiogroup"
         aria-label="Filter templates by day"
@@ -229,7 +229,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      {/* L18: Accordion Toggle Button */}
+                      {/* Accordion Toggle Button */}
                       <button
                         type="button"
                         aria-expanded={isExpanded}
@@ -335,7 +335,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
                   </div>
                 </div>
 
-                {/* L25: "Start routine" CTA Button */}
+                {/* "Start routine" CTA Button */}
                 <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2">
                   <Button
                     variant="secondary"
@@ -354,7 +354,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
                   </Button>
                 </div>
 
-                {/* L18 Accordion Content: Listing exercises with sets x reps and Archived pill */}
+                {/* Accordion Content: Listing exercises with sets x reps and Archived pill */}
                 {isExpanded && (
                   <div
                     id={`template-preview-${tpl.id}`}

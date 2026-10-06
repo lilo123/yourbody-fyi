@@ -4,7 +4,7 @@ import { useHistorySessionFilter } from './useHistorySessionFilter';
 import type { HistorySession, HistorySet } from './useWorkoutHistory';
 import type { Exercise } from '../../types/database';
 
-describe('useHistorySessionFilter (H43, D-P5b-6)', () => {
+describe('useHistorySessionFilter', () => {
   const mockSessions: HistorySession[] = [
     {
       id: 'sess-1',

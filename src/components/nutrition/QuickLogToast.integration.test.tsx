@@ -56,7 +56,7 @@ vi.mock('../../utils/unitConverter', async (importOriginal) => {
   };
 });
 
-describe('NutritionEngine QuickLogToast Integration (D41 & D42)', () => {
+describe('NutritionEngine QuickLogToast Integration', () => {
   let queryClient: QueryClient;
   let mockDeleteEq: ReturnType<typeof vi.fn>;
   let mockDelete: ReturnType<typeof vi.fn>;

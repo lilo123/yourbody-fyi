@@ -51,7 +51,7 @@ export function useHistoryData(targetUserId: string, onMutationError?: (msg: str
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch nutrition logs for target user via 14-day window infinite query (H11, D-P5b-2)
+  // Fetch nutrition logs for target user via 14-day window infinite query
   const {
     data: nutritionData,
     isPending: isNutritionPending,
@@ -88,7 +88,7 @@ export function useHistoryData(targetUserId: string, onMutationError?: (msg: str
       if (error) throw error;
       const logs = (data ? (data as NutritionLog[]) : []).map(rehydrateLogWithCachedItems);
 
-      // Probe whether an older row exists before windowStart (H11, D-P5b-2)
+      // Probe whether an older row exists before windowStart
       const { data: olderRows, error: probeError } = await supabase
         .from('nutrition_logs')
         .select('logged_date')

@@ -71,7 +71,7 @@ function createClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
 
-describe('EditMealSheet D45 Add Items with AI', () => {
+describe('EditMealSheet Add Items with AI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMockHistory();

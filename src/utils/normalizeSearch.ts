@@ -1,5 +1,5 @@
 /**
- * Search normalization and alias expansion utility (P4, L8, H32)
+ * Search normalization and alias expansion utility
  *
  * Implements:
  * 1. NFD folding (strips accents and diacritics)

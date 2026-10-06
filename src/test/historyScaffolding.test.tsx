@@ -44,12 +44,12 @@ vi.mock('../lib/supabase', () => ({
  * Smoke tests for History behavioural scaffolding.
  *
  * Cites:
- * - HISTORY_AUDIT_REPORT.md line 105 (Item H13):
+ * - HISTORY_AUDIT_REPORT.md line 105:
  *   "Chips, search and category behaviour have no tests (only CSS class / placeholder checks) |
- *    Tests | P2 | HistoryView.test.tsx:231,1907-1922; Virtualization.test.tsx:201 V-s |
- *    Add behavioural tests (see H9/H5 acceptance)"
+ *    Tests | HistoryView.test.tsx:231,1907-1922; Virtualization.test.tsx:201 V-s |
+ *    Add behavioural tests (see acceptance)"
  * - HISTORY_AUDIT_REPORT.md line 255 (Batch B0):
- *   "B0 Test infra | H19, H28, H13 scaffolding, H46 | ... Land first so the other batches' tests
+ *   "B0 Test infra | Test scaffolding | ... Land first so the other batches' tests
  *    actually exercise the caps and timezones. Other batches add new test files only; nobody edits
  *    HistoryView.test.tsx except B2."
  */
@@ -70,7 +70,7 @@ function setupHistoryMocks(options?: any) {
   });
 }
 
-describe('History scaffolding (H13)', () => {
+describe('History scaffolding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMockHistory();
@@ -138,7 +138,7 @@ describe('History scaffolding (H13)', () => {
     expect(input.value).toBe('Incline');
   });
 
-  it('generates boundary sessions with createBoundarySessions for H9 date-filtering tests', () => {
+  it('generates boundary sessions with createBoundarySessions for date-filtering tests', () => {
     const ref = new Date('2026-09-26T12:00:00Z');
     const boundaries = createBoundarySessions(ref);
 

@@ -87,7 +87,7 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
-describe('HistoryView Filters & Range Integration (H13)', () => {
+describe('HistoryView Filters & Range Integration', () => {
   let queryClient: QueryClient;
   let mockHookReturn: any;
 
@@ -152,7 +152,7 @@ describe('HistoryView Filters & Range Integration (H13)', () => {
       </MemoryRouter>
     );
 
-  describe('Date Range Chips (H9, H22, H34)', () => {
+  describe('Date Range Chips', () => {
     it('services expected database query contracts for exercises, sets, nutrition, and user profile', async () => {
       renderComponent();
       await waitFor(() => {
@@ -236,7 +236,7 @@ describe('HistoryView Filters & Range Integration (H13)', () => {
       });
     });
 
-    it('hides date range chips and displays All-time stats caption in By Exercise view (H5)', async () => {
+    it('hides date range chips and displays All-time stats caption in By Exercise view', async () => {
       renderComponent();
 
       // In session view, date chips exist
@@ -254,7 +254,7 @@ describe('HistoryView Filters & Range Integration (H13)', () => {
     });
   });
 
-  describe('Session Count and keystone Pagination (H31)', () => {
+  describe('Session Count and keystone Pagination', () => {
     it('displays Showing N of M sessions counter when totalCount is provided', () => {
       renderComponent();
 
@@ -280,7 +280,7 @@ describe('HistoryView Filters & Range Integration (H13)', () => {
     });
   });
 
-  describe('Search & Category Filtering in By Exercise (H14, H22, H32)', () => {
+  describe('Search & Category Filtering in By Exercise', () => {
     it('folds diacritics, case, and whitespace in exercise search query (normalizeSearch)', async () => {
       renderComponent();
 
@@ -319,7 +319,7 @@ describe('HistoryView Filters & Range Integration (H13)', () => {
     });
   });
 
-  describe('Empty States and Skeletons (H7, H20)', () => {
+  describe('Empty States and Skeletons', () => {
     it('renders 3 skeleton cards while isSessionsPending is true', () => {
       mockHookReturn.isSessionsPending = true;
       mockHookReturn.sessions = [];
