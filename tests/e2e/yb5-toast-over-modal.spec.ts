@@ -40,6 +40,10 @@ async function login(page: Page) {
   await page.fill('input[type="password"]', 'password123');
   await page.click('button[type="submit"]');
   await page.waitForURL('**/workout', { timeout: 15000 });
+  await page.locator('[data-testid="workout-date-input"]').waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('[data-testid="nav-nutrition"]').click();
+  await page.waitForURL('**/nutrition');
+  await expect(page.locator("text=Today's Nutrition")).toBeVisible({ timeout: 15000 });
 }
 
 function overlaps(
@@ -74,8 +78,6 @@ test.describe('YB5 Toast over Modal Layering & Geometry (D-YB5-T1..T4)', () => {
     page,
   }, testInfo) => {
     await login(page);
-    await page.goto('/nutrition');
-    await expect(page.locator("text=Today's Nutrition")).toBeVisible({ timeout: 15000 });
 
     // Locate the seeded meal row
     const mealRow = page
@@ -256,8 +258,6 @@ test.describe('YB5 Toast over Modal Layering & Geometry (D-YB5-T1..T4)', () => {
   test('CustomDishesModal New Dish save: toast is top-most at centre point', async ({ page }) => {
     const dishName = `YB5 Dish ${Date.now()}`;
     await login(page);
-    await page.goto('/nutrition');
-    await expect(page.locator("text=Today's Nutrition")).toBeVisible({ timeout: 15000 });
 
     // Open "New Dish" modal
     const newDishBtn = page.locator('[data-testid="create-custom-dish-btn"]');

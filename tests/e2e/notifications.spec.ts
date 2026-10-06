@@ -73,8 +73,9 @@ async function loginAsAthlete(page: Page) {
   await page.click('button[type="submit"]');
   await page.waitForURL('**/workout');
   await page.locator('[data-testid="workout-date-input"]').waitFor({ state: 'visible', timeout: 15000 });
-  await page.goto('/nutrition');
-  await page.waitForSelector("text=Today's Nutrition", { timeout: 15000 });
+  await page.locator('[data-testid="nav-nutrition"]').click();
+  await page.waitForURL('**/nutrition');
+  await expect(page.locator("text=Today's Nutrition")).toBeVisible({ timeout: 15000 });
 }
 
 test.describe('P8.1 Notification Standardization & Stray Status Repro', () => {

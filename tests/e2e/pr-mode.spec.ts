@@ -161,6 +161,7 @@ async function loginAsAthlete(page: Page) {
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL('**/workout');
+  await page.locator('[data-testid="workout-date-input"]').waitFor({ state: 'visible', timeout: 15000 });
 }
 
 test.describe('P8.1 PR Mode Setting E2E', () => {
@@ -185,6 +186,7 @@ test.describe('P8.1 PR Mode Setting E2E', () => {
     const byExerciseTab = page.locator('[data-testid="history-subview-exercise"]');
     await expect(byExerciseTab).toBeVisible();
     await byExerciseTab.click();
+    await expect(byExerciseTab).toHaveAttribute('aria-selected', 'true');
 
     // Verify exercise PR card displays max weight (200 lbs x 2)
     const exerciseCard = page.locator(`[data-testid="exercise-card-${seedData.exerciseId}"]`);
@@ -229,16 +231,36 @@ test.describe('P8.1 PR Mode Setting E2E', () => {
 
     // Verify DB updated via psql
     const cmd = getPsqlCommand();
-    const dbModeE1rm = execSync(
-      `${cmd} -t -A -c "SELECT pr_mode FROM public.users WHERE id = '${seedData.athleteId}';"`,
-      { encoding: 'utf8' }
-    ).trim();
-    expect(dbModeE1rm).toBe('e1rm');
+    await expect
+      .poll(
+        () =>
+          execSync(
+            `${cmd} -t -A -c "SELECT pr_mode FROM public.users WHERE id = '${seedData.athleteId}';"`,
+            { encoding: 'utf8' }
+          ).trim(),
+        { intervals: [250, 500, 1000] }
+      )
+      .toBe('e1rm');
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          try {
+            return JSON.parse(localStorage.getItem('yourbody_user') || '{}').pr_mode;
+          } catch {
+            return null;
+          }
+        })
+      )
+      .toBe('e1rm');
 
     // 3. Verify PR in History updated to Estimated 1RM set (180 lbs x 10 · e1RM 240 lbs)
     await page.goto('/history');
     await page.waitForURL('**/history');
-    await page.locator('[data-testid="history-subview-exercise"]').click();
+    const byExerciseTab2 = page.locator('[data-testid="history-subview-exercise"]');
+    await expect(byExerciseTab2).toBeVisible();
+    await byExerciseTab2.click();
+    await expect(byExerciseTab2).toHaveAttribute('aria-selected', 'true');
 
     await expect(exerciseCard).toBeVisible({ timeout: 10000 });
     await expect(exerciseCard).toContainText('180 lbs × 10');
@@ -275,16 +297,36 @@ test.describe('P8.1 PR Mode Setting E2E', () => {
     await page.locator('[data-testid="pr-mode-weight"]').click();
     await expect(page.locator('[data-testid="pr-mode-weight"]')).toHaveAttribute('aria-selected', 'true');
 
-    const dbModeWeight = execSync(
-      `${cmd} -t -A -c "SELECT pr_mode FROM public.users WHERE id = '${seedData.athleteId}';"`,
-      { encoding: 'utf8' }
-    ).trim();
-    expect(dbModeWeight).toBe('weight');
+    await expect
+      .poll(
+        () =>
+          execSync(
+            `${cmd} -t -A -c "SELECT pr_mode FROM public.users WHERE id = '${seedData.athleteId}';"`,
+            { encoding: 'utf8' }
+          ).trim(),
+        { intervals: [250, 500, 1000] }
+      )
+      .toBe('weight');
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          try {
+            return JSON.parse(localStorage.getItem('yourbody_user') || '{}').pr_mode;
+          } catch {
+            return null;
+          }
+        })
+      )
+      .toBe('weight');
 
     // Verify History restores to Max weight PR
     await page.goto('/history');
     await page.waitForURL('**/history');
-    await page.locator('[data-testid="history-subview-exercise"]').click();
+    const byExerciseTab3 = page.locator('[data-testid="history-subview-exercise"]');
+    await expect(byExerciseTab3).toBeVisible();
+    await byExerciseTab3.click();
+    await expect(byExerciseTab3).toHaveAttribute('aria-selected', 'true');
     await expect(exerciseCard).toBeVisible({ timeout: 10000 });
     await expect(exerciseCard).toContainText('200 lbs × 2');
     await expect(exerciseCard).not.toContainText('e1RM');

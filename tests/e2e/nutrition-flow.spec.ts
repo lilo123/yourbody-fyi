@@ -35,14 +35,6 @@ async function deleteMealRow(page: Page, name: string) {
   await expect(page.locator(`[data-testid="meal-actions-${id}"]`)).toHaveCount(0);
 }
 
-async function safeGoto(page: Page, url: string) {
-  try {
-    await page.goto(url);
-  } catch {
-    await page.goto(url);
-  }
-}
-
 test.describe('Nutrition Flow E2E', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -156,13 +148,15 @@ test.describe('Nutrition Flow E2E', () => {
       });
     });
 
-    await safeGoto(page, '/login');
+    await page.goto('/login');
     await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
     await page.fill('input[type="password"]', 'password123');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/workout');
-    await safeGoto(page, '/nutrition');
-    await page.waitForSelector('text=Today\'s Nutrition');
+    await page.locator('[data-testid="workout-date-input"]').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('[data-testid="nav-nutrition"]').click();
+    await page.waitForURL('**/nutrition');
+    await expect(page.locator("text=Today's Nutrition")).toBeVisible({ timeout: 15000 });
   });
 
   test('renders 5-ring/card macro dashboard and conversational analysis input', async ({ page }) => {
@@ -607,7 +601,7 @@ Total Fiber: 8 g`;
     await expect(restoredRow.locator('text=400 kcal')).toBeVisible();
 
     // 3. Navigate to /history, switch to Nutrition, and verify edit works there as well
-    await safeGoto(page, '/history');
+    await page.goto('/history');
     await expect(page.locator('text=Workout History')).toBeVisible();
 
     const nutritionTab = page.locator('[data-testid="history-tab-nutrition"]');
@@ -811,7 +805,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
     // O2 persists ['custom_dishes', uid] in the per-user rq store; clear it so the route mock above is what loads.
     expect(evalRes).toMatch(/^(rq-cleared|no-rq-store)$/);
 
-    await safeGoto(page, '/nutrition');
+    await page.goto('/nutrition');
     await page.waitForSelector("text=Today's Nutrition");
 
     // Initially heading is "Quick Log Favorites"
@@ -949,7 +943,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
     // O2 persists ['custom_dishes', uid] in the per-user rq store; clear it so the route mock above is what loads.
     expect(evalRes).toMatch(/^(rq-cleared|no-rq-store)$/);
 
-    await safeGoto(page, '/nutrition');
+    await page.goto('/nutrition');
     await page.waitForSelector("text=Today's Nutrition");
 
     // Click 1-tap quick log button
