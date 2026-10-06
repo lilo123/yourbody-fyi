@@ -22,6 +22,14 @@ const srcDir = path.resolve(rootDir, 'src');
 
 // Registry of serviced queries per test file mocking supabase.from
 const SERVICED_QUERIES_REGISTRY = {
+  'src/hooks/useFeatureFlag.test.tsx': [
+    {
+      table: 'app_config',
+      type: 'EXACT',
+      projection: 'key,value',
+      description: 'App configuration feature flags query',
+    },
+  ],
   'src/App.test.tsx': [
     {
       table: 'users',
