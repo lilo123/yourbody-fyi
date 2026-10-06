@@ -34,7 +34,7 @@ describe('EditExerciseSheet', () => {
     onSuccess: vi.fn(),
   };
 
-  it('has accessible label association for Exercise Name and uses input-text-sm (NEW-18)', () => {
+  it('has accessible label association for Exercise Name and uses input-text-sm', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <EditExerciseSheet {...mockProps} />
@@ -61,7 +61,7 @@ describe('EditExerciseSheet', () => {
     vi.mocked(useOnlineStatus).mockReturnValue(true);
   });
 
-  it('mounts edit-exercise-error live region empty while idle and retains same node on error (NEW-15)', async () => {
+  it('mounts edit-exercise-error live region empty while idle and retains same node on error', async () => {
     vi.mocked(supabase.from).mockImplementation((table: string) =>
       createSupabaseBuilder(table, { error: new Error('Failed to update exercise in DB') })
     );
@@ -173,7 +173,7 @@ describe('EditExerciseSheet', () => {
     expect(screen.getByLabelText(/exercise name/i)).toHaveValue('Updated Bench Press');
   });
 
-  it('L12: disables save button and displays inline error on whitespace name', () => {
+  it('disables save button and displays inline error on whitespace name', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <EditExerciseSheet {...mockProps} />
@@ -188,7 +188,7 @@ describe('EditExerciseSheet', () => {
     expect(screen.getByText(/Exercise name cannot be blank or whitespace-only./i)).toBeDefined();
   });
 
-  it('L26: successful rename invalidates exercise_stats query cache to update History PR card title', async () => {
+  it('successful rename invalidates exercise_stats query cache to update History PR card title', async () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       const b = createSupabaseBuilder(table, { data: [{ id: 'ex-1', name: 'Incline Bench Press' }], error: null });
       b.update = vi.fn().mockReturnValue({
@@ -220,7 +220,7 @@ describe('EditExerciseSheet', () => {
     expect(invalidatedKeys).toContainEqual(['exercise_stats']);
   });
 
-  it('L39: library rename followed by set logging passes valid exerciseId UUID to set insertion', async () => {
+  it('library rename followed by set logging passes valid exerciseId UUID to set insertion', async () => {
     const renamedExercise = {
       id: '00000000-0000-4000-8000-000000000099',
       name: 'Incline Dumbbell Press',
@@ -264,7 +264,7 @@ describe('EditExerciseSheet', () => {
   });
 
 
-  it("L32: pressing Enter submits the edit form", async () => {
+  it("pressing Enter submits the edit form", async () => {
     const updateSpy = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         select: vi.fn().mockResolvedValue({
@@ -297,7 +297,7 @@ describe('EditExerciseSheet', () => {
     });
   });
 
-  it("L48: single-select equipment chips saved to exercises.equipment", async () => {
+  it("single-select equipment chips saved to exercises.equipment", async () => {
     const updateSpy = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         select: vi.fn().mockResolvedValue({
@@ -332,7 +332,7 @@ describe('EditExerciseSheet', () => {
     });
   });
 
-  it("L35: duplicate check on rename shows duplicate message naming existing exercise and prevents update", async () => {
+  it("duplicate check on rename shows duplicate message naming existing exercise and prevents update", async () => {
     const existingExercise = {
       id: "ex-2",
       name: "Incline Bench Press",
@@ -397,7 +397,7 @@ describe('EditExerciseSheet', () => {
     });
   });
 
-  it("L13: synchronous double-submit guard triggers only one DB update", async () => {
+  it("synchronous double-submit guard triggers only one DB update", async () => {
     let resolveUpdate: (val: any) => void;
     const updatePromise = new Promise((resolve) => {
       resolveUpdate = resolve;
@@ -441,7 +441,7 @@ describe('EditExerciseSheet', () => {
     });
   });
 
-  it("L35: DB 23505 duplicate_exercise_name with DETAIL maps to inline duplicate alert with existing exercise link", async () => {
+  it("DB 23505 duplicate_exercise_name with DETAIL maps to inline duplicate alert with existing exercise link", async () => {
     const updateSpy = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         select: vi.fn().mockResolvedValue({

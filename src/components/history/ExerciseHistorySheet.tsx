@@ -241,7 +241,7 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
     });
   }, [sessionGroups]);
 
-  // RD-4: Exact PR set determination with tie-breaking (more reps then earliest date, then earliest set)
+  // Exact PR set determination with tie-breaking (more reps then earliest date, then earliest set)
   const prSetId = useMemo(() => {
     if (prWeight == null || prWeight < 0 || prReps == null || prReps <= 0) return null;
     const matches: Array<{
@@ -340,7 +340,7 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
           })()}
         </div>
 
-        {/* Range Selector Chips (D2) */}
+        {/* Range Selector Chips */}
         <div
           data-testid="exercise-history-range-chips"
           className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar"

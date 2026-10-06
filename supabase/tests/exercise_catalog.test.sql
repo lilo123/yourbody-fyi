@@ -54,9 +54,9 @@ SELECT pass('Cable Lateral Raises backfilled equipment = cable, Leg Extension Ma
 SELECT pass('Face Pulls equipment backfilled to cable by M8');
 
 -- ============================================================================
--- 3. Post-M9 Contract: Absence of body_part, Non-Empty body_parts, Catalog Output & Direct Writes
+-- 3. Post-migration Contract: Absence of body_part, Non-Empty body_parts, Catalog Output & Direct Writes
 -- ============================================================================
--- 3.1 exercises.body_part column is absent post-M9
+-- 3.1 exercises.body_part column is absent post-migration
 SELECT hasnt_column('public', 'exercises', 'body_part', 'exercises.body_part column is absent post-M9');
 
 -- 3.2 exercises.body_parts is present and non-empty for all exercise rows
@@ -142,7 +142,7 @@ $$;
 SELECT pass('Inserting and updating with body_parts works; unrelated update preserves body_parts');
 
 -- ============================================================================
--- 4. Exercise Hides Table + RLS (RD-3, L47)
+-- 4. Exercise Hides Table + RLS
 -- ============================================================================
 DO $$
 DECLARE

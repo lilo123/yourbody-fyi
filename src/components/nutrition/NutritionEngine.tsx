@@ -49,7 +49,7 @@ export const NutritionEngine: React.FC = () => {
     setShowManualForm(false);
   };
 
-  // Manual Form Fallback State (D22: stages into StagedMealCard instead of logging directly)
+  // Manual Form Fallback State (stages into StagedMealCard instead of logging directly)
   const manualMealForm = useManualMealForm({
     onStageMeal: handleStageManualMeal,
   });
@@ -80,7 +80,7 @@ export const NutritionEngine: React.FC = () => {
   const { show: showToast, dismiss: dismissToast } = useToast();
   useToastOffset(isTimerActive ? (stagedMeal ? 190 : 148) : stagedMeal ? 128 : undefined);
 
-  // RD-7: Deferred delete for NutritionLog (6s window with UndoToast)
+  // Deferred delete for NutritionLog (6s window with UndoToast)
   const deferredMealDelete = useDeferredDelete<NutritionLog>({
     durationMs: 6000,
     commit: async (log) => {
@@ -93,7 +93,7 @@ export const NutritionEngine: React.FC = () => {
     },
   });
 
-  // RD-7: Deferred delete for CustomDish (6s window with UndoToast)
+  // Deferred delete for CustomDish (6s window with UndoToast)
   const deferredDishDelete = useDeferredDelete<CustomDish>({
     durationMs: 6000,
     commit: async (dish) => {
@@ -562,7 +562,7 @@ export const NutritionEngine: React.FC = () => {
         onOpenEditDishModal={dishModal.handleOpenEditDishModal}
       />
 
-      {/* Edit Meal Sheet (D44) */}
+      {/* Edit Meal Sheet */}
       <EditMealSheet
         isOpen={!!editingMealLog}
         meal={editingMealLog}

@@ -136,7 +136,7 @@ describe('DayTotalRow', () => {
     expect(screen.getByTestId('day-total-val-carbs')).toHaveTextContent('0');
   });
 
-  it('applies D24 minmax responsive grid template and whitespace-nowrap', () => {
+  it('applies minmax responsive grid template and whitespace-nowrap', () => {
     render(
       <DayTotalRow
         macroColumns={columns}

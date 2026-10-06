@@ -292,7 +292,7 @@ describe('StagedMealCard', () => {
     await expectNoA11yViolationsForRules(container, ['duplicate-id', 'label']);
   });
 
-  it('D3 & D4: omits "Adjust portion or remove item" helper label and formula callout box', () => {
+  it('omits "Adjust portion or remove item" helper label and formula callout box', () => {
     const meal = makeMultiItemMeal();
     const { container } = render(
       <StagedMealCard
@@ -313,7 +313,7 @@ describe('StagedMealCard', () => {
     expect(screen.getByText(/itemized breakdown \(4\)/i)).toBeDefined();
   });
 
-  it('D5: renders read-only totals with no inputs for multi-item meal and shows 484/39.5/34.5 values', () => {
+  it('renders read-only totals with no inputs for multi-item meal and shows 484/39.5/34.5 values', () => {
     const meal = makeMultiItemMeal();
     render(
       <StagedMealCard
@@ -421,7 +421,7 @@ describe('StagedMealCard', () => {
     expect(totalCarbs).toHaveTextContent(/^0\s*C$/);
   });
 
-  it('single-item meal (D14): renders no inputs in the single-item card and hides Itemized Breakdown and This meal row', () => {
+  it('single-item meal: renders no inputs in the single-item card and hides Itemized Breakdown and This meal row', () => {
     const meal = makeStagedMeal();
     render(
       <StagedMealCard
@@ -454,7 +454,7 @@ describe('StagedMealCard', () => {
     expect(screen.getByTestId('component-quantity-input')).toHaveValue(1);
   });
 
-  it('single-item meal (D14): renders Day total row with 1 item when dailyTotals and targets provided', () => {
+  it('single-item meal: renders Day total row with 1 item when dailyTotals and targets provided', () => {
     const meal = makeStagedMeal(); // 600 kcal, 30 P, 40 C, 20 F, 5 Fib
     render(
       <StagedMealCard
@@ -488,7 +488,7 @@ describe('StagedMealCard', () => {
     expect(screen.queryByTestId('this-meal-label')).toBeNull();
   });
 
-  it('single-item meal (D14): modal edit updates item 0 nutrition and recomputes meal totals', () => {
+  it('single-item meal: modal edit updates item 0 nutrition and recomputes meal totals', () => {
     const meal = makeStagedMeal();
     let currentMeal = meal;
     const onUpdateStagedMeal = vi.fn((updated: StagedMeal) => {
@@ -552,7 +552,7 @@ describe('StagedMealCard', () => {
     expect(screen.getByText('Log Meal (+750 kcal)')).toBeInTheDocument();
   });
 
-  it('deleting from 2 items down to 1 (D14): removes This meal row and Itemized Breakdown header without rendering inputs', () => {
+  it('deleting from 2 items down to 1: removes This meal row and Itemized Breakdown header without rendering inputs', () => {
     const multiMeal: StagedMeal = {
       name: '2-Item Meal',
       mealType: 'Lunch',
@@ -720,7 +720,7 @@ describe('StagedMealCard', () => {
     expect(updated.calories).toBe(530);
   });
 
-  it('Task 5 (revised D8): renders This meal label on totals and Day total row directly under bold totals when dailyTotals and targets provided', () => {
+  it('Task 5 (revised): renders This meal label on totals and Day total row directly under bold totals when dailyTotals and targets provided', () => {
     const meal = makeMultiItemMeal();
     render(
       <StagedMealCard
@@ -802,7 +802,7 @@ describe('StagedMealCard', () => {
     expect(pCell).not.toHaveClass('text-rose-400');
     expect(screen.queryByTestId('day-total-over-protein')).toBeNull();
   });
-  describe('Batch 3 / D10: sticky action row and scrollIntoView', () => {
+  describe('Batch 3: sticky action row and scrollIntoView', () => {
     it('action row has the sticky class and bottom style set to nav height', () => {
       const meal = makeMultiItemMeal();
       render(
@@ -967,7 +967,7 @@ describe('StagedMealCard', () => {
   });
 
 
-  it('applies D24 minmax responsive grid template and whitespace-nowrap on totals cells', () => {
+  it('applies minmax responsive grid template and whitespace-nowrap on totals cells', () => {
     const multiMeal: StagedMeal = {
       name: '2-Item Meal',
       mealType: 'Lunch',
@@ -1044,7 +1044,7 @@ describe('StagedMealCard', () => {
     expect(calTotal).toHaveClass('whitespace-nowrap');
   });
 
-  describe('Add item flow (D22)', () => {
+  describe('Add item flow', () => {
     it('renders + Add item control on single-item card and multi-item card', () => {
       const singleMeal = makeStagedMeal();
       const { unmount } = render(
@@ -1082,7 +1082,7 @@ describe('StagedMealCard', () => {
       expect(screen.getByTestId('add-item-button')).toBeDefined();
     });
 
-    it('D34/D45: renders "+ Add" button with aria-label on single, multi-component, AI and manual staged cards and opens composer', () => {
+    it('renders "+ Add" button with aria-label on single, multi-component, AI and manual staged cards and opens composer', () => {
       const cardTypes: Array<{ type: string; meal: StagedMeal }> = [
         {
           type: 'single-item',
@@ -1172,7 +1172,7 @@ describe('StagedMealCard', () => {
       }
     });
 
-    it('D45: focus returns to "+ Add" button when composer is closed via Cancel', () => {
+    it('focus returns to "+ Add" button when composer is closed via Cancel', () => {
       const meal = makeStagedMeal();
       render(
         <StagedMealCard
@@ -1650,7 +1650,7 @@ describe('StagedMealCard mode="edit" vs mode="stage"', () => {
     fireEvent.change(dateInput, { target: { value: '2026-09-25' } });
     expect(onDateChange).toHaveBeenCalledWith('2026-09-25');
 
-    // 2. D46: the x0.5-x2 bar is gone; the header Scale chip scales the draft
+    // 2. the x0.5-x2 bar is gone; the header Scale chip scales the draft
     expect(screen.queryByTestId('dish-scale-bar')).toBeNull();
     fireEvent.click(screen.getByTestId('meal-scale-button'));
     const scaleInput = screen.getByTestId('meal-scale-input');
@@ -1725,7 +1725,7 @@ describe('StagedMealCard mode="edit" vs mode="stage"', () => {
   });
 });
 
-describe('D46 Scale chip on the staged card', () => {
+describe('Scale chip on the staged card', () => {
   const baseProps = {
     onApplyStagedItemChange: vi.fn(),
     onDeleteItem: vi.fn(),

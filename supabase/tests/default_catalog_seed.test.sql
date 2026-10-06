@@ -60,7 +60,7 @@ SELECT pass('All master exercises have valid non-null equipment');
 SELECT pass('Newly seeded master exercises have deterministic IDs matching md5(m8:norm_name)');
 
 -- ============================================================================
--- 3. Idempotency Check (re-running M8 seed insert does not duplicate or fail)
+-- 3. Idempotency Check (re-running seed insert does not duplicate or fail)
 -- ============================================================================
 DO $$
 DECLARE

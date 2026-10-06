@@ -217,7 +217,7 @@ describe('AddItemForm', () => {
     expect(screen.getByTestId('add-item-quantity-error')).toHaveTextContent('Must be 0 or more');
     expect(onAddItem).not.toHaveBeenCalled();
   });
-  it('D23: soft kcal-vs-macros hint appears/disappears as values change and does not block submit', () => {
+  it('soft kcal-vs-macros hint appears/disappears as values change and does not block submit', () => {
     const onAddItem = vi.fn();
     renderForm({ onAddItem });
 

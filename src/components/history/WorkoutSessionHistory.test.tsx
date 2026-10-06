@@ -18,7 +18,7 @@ vi.mock('../../hooks/useOnlineStatus', () => ({
   useOnlineStatus: () => mockIsOnline,
 }));
 
-describe('WorkoutSessionHistory (H4, H29, H43)', () => {
+describe('WorkoutSessionHistory', () => {
   const mockSessions: HistorySession[] = [
     {
       id: 'session-1',
@@ -47,7 +47,7 @@ describe('WorkoutSessionHistory (H4, H29, H43)', () => {
     mockIsOnline = true;
   });
 
-  it('H4: renders formatted civil date (Sep 15) and drops raw ISO timestamp text', () => {
+  it('renders formatted civil date (Sep 15) and drops raw ISO timestamp text', () => {
     render(
       <MemoryRouter>
         <WorkoutSessionHistory
@@ -70,12 +70,12 @@ describe('WorkoutSessionHistory (H4, H29, H43)', () => {
     // Formatted civil date must be displayed
     expect(screen.getByText(/Sep 15/)).toBeDefined();
 
-    // H4: Must NOT contain raw ISO timestamp text like "(2026-09-15T00:00:00.000Z)"
+    // Must NOT contain raw ISO timestamp text like "(2026-09-15T00:00:00.000Z)"
     expect(screen.queryByText(/2026-09-15T00:00:00/)).toBeNull();
     expect(screen.queryByText(/\(2026-09-15/)).toBeNull();
   });
 
-  it('H29: renders data-civil-date on session cards', () => {
+  it('renders data-civil-date on session cards', () => {
     const { container } = render(
       <MemoryRouter>
         <WorkoutSessionHistory
@@ -98,7 +98,7 @@ describe('WorkoutSessionHistory (H4, H29, H43)', () => {
     expect(card2).not.toBeNull();
   });
 
-  it('H29: highlights and focuses session card matching highlightDate', async () => {
+  it('highlights and focuses session card matching highlightDate', async () => {
     const { container } = render(
       <MemoryRouter>
         <WorkoutSessionHistory
@@ -122,7 +122,7 @@ describe('WorkoutSessionHistory (H4, H29, H43)', () => {
     });
   });
 
-  it('H43: renders filterSummary text when filtering sessions', () => {
+  it('renders filterSummary text when filtering sessions', () => {
     render(
       <MemoryRouter>
         <WorkoutSessionHistory
@@ -141,7 +141,7 @@ describe('WorkoutSessionHistory (H4, H29, H43)', () => {
     expect(counter.textContent).toBe('Showing 1 matches in 2 loaded sessions');
   });
 
-  it('H43: renders empty state with Clear filters CTA when filtering produces 0 matches', () => {
+  it('renders empty state with Clear filters CTA when filtering produces 0 matches', () => {
     const mockClearFilters = vi.fn();
 
     render(

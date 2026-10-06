@@ -51,8 +51,8 @@ describe('SetRow', () => {
     created_at: new Date().toISOString(),
   };
 
-  describe('Logged Set (W3, W7, W19)', () => {
-    it('tapping a logged row calls onEditSet and does not delete (W3)', () => {
+  describe('Logged Set', () => {
+    it('tapping a logged row calls onEditSet and does not delete', () => {
       const onEditSet = vi.fn();
       const onCommitSet = vi.fn();
       const onUpdateDraft = vi.fn();
@@ -84,7 +84,7 @@ describe('SetRow', () => {
       expect(onCommitSet).not.toHaveBeenCalled();
     });
 
-    it('displays logged set index from loggedSet.set_index (W19)', () => {
+    it('displays logged set index from loggedSet.set_index', () => {
       renderWithAuth(
         <SetRow
           exName="Bench Press"
@@ -105,7 +105,7 @@ describe('SetRow', () => {
       expect(screen.getByText('3')).toBeInTheDocument();
     });
 
-    it('formats bodyweight as BW (W7)', () => {
+    it('formats bodyweight as BW', () => {
       const bwLoggedSet: WorkoutSet = {
         ...loggedSet,
         weight: 0,
@@ -184,8 +184,8 @@ describe('SetRow', () => {
     });
   });
 
-  describe('Pending / Draft Set (W26)', () => {
-    it('provides 16px inputs, enterKeyHint and select-on-focus (W26)', () => {
+  describe('Pending / Draft Set', () => {
+    it('provides 16px inputs, enterKeyHint and select-on-focus', () => {
       renderWithAuth(
         <SetRow
           exName="Bench Press"
@@ -213,7 +213,7 @@ describe('SetRow', () => {
       expect(repsInput).toHaveAttribute('inputMode', 'numeric');
     });
 
-    it('navigates from weight to reps on Enter and commits on Enter in reps (W26)', () => {
+    it('navigates from weight to reps on Enter and commits on Enter in reps', () => {
       const onCommitSet = vi.fn();
       renderWithAuth(
         <SetRow
@@ -266,7 +266,7 @@ describe('SetRow', () => {
       expect(onCommitSet).toHaveBeenCalledWith('Bench Press', 1, defaultGhost);
     });
 
-    it('W34: after commit, moves focus to next pending set weight input (or reps if weight prefilled)', async () => {
+    it('after commit, moves focus to next pending set weight input (or reps if weight prefilled)', async () => {
       vi.useFakeTimers();
       const onCommitSet = vi.fn();
       renderWithAuth(
@@ -311,7 +311,7 @@ describe('SetRow', () => {
       vi.useRealTimers();
     });
 
-    it('W34: moves focus to reps input if next pending set weight is prefilled', async () => {
+    it('moves focus to reps input if next pending set weight is prefilled', async () => {
       vi.useFakeTimers();
       renderWithAuth(
         <div>
@@ -353,7 +353,7 @@ describe('SetRow', () => {
       vi.useRealTimers();
     });
 
-    it('W34: does not steal focus when a dialog or sheet is open', async () => {
+    it('does not steal focus when a dialog or sheet is open', async () => {
       vi.useFakeTimers();
       renderWithAuth(
         <div>
@@ -421,7 +421,7 @@ describe('SetRow', () => {
       await expectNoA11yViolations(container);
     });
 
-    it('displays 102.1 for 225 lb logged set in kg mode (P6, W3)', () => {
+    it('displays 102.1 for 225 lb logged set in kg mode', () => {
       const kgLoggedSet: WorkoutSet = {
         ...loggedSet,
         weight: 225,
@@ -448,7 +448,7 @@ describe('SetRow', () => {
       expect(screen.getByText('102.1')).toBeInTheDocument();
     });
 
-    it('renders suffix kg in placeholder when ghost weight is absent in kg mode (P6, W3)', () => {
+    it('renders suffix kg in placeholder when ghost weight is absent in kg mode', () => {
       renderWithAuth(
         <SetRow
           exName="Bench Press"

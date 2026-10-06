@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useHistoryCalendarJump } from './useHistoryCalendarJump';
 import type { HistorySession } from './useWorkoutHistory';
 
-describe('useHistoryCalendarJump (H29, D-P5b-5)', () => {
+describe('useHistoryCalendarJump', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });

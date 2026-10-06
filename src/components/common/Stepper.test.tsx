@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { Stepper } from './Stepper';
 import { expectNoA11yViolations } from '../../test/a11y';
 
-describe('Stepper (L40)', () => {
+describe('Stepper', () => {
   it('keeps local string draft while typing, clearing leaves field blank, and typing "5" yields 5 without snap-to-1', async () => {
     const handleChange = vi.fn();
     const { container } = render(

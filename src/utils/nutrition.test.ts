@@ -381,7 +381,7 @@ describe('nutrition utility', () => {
       expect(formatPercentage('invalid', '100')).toBe('0%');
     });
   });
-  describe('kcalMacroMismatch (D23)', () => {
+  describe('kcalMacroMismatch', () => {
     it('returns null when any of kcal, protein, carbs, or fat is empty string', () => {
       expect(kcalMacroMismatch({ kcal: '', protein: 25, carbs: 0, fat: 0 })).toBeNull();
       expect(kcalMacroMismatch({ kcal: 200, protein: '', carbs: 0, fat: 0 })).toBeNull();

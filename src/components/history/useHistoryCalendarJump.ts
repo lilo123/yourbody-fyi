@@ -28,7 +28,7 @@ export interface UseHistoryCalendarJumpResult {
 }
 
 /**
- * useHistoryCalendarJump (H29, D-P5b-5)
+ * UseHistoryCalendarJump
  *
  * Coordinates jumping to a target date from HistoryCalendarSheet:
  * 1. Sets timeRange to 'all'.
@@ -66,7 +66,7 @@ export function useHistoryCalendarJump({
     pagesLoadedRef.current = 0;
   }, [targetUserId]);
 
-  // H29: Clear highlight after use so the ring indicator does not persist indefinitely
+  // Clear highlight after use so the ring indicator does not persist indefinitely
   useEffect(() => {
     if (!highlightDate) return;
     const timer = setTimeout(() => {

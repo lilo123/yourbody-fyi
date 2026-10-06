@@ -21,7 +21,7 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-describe('Cross-Tab Invalidation (H2)', () => {
+describe('Cross-Tab Invalidation', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -30,7 +30,7 @@ describe('Cross-Tab Invalidation (H2)', () => {
     clearMockHistory();
   });
 
-  it('H2: logging a set triggers invalidateWorkoutDerived and updates History without reload', async () => {
+  it('logging a set triggers invalidateWorkoutDerived and updates History without reload', async () => {
     let sessionCount = 1;
     (supabase.rpc as any).mockImplementation((fn: string) => {
       if (fn === 'get_history_sessions_v2') {

@@ -44,7 +44,7 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-describe('NutritionEngine — Staged meal survives date change (D29)', () => {
+describe('NutritionEngine — Staged meal survives date change', () => {
   let queryClient: QueryClient;
   const dateX = '2026-09-25';
   const dateY = '2026-09-26';
@@ -180,7 +180,7 @@ describe('NutritionEngine — Staged meal survives date change (D29)', () => {
     await userEvent.type(screen.getByTestId('fat-input'), '8');
     await userEvent.type(screen.getByTestId('fiber-input'), '7');
 
-    // Submit manual meal form to stage into StagedMealCard (D22)
+    // Submit manual meal form to stage into StagedMealCard
     fireEvent.click(screen.getByText('Log Meal'));
 
     expect(mockInsert).not.toHaveBeenCalled();
@@ -317,7 +317,7 @@ describe('NutritionEngine — Staged meal survives date change (D29)', () => {
     expect(screen.getByTestId('day-total-val-calories')).not.toHaveTextContent('1100');
   });
 
-  it('(c) staged card is still present after date change without discard or confirm modal (D29)', async () => {
+  it('(c) staged card is still present after date change without discard or confirm modal', async () => {
     (supabase.functions.invoke as any).mockResolvedValue({
       data: {
         name: 'Greek Yogurt Bowl',

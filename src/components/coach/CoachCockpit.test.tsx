@@ -650,7 +650,7 @@ describe('CoachCockpit', () => {
     });
   });
 
-  it('surfaces visible error state with retry button on athlete workouts query failure and refetches on click (FIX-12)', async () => {
+  it('surfaces visible error state with retry button on athlete workouts query failure and refetches on click', async () => {
     let failWorkouts = true;
 
     (supabase.from as any).mockImplementation((table: string) => {
@@ -687,7 +687,7 @@ describe('CoachCockpit', () => {
     });
   });
 
-  it('NEW-15: mounts live regions unconditionally and mutates assertive region on coach read error (coach-read-error)', async () => {
+  it('mounts live regions unconditionally and mutates assertive region on coach read error (coach-read-error)', async () => {
     let failTemplates = false;
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'routine_templates' && failTemplates) {

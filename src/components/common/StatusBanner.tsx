@@ -70,7 +70,7 @@ export interface StatusBannerProps {
   /** Inline styles applied to the visible banner container. */
   style?: React.CSSProperties;
   /**
-   * Optional custom body for special surfaces like the D41 quick-log toast.
+   * Optional custom body for special surfaces like the quick-log toast.
    * When provided, replaces the default heading/detail layout inside the visible container.
    */
   children?: React.ReactNode;

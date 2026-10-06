@@ -10,13 +10,13 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-describe('useHistoryData (H15, H16, H47, RD-16, RD-20)', () => {
+describe('useHistoryData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMockHistory();
   });
 
-  it('H16 & RD-16/RD-20: fetchSessionSets queries rpe and set_type, and excludes warmup/drop sets', async () => {
+  it('fetchSessionSets queries rpe and set_type, and excludes warmup/drop sets', async () => {
     const mockSetsFromDb = [
       {
         id: 's-1',
@@ -66,11 +66,11 @@ describe('useHistoryData (H15, H16, H47, RD-16, RD-20)', () => {
 
     const sets = await fetchSessionSets('w-1');
 
-    // H16: Must select rpe and set_type from sets table
+    // Must select rpe and set_type from sets table
     expect(selectProjection).toContain('rpe');
     expect(selectProjection).toContain('set_type');
 
-    // RD-16 / RD-20: Warm-up and drop sets must be hidden on every screen
+    // Warm-up and drop sets must be hidden on every screen
     expect(sets.length).toBe(1);
     expect(sets[0].id).toBe('s-1');
     expect(sets[0].weight).toBe(225);

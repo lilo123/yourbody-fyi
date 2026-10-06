@@ -209,7 +209,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = memo((props) => {
         </div>
       </button>
 
-      {/* LINE 2: Chip Row (W32, W13, W15, W47) */}
+      {/* LINE 2: Chip Row */}
       <div className="flex items-center gap-1.5 flex-wrap min-w-0">
         {benchmarks.lastSession ? (
           <Chip
@@ -273,7 +273,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = memo((props) => {
         )}
       </div>
 
-      {/* LINE 3: Control Row (W32, W33, STD-INT-9) */}
+      {/* LINE 3: Control Row (STD INT 9) */}
       <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-zinc-800/60">
         {/* Stepper for target sets */}
         <div className="flex items-center bg-zinc-800/90 border border-zinc-700/70 rounded-xl h-11 px-0.5 text-xs">

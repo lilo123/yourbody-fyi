@@ -22,7 +22,7 @@ describe('MacroRing reduced motion accessibility', () => {
     expect(progressCircle.getAttribute('class')).toContain('duration-700');
     expect(progressCircle.getAttribute('class')).toContain('motion-reduce:transition-none');
   });
-  it("renders ring geometry with radius 34 and strokeWidth 3.5 for >= 4px clearance (D37)", () => {
+  it("renders ring geometry with radius 34 and strokeWidth 3.5 for >= 4px clearance", () => {
     const { container } = render(
       <MacroRing
         label="Calories"
@@ -46,7 +46,7 @@ describe('MacroRing reduced motion accessibility', () => {
     expect(valueSpan?.className).toContain("leading-none");
     expect(valueSpan?.className).toContain("tracking-tight");
   });
-it("computes strokeDasharray and strokeDashoffset correctly for the new geometry (D37)", () => {
+it("computes strokeDasharray and strokeDashoffset correctly for the new geometry", () => {
     const radius = 34;
     const circumference = 2 * Math.PI * radius;
 

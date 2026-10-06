@@ -83,7 +83,7 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-describe('History Keep-Alive Shell (RD-17 / D-P5a-6)', () => {
+describe('History Keep-Alive Shell', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {

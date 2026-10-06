@@ -33,7 +33,7 @@ vi.mock('../../offline', () => ({
   getOutboxOps: vi.fn().mockResolvedValue([]),
 }));
 
-describe('NEW-16: Rescale meal from /history consistency and silent revert prevention', () => {
+describe('Rescale meal from /history consistency and silent revert prevention', () => {
   let queryClient: QueryClient;
   let mockDatabase: Record<string, any>;
 

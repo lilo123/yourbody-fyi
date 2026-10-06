@@ -21,7 +21,7 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-describe('Cross-Tab PR & Benchmarks (H10, RD-16, RD-20)', () => {
+describe('Cross-Tab PR & Benchmarks', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -30,7 +30,7 @@ describe('Cross-Tab PR & Benchmarks (H10, RD-16, RD-20)', () => {
     clearMockHistory();
   });
 
-  it('H10: History By-Exercise displays PR from stats v2 (225x3 -> 230x1 live without reload) and ignores warmup sets', async () => {
+  it('History By-Exercise displays PR from stats v2 (225x3 -> 230x1 live without reload) and ignores warmup sets', async () => {
     let currentPrWeight = 225;
     let currentPrReps = 3;
 

@@ -25,12 +25,12 @@ export interface ComponentRowProps {
 }
 
 /**
- * Compact item row for staged meals and meal logs (Fixes D1, D2, D6, R3).
+ * Compact item row for staged meals and meal logs (R3).
  *
  * Layout:
  *   Left  (flex-1 min-w-0): name (line 1, up to 2 lines) stacked above non-zero macros
  *         (line 2, kcal first in amber, then non-zero P/C/F/Fib in macro colors).
- *   Right (shrink-0): bordered [qty input][UnitChip] field (D17), followed by the OverflowMenu (⋯).
+ *   Right (shrink-0): bordered [qty input][UnitChip] field, followed by the OverflowMenu (⋯).
  *
  * Maintains touch target sizes >= 40x40 px and typography >= 12 px (text-xs).
  */

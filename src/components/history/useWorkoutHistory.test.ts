@@ -42,7 +42,7 @@ function makePageRows(count: number, prefix: string, totalCount: number, startDa
   });
 }
 
-describe('useWorkoutHistory Data Layer (P5a W2)', () => {
+describe('useWorkoutHistory Data Layer', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -268,7 +268,7 @@ describe('useWorkoutHistory Data Layer (P5a W2)', () => {
     });
   });
 
-  describe('5. invalidation keeps loaded pages (refetch sends the same cursors, H26)', () => {
+  describe('5. invalidation keeps loaded pages (refetch sends the same cursors)', () => {
     it('refetches all 4 loaded pages in place with the exact same 4 cursors', async () => {
       const page1 = makePageRows(30, 'p1', 120, 30);
       const page2 = makePageRows(30, 'p2', 120, 25);
@@ -310,7 +310,7 @@ describe('useWorkoutHistory Data Layer (P5a W2)', () => {
       // Clear calls to isolate the refetch/invalidation phase
       vi.mocked(supabase.rpc).mockClear();
 
-      // 1. Explicit refetch sends the exact same 4 cursors for the 4 loaded pages (H26)
+      // 1. Explicit refetch sends the exact same 4 cursors for the 4 loaded pages
       await act(async () => {
         await result.current.refetchSessions();
       });

@@ -1,7 +1,7 @@
 BEGIN;
 SELECT plan(2);
 
--- 1. save_routine_template on a master template keeps is_master=true when p_is_master is omitted (L2)
+-- 1. save_routine_template on a master template keeps is_master=true when p_is_master is omitted
 DO $$
 DECLARE
   v_coach_id uuid := gen_random_uuid();

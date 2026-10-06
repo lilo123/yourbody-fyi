@@ -2,7 +2,7 @@ import { getOutboxOps, getSyncingStatus } from './outbox';
 import { getActiveUserId } from './flusher';
 
 /**
- * Registers an update safety blocker with W2's PWA update registry.
+ * Registers an update safety blocker with the PWA update registry.
  * Prevents applying service worker updates if outbox is actively syncing.
  */
 export function registerOutboxUpdateBlocker(

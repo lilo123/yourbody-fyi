@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SegmentedTabs, type TabItem } from './SegmentedTabs';
 
-describe('SegmentedTabs (H12 WAI-ARIA)', () => {
+describe('SegmentedTabs (WAI ARIA)', () => {
   const tabs: TabItem[] = [
     { id: 'tab-1', label: 'First Tab', testId: 'tab-btn-1' },
     { id: 'tab-2', label: 'Second Tab', testId: 'tab-btn-2' },

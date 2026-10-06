@@ -265,7 +265,7 @@ async function loginAsCoach(page: Page) {
   await page.waitForURL('**/coach', { timeout: 15000 });
 }
 
-test.describe('P5b History Suite (p5b-history)', () => {
+test.describe('History Suite (p5b-history)', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async () => {
@@ -276,8 +276,8 @@ test.describe('P5b History Suite (p5b-history)', () => {
     cleanupP5bUser();
   });
 
-  // (a) H8: exercise history sheet shows session groups, working sets, PR badge, and 30D filter
-  test('(a) H8: exercise sheet displays session groups, 24 working sets without warmups, PR badge, and 30D range limit', async ({ page }) => {
+  // (a): exercise history sheet shows session groups, working sets, PR badge, and 30D filter
+  test('(a) exercise sheet displays session groups, 24 working sets without warmups, PR badge, and 30D range limit', async ({ page }) => {
     await loginAsP5bAthlete(page);
 
     // Switch to By Exercise view
@@ -381,8 +381,8 @@ test.describe('P5b History Suite (p5b-history)', () => {
     await expect(sheet).not.toBeVisible();
   });
 
-  // (c) H29 calendar: month grid dots, tapping older day loads page and scrolls/focuses card
-  test('(c) H29 calendar: month grid dots on seeded days, tapping older day not on page 1 scrolls into view and focuses card', async ({ page }) => {
+  // (c) calendar: month grid dots, tapping older day loads page and scrolls/focuses card
+  test('(c) calendar: month grid dots on seeded days, tapping older day not on page 1 scrolls into view and focuses card', async ({ page }) => {
     await loginAsP5bAthlete(page);
 
     // Initial page shows 30 of 35 sessions
@@ -428,8 +428,8 @@ test.describe('P5b History Suite (p5b-history)', () => {
     await expect(countBanner).toHaveText('Showing 35 of 35 sessions');
   });
 
-  // (d) H43: search filters sessions with match count and Clear filters restores
-  test('(d) H43: By-Session search filters with match count and Clear filters restores', async ({ page }) => {
+  // (d): search filters sessions with match count and Clear filters restores
+  test('(d) By-Session search filters with match count and Clear filters restores', async ({ page }) => {
     await loginAsP5bAthlete(page);
 
     const searchInput = page.locator('[data-testid="session-search-input"]');
@@ -453,8 +453,8 @@ test.describe('P5b History Suite (p5b-history)', () => {
     await expect(page.locator('text=P5b Special Benchmark Session')).toBeVisible();
   });
 
-  // (e) H27/RD-7: nutrition deferred delete, Undo restores with 0 DELETE, expiry sends 1 DELETE, tab switch flushes
-  test('(e) H27/RD-7: nutrition deferred delete undo, expiry, and keep-alive flush', async ({ page }) => {
+  // (e) /: nutrition deferred delete, Undo restores with 0 DELETE, expiry sends 1 DELETE, tab switch flushes
+  test('(e) nutrition deferred delete undo, expiry, and keep-alive flush', async ({ page }) => {
     let deleteCount = 0;
     page.on('request', (req) => {
       if (req.method() === 'DELETE' && req.url().includes('/rest/v1/nutrition_logs')) {
@@ -520,8 +520,8 @@ test.describe('P5b History Suite (p5b-history)', () => {
     await expect.poll(() => deleteCount, { timeout: 6000, intervals: [100] }).toBe(2);
   });
 
-  // (f) H11: nutrition window paging reaches oldest day with human date headers and full totals
-  test('(f) H11: nutrition logs spanning 40 days page to oldest day with human date headers and full totals', async ({ page }) => {
+  // (f): nutrition window paging reaches oldest day with human date headers and full totals
+  test('(f) nutrition logs spanning 40 days page to oldest day with human date headers and full totals', async ({ page }) => {
     await loginAsP5bAthlete(page);
 
     const nutritionTab = page.locator('[data-testid="history-tab-nutrition"]');

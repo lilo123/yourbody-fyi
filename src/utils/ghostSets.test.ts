@@ -618,7 +618,7 @@ describe('Ghost Sets Algorithm & Benchmarks', () => {
     });
   });
 
-  describe('P1-6c: Dynamic Date-Shifted Ghost Sets Fidelity Control', () => {
+  describe('6c: Dynamic Date-Shifted Ghost Sets Fidelity Control', () => {
     it('guarantees all qualifying exercises receive ghost sets under dynamic date-shifted query against prior 500-set workout', async () => {
       const cpMod = 'node:child_process';
       const cp = (await import(/* @vite-ignore */ cpMod)) as any;
@@ -764,8 +764,8 @@ describe('Ghost Sets Algorithm & Benchmarks', () => {
     });
   });
 
-  describe('P2 mergeBenchmarks & working-sets filters (W1, W6, W42)', () => {
-    it('mergeBenchmarks updates PR when today logs a new best working set (W1)', () => {
+  describe('mergeBenchmarks & working-sets filters', () => {
+    it('mergeBenchmarks updates PR when today logs a new best working set', () => {
       const initialBenchmarks = {
         'ex-uuid-1': {
           lastSession: {
@@ -798,7 +798,7 @@ describe('Ghost Sets Algorithm & Benchmarks', () => {
       expect(merged['ex-uuid-1'].lastSession?.date).toBe('2026-09-20');
     });
 
-    it('mergeBenchmarks ignores warm-up and drop sets (W6 acceptance)', () => {
+    it('mergeBenchmarks ignores warm-up and drop sets (acceptance)', () => {
       const initialBenchmarks = {
         'ex-uuid-1': {
           lastSession: null,
@@ -826,7 +826,7 @@ describe('Ghost Sets Algorithm & Benchmarks', () => {
       });
     });
 
-    it('formats bodyweight (0 lbs) as BW in lastSession summaryText (W7)', () => {
+    it('formats bodyweight (0 lbs) as BW in lastSession summaryText', () => {
       const history = [
         {
           id: 's-bw',
@@ -842,7 +842,7 @@ describe('Ghost Sets Algorithm & Benchmarks', () => {
       expect(bm.lastSession?.summaryText).toBe('BW×8');
     });
 
-    it('isolates custom vs master same-named exercises by exercise_id UUID (W42)', () => {
+    it('isolates custom vs master same-named exercises by exercise_id UUID', () => {
       const customExId = '00000000-0000-0000-0000-000000000001';
       const masterExId = '00000000-0000-0000-0000-000000000002';
 
@@ -938,7 +938,7 @@ describe('Ghost Sets Algorithm & Benchmarks', () => {
       expect((mergedE1rm[exId].pr as any)?.e1rm).toBe(120);
     });
 
-    it('formats ghost hint in active unit (102.1 kg × 5) and benchmark summary in kg (P6, W3)', () => {
+    it('formats ghost hint in active unit (102.1 kg × 5) and benchmark summary in kg', () => {
       const history = [
         {
           id: 's-1',

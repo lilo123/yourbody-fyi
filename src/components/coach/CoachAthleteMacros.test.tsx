@@ -36,7 +36,7 @@ describe('CoachAthleteMacros accessibility', () => {
     await expectNoA11yViolations(container);
   });
 
-  it('NEW-15: mounts live regions unconditionally and mutates text in place on status changes', () => {
+  it('mounts live regions unconditionally and mutates text in place on status changes', () => {
     const politeOf = (c: HTMLElement) => c.querySelector('[role="status"]');
     const assertiveOf = (c: HTMLElement) => c.querySelector('[role="alert"]');
 

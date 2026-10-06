@@ -43,7 +43,7 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
-describe('NutritionEngine D45 Add Items with AI', () => {
+describe('NutritionEngine Add Items with AI', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {

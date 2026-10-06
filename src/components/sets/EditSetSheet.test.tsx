@@ -434,7 +434,7 @@ describe("EditSetSheet", () => {
     expect(screen.getByText("Custom Kettlebell Snatch")).toBeDefined();
   });
 
-  it("calls onDeleteRequested without window.confirm or delete mutation when delete button clicked (W44)", async () => {
+  it("calls onDeleteRequested without window.confirm or delete mutation when delete button clicked", async () => {
     const confirmSpy = vi.spyOn(window, "confirm");
     renderSheet();
 
@@ -529,7 +529,7 @@ describe("EditSetSheet", () => {
     expect(updatedWeightInput.value).toBe("275");
   });
 
-  it("mounts live regions empty while idle and retains same DOM node on error mutation (NEW-15)", async () => {
+  it("mounts live regions empty while idle and retains same DOM node on error mutation", async () => {
     const { container } = renderSheet();
 
     const assertiveBefore = container.querySelector(`[role="alert"]`);

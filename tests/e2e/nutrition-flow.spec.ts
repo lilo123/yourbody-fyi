@@ -210,7 +210,7 @@ test.describe('Nutrition Flow E2E', () => {
       await fiberInput.fill('5');
     }
 
-    // Submit manual form (stages meal into StagedMealCard per D22)
+    // Submit manual form (stages meal into StagedMealCard per)
     const logBtn = page.locator('button:has-text("Log Meal")').last();
     await logBtn.click();
 
@@ -285,7 +285,7 @@ test.describe('Nutrition Flow E2E', () => {
       const calInput = page.locator('[data-testid="calories-input"]');
       await calInput.fill('400');
 
-      // Submit manual form (stages meal into StagedMealCard per D22)
+      // Submit manual form (stages meal into StagedMealCard per)
       const logBtn = page.locator('button:has-text("Log Meal")').last();
       await logBtn.click();
 
@@ -317,14 +317,14 @@ test.describe('Nutrition Flow E2E', () => {
     // Verify staged meal card appears with breakdown
     const stagedCard = page.locator('[data-testid="staged-meal-card"]');
     await expect(stagedCard).toBeVisible({ timeout: 15000 });
-    // D46: below 390px the breakdown header reads "Items (n)"; from 390px up it reads "Itemized Breakdown (n)".
+    // Below 390px the breakdown header reads "Items (n)"; from 390px up it reads "Itemized Breakdown (n)".
     const isNarrow = (page.viewportSize()?.width ?? 390) < 390;
     await expect(
       stagedCard.getByText(isNarrow ? /^Items \(\d+\)$/ : /^Itemized Breakdown \(\d+\)$/),
     ).toBeVisible();
     await expect(page.locator('text=Eggs').first()).toBeVisible();
 
-    // D17/D32: typed [qty][unit] box with 44px hit area wrapper and 32px visible box.
+    // Typed [qty][unit] box with 44px hit area wrapper and 32px visible box.
     // The hit area meets the >= 40px touch target, and typing quantity + Enter saves.
     const quantityField = page.locator('[data-testid="component-quantity-field"]').first();
     await expect(quantityField).toBeVisible();
@@ -457,7 +457,7 @@ Total Fiber: 8 g`;
     expect(sumFat).toBe(30);
     expect(sumFiber).toBe(8);
 
-    // Assert read-only staged totals (Fix D5) equal the sum of items
+    // Assert read-only staged totals equal the sum of items
     await expect(stagedCard.locator('[data-testid="staged-total-calories"] [data-testid="macro-val-calories"]')).toHaveText(String(sumCalories));
     await expect(stagedCard.locator('[data-testid="staged-total-protein"] [data-testid="macro-val-protein"]')).toHaveText(String(sumProtein));
     await expect(stagedCard.locator('[data-testid="staged-total-carbs"] [data-testid="macro-val-carbs"]')).toHaveText(String(sumCarbs));
@@ -490,7 +490,7 @@ Total Fiber: 8 g`;
     await deleteMealRow(page, 'High-Protein Breakfast Plate & Chia Pudding Bowl (Friday Menu Grounded)');
   });
 
-  test('allows editing a logged meal in today timeline and history view with updated macros (D44)', async ({ page }) => {
+  test('allows editing a logged meal in today timeline and history view with updated macros', async ({ page }) => {
     const uniqueSuffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const originalMealName = `Meal-${uniqueSuffix}`;
     const historyMealName = `History-${uniqueSuffix}`;
@@ -543,7 +543,7 @@ Total Fiber: 8 g`;
     await expect(originalRow).toBeVisible();
     await expect(originalRow.locator('text=400 kcal')).toBeVisible();
 
-    // 2. Open row overflow menu and pick Edit meal (D44 EditMealSheet)
+    // 2. Open row overflow menu and pick Edit meal (EditMealSheet)
     const actionsBtn = originalRow.locator('button[aria-haspopup="menu"]');
     await expect(actionsBtn).toBeVisible();
 
@@ -642,7 +642,7 @@ Total Fiber: 8 g`;
     // Net-neutral: clean up
     await deleteMealRow(page, historyMealName);
   });
-test('manual form stages meal, adds item with updated totals, and logs to timeline (D22)', async ({ page }) => {
+test('manual form stages meal, adds item with updated totals, and logs to timeline', async ({ page }) => {
     const uniqueSuffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const manualMealName = `Manual Multi-Item ${uniqueSuffix}`;
 
@@ -711,7 +711,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
     await deleteMealRow(page, manualMealName);
   });
 
-  test('while meal is staged, Quick Log favorite appends items to staged meal and commits (D33)', async ({ page }) => {
+  test('while meal is staged, Quick Log favorite appends items to staged meal and commits', async ({ page }) => {
     const favoriteDish = {
       id: 'dish-almonds-fav',
       user_id: 'test-user',
@@ -808,7 +808,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
         openReq.onblocked = () => resolve('open-blocked');
       });
     });
-    // O2 persists ['custom_dishes', uid] in the per-user rq store; clear it so the route mock above is what loads.
+    // Persists ['custom_dishes', uid] in the per-user rq store; clear it so the route mock above is what loads.
     expect(evalRes).toMatch(/^(rq-cleared|no-rq-store)$/);
 
     await safeGoto(page, '/nutrition');
@@ -849,7 +849,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
     // Click plus button to append Roasted Almonds
     await plusBtn.click();
 
-    // Toast with Undo is visible (D41)
+    // Toast with Undo is visible
     const toast = page.locator('[data-testid="quick-log-toast"]');
     await expect(toast).toBeVisible();
     await expect(toast).toContainText('Added to meal');
@@ -872,7 +872,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
     await deleteMealRow(page, manualMealName);
   });
 
-  test('direct quick log -> Undo removes created row from timeline (D42)', async ({ page }) => {
+  test('direct quick log -> Undo removes created row from timeline', async ({ page }) => {
     const dishName = `Quick Dish ${Date.now()}`;
     const favoriteDish = {
       id: `dish-d42-${Date.now()}`,
@@ -946,7 +946,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
         openReq.onblocked = () => resolve('open-blocked');
       });
     });
-    // O2 persists ['custom_dishes', uid] in the per-user rq store; clear it so the route mock above is what loads.
+    // Persists ['custom_dishes', uid] in the per-user rq store; clear it so the route mock above is what loads.
     expect(evalRes).toMatch(/^(rq-cleared|no-rq-store)$/);
 
     await safeGoto(page, '/nutrition');
@@ -957,7 +957,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
     await expect(quickLogBtn).toBeVisible();
     await quickLogBtn.click();
 
-    // Floating toast appears with "Logged", dish name, kcal and Undo button (D41 & D42)
+    // Floating toast appears with "Logged", dish name, kcal and Undo button
     const toast = page.locator('[data-testid="quick-log-toast"]');
     await expect(toast).toBeVisible();
     await expect(toast).toContainText('Logged');
@@ -976,10 +976,10 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
     // Toast dismissed
     await expect(toast).not.toBeVisible();
 
-    // Entry removed from timeline (D42)
+    // Entry removed from timeline
     await expect(loggedRow).not.toBeVisible();
   });
-  test('D45: Stage meal -> "+ Add" -> "Enter manually" -> adds item manually and updates totals', async ({ page }) => {
+  test('Stage meal -> "+ Add" -> "Enter manually" -> adds item manually and updates totals', async ({ page }) => {
     // 1. Stage a meal via conversational input
     const nlTextarea = page.locator('textarea[placeholder*="Describe what you ate"]');
     await nlTextarea.fill('3 eggs and toast');
@@ -1032,7 +1032,7 @@ test('manual form stages meal, adds item with updated totals, and logs to timeli
     await expect(stagedCard).not.toBeVisible();
   });
 
-  test('D45: Stage meal -> "+ Add" -> AI analyze appends items, triggers toast with Undo', async ({ page }) => {
+  test('Stage meal -> "+ Add" -> AI analyze appends items, triggers toast with Undo', async ({ page }) => {
     // 1. Stage a meal
     const nlTextarea = page.locator('textarea[placeholder*="Describe what you ate"]');
     await nlTextarea.fill('3 eggs and toast');

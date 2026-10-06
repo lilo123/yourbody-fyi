@@ -179,7 +179,7 @@ export class WorkoutSessionStore {
       }
     }
 
-    // W24: Persist pointer for any active open session date (including past dates)
+    // Persist pointer for any active open session date (including past dates)
     if (setPointer && session.completedAt === null) {
       localStorage.setItem(this.getPointerKey(session.userId), session.workoutDate);
     }
@@ -481,7 +481,7 @@ export class WorkoutSessionStore {
    * updating exercise lists, target sets/reps records, expanded state, and input drafts.
    */
   /**
-   * Renames an exercise across all active workout sessions for a user (shim for L39).
+   * Renames an exercise across all active workout sessions for a user (shim for).
    */
   renameExercise(userId: string, oldName: string, newName: string): void {
     this.flushPendingWrites();

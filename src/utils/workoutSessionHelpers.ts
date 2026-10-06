@@ -7,7 +7,7 @@ export const ROUTINE_PREFIX = 'yourbody_routine_';
 export const TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Renames an exercise across all active workout sessions for a user (shim for L39 / backward compatibility).
+ * Renames an exercise across all active workout sessions for a user (shim for backward compatibility).
  */
 export function renameExerciseInSessions(
   userId: string,

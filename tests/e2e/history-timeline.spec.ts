@@ -126,7 +126,7 @@ async function loginAsP5aAthlete(page: Page) {
   await expect(page.getByRole('heading', { name: 'Workout History' })).toBeVisible({ timeout: 10000 });
 }
 
-test.describe('P5a History Suite (p5a-history)', () => {
+test.describe('History Suite (p5a-history)', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async () => {
@@ -168,10 +168,10 @@ test.describe('P5a History Suite (p5a-history)', () => {
     await expect(chipAll).toHaveAttribute('aria-pressed', 'true');
   });
 
-  // (b) Keep-alive D5:
+  // (b) Keep-alive:
   // Load >=2 pages, expand a session, scroll, go to Workout tab and back:
   // -> same pages loaded (count cards/'Showing N of M'), expanded session still expanded, scrollY within 5px.
-  test('(b) keep-alive D5: pages, expanded session, and scroll position preserved across tab switch', async ({ page }) => {
+  test('(b) keep-alive: pages, expanded session, and scroll position preserved across tab switch', async ({ page }) => {
     await loginAsP5aAthlete(page);
 
     const countBanner = page.locator('[data-testid="showing-sessions-count"]');

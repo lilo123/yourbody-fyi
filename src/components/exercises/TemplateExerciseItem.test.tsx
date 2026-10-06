@@ -33,7 +33,7 @@ describe("TemplateExerciseItem", () => {
     expect(screen.getByText("Chest, Triceps")).toBeDefined();
   });
 
-  it("L16: provides descriptive aria-labels naming the exercise on all buttons", () => {
+  it("provides descriptive aria-labels naming the exercise on all buttons", () => {
     render(<TemplateExerciseItem {...defaultProps} index={1} />);
 
     expect(screen.getByRole("button", { name: "Move Barbell Bench Press up" })).toBeDefined();
@@ -76,7 +76,7 @@ describe("TemplateExerciseItem", () => {
     expect(defaultProps.onRemove).toHaveBeenCalledWith(1);
   });
 
-  it("L40: stepper clear != 1 then blur clamps (clearing input does not snap to 1; clamps on blur)", () => {
+  it("stepper clear != 1 then blur clamps (clearing input does not snap to 1; clamps on blur)", () => {
     const onUpdateSets = vi.fn();
     render(<TemplateExerciseItem {...defaultProps} onUpdateSets={onUpdateSets} />);
 
@@ -94,7 +94,7 @@ describe("TemplateExerciseItem", () => {
     expect((setsInput as HTMLInputElement).value).toBe("1");
   });
 
-  it("L40: stepper clamps out-of-range typed values on blur", () => {
+  it("stepper clamps out-of-range typed values on blur", () => {
     const onUpdateReps = vi.fn();
     render(<TemplateExerciseItem {...defaultProps} onUpdateReps={onUpdateReps} />);
 
@@ -108,7 +108,7 @@ describe("TemplateExerciseItem", () => {
     expect((repsInput as HTMLInputElement).value).toBe("100");
   });
 
-  it("L13: disables all controls when disabled=true", () => {
+  it("disables all controls when disabled=true", () => {
     render(<TemplateExerciseItem {...defaultProps} index={1} disabled={true} />);
 
     expect(screen.getByRole("button", { name: "Move Barbell Bench Press up" })).toBeDisabled();

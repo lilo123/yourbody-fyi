@@ -131,7 +131,7 @@ describe('ExerciseListTab', () => {
       </QueryClientProvider>
     );
 
-  it('L10: displays skeleton with aria-busy while pending', async () => {
+  it('displays skeleton with aria-busy while pending', async () => {
     // Hang the RPC to observe pending state
     mockRpc.mockReturnValueOnce(new Promise(() => {}));
 
@@ -143,7 +143,7 @@ describe('ExerciseListTab', () => {
     expect(skeleton.getAttribute('aria-busy')).toBe('true');
   });
 
-  it('L10: displays skeleton with aria-busy while pending even when propExercises is []', async () => {
+  it('displays skeleton with aria-busy while pending even when propExercises is', async () => {
     mockRpc.mockReturnValueOnce(new Promise(() => {}));
 
     renderComponent({ exercises: [] });
@@ -154,7 +154,7 @@ describe('ExerciseListTab', () => {
     expect(screen.queryByText(/No exercises found in your library/i)).toBeNull();
   });
 
-  it('L10: shows "Showing N of M" count on catalog load', async () => {
+  it('shows "Showing N of M" count on catalog load', async () => {
     renderComponent();
     expect(await screen.findByText('Zercher Squat')).toBeDefined();
     expect(screen.getByText('Romanian Deadlift')).toBeDefined();
@@ -163,14 +163,14 @@ describe('ExerciseListTab', () => {
     expect(countText.textContent).toContain('Showing 3 of 3');
   });
 
-  it('L10: shows empty state ONLY when query succeeds with 0 items', async () => {
+  it('shows empty state ONLY when query succeeds with 0 items', async () => {
     mockRpc.mockResolvedValueOnce({ data: [], error: null });
 
     renderComponent();
     expect(await screen.findByText(/No exercises found in your library/i)).toBeDefined();
   });
 
-  it('L10: displays StatusBanner error and Retry button on catalog query failure', async () => {
+  it('displays StatusBanner error and Retry button on catalog query failure', async () => {
     mockRpc.mockRejectedValueOnce(new Error('RPC connection failed'));
 
     renderComponent();
@@ -185,7 +185,7 @@ describe('ExerciseListTab', () => {
     expect(await screen.findByText('Zercher Squat')).toBeDefined();
   });
 
-  it('L8: search input updates and matches exercise terms (zer, rdl)', async () => {
+  it('search input updates and matches exercise terms (zer, rdl)', async () => {
     renderComponent();
     await screen.findByText('Zercher Squat');
 
@@ -201,7 +201,7 @@ describe('ExerciseListTab', () => {
     expect(searchInput).toHaveValue('');
   });
 
-  it('L4: deferred exercise archive executes 0 writes before expiry, Undo = 0 writes, exactly 1 write on expiry', async () => {
+  it('deferred exercise archive executes 0 writes before expiry, Undo = 0 writes, exactly 1 write on expiry', async () => {
     const updateSpy = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         select: vi.fn().mockResolvedValue({ data: [{ id: 'ex-2' }], error: null }),
@@ -258,7 +258,7 @@ describe('ExerciseListTab', () => {
     }
   });
 
-  it('L24: scope chips render with radiogroup semantics and pass correct p_scope to RPC', async () => {
+  it('scope chips render with radiogroup semantics and pass correct p_scope to RPC', async () => {
     renderComponent();
     await screen.findByText('Zercher Squat');
 
@@ -292,7 +292,7 @@ describe('ExerciseListTab', () => {
     });
   });
 
-  it('L34: Restore button reverses is_archived on archived exercises', async () => {
+  it('Restore button reverses is_archived on archived exercises', async () => {
     const archivedItem: CatalogExercise = {
       ...sampleCatalog[1],
       is_archived: true,
@@ -321,7 +321,7 @@ describe('ExerciseListTab', () => {
     });
   });
 
-  it('L47 & D-P7a-3: Coach hide of default triggers ConfirmDialog with dynamic athlete count copy', async () => {
+  it('Coach hide of default triggers ConfirmDialog with dynamic athlete count copy', async () => {
     mockCoachState.isCoach = true;
     mockCoachState.athletes = [
       { id: 'ath-1', name: 'Alice Smith' },
@@ -360,7 +360,7 @@ describe('ExerciseListTab', () => {
     });
   });
 
-  it('L47: Athlete hide triggers immediate insert into exercise_hides and offers UndoToast', async () => {
+  it('Athlete hide triggers immediate insert into exercise_hides and offers UndoToast', async () => {
     mockCoachState.isCoach = false;
 
     const insertSpy = vi.fn().mockResolvedValue({ error: null });
@@ -407,7 +407,7 @@ describe('ExerciseListTab', () => {
     });
   });
 
-  it('L47: Unhide action deletes from exercise_hides', async () => {
+  it('Unhide action deletes from exercise_hides', async () => {
     const hiddenItem: CatalogExercise = {
       ...sampleCatalog[0],
       is_hidden: true,

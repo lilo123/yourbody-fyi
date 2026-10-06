@@ -25,7 +25,7 @@ function batchMeal(): StagedMeal {
   };
 }
 
-describe('D46 parseMealScaleInput', () => {
+describe('parseMealScaleInput', () => {
   it.each([
     ['0.2', 0.2],
     ['.2', 0.2],
@@ -47,7 +47,7 @@ describe('D46 parseMealScaleInput', () => {
   });
 });
 
-describe('D46 formatMealScale', () => {
+describe('formatMealScale', () => {
   it('drops trailing zeros and keeps at most 2 decimals', () => {
     expect(formatMealScale(1)).toBe('1');
     expect(formatMealScale(0.2)).toBe('0.2');
@@ -56,7 +56,7 @@ describe('D46 formatMealScale', () => {
   });
 });
 
-describe('D46 scaleStagedMeal', () => {
+describe('scaleStagedMeal', () => {
   it('scales every item and the totals, and records the scale', () => {
     const meal = batchMeal();
     const fifth = scaleStagedMeal(meal, 0.2);

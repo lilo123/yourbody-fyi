@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useExerciseRemoval, type RemovedExerciseState } from './useExerciseRemoval';
 import type { WorkoutSet } from '../../types/database';
 
-describe('useExerciseRemoval (W8, RD-7)', () => {
+describe('useExerciseRemoval', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });

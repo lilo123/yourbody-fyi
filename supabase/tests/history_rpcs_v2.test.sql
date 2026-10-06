@@ -277,7 +277,7 @@ BEGIN
     (v_ex_id, 'Bench Press M5 Test', ARRAY['Chest'], true, NULL),
     (v_other_ex_id, 'Squat M5 Test', ARRAY['Legs'], true, NULL);
 
-  -- Session W1: 2 working sets (100x5, 100x5 -> 1000 vol), 1 warmup (50x10), 1 drop (60x8)
+  -- Session 1: 2 working sets (100x5, 100x5 -> 1000 vol), 1 warmup (50x10), 1 drop (60x8)
   INSERT INTO public.workouts (id, user_id, name, date, workout_date)
   VALUES (v_w1, v_ath_id, 'Session W1', (CURRENT_DATE - 10)::timestamptz, CURRENT_DATE - 10);
 
@@ -287,19 +287,19 @@ BEGIN
     (gen_random_uuid(), v_w1, v_ex_id, 50, 10, 3, 'warmup', (CURRENT_DATE - 10)::timestamptz),
     (gen_random_uuid(), v_w1, v_ex_id, 60, 8, 4, 'drop', (CURRENT_DATE - 10)::timestamptz);
 
-  -- Session W2: 1 working set (110x3 -> 330 vol)
+  -- Session 2: 1 working set (110x3 -> 330 vol)
   INSERT INTO public.workouts (id, user_id, name, date, workout_date)
   VALUES (v_w2, v_ath_id, 'Session W2', (CURRENT_DATE - 11)::timestamptz, CURRENT_DATE - 11);
   INSERT INTO public.sets (id, workout_id, exercise_id, weight, reps, set_index, set_type, created_at)
   VALUES (gen_random_uuid(), v_w2, v_ex_id, 110, 3, 1, 'working', (CURRENT_DATE - 11)::timestamptz);
 
-  -- Session W3: ONLY warmup set of target exercise (must be excluded from get_exercise_history)
+  -- Session 3: ONLY warmup set of target exercise (must be excluded from get_exercise_history)
   INSERT INTO public.workouts (id, user_id, name, date, workout_date)
   VALUES (v_w3, v_ath_id, 'Session W3 (Warmup only)', (CURRENT_DATE - 12)::timestamptz, CURRENT_DATE - 12);
   INSERT INTO public.sets (id, workout_id, exercise_id, weight, reps, set_index, set_type, created_at)
   VALUES (gen_random_uuid(), v_w3, v_ex_id, 40, 10, 1, 'warmup', (CURRENT_DATE - 12)::timestamptz);
 
-  -- Session W4: working set of a DIFFERENT exercise
+  -- Session 4: working set of a DIFFERENT exercise
   INSERT INTO public.workouts (id, user_id, name, date, workout_date)
   VALUES (v_w4, v_ath_id, 'Session W4 (Other)', (CURRENT_DATE - 13)::timestamptz, CURRENT_DATE - 13);
   INSERT INTO public.sets (id, workout_id, exercise_id, weight, reps, set_index, set_type, created_at)
@@ -314,7 +314,7 @@ BEGIN
     VALUES (gen_random_uuid(), v_wid, v_ex_id, 100 + i, 5, 1, 'working', (CURRENT_DATE - i)::timestamptz);
   END LOOP;
 
-  -- 14. Test W1 in get_history_sessions_v2 excludes warmup and drop sets from set_count and total_volume
+  -- 14. Test Session 1 in get_history_sessions_v2 excludes warmup and drop sets from set_count and total_volume
   SELECT * INTO v_rec FROM public.get_history_sessions_v2(v_ath_id, p_limit => 1);
   IF v_rec.set_count <> 2 THEN
     RAISE EXCEPTION 'W1 set_count expected 2 working sets, got %', v_rec.set_count;
@@ -330,7 +330,7 @@ BEGIN
     RAISE EXCEPTION 'Session W1 in get_exercise_history expected 2 working sets, got %', v_count;
   END IF;
 
-  -- 16 & 18. Session W3 (warmup only) is excluded; total qualifying sessions = 1 + 1 + 11 = 13
+  -- 16 & 18. Session 3 (warmup only) is excluded; total qualifying sessions = 1 + 1 + 11 = 13
   SELECT max(total_sessions) INTO v_tot
   FROM public.get_exercise_history(v_ath_id, v_ex_id, p_limit => 10);
   IF v_tot <> 13 THEN

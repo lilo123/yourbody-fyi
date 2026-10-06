@@ -94,7 +94,7 @@ describe('MealLogRow', () => {
     expect(screen.queryByTestId('meal-log-count-badge')).toBeNull();
   });
 
-  it('expands a multi-component log and lists its components read-only (D44)', () => {
+  it('expands a multi-component log and lists its components read-only', () => {
     const items = [component(), component({ id: 'c2', name: 'Whey', calories: 120, quantity: 30 })];
     render(<MealLogRow log={log(items)} onEdit={noop} onDelete={noop} />);
 
@@ -110,7 +110,7 @@ describe('MealLogRow', () => {
     expect(within(panel).getAllByTestId('component-row')).toHaveLength(2);
     expect(trigger.getAttribute('aria-controls')).toBe(panel.getAttribute('id'));
 
-    // D44: Read-only presentation, no scale bar, no quantity input, no unit chip
+    // Read-only presentation, no scale bar, no quantity input, no unit chip
     expect(screen.queryByTestId('dish-scale-bar')).toBeNull();
     expect(screen.queryByTestId('component-quantity-input')).toBeNull();
     expect(screen.queryByTestId('component-unit-chip')).toBeNull();
@@ -136,7 +136,7 @@ describe('MealLogRow', () => {
     expect(screen.queryByTestId('component-unit-chip')).toBeNull();
   });
 
-  it('renders expanded component rows strictly read-only with no scale bar and no action menus (D44)', () => {
+  it('renders expanded component rows strictly read-only with no scale bar and no action menus', () => {
     const items = [
       component({ id: 'c1', name: 'Oatmeal', quantity: 100, unit: 'g', calories: 380, protein: 13, carbs: 68, fat: 7, fiber: 10 }),
       component({ id: 'c2', name: 'Almond Milk', quantity: 200, unit: 'ml', calories: 60, protein: 2, carbs: 4, fat: 5, fiber: 1 }),
@@ -192,7 +192,7 @@ describe('MealLogRow', () => {
     expect(screen.getByText(/500 kcal/)).toBeDefined();
   });
 
-  it('updates displayed totals and components when log prop updates with new items (D44)', () => {
+  it('updates displayed totals and components when log prop updates with new items', () => {
     const items = [component(), component({ id: 'c2', name: 'Whey', calories: 120, protein: 25 })];
     const { rerender } = render(
       <MealLogRow log={log(items)} onEdit={noop} onDelete={noop} />

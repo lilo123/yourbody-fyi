@@ -153,7 +153,7 @@ describe('useMealEditor', () => {
     expect(result.current.isDirty).toBe(false);
   });
 
-  it('D46: whole-meal scale is relative to the draft at open, x1 restores exactly', () => {
+  it('whole-meal scale is relative to the draft at open, x1 restores exactly', () => {
     const items = [
       makeComponent({ id: 'c1', name: 'Rice', quantity: 200, unit: 'g', calories: 260, protein: 5, carbs: 57, fat: 1, fiber: 1 }),
       makeComponent({ id: 'c2', name: 'Chicken', quantity: 150, unit: 'g', calories: 247, protein: 46, carbs: 0, fat: 5, fiber: 0 }),
@@ -201,7 +201,7 @@ describe('useMealEditor', () => {
     expect(result.current.isDirty).toBe(false);
   });
 
-  it('D46: scaling keeps a per-item quantity edit made while scaled (old bar reset it)', () => {
+  it('scaling keeps a per-item quantity edit made while scaled (old bar reset it)', () => {
     const items = [
       makeComponent({ id: 'c1', name: 'Rice', quantity: 200, unit: 'g', calories: 260, protein: 5, carbs: 57, fat: 1, fiber: 1 }),
       makeComponent({ id: 'c2', name: 'Chicken', quantity: 150, unit: 'g', calories: 247, protein: 46, carbs: 0, fat: 5, fiber: 0 }),

@@ -38,7 +38,7 @@ export async function invalidateWorkoutDerived(
     queryClient.invalidateQueries({ queryKey: queryKeys.exerciseStats.all }),
     // src/components/sets/EditSetSheet.tsx:80, 109
     queryClient.invalidateQueries({ queryKey: queryKeys.sessionSets.all }),
-    // P2: workouts civil date, benchmarks, and stats v2 (W2, W20, H2, H10)
+    // Workouts civil date, benchmarks, and stats v2
     queryClient.invalidateQueries({ queryKey: queryKeys.workouts.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.exerciseBenchmarks.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.exerciseStatsV2.all }),
@@ -57,7 +57,7 @@ export async function invalidateWorkoutDerived(
     promises.push(
       queryClient.invalidateQueries({ queryKey: queryKeys.exerciseStats.byUser(userId) })
     );
-    // P2: exercise_stats_v2 scoped by user
+    // Exercise_stats_v2 scoped by user
     promises.push(
       queryClient.invalidateQueries({ queryKey: queryKeys.exerciseStatsV2.byUser(userId) })
     );

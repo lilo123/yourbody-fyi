@@ -29,7 +29,7 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
-describe('useQuickLogToast & D42 Undo Hook Tests', () => {
+describe('useQuickLogToast & Undo Hook Tests', () => {
   let queryClient: QueryClient;
   let mockDeleteEq: ReturnType<typeof vi.fn>;
   let mockDelete: ReturnType<typeof vi.fn>;
@@ -116,7 +116,7 @@ describe('useQuickLogToast & D42 Undo Hook Tests', () => {
     expect(result.current.activeToast?.dishName || result.current.activeToast?.name).toBe('Meal B');
   });
 
-  it('D42 undo: deletes the right log id using timeline delete path and invalidates queries', async () => {
+  it('undo: deletes the right log id using timeline delete path and invalidates queries', async () => {
     const setStatus = vi.fn();
     const setIsError = vi.fn();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
@@ -163,7 +163,7 @@ describe('useQuickLogToast & D42 Undo Hook Tests', () => {
     expect(setIsError).toHaveBeenCalledWith(false);
   });
 
-  it('D42 failure path: delete failure shows existing error status and entry is kept', async () => {
+  it('failure path: delete failure shows existing error status and entry is kept', async () => {
     const setStatus = vi.fn();
     const setIsError = vi.fn();
 
@@ -203,7 +203,7 @@ describe('useQuickLogToast & D42 Undo Hook Tests', () => {
     expect(setIsError).toHaveBeenCalledWith(true);
   });
 
-  it('D42 use_count untouched: undoing direct log does not decrement custom dish use_count', async () => {
+  it('use_count untouched: undoing direct log does not decrement custom dish use_count', async () => {
     const setStatus = vi.fn();
     const setIsError = vi.fn();
 

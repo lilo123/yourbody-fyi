@@ -44,7 +44,7 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
-describe('TemplateListTab - W3 Features', () => {
+describe('TemplateListTab - Routine Features', () => {
   let queryClient: QueryClient;
 
   const mockExercises: Exercise[] = [
@@ -58,7 +58,7 @@ describe('TemplateListTab - W3 Features', () => {
       id: 'ex-incline',
       name: 'Incline Dumbbell Press',
       body_parts: ['Chest'],
-      is_archived: true, // Archived exercise for L11 testing
+      is_archived: true, // Archived exercise for testing
     },
     {
       id: 'ex-fly',
@@ -156,7 +156,7 @@ describe('TemplateListTab - W3 Features', () => {
     );
   };
 
-  describe('L4 Deferred Delete (RD-7)', () => {
+  describe('Deferred Delete', () => {
     it('sends 0 DELETE calls before 6s expiry, and exactly 1 DELETE after expiry', async () => {
       vi.useFakeTimers();
 
@@ -293,7 +293,7 @@ describe('TemplateListTab - W3 Features', () => {
     });
   });
 
-  describe('L18 Accordion Preview & L11 Archived Pill', () => {
+  describe('Accordion Preview & Archived Pill', () => {
     it('toggles accordion preview with aria-expanded and displays exercises with sets x reps', async () => {
       renderComponent();
 
@@ -325,7 +325,7 @@ describe('TemplateListTab - W3 Features', () => {
       expect(screen.queryByTestId('template-preview-tpl-push')).toBeNull();
     });
 
-    it('L11: marks archived exercise in preview with an "Archived" Tag pill', async () => {
+    it('marks archived exercise in preview with an "Archived" Tag pill', async () => {
       renderComponent();
 
       // Expand accordion
@@ -342,7 +342,7 @@ describe('TemplateListTab - W3 Features', () => {
     });
   });
 
-  describe('L25 "Start routine" Deep Link Navigation', () => {
+  describe('"Start routine" Deep Link Navigation', () => {
     it('clicking "Start routine" navigates to /workout?routine=${template.id}', async () => {
       renderComponent();
 
@@ -368,7 +368,7 @@ describe('TemplateListTab - W3 Features', () => {
     });
   });
 
-  describe('L15 Day Filter Toolbar Radiogroup', () => {
+  describe('Day Filter Toolbar Radiogroup', () => {
     it('has role="radiogroup" and day buttons with role="radio" and aria-checked', async () => {
       renderComponent();
 
@@ -401,7 +401,7 @@ describe('TemplateListTab - W3 Features', () => {
     expect(getRecordedTables()).toContain('routine_templates');
   });
 
-  describe('L33: get_routine_catalog integration', () => {
+  describe('get_routine_catalog integration', () => {
     it('loads routines via get_routine_catalog RPC with targetUserId', async () => {
       renderComponent();
 

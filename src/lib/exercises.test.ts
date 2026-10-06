@@ -98,7 +98,7 @@ describe('exercises lib', () => {
   });
 
   describe('insertCustomExercise', () => {
-    it('throws DuplicateExerciseError on client when name + equipment duplicate exists (L35)', async () => {
+    it('throws DuplicateExerciseError on client when name + equipment duplicate exists', async () => {
       const existingCatalog = [
         { name: 'Bench Press', equipment: 'barbell' },
         { name: 'Overhead Press', equipment: null },
@@ -123,7 +123,7 @@ describe('exercises lib', () => {
       ).rejects.toThrow(DuplicateExerciseError);
     });
 
-    it('allows coexistence when equipment differs (L35: Bench Press Barbell vs Dumbbell)', async () => {
+    it('allows coexistence when equipment differs (Bench Press Barbell vs Dumbbell)', async () => {
       const existingCatalog = [{ name: 'Bench Press', equipment: 'barbell' }];
 
       const mockInserted = {

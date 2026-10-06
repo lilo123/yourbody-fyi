@@ -72,7 +72,7 @@ export const HistoryCalendarSheet: React.FC<HistoryCalendarSheetProps> = ({
   const nextMonthNum = viewMonth === 11 ? 1 : viewMonth + 2;
   const nextMonthStart = `${nextMonthYear}-${String(nextMonthNum).padStart(2, '0')}-01`;
 
-  // D-P5b-5: Lightweight month query for workout dates
+  // Lightweight month query for workout dates
   const { data: monthWorkouts } = useQuery({
     queryKey: ['workout_sets', userId, 'calendar_month', monthStart],
     queryFn: async () => {

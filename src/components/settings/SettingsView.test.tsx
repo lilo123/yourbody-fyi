@@ -391,13 +391,13 @@ describe('SettingsView', () => {
     ).toBeDefined();
   });
 
-  it('renders auto-start rest timer toggle switch with an accessible name (NEW-25)', async () => {
+  it('renders auto-start rest timer toggle switch with an accessible name', async () => {
     renderComponent();
     await screen.findByDisplayValue('Coach Demo');
     expect(screen.getByRole('switch', { name: /auto-start rest timer/i })).toBeDefined();
   });
 
-  it('renders email address as read-only text rather than a disabled input (D5)', async () => {
+  it('renders email address as read-only text rather than a disabled input', async () => {
     renderComponent();
     await screen.findByDisplayValue('Coach Demo');
     expect(screen.queryByRole('textbox', { name: /email address/i })).toBeNull();

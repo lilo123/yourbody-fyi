@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSupabaseBuilder, createSupabaseMock } from './supabaseBuilderMock';
 
-describe('supabaseBuilderMock limit and range fidelity (H28 / L37)', () => {
+describe('supabaseBuilderMock limit and range fidelity', () => {
   it('observably caps query results with .limit(200) on a 500-row fixture', async () => {
     const fixture = Array.from({ length: 500 }, (_, i) => ({
       id: `ex-${i}`,

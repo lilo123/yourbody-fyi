@@ -130,7 +130,7 @@ describe('ExerciseListRow', () => {
     expect(screen.getByTestId('tag-hidden-ex-user-1')).toBeDefined();
   });
 
-  it('enforces 44px min hit targets on all action buttons (L21)', () => {
+  it('enforces 44px min hit targets on all action buttons', () => {
     render(
       <ExerciseListRow
         exercise={userExercise}
@@ -149,7 +149,7 @@ describe('ExerciseListRow', () => {
     expect(archiveBtn.className).toContain('min-h-[44px]');
   });
 
-  it('L13: double-tap protection disables buttons once clicked', () => {
+  it('double-tap protection disables buttons once clicked', () => {
     const onArchiveMock = vi.fn();
     render(
       <ExerciseListRow

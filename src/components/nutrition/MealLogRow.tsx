@@ -32,7 +32,7 @@ export interface MealLogRowProps {
 /**
  * The single meal row, shared by NutritionEngine and HistoryView.
  *
- * D44: The timeline row panel is strictly read-only. Inline whole-dish scaling
+ * The timeline row panel is strictly read-only. Inline whole-dish scaling
  * and inline component editing have been removed; editing is now exclusively
  * handled in EditMealSheet.
  *
@@ -248,7 +248,7 @@ export const MealLogRow: React.FC<MealLogRowProps> = ({
         }
       />
 
-      {/* Expanded panel — read-only component list (D44) */}
+      {/* Expanded panel — read-only component list */}
       {expandable && expanded && (
         <div id={panelId} data-testid="meal-log-panel" className="mt-2 space-y-1.5">
           {(items ?? []).map((item) => (

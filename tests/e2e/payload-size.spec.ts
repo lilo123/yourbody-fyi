@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Payload & Cache Key Disambiguation Verification', () => {
   test.describe.configure({ mode: 'serial' });
 
-  // P4 (M4): /workout loads routine templates via the paged RPC get_routine_catalog
+  // /workout loads routine templates via the paged RPC get_routine_catalog
   // (keyset cursor, server-clamped limit <= 200) instead of GET routine_templates?limit=100.
   // The payload bound and the "no nested template_exercises embed on /workout" contract are kept.
   test('Order A: Cold navigation directly to /workout measures <= 51,200 B via bounded get_routine_catalog page', async ({ page }) => {

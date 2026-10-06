@@ -172,7 +172,7 @@ describe('EditMealSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('D46: Escape in the Scale box cancels the scale edit and keeps the sheet open', () => {
+  it('Escape in the Scale box cancels the scale edit and keeps the sheet open', () => {
     const client = createClient();
     const onClose = vi.fn();
     render(
@@ -193,7 +193,7 @@ describe('EditMealSheet', () => {
     expect(screen.getByTestId('save-edit-meal-btn')).toBeDisabled();
   });
 
-  it('D46: Scale x0.5 marks the draft dirty, scale x1 makes it clean again, and Save writes the scaled item', async () => {
+  it('Scale x0.5 marks the draft dirty, scale x1 makes it clean again, and Save writes the scaled item', async () => {
     const client = createClient();
     render(
       <QueryClientProvider client={client}>
@@ -308,7 +308,7 @@ describe('EditMealSheet', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('renders nothing when readOnly is true (coach inspection mode) (D44)', () => {
+  it('renders nothing when readOnly is true (coach inspection mode)', () => {
     const client = createClient();
     const currentMeal = meal([component()]);
 

@@ -20,7 +20,7 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
-describe('useHistoryData: 14-day window infinite query (H11, D-P5b-2)', () => {
+describe('useHistoryData: 14-day window infinite query', () => {
   let queryClient: QueryClient;
   const targetUserId = 'athlete-paging-test';
 

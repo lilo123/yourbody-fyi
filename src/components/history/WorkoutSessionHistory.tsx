@@ -174,7 +174,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
     },
   });
 
-  // H29: Scroll to highlightDate session index and focus its card
+  // Scroll to highlightDate session index and focus its card
   React.useEffect(() => {
     if (!highlightDate) return;
     const targetIndex = displayedSessions.findIndex((s) => {
@@ -207,7 +207,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
   const virtualItems = virtualizer.getVirtualItems();
   const isVirtual = virtualItems.length > 0;
 
-  // H7: 3 Skeleton cards while initial fetch is pending or not yet settled
+  // 3 Skeleton cards while initial fetch is pending or not yet settled
   if (isSessionsPending || (totalCount === null && displayedSessions.length === 0)) {
     return (
       <div data-testid="history-sessions-skeleton" className="space-y-4">
@@ -216,7 +216,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
     );
   }
 
-  // H20 & H18: Empty state only when settled and totalCount === 0 OR filtering produced 0 matches
+  // Empty state only when settled and totalCount === 0 OR filtering produced 0 matches
   const isZeroMatches = displayedSessions.length === 0;
   const isFilteringWithZeroMatches =
     isZeroMatches && (Boolean(filterSummary) || (timeRange !== 'all' && totalCount !== 0));
@@ -305,7 +305,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
         tabIndex={-1}
       >
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3 gap-2">
-          {/* H21: min-w-0 flex-1 truncate session title at 320px */}
+          {/* min-w-0 flex-1 truncate session title at 320px */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
               <h3 className="text-sm font-bold text-white truncate">{session.name || 'Workout Session'}</h3>
@@ -325,7 +325,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
               </div>
             </div>
 
-            {/* H45: Session overflow menu, hidden when isInspectingAthlete */}
+            {/* Session overflow menu, hidden when isInspectingAthlete */}
             {!isInspectingAthlete && (
               <OverflowMenu
                 ariaLabel={`Session actions for ${session.name || 'workout'}`}
@@ -334,7 +334,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
               />
             )}
 
-            {/* H33: Session expander with aria-controls */}
+            {/* Session expander with aria-controls */}
             <button
               type="button"
               onClick={() => handleToggle(session.id)}
@@ -356,7 +356,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
                 Loading sets...
               </div>
             ) : isErrorSets ? (
-              /* H6: Per-session set-fetch error + Retry */
+              /* Per-session set-fetch error + Retry */
               <div className="py-3 px-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between text-xs text-rose-300">
                 <span>Failed to load sets for this workout.</span>
                 <button
@@ -451,7 +451,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* H6: Surface load-more errors in StatusBanner */}
+      {/* Surface load-more errors in StatusBanner */}
       {loadMoreError && (
         <StatusBanner
           title="Failed to load more sessions"
@@ -472,7 +472,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
         />
       )}
 
-      {/* H31: Showing N of M sessions counter or filter summary */}
+      {/* Showing N of M sessions counter or filter summary */}
       <div data-testid="showing-sessions-count" className="text-xs text-zinc-400 text-center">
         {filterSummary
           ? `Showing ${filterSummary.matchCount} matches in ${filterSummary.loadedCount} loaded sessions`
@@ -529,7 +529,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
         </div>
       )}
 
-      {/* H9, H31: Load More button ONLY while hasMore */}
+      {/* Load More button ONLY while hasMore */}
       {hasMore && displayedSessions.length > 0 && (
         <div className="text-center pt-2">
           <button
@@ -546,7 +546,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
         </div>
       )}
 
-      {/* H45: Session delete confirmation dialog */}
+      {/* Session delete confirmation dialog */}
       <ConfirmDialog
         isOpen={Boolean(sessionToDelete)}
         title="Delete Workout Session"

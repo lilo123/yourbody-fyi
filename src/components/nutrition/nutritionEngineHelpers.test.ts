@@ -746,7 +746,7 @@ describe('useStagedCardFocus', () => {
   });
 });
 
-describe('D33: isIdenticalItem and mergeOrAppendStagedItems', () => {
+describe('isIdenticalItem and mergeOrAppendStagedItems', () => {
   it('isIdenticalItem returns true for identical items and false for differing unit or macros', () => {
     const item1 = buildStagedItem({
       name: 'Rolled Oats',
@@ -958,7 +958,7 @@ describe('D33: isIdenticalItem and mergeOrAppendStagedItems', () => {
     expect(result[1].calories).toBe(98);
   });
 
-  it('an item whose nutrition was edited via D7 is compared by its CURRENT per-unit values', () => {
+  it('an item whose nutrition was edited is compared by its CURRENT per-unit values', () => {
     const originalItem = buildStagedItem({
       name: 'Chicken Breast',
       portion: '100g',
@@ -971,7 +971,7 @@ describe('D33: isIdenticalItem and mergeOrAppendStagedItems', () => {
       fiber: 0,
     });
 
-    // D7: user edits nutrition
+    // User edits nutrition
     const editedItem = updateStagedItemNutrition(originalItem, {
       calories: 200,
       protein: 40,
@@ -1108,7 +1108,7 @@ describe('D33: isIdenticalItem and mergeOrAppendStagedItems', () => {
     expect(JSON.stringify(incoming)).toBe(incomingBefore);
   });
 
-  describe('Audit Fix #2: isIdenticalItem relative tolerance & D7 edits', () => {
+  describe('isIdenticalItem relative tolerance & edited nutrition', () => {
     it('per-gram protein 0.027 vs 0.07 -> NOT identical', () => {
       const itemA = buildStagedItem({
         name: 'Greek Yogurt',
@@ -1161,7 +1161,7 @@ describe('D33: isIdenticalItem and mergeOrAppendStagedItems', () => {
       expect(isIdenticalItem(itemA, itemB)).toBe(true);
     });
 
-    it('D7-edited item vs original -> not identical', () => {
+    it('edited item vs original -> not identical', () => {
       // Original 150g favorite: 4g protein, 0.5g fat, 195 kcal
       const original = buildStagedItem({
         name: 'Rice & Beans',
@@ -1174,7 +1174,7 @@ describe('D33: isIdenticalItem and mergeOrAppendStagedItems', () => {
         fat: 0.5,
         fiber: 3,
       });
-      // D7 user edit: 15g protein, 7g fat, 215 kcal
+      // User edit: 15g protein, 7g fat, 215 kcal
       const d7Edited = buildStagedItem({
         name: 'Rice & Beans',
         portion: '150g',

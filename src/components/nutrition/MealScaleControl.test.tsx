@@ -17,7 +17,7 @@ function Harness({ initial = 1, onScale = vi.fn() }: { initial?: number; onScale
   );
 }
 
-describe('D46 MealScaleControl', () => {
+describe('MealScaleControl', () => {
   it('reads "Scale" at x1 and opens a focused, pre-selected numeric box on tap', () => {
     render(<Harness />);
     const btn = screen.getByTestId('meal-scale-button');

@@ -111,7 +111,7 @@ describe('QuickLogFavorites (Horizontal Bar Redesign)', () => {
     expect(onOpenNewDishModal).toHaveBeenCalledTimes(1);
   });
 
-  it('resolves NEW-10 defect: primary card button carries staging onClick without nested buttons', () => {
+  it('primary card button carries staging onClick without nested buttons', () => {
     const onStageCustomDish = vi.fn();
     const dish = createMockDish({ id: 'dish-new-10', name: 'Clean Salmon' });
 
@@ -208,7 +208,7 @@ describe('QuickLogFavorites (Horizontal Bar Redesign)', () => {
     );
 
     // Order should be: Dish B (10), Dish D (5, newer), Dish C (5, older), Dish A (3), Dish E (2), Dish F (1)
-    // In collapsed state per D26, top 3 (B, D, C) are rendered; A, E, F are beyond top 3
+    // In collapsed state per, top 3 (B, D, C) are rendered; A, E, F are beyond top 3
     const renderedCards = screen.getAllByTestId(/custom-dish-card-/);
     expect(renderedCards.map((card) => card.getAttribute('data-testid'))).toEqual([
       'custom-dish-card-dish-b',
@@ -349,8 +349,8 @@ describe('QuickLogFavorites (Horizontal Bar Redesign)', () => {
     expect(screen.getByText('Protein Shake Vanilla')).toBeDefined();
   });
 
-  // D26: visible rows in collapsed state are strictly 3 without media-query hiding
-  it('rendered rows in collapsed state do not carry height hiding variants (superseded by D26 fixed top 3 slice)', () => {
+  // Visible rows in collapsed state are strictly 3 without media-query hiding
+  it('rendered rows in collapsed state do not carry height hiding variants (superseded by fixed top 3 slice)', () => {
     const dishes = Array.from({ length: 5 }, (_, i) =>
       createMockDish({ id: `dish-${i + 1}`, name: `Dish ${i + 1}` })
     );
@@ -687,8 +687,8 @@ describe('QuickLogFavorites (Horizontal Bar Redesign)', () => {
     expect(screen.getByText('(1 of 6)')).toBeDefined();
   });
 
-  // D18 Type Scale Contract: NO font-mono anywhere, tabular-nums for numbers, all fonts >= 12px
-  it('D18 type scale contract: no font-mono anywhere in Quick Log, tabular-nums on numbers, every font >= 12px', () => {
+  // Type Scale Contract: NO font-mono anywhere, tabular-nums for numbers, all fonts >= 12px
+  it('type scale contract: no font-mono anywhere in Quick Log, tabular-nums on numbers, every font >= 12px', () => {
     const dishes = Array.from({ length: 5 }, (_, i) =>
       createMockDish({
         id: `dish-${i + 1}`,
@@ -754,7 +754,7 @@ describe('QuickLogFavorites (Horizontal Bar Redesign)', () => {
     expect(cardBtn.getAttribute('aria-label')).toContain(longName);
   });
 
-  describe('D33: Quick Log Favorites staged mode', () => {
+  describe('Quick Log Favorites staged mode', () => {
     it('switches section title to "Add to staged meal" when isStaged is true, and keeps "Quick Log Favorites" when false', () => {
       const dish = createMockDish({ id: 'dish-1', name: 'Greek Yogurt' });
 
@@ -901,8 +901,8 @@ describe('QuickLogFavorites (Horizontal Bar Redesign)', () => {
     });
   });
 
-  describe('D35 type and input consistency', () => {
-    it('clear search button moves focus to the search input (D35)', () => {
+  describe('type and input consistency', () => {
+    it('clear search button moves focus to the search input', () => {
       render(
         <QuickLogFavorites
           customDishes={[createMockDish()]}
@@ -925,7 +925,7 @@ describe('QuickLogFavorites (Horizontal Bar Redesign)', () => {
       expect(document.activeElement).toBe(searchInput);
     });
 
-    it('dish name uses 14px semibold text-sm font-semibold (D35/D18)', () => {
+    it('dish name uses 14px semibold text-sm font-semibold', () => {
       render(
         <QuickLogFavorites
           customDishes={[createMockDish({ id: 'dish-1', name: 'Whey Protein' })]}
@@ -944,7 +944,7 @@ describe('QuickLogFavorites (Horizontal Bar Redesign)', () => {
       expect(dishName.className).not.toContain('font-bold');
     });
 
-    it('search input maintains 16px text-base without sm:text-xs responsive shrink (D35)', () => {
+    it('search input maintains 16px text-base without sm: text-xs responsive shrink', () => {
       render(
         <QuickLogFavorites
           customDishes={[createMockDish()]}

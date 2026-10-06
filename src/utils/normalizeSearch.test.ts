@@ -66,7 +66,7 @@ describe('normalizeSearch utility', () => {
   });
 
   describe('matchesExerciseSearch', () => {
-    it('prefix matches "zer" to Zercher Squat (L8, H32)', () => {
+    it('prefix matches "zer" to Zercher Squat', () => {
       const zercher = { name: 'Zercher Squat', body_parts: ['Legs'] };
       const bench = { name: 'Bench Press', body_parts: ['Chest'] };
 
@@ -87,7 +87,7 @@ describe('normalizeSearch utility', () => {
       expect(matchesExerciseSearch(ohp, 'ohp')).toBe(true);
     });
 
-    it('enforces token boundary on body parts (L8: Back chip does not match Lower Back)', () => {
+    it('enforces token boundary on body parts (Back chip does not match Lower Back)', () => {
       const lowerBackOnly = { name: 'Hyperextensions', body_parts: ['Lower Back'] };
       const backExercise = { name: 'Pull-up', body_parts: ['Back'] };
 

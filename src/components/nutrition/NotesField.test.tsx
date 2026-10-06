@@ -56,7 +56,7 @@ describe('NotesField', () => {
     expect(screen.getByTestId('add-note-btn')).toBeDefined();
   });
 
-  it('applies text-base without responsive shrink to maintain 16px font at every width (D35)', () => {
+  it('applies text-base without responsive shrink to maintain 16px font at every width', () => {
     render(<ControlledNotesField initialValue="Zoom test" />);
     const textarea = screen.getByTestId('dish-notes-textarea');
     expect(textarea.className).toContain('text-base');

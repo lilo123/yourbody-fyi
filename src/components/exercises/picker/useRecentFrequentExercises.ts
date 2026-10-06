@@ -18,7 +18,7 @@ export interface RecentFrequentData {
 
 /**
  * Derives Recent and Frequent exercise names from existing workout logs
- * and/or the get_exercise_stats RPC (P4, W22).
+ * And/or the get_exercise_stats RPC.
  */
 export function useRecentFrequentExercises(
   targetUserId?: string,

@@ -66,7 +66,7 @@ export function computeGhostSets(
     .filter((s) => normalizeDateStr(s.workout_date || s.date || s.created_at) === mostRecentDate)
     .sort((a, b) => (a.set_index || 0) - (b.set_index || 0));
 
-  // Working sets only (RD-9, W6: warm-up and drop sets hidden and excluded)
+  // Working sets only (warm up and drop sets hidden and excluded)
   const candidateSets = sessionSets.filter((s) => s.set_type === 'working' || !s.set_type);
 
   const results: GhostSetValues[] = [];
@@ -121,7 +121,7 @@ export function getExerciseBenchmarks(
       if (!matchesId && !matchesName) return false;
     }
     if (s.weight == null || s.reps == null) return false;
-    // Working sets only (RD-9, W6)
+    // Working sets only
     const type = s.set_type ? s.set_type.toLowerCase() : 'working';
     if (type === 'warmup' || type === 'drop') return false;
     return true;
@@ -298,9 +298,9 @@ export const DEFAULT_WORKOUT_TEMPLATES: WorkoutTemplateDefinition[] = [
 ];
 
 /**
- * Merges server benchmarks with today's committed working sets in real-time (W1, RD-4, RD-9).
+ * Merges server benchmarks with today's committed working sets in real-time.
  * Working sets only: warm-up and drop sets are strictly excluded.
- * Ties broken by: higher weight, then higher reps, then earliest date (RD-4).
+ * Ties broken by: higher weight, then higher reps, then earliest date.
  */
 export function mergeBenchmarks(
   benchmarks: Record<string, ExerciseBenchmarks>,

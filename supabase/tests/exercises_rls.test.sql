@@ -216,7 +216,7 @@ END;
 $$;
 SELECT pass('Own custom exercises are visible to the owner');
 
--- 7. UNLINKED coach (role=coach) sees nothing from other users' custom exercises (W50 fix).
+-- 7. UNLINKED coach (role=coach) sees nothing from other users' custom exercises.
 DO $$
 DECLARE
   v_coach_id uuid := gen_random_uuid();
@@ -285,7 +285,7 @@ END;
 $$;
 SELECT pass('ENDED-link coach sees 0 rows of former athletes custom exercises');
 
--- 9. Coach UPDATE on a master exercise affects 0 rows (L1 / RD-10: masters read-only).
+-- 9. Coach UPDATE on a master exercise affects 0 rows (masters read-only).
 DO $$
 DECLARE
   v_coach_id uuid := gen_random_uuid();
@@ -314,7 +314,7 @@ END;
 $$;
 SELECT pass('Coach UPDATE on a master exercise affects 0 rows');
 
--- 10. Coach UPDATE on another user custom exercise affects 0 rows (RD-10: no coach edit).
+-- 10. Coach UPDATE on another user custom exercise affects 0 rows (no coach edit).
 DO $$
 DECLARE
   v_coach_id uuid := gen_random_uuid();

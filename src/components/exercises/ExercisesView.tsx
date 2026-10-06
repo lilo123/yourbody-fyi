@@ -62,7 +62,7 @@ export const ExercisesView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-[max(env(safe-area-inset-bottom),2rem)] animate-fade-in">
-      {/* Sub-tabs with SegmentedTabs primitive (L14, L19) */}
+      {/* Sub-tabs with SegmentedTabs primitive */}
       <SegmentedTabs
         tabs={[
           { id: 'exercises', label: 'Exercises', icon: <BookOpen className="w-4 h-4" /> },

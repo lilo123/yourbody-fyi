@@ -130,7 +130,7 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
         {/* Accessible title for test backward-compatibility */}
         {isFork && <span className="sr-only">Duplicate & Customize Template</span>}
 
-        {/* Polite Live Region for Reorder Announcements (L17) */}
+        {/* Polite Live Region for Reorder Announcements */}
         <output
           aria-live="polite"
           aria-atomic="true"
@@ -140,7 +140,7 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
           {reorderAnnouncement}
         </output>
 
-        {/* Master Routine Info Banner (L29) */}
+        {/* Master Routine Info Banner */}
         {(template?.is_master || allowMaster) && !isFork && !isLoadingTemplate && !fetchError && (
           <StatusBanner
             tone="info"
@@ -153,7 +153,7 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
           </StatusBanner>
         )}
 
-        {/* Fetch Error with Retry Button (L43) */}
+        {/* Fetch Error with Retry Button */}
         {fetchError && (
           <StatusBanner
             tone="error"
@@ -176,14 +176,14 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
           />
         )}
 
-        {/* Loading Skeleton while fetching fresh template (L43) */}
+        {/* Loading Skeleton while fetching fresh template */}
         {isLoadingTemplate && (
           <div className="space-y-4 py-2" data-testid="template-sheet-skeleton">
             <Skeleton variant="card" count={2} />
           </div>
         )}
 
-        {/* Stale Template Conflict Banner (L43) */}
+        {/* Stale Template Conflict Banner */}
         {staleError && !isLoadingTemplate && (
           <StatusBanner
             tone="error"
@@ -245,7 +245,7 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
               )}
             </div>
 
-            {/* Scheduled Days Filter (L15: role=group + aria-pressed) */}
+            {/* Scheduled Days Filter (role=group + aria pressed) */}
             <div className="space-y-1.5">
               <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-cyan-400" />
@@ -301,7 +301,7 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
                 ))
               )}
 
-              {/* Add Exercise Drawer Trigger (L28/L36) */}
+              {/* Add Exercise Drawer Trigger */}
               <button
                 ref={addExerciseBtnRef}
                 type="button"
@@ -317,7 +317,7 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
           </>
         )}
 
-        {/* Shared ExercisePicker as Overlay Sheet (L28, L36) */}
+        {/* Shared ExercisePicker as Overlay Sheet */}
         <ExercisePicker
           isOpen={isPickerOpen}
           onClose={handleClosePicker}

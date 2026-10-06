@@ -206,7 +206,7 @@ export interface StagedMeal {
   photoUrl?: string;
   notes?: string | null;
   /**
-   * D46: whole-meal scale relative to the meal as it was staged / opened
+   * Whole-meal scale relative to the meal as it was staged / opened
    * (1 or undefined = as staged). UI state only: never persisted, the items
    * themselves carry the scaled amounts.
    */
@@ -303,7 +303,7 @@ export function buildStagedItem(raw: {
 }
 
 /**
- * D33: Identical item check.
+ * Identical item check.
  * Identical item = same name (case-insensitive trimmed), same unit, same per-unit
  * macros (kcal/P/C/F/fiber per unit, compared with epsilon 0.1 or rounded to 1 decimal).
  */
@@ -345,7 +345,7 @@ export function isIdenticalItem(existing: StagedItem, incoming: StagedItem): boo
 }
 
 /**
- * D33: Merge identical items by adding quantity, or append non-identical items in order.
+ * Merge identical items by adding quantity, or append non-identical items in order.
  */
 export function mergeOrAppendStagedItems(
   existingItems: StagedItem[],
@@ -396,7 +396,7 @@ export function recomputeStagedTotals(items: StagedItem[]) {
   };
 }
 
-/** D46: allowed range for the whole-meal scale factor. */
+/** Allowed range for the whole-meal scale factor. */
 export const MIN_MEAL_SCALE = 0.01;
 export const MAX_MEAL_SCALE = 20;
 
@@ -438,7 +438,7 @@ function roundQuantity(q: number): number {
 }
 
 /**
- * D46: scale every item of a meal to `nextScale`, where the scale is relative
+ * Scale every item of a meal to `nextScale`, where the scale is relative
  * to the meal as it was staged/opened (1 = as staged).
  *
  * The change is applied as a ratio to the CURRENT items (next / current), so

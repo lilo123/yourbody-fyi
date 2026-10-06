@@ -1,13 +1,13 @@
 /**
- * Sets & Workouts Data Layer Writers (P2 / RD-4 / RD-5 / W19 / W40 / W41 / O1)
+ * Sets & Workouts Data Layer Writers
  *
  * Guarantees:
  * 1. Sets are always resolved and written by exercise_id UUID (never by name).
- * 2. Next set_index is derived as max(set_index)+1 from existing sets (W19).
+ * 2. Next set_index is derived as max(set_index)+1 from existing sets.
  * 3. Workouts are strictly scoped to the user's local civil date (YYYY-MM-DD).
  * 4. Concurrent getOrCreateWorkout calls safely resolve to a single row via
- *    the unique (user_id, workout_date) constraint and select-after-23505 recovery (W41).
- * 5. O1: All production writes route through durable outbox (enqueueAndAwait)
+ *    The unique (user_id, workout_date) constraint and select-after-23505 recovery.
+ * 5. All production writes route through durable outbox (enqueueAndAwait)
  *    with optimistic local representation and automatic background sync.
  */
 
@@ -59,7 +59,7 @@ export interface LoggedSetResult {
 
 /**
  * Derives the next set_index as max(set_index) + 1 from logged sets.
- * Prevents duplicate set_index when earlier sets in the session were deleted (W19).
+ * Prevents duplicate set_index when earlier sets in the session were deleted.
  */
 export function getNextSetIndex(existingSets: Array<{ set_index?: number | null }>): number {
   if (!existingSets || existingSets.length === 0) return 1;
@@ -136,7 +136,7 @@ export async function resolveWorkoutRefForDate(
 
 /**
  * Gets or creates the unique workout session row for a user on a given civil date.
- * Handles concurrent insert races (PostgreSQL error 23505) by recovering the existing row (W41).
+ * Handles concurrent insert races (PostgreSQL error 23505) by recovering the existing row.
  */
 export async function getOrCreateWorkout(
   client: SupabaseClient,

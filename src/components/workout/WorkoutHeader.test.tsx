@@ -14,7 +14,7 @@ describe('WorkoutHeader', () => {
     onClearWorkout: vi.fn(),
   };
 
-  it('mounts live regions empty while idle and retains same DOM node on error mutation (NEW-15)', () => {
+  it('mounts live regions empty while idle and retains same DOM node on error mutation', () => {
     const onClear = vi.fn();
     const { rerender, container } = render(
       <WorkoutHeader {...defaultProps} mutationError={null} onClearMutationError={onClear} />
@@ -57,7 +57,7 @@ describe('WorkoutHeader', () => {
     expect(assertiveBefore!.textContent).toBe('');
   });
 
-  it('satisfies touch target and typography requirements on all controls (W28, W29, W33)', () => {
+  it('satisfies touch target and typography requirements on all controls', () => {
     const onClear = vi.fn();
     const onDateChange = vi.fn();
     const onOpenRoutine = vi.fn();

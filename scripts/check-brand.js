@@ -23,7 +23,7 @@ export const DEFAULT_ALLOWLIST = [
     linePattern: /^- (?:Renamed|Historical records)|Brand & identifier inventory/,
     reason: 'Brand & identifier inventory section documenting historical identifiers and keeps',
   },
-  // 3. M11 coach-code prefix migration files
+  // 3. coach-code prefix migration files
   {
     path: 'supabase/migrations/20261001000000_coach_code_prefix_yb.sql',
     reason: 'M11 coach code prefix migration up',

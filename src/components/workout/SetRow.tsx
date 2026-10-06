@@ -73,7 +73,7 @@ export const SetRow: React.FC<SetRowProps> = memo((props) => {
           {ghost.hintText}
         </div>
         <div className="flex justify-center">
-          {/* data-input-mirror: shows a logged value in the input column, sized like the 16px inputs (D43 exception). */}
+          {/* data-input-mirror: shows a logged value in the input column, sized like the 16px inputs (exception). */}
           <div data-testid={`logged-weight-value-${exIndex}-${rowIdx}`} data-input-mirror="true" className="w-full max-w-[58px] h-11 rounded-lg bg-zinc-950/80 border border-zinc-700/60 flex items-center justify-center font-semibold text-white text-base tabular-nums">
             {formatWeight(loggedSet.weight, unit)}
           </div>
@@ -186,7 +186,7 @@ export function focusNextPendingSet(exIndex: number, rowIdx: number) {
     // Do not steal focus into background cards if a modal, sheet, or dialog is active
     if (document.querySelector('[role="dialog"]')) return;
 
-    // Look for next pending set in the same exercise: rowIdx + 1 (W34: restricted to active card)
+    // Look for next pending set in the same exercise: rowIdx + 1 (restricted to active card)
     const nextWeightInput = document.querySelector<HTMLInputElement>(
       `input[data-testid="ghost-weight-${exIndex}-${rowIdx + 1}"]`
     );
