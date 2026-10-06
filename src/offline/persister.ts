@@ -17,6 +17,7 @@ export const WHITELIST_ROOTS = [
   'users',
   'custom_dishes',
   'nutrition_logs',
+  'app_config',
 ] as const;
 
 export function getCivilDateInTz(date: Date = new Date(), timeZone?: string): string {
@@ -127,6 +128,10 @@ export function shouldDehydrateQuery(query: Query): boolean {
   }
 
   if (root === 'users') {
+    return true;
+  }
+
+  if (root === 'app_config') {
     return true;
   }
 

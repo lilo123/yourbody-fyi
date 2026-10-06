@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import zlib from 'node:zlib'
 import fs from 'node:fs'
@@ -73,6 +73,23 @@ function getPackageName(id: string): string | null {
   return pathAfter.split('/')[0] || null;
 }
 
+// Emits version.json with the commit being built so the deploy workflow can
+// confirm which build is live. It is not part of the service worker precache.
+function versionJsonPlugin(): Plugin {
+  return {
+    name: 'version-json-plugin',
+    apply: 'build',
+    generateBundle() {
+      const sha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'dev';
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ sha }),
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -121,6 +138,7 @@ export default defineConfig({
       },
     }),
     chunkReporterPlugin(),
+    versionJsonPlugin(),
   ],
   server: {
     watch: {
