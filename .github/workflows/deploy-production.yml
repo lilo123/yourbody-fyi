@@ -1,0 +1,216 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      skip_db_push:
+        description: 'Skip database migrations push (for function rollback from older ref)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: vars.PROD_DEPLOY_ENABLED == 'true'
+    environment: production
+    steps:
+      - name: Preflight secrets check
+        env:
+          SUPABASE_ACCESS_TOKEN_PROD: ${{ secrets.SUPABASE_ACCESS_TOKEN_PROD }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          PROD_PROJECT_REF: ${{ secrets.PROD_PROJECT_REF }}
+          AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
+          OPS_REPO_TOKEN: ${{ secrets.OPS_REPO_TOKEN }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          MISSING=()
+          [ -z "$SUPABASE_ACCESS_TOKEN_PROD" ] && MISSING+=("SUPABASE_ACCESS_TOKEN_PROD")
+          [ -z "$PROD_DB_PASSWORD" ] && MISSING+=("PROD_DB_PASSWORD")
+          [ -z "$PROD_PROJECT_REF" ] && MISSING+=("PROD_PROJECT_REF")
+          [ -z "$AGE_RECIPIENT" ] && MISSING+=("AGE_RECIPIENT")
+          [ -z "$OPS_REPO_TOKEN" ] && MISSING+=("OPS_REPO_TOKEN")
+          [ -z "$SMOKE_EMAIL" ] && MISSING+=("SMOKE_EMAIL")
+          [ -z "$SMOKE_PASSWORD" ] && MISSING+=("SMOKE_PASSWORD")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::Required production secrets missing: ${MISSING[*]}"
+            exit 1
+          fi
+          echo "Preflight check passed: all required secrets are configured."
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js (version 22)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.119.0
+
+      - name: Install age encryption tool
+        run: |
+          AGE_VERSION="v1.3.2"
+          AGE_SHA256="cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10"
+          curl -sSL "https://github.com/FiloSottile/age/releases/download/${AGE_VERSION}/age-${AGE_VERSION}-linux-amd64.tar.gz" -o "$RUNNER_TEMP/age.tar.gz"
+          echo "${AGE_SHA256}  $RUNNER_TEMP/age.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/age-bin"
+          tar -xzf "$RUNNER_TEMP/age.tar.gz" -C "$RUNNER_TEMP/age-bin" --strip-components=1
+          echo "$RUNNER_TEMP/age-bin" >> "$GITHUB_PATH"
+          rm -f "$RUNNER_TEMP/age.tar.gz"
+
+      - name: Pre-deploy backup
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN_PROD }}
+          PROD_PROJECT_REF: ${{ secrets.PROD_PROJECT_REF }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
+        run: |
+          DUMP_DIR="$RUNNER_TEMP/predeploy-dump"
+          rm -rf "$DUMP_DIR"
+          mkdir -p "$DUMP_DIR"
+          trap 'rm -rf "$DUMP_DIR"' EXIT
+
+          # GitHub-hosted runners have no IPv6. `supabase link` uses the IPv4
+          # connection pooler by default (`--skip-pooler` would opt out).
+          supabase link --project-ref "$PROD_PROJECT_REF" --password "$PROD_DB_PASSWORD"
+
+          supabase db dump --linked --role-only -f "$DUMP_DIR/roles.sql" --password "$PROD_DB_PASSWORD"
+          supabase db dump --linked -f "$DUMP_DIR/schema.sql" --password "$PROD_DB_PASSWORD"
+          supabase db dump --linked --data-only --use-copy -f "$DUMP_DIR/data.sql" --password "$PROD_DB_PASSWORD"
+
+          tar -cf "$RUNNER_TEMP/predeploy-dump.tar" -C "$DUMP_DIR" roles.sql schema.sql data.sql
+          age -r "$AGE_RECIPIENT" -o "$RUNNER_TEMP/predeploy-dump.tar.age" "$RUNNER_TEMP/predeploy-dump.tar"
+          rm -f "$RUNNER_TEMP/predeploy-dump.tar"
+
+      - name: Store encrypted backup in operations repository
+        env:
+          OPS_REPO_TOKEN: ${{ secrets.OPS_REPO_TOKEN }}
+        run: |
+          AUTH_HEADER="Authorization: basic $(printf "x-access-token:%s" "$OPS_REPO_TOKEN" | base64 -w0)"
+          git -c "http.extraheader=$AUTH_HEADER" clone --depth=1 https://github.com/lilo123/yourbody-ops.git "$RUNNER_TEMP/ops-repo"
+          mkdir -p "$RUNNER_TEMP/ops-repo/predeploy"
+          TIMESTAMP=$(date -u +'%Y%m%d%H%M%S')
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          DEST_FILE="predeploy/${TIMESTAMP}-${SHORT_SHA}.tar.age"
+          mv "$RUNNER_TEMP/predeploy-dump.tar.age" "$RUNNER_TEMP/ops-repo/$DEST_FILE"
+          cd "$RUNNER_TEMP/ops-repo"
+          git add "$DEST_FILE"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Predeploy backup: ${SHORT_SHA} (${TIMESTAMP})"
+          git -c "http.extraheader=$AUTH_HEADER" push origin main
+          cd -
+          rm -rf "$RUNNER_TEMP/ops-repo"
+
+      - name: Push database migrations to production
+        if: inputs.skip_db_push != true
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN_PROD }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+        run: |
+          supabase db push --password "$PROD_DB_PASSWORD"
+
+      - name: Deploy edge functions to production
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN_PROD }}
+        run: |
+          supabase functions deploy --use-api
+
+      - name: Trigger frontend deployment and await rollout
+        # A manual redeploy of an older ref leaves the frontend on main.
+        if: github.ref == 'refs/heads/main'
+        env:
+          VERCEL_DEPLOY_HOOK_PROD: ${{ secrets.VERCEL_DEPLOY_HOOK_PROD }}
+        run: |
+          if [ -n "$VERCEL_DEPLOY_HOOK_PROD" ]; then
+            echo "Triggering Vercel deployment hook..."
+            curl -sS -X POST "$VERCEL_DEPLOY_HOOK_PROD"
+          fi
+
+          START_TIME=$(date +%s)
+          TIMEOUT_SECONDS=900
+          echo "Polling https://www.yourbody.fyi/version.json for commit $GITHUB_SHA..."
+          while true; do
+            CURRENT_SHA=$(curl -sS -H "Cache-Control: no-cache" https://www.yourbody.fyi/version.json | jq -r .sha 2>/dev/null || echo "")
+            if [ "$CURRENT_SHA" = "$GITHUB_SHA" ]; then
+              echo "Frontend live with target SHA: $GITHUB_SHA"
+              break
+            fi
+            ELAPSED=$(( $(date +%s) - START_TIME ))
+            if [ $ELAPSED -ge $TIMEOUT_SECONDS ]; then
+              echo "::error::Timed out after 15m waiting for frontend deployment to reach $GITHUB_SHA (observed: $CURRENT_SHA)"
+              exit 1
+            fi
+            echo "Current observed sha: '$CURRENT_SHA', waiting 15s (elapsed: ${ELAPSED}s)..."
+            sleep 15
+          done
+
+      - name: Install Playwright Chromium browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Execute production smoke test suite
+        env:
+          SMOKE_BASE_URL: https://www.yourbody.fyi
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: npx playwright test -c playwright.smoke.config.ts
+
+  tag:
+    name: Create Release Tag
+    needs: deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    # Release tags mark main deploys only, not manual redeploys of older refs.
+    # No environment here: this job needs only the repository token.
+    if: vars.PROD_DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Create and push release tag
+        run: |
+          TODAY=$(date -u +'%Y.%m.%d')
+          PREFIX="v${TODAY}-"
+          git fetch --tags origin
+          EXISTING_TAGS=$(git tag -l "${PREFIX}*")
+          MAX_N=0
+          if [ -n "$EXISTING_TAGS" ]; then
+            for tag in $EXISTING_TAGS; do
+              N="${tag#"$PREFIX"}"
+              if [[ "$N" =~ ^[0-9]+$ ]] && [ "$N" -gt "$MAX_N" ]; then
+                MAX_N="$N"
+              fi
+            done
+          fi
+          NEXT_N=$((MAX_N + 1))
+          TAG_NAME="${PREFIX}${NEXT_N}"
+          echo "Creating annotated tag: $TAG_NAME on commit $GITHUB_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG_NAME" "$GITHUB_SHA" -m "Production release $TAG_NAME"
+          git push origin "$TAG_NAME"

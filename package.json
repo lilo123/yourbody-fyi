@@ -32,7 +32,8 @@
     "test:tz:tokyo": "TZ=Asia/Tokyo vitest run",
     "test:tz": "npm run test:tz:la && npm run test:tz:tokyo",
     "test:density": "playwright test -c playwright.density.config.ts",
-    "test:pwa": "playwright test -c playwright.pwa.config.ts"
+    "test:pwa": "playwright test -c playwright.pwa.config.ts",
+    "test:smoke": "playwright test -c playwright.smoke.config.ts"
   },
   "dependencies": {
     "@capacitor/camera": "^7.0.5",
