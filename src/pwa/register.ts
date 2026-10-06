@@ -24,6 +24,10 @@ let visibilityListener: (() => void) | null = null;
  * - Service workers supported by browser ('serviceWorker' in navigator)
  */
 export function isSWRegistrationEligible(): boolean {
+  // Build-time opt-out used only by the main E2E suite's preview server.
+  if (import.meta.env.VITE_DISABLE_SW === 'true') {
+    return false;
+  }
   if (!import.meta.env.PROD) {
     return false;
   }

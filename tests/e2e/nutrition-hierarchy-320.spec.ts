@@ -25,16 +25,8 @@ const NARROW = 320;
 /** A deliberately long, non-ASCII name: the real data that breaks these rows. */
 const UNICODE_MEAL = 'Açaí Bowl with Crème Brûlée & Jalapeño Poppers';
 
-async function safeGoto(page: Page, url: string) {
-  try {
-    await page.goto(url);
-  } catch {
-    await page.goto(url);
-  }
-}
-
 async function login(page: Page) {
-  await safeGoto(page, '/login');
+  await page.goto('/login');
   await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
   await page.fill('input[type="password"]', 'password123');
   await page.click('button[type="submit"]');
@@ -150,7 +142,7 @@ test.describe('Nutrition hierarchy at 320px', () => {
     });
     await stubAnalysis(page);
     await login(page);
-    await safeGoto(page, '/nutrition');
+    await page.goto('/nutrition');
     await page.waitForSelector("text=Today's Nutrition");
   });
 

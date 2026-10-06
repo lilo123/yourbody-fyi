@@ -1,5 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const port = process.env.E2E_PORT || '5173';
+const baseURL = `http://localhost:${port}`;
+// Serve a production bundle by default. The unbundled dev server streams hundreds of
+// module requests per navigation, and WebKit intermittently fails those loads
+// ("Importing a module script failed") or the navigation itself. VITE_DISABLE_SW keeps
+// the service worker out of this suite (the PWA suite covers it separately).
+// Set E2E_SERVER_DEV=1 to run against the dev server instead.
+const serverCommand = process.env.E2E_SERVER_DEV
+  ? `npm run dev -- --port ${port} --strictPort`
+  : `VITE_DISABLE_SW=true npx vite build && npx vite preview --port ${port} --strictPort`;
+
 export default defineConfig({
   testDir: './tests/e2e',
   globalTeardown: './tests/e2e/global-teardown.ts',
@@ -9,7 +20,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL,
     trace: 'on-first-retry',
   },
   projects: [
@@ -55,8 +66,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
+    command: serverCommand,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },

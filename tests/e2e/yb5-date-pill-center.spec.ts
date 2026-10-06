@@ -18,16 +18,8 @@ interface GeometryMeasurement {
   gapDiffPx: number;
 }
 
-async function safeGoto(page: Page, url: string): Promise<void> {
-  try {
-    await page.goto(url);
-  } catch {
-    await page.goto(url);
-  }
-}
-
 async function loginAsAthlete(page: Page): Promise<void> {
-  await safeGoto(page, '/login');
+  await page.goto('/login');
   await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
   await page.fill('input[type="password"]', 'password123');
   await page.click('button[type="submit"]');
@@ -123,7 +115,7 @@ test.describe('YB5: Nutrition date-pill centring geometry', () => {
       page,
     }, testInfo) => {
       await loginAsAthlete(page);
-      await safeGoto(page, '/nutrition');
+      await page.goto('/nutrition');
       await expect(page.locator("text=Today's Nutrition")).toBeVisible();
 
       await page.setViewportSize({ width: viewportWidth, height: 800 });
