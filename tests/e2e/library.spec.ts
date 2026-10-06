@@ -116,12 +116,22 @@ async function loginAsCoach(page: Page) {
   await page.click('button[type="submit"]');
   await page.waitForURL('**/coach');
   await expect(page.locator('text=Coach Dashboard')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('[data-testid="coach-athlete-select"]')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('[data-testid="coach-athlete-select"]')).not.toHaveValue('', { timeout: 15000 });
 }
 
 async function goToLibrary(page: Page) {
-  await page.goto('/exercises');
+  if (!page.url().includes('/exercises')) {
+    const navExercises = page.locator('[data-testid="nav-exercises"]');
+    if (await navExercises.isVisible()) {
+      await navExercises.click();
+    } else {
+      await page.goto('/exercises');
+    }
+  }
   await page.waitForURL('**/exercises');
   await expect(page.getByRole('tab', { name: 'Exercises' })).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('[data-testid="exercise-search-input"]')).toBeVisible({ timeout: 10000 });
 }
 
 test.describe('P7a Library Acceptance Proofs', () => {

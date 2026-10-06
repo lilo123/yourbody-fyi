@@ -10,6 +10,32 @@ export const BROADCAST_CHANNEL_NAME = 'yourbody_outbox_channel';
 let outboxBroadcastChannel: BroadcastChannel | null = null;
 let storageEventListener: ((event: StorageEvent) => void) | null = null;
 
+type RemoteSyncedHandler = (userId: string, count: number) => void;
+let remoteSyncedHandler: RemoteSyncedHandler | null = null;
+
+export function registerRemoteSyncedHandler(handler: RemoteSyncedHandler): void {
+  ensureListeners();
+  remoteSyncedHandler = handler;
+}
+
+export function broadcastSynced(userId: string, count: number): void {
+  if (!userId || typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
+    return;
+  }
+  ensureListeners();
+  if (outboxBroadcastChannel) {
+    try {
+      outboxBroadcastChannel.postMessage({
+        type: 'synced',
+        userId,
+        count,
+      });
+    } catch (e) {
+      console.warn('[outbox] Failed to broadcast synced event', e);
+    }
+  }
+}
+
 interface InFlightRead {
   promise: Promise<OutboxOp[]>;
   gen: number;
@@ -47,6 +73,19 @@ function ensureListeners(): void {
       outboxBroadcastChannel.onmessage = (event) => {
         if (event.data?.type === 'outbox_changed' && event.data.userId) {
           scheduleOutboxRefresh(event.data.userId);
+        } else if (
+          event.data?.type === 'synced' &&
+          typeof event.data.userId === 'string' &&
+          typeof event.data.count === 'number' &&
+          event.data.count > 0
+        ) {
+          if (remoteSyncedHandler) {
+            try {
+              remoteSyncedHandler(event.data.userId, event.data.count);
+            } catch (err) {
+              console.error('[outbox] remoteSyncedHandler error:', err);
+            }
+          }
         }
       };
     } catch (e) {
