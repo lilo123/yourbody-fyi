@@ -11,6 +11,8 @@ export interface RegisterPWAOptions {
 }
 
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+// Upper bound between the user confirming an update reload and the reload happening.
+export const UPDATE_RELOAD_FALLBACK_MS = 5000;
 
 let periodicIntervalId: ReturnType<typeof setInterval> | null = null;
 let visibilityListener: (() => void) | null = null;
@@ -142,6 +144,15 @@ export function registerSW(
     }
 
     wb?.messageSkipWaiting();
+
+    if (reloadPage) {
+      // The browser can defer activating the waiting worker after SKIP_WAITING (it was
+      // observed to hold it in 'installed' indefinitely while offline). The user asked to
+      // reload, so do not leave the click without effect: reload after a bounded wait. The
+      // page then loads through the current worker, the update prompt reappears, and the
+      // new worker activates on a later reload. doReload() runs at most once.
+      setTimeout(doReload, UPDATE_RELOAD_FALLBACK_MS);
+    }
   };
 
   if (!isSWRegistrationEligible()) {

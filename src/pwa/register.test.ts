@@ -6,6 +6,7 @@ import {
   registerSW,
   setupPeriodicUpdates,
   teardownPeriodicUpdates,
+  UPDATE_RELOAD_FALLBACK_MS,
 } from './register';
 
 vi.mock('@capacitor/core', () => ({
@@ -113,6 +114,7 @@ describe('PWA Service Worker Registration Gating', () => {
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
 
     const originalProd = import.meta.env.PROD;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       (import.meta.env as any).PROD = true;
       expect(isSWRegistrationEligible()).toBe(true);
@@ -127,6 +129,8 @@ describe('PWA Service Worker Registration Gating', () => {
       await updateFn(true);
       expect(mockMessageSkipWaiting).toHaveBeenCalled();
     } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
       (import.meta.env as any).PROD = originalProd;
     }
   });
@@ -191,9 +195,12 @@ describe('PWA Service Worker Registration Gating', () => {
       });
       vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
       (import.meta.env as any).PROD = true;
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     });
 
     afterEach(() => {
+      vi.clearAllTimers();
+      vi.useRealTimers();
       Object.defineProperty(window, 'location', {
         value: originalLocation,
         configurable: true,
@@ -285,6 +292,38 @@ describe('PWA Service Worker Registration Gating', () => {
       triggerWorkboxEvent('controlling');
       triggerWorkboxEvent('controlling');
       expect(reloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('confirmed reload still happens after the fallback delay when activation is deferred', async () => {
+      const updateFn = registerSW();
+      await updateFn(true);
+
+      // No 'controlling' event: the waiting worker never activates.
+      vi.advanceTimersByTime(UPDATE_RELOAD_FALLBACK_MS - 1);
+      expect(reloadSpy).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('fallback does not add a second reload after controlling already reloaded', async () => {
+      const updateFn = registerSW();
+      await updateFn(true);
+
+      triggerWorkboxEvent('controlling');
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(UPDATE_RELOAD_FALLBACK_MS);
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('updateServiceWorker(false) schedules no reload', async () => {
+      const updateFn = registerSW();
+      await updateFn(false);
+
+      vi.advanceTimersByTime(UPDATE_RELOAD_FALLBACK_MS * 2);
+      triggerWorkboxEvent('controlling');
+      expect(reloadSpy).not.toHaveBeenCalled();
     });
   });
 });
