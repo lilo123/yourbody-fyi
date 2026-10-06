@@ -23,6 +23,14 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
     }
   });
 
+  function getTodayCivilDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   test.beforeEach(async () => {
     user = await createPwaTestUser('pwa-yb2-upd');
   });
@@ -76,9 +84,8 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
 
-    await page.evaluate(() => {
+    await page.evaluate((today) => {
       const staleUid = 'stale-user-999';
-      const today = '2026-10-02';
       localStorage.setItem(`yourbody_current_session_pointer_${staleUid}`, today);
       localStorage.setItem(
         `yourbody_active_session_${staleUid}_${today}`,
@@ -98,7 +105,7 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
           completedAt: null,
         })
       );
-    });
+    }, getTodayCivilDate());
 
     await triggerSwUpdate(page);
 
@@ -122,9 +129,8 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
     await waitForSwControl(page);
 
     // Initialize ghost-only session (no drafts, completedAt null)
-    await page.evaluate((uid) => {
+    await page.evaluate(({ uid, today }) => {
       const now = new Date();
-      const today = '2026-10-02';
       localStorage.setItem(`yourbody_current_session_pointer_${uid}`, today);
       localStorage.setItem(
         `yourbody_active_session_${uid}_${today}`,
@@ -144,7 +150,7 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
           completedAt: null,
         })
       );
-    }, user.id);
+    }, { uid: user.id, today: getTodayCivilDate() });
 
     await triggerSwUpdate(page);
 
@@ -167,9 +173,9 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
     await signInUser(page, user);
     await waitForSwControl(page);
 
-    await page.evaluate((uid) => {
+    const today = getTodayCivilDate();
+    await page.evaluate(({ uid, today }) => {
       const now = new Date();
-      const today = '2026-10-02';
       localStorage.setItem(`yourbody_current_session_pointer_${uid}`, today);
       localStorage.setItem(
         `yourbody_active_session_${uid}_${today}`,
@@ -189,7 +195,7 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
           completedAt: null,
         })
       );
-    }, user.id);
+    }, { uid: user.id, today });
 
     let navigations = 0;
     page.on('load', () => {
@@ -218,12 +224,11 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
     expect(navigations).toBe(0);
 
     // Draft is preserved
-    const draftValue = await page.evaluate((uid) => {
-      const today = '2026-10-02';
+    const draftValue = await page.evaluate(({ uid, today }) => {
       const raw = localStorage.getItem(`yourbody_active_session_${uid}_${today}`);
       if (!raw) return null;
       return JSON.parse(raw)?.inputDrafts?.['Bench Press_0'];
-    }, user.id);
+    }, { uid: user.id, today });
     expect(draftValue).toEqual({ weight: '155', reps: '8' });
   });
 
@@ -233,9 +238,9 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
     await signInUser(page, user);
     await waitForSwControl(page);
 
-    await page.evaluate((uid) => {
+    const today = getTodayCivilDate();
+    await page.evaluate(({ uid, today }) => {
       const now = new Date();
-      const today = '2026-10-02';
       localStorage.setItem(`yourbody_current_session_pointer_${uid}`, today);
       localStorage.setItem(
         `yourbody_active_session_${uid}_${today}`,
@@ -255,7 +260,7 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
           completedAt: null,
         })
       );
-    }, user.id);
+    }, { uid: user.id, today });
 
     await triggerSwUpdate(page);
 
@@ -275,12 +280,11 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
     expect(isControlled).toBe(true);
 
     // Typed draft survives the reload
-    const draftValue = await page.evaluate((uid) => {
-      const today = '2026-10-02';
+    const draftValue = await page.evaluate(({ uid, today }) => {
       const raw = localStorage.getItem(`yourbody_active_session_${uid}_${today}`);
       if (!raw) return null;
       return JSON.parse(raw)?.inputDrafts?.['Bench Press_0'];
-    }, user.id);
+    }, { uid: user.id, today });
     expect(draftValue).toEqual({ weight: '205', reps: '5' });
   });
 
@@ -456,9 +460,8 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
     await waitForSwControl(page);
 
     // Setup active session with drafts to trigger dialog
-    await page.evaluate((uid) => {
+    await page.evaluate(({ uid, today }) => {
       const now = new Date();
-      const today = '2026-10-02';
       localStorage.setItem(`yourbody_current_session_pointer_${uid}`, today);
       localStorage.setItem(
         `yourbody_active_session_${uid}_${today}`,
@@ -478,7 +481,7 @@ test.describe('YB2 Update Gate Confirmation Dialog Flow (D-YB2-3)', () => {
           completedAt: null,
         })
       );
-    }, user.id);
+    }, { uid: user.id, today: getTodayCivilDate() });
 
     await triggerSwUpdate(page);
 
