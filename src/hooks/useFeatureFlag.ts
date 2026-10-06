@@ -5,6 +5,9 @@ import { AuthContext } from '../context/AuthContextTypes';
 
 export const APP_CONFIG_QUERY_KEY = ['app_config'] as const;
 
+// Flags are a small, maintainer-curated set; the bound keeps the query cheap and explicit.
+const APP_CONFIG_ROW_LIMIT = 200;
+
 export interface AppConfigRow {
   key: string;
   value: unknown;
@@ -27,7 +30,8 @@ export function useFeatureFlag(key: string, defaultValue: boolean = false): bool
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('app_config')
-        .select('key,value');
+        .select('key,value')
+        .limit(APP_CONFIG_ROW_LIMIT);
 
       if (error) {
         throw error;
