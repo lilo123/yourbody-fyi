@@ -261,6 +261,13 @@ async function setupPageAndLogin(page: Page) {
   await page.waitForSelector("text=Today's Nutrition");
 }
 
+// The Quick Log section renders its header (and an empty state) before the
+// custom dishes request resolves; rows appear only once that data arrives.
+// Measure only after the first row is attached and visible.
+async function waitForFavoriteRows(section: Locator) {
+  await expect(section.locator('[data-testid^="favorite-row-"]').first()).toBeVisible();
+}
+
 // Check helper: Staged card meal-type select chevron geometry
 async function checkSelectChevronGeometry(card: Locator) {
   return await card.evaluate((cardEl) => {
@@ -2550,6 +2557,7 @@ test.describe('Surface G: Quick Log surface at 390×844', () => {
     await setupPageAndLogin(page);
     sectionLocator = page.locator('section').filter({ hasText: 'Quick Log Favorites' });
     await expect(sectionLocator).toBeVisible();
+    await waitForFavoriteRows(sectionLocator);
     await sectionLocator.scrollIntoViewIfNeeded();
   });
 
@@ -2632,6 +2640,7 @@ test.describe('Surface G: Quick Log surface at 320×568', () => {
     await setupPageAndLogin(page);
     sectionLocator = page.locator('section').filter({ hasText: 'Quick Log Favorites' });
     await expect(sectionLocator).toBeVisible();
+    await waitForFavoriteRows(sectionLocator);
     await sectionLocator.scrollIntoViewIfNeeded();
   });
 
@@ -2717,6 +2726,7 @@ test.describe('type/input consistency', () => {
         await setupPageAndLogin(page);
         const section = page.locator('section').filter({ hasText: 'Quick Log Favorites' });
         await expect(section).toBeVisible();
+        await waitForFavoriteRows(section);
         const rowHeights = await section.evaluate((root) => {
           const rows = Array.from(root.querySelectorAll('[data-testid^="favorite-row-"]'));
           return rows.map((r) => Math.round(r.getBoundingClientRect().height * 10) / 10);
@@ -2741,6 +2751,7 @@ test.describe('type/input consistency', () => {
         await setupPageAndLogin(page);
         const section = page.locator('section').filter({ hasText: 'Quick Log Favorites' });
         await expect(section).toBeVisible();
+        await waitForFavoriteRows(section);
         const dishNames = await section.evaluate((root) => {
           const names = Array.from(root.querySelectorAll('[id^="dish-name-"]'));
           return names.map((el) => {
