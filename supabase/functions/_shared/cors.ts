@@ -8,6 +8,10 @@ const ALLOWED_STATIC_ORIGINS = new Set([
 ]);
 
 const PREVIEW_ORIGIN_REGEX = /^https:\/\/fitness-tracking-app[a-z0-9-]*\.vercel\.app$/;
+// Per-deployment and branch preview URLs carry the team scope as a suffix,
+// e.g. https://fitness-tracking-<hash>-lilo123-2112s-projects.vercel.app.
+const SCOPED_PREVIEW_ORIGIN_REGEX =
+  /^https:\/\/fitness-tracking-[a-z0-9-]+-lilo123-2112s-projects\.vercel\.app$/;
 const DEV_ORIGIN_REGEX = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/;
 
 export function isAllowedOrigin(origin: string | null | undefined): boolean {
@@ -19,7 +23,7 @@ export function isAllowedOrigin(origin: string | null | undefined): boolean {
     return true;
   }
 
-  if (PREVIEW_ORIGIN_REGEX.test(origin)) {
+  if (PREVIEW_ORIGIN_REGEX.test(origin) || SCOPED_PREVIEW_ORIGIN_REGEX.test(origin)) {
     return true;
   }
 

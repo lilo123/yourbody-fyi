@@ -9,6 +9,8 @@ Deno.test("cors: allowed origins matrix", () => {
     "https://fitness-tracking-app-silk.vercel.app",
     "https://fitness-tracking-app-git-v2-rewrite-preview.vercel.app",
     "https://fitness-tracking-app-feat-123.vercel.app",
+    "https://fitness-tracking-j5kms8fj7-lilo123-2112s-projects.vercel.app",
+    "https://fitness-tracking-app-git-main-lilo123-2112s-projects.vercel.app",
   ];
 
   for (const origin of allowed) {
@@ -34,6 +36,11 @@ Deno.test("cors: rejected origins matrix", () => {
     "https://fitness-tracking-app_preview.vercel.app",
     "https://fitness-tracking-app-silk.vercel.app.attacker.com",
     "https://fitness-tracking-app.vercel.app.evil.com",
+    "https://fitness-tracking-abc123-other-team-projects.vercel.app",
+    "https://evil-fitness-tracking-abc123-lilo123-2112s-projects.vercel.app",
+    "https://fitness-tracking-abc123-lilo123-2112s-projects.vercel.app.attacker.com",
+    "http://fitness-tracking-abc123-lilo123-2112s-projects.vercel.app",
+    "https://fitness-tracking--lilo123-2112s-projects.vercel.app.evil.com",
   ];
 
   for (const origin of rejected) {
