@@ -25,6 +25,8 @@ export function getCorsHeaders(origin: string | null | undefined): Record<string
   return getBaseCorsHeaders(origin, {
     'Access-Control-Expose-Headers': 'Retry-After',
     'Access-Control-Max-Age': '86400',
+    // Marker used to verify that a function deploy reaches production.
+    'X-Release-Check': '1',
   });
 }
 
