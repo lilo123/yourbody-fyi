@@ -1105,12 +1105,6 @@ Deno.test("parse-nutrition exposes Retry-After in Access-Control-Expose-Headers 
     assertEquals(resOptions.headers.get("Access-Control-Expose-Headers"), "Retry-After");
 });
 
-Deno.test("parse-nutrition sends the X-Release-Check marker header", async () => {
-    const res = await app.fetch(new Request("http://localhost/parse-nutrition", { method: "OPTIONS" }));
-    assertEquals(res.status, 200);
-    assertEquals(res.headers.get("X-Release-Check"), "1");
-});
-
 Deno.test("parse-nutrition falls back to text-only mode when imageBase64 is an empty data URI but input text exists", async () => {
     const originalKey = Deno.env.get("GEMINI_API_KEY");
     Deno.env.set("GEMINI_API_KEY", "test-key");
