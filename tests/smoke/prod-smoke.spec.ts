@@ -66,6 +66,40 @@ test.describe('Production Smoke Suite', () => {
     const uniqueMarkerWeight = '239';
     const markerReps = '11';
 
+    const markerRows = card
+      .locator('[data-testid^="logged-set-row-0-"]')
+      .filter({ hasText: uniqueMarkerWeight });
+
+    // Deletes are deferred behind the undo toast and then sent through the
+    // offline outbox. Wait for the server to confirm the DELETE so the next
+    // reload, or the next smoke run, starts from the real server state rather
+    // than a pending local change.
+    const deleteMarkerRow = async () => {
+      const serverDelete = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'DELETE' &&
+          res.url().includes('/rest/v1/sets') &&
+          res.ok(),
+        { timeout: 30000 }
+      );
+      await markerRows.first().click();
+      const editSheet = page.locator('[data-testid="edit-set-sheet"]');
+      await expect(editSheet).toBeVisible({ timeout: 5000 });
+      await editSheet.locator('[data-testid="delete-set-btn"]').click();
+      await expect(editSheet).not.toBeVisible();
+
+      const undoToast = page.locator('[data-testid="quick-log-toast"]');
+      await expect(undoToast).toBeVisible({ timeout: 5000 });
+      await expect(undoToast).toContainText('Set deleted');
+      await serverDelete;
+    };
+
+    // Remove marker sets left behind by an earlier run that stopped before its
+    // delete reached the server, so this run does not depend on prior state.
+    while ((await markerRows.count()) > 0) {
+      await deleteMarkerRow();
+    }
+
     const ghostWeight = card.locator('[data-testid^="ghost-weight-0-"]').first();
     const ghostReps = card.locator('[data-testid^="ghost-reps-0-"]').first();
     const commitBtn = card.locator('[data-testid^="commit-set-btn-0-"]').first();
@@ -76,36 +110,18 @@ test.describe('Production Smoke Suite', () => {
     await commitBtn.click();
 
     // Verify the logged set appears
-    const loggedRow = card
-      .locator('[data-testid^="logged-set-row-0-"]')
-      .filter({ hasText: uniqueMarkerWeight })
-      .first();
-    await expect(loggedRow).toBeVisible({ timeout: 10000 });
+    await expect(markerRows.first()).toBeVisible({ timeout: 10000 });
 
-    // Delete the logged set through the UI
-    await loggedRow.click();
-    const editSheet = page.locator('[data-testid="edit-set-sheet"]');
-    await expect(editSheet).toBeVisible({ timeout: 5000 });
-
-    const deleteBtn = editSheet.locator('[data-testid="delete-set-btn"]');
-    await deleteBtn.click();
-    await expect(editSheet).not.toBeVisible();
-
-    // Confirm UndoToast indicates deletion
-    const undoToast = page.locator('[data-testid="quick-log-toast"]');
-    await expect(undoToast).toBeVisible({ timeout: 5000 });
-    await expect(undoToast).toContainText('Set deleted');
+    // Delete the logged set through the UI and wait for the server to confirm
+    await deleteMarkerRow();
 
     // Verify the logged set row is gone
-    await expect(loggedRow).toHaveCount(0, { timeout: 15000 });
-
-    // Wait for the undo toast countdown/expiry to dispatch the background DELETE
-    await expect(undoToast).not.toBeVisible({ timeout: 10000 });
+    await expect(markerRows).toHaveCount(0, { timeout: 15000 });
 
     // Reload and confirm the set stays gone, i.e. the delete persisted.
     await page.reload();
     await expect(card).toBeVisible({ timeout: 15000 });
-    await expect(loggedRow).toHaveCount(0, { timeout: 15000 });
+    await expect(markerRows).toHaveCount(0, { timeout: 15000 });
 
     // -------------------------------------------------------------------------
     // Step 4: One AI nutrition parse through the UI, assert parsed result, WITHOUT saving
