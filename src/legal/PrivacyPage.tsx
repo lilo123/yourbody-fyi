@@ -18,7 +18,12 @@ export const PrivacyPage: React.FC = () => {
         </p>
         <p>
           If you have any questions about this Privacy Policy, our data practices, or exercising your privacy rights, please contact our privacy officer at{' '}
-          <strong>[PRIVACY EMAIL]</strong>
+          <a
+            href="mailto:support@yourbody.fyi"
+            className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 font-semibold"
+          >
+            support@yourbody.fyi
+          </a>
           .
         </p>
       </section>
@@ -78,13 +83,45 @@ export const PrivacyPage: React.FC = () => {
           <li>Handling billing and subscription management via Stripe.</li>
           <li>Detecting and mitigating security threats and system errors.</li>
         </ul>
-        <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 mt-3 space-y-2">
-          <p className="font-semibold text-zinc-200">
-            European Economic Area (EEA) and UK Legal Bases:
-          </p>
-          <p>
-            For users located in the EEA, UK, or Switzerland, we process personal data under the following legal bases: [LEGAL BASES].
-          </p>
+        <div className="space-y-3 mt-3">
+          <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 space-y-2">
+            <p className="font-semibold text-zinc-200">
+              European Economic Area (EEA) and UK Legal Bases:
+            </p>
+            <p className="text-zinc-300">
+              For users located in the EEA, UK, or Switzerland, we process personal data under the following legal bases:
+            </p>
+            <ul className="list-disc list-inside space-y-1 pl-1 text-zinc-300">
+              <li>
+                <strong className="text-zinc-100">Contract:</strong> Account registration, user authentication, service delivery, and subscription billing.
+              </li>
+              <li>
+                <strong className="text-zinc-100">Consent:</strong> Product analytics and optional feature engagement.
+              </li>
+              <li>
+                <strong className="text-zinc-100">Legitimate Interest:</strong> Maintaining system security, preventing fraud and abuse, and ensuring platform reliability.
+              </li>
+            </ul>
+          </div>
+
+          <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 space-y-2">
+            <p className="font-semibold text-zinc-200">
+              Canadian Privacy Rights (PIPEDA):
+            </p>
+            <p className="text-zinc-300">
+              For users located in Canada, the Personal Information Protection and Electronic Documents Act (PIPEDA) governs our collection, use, and disclosure of personal information. Canadian users have the right to request access to and correction of their personal information, as well as the right to withdraw consent for processing where applicable.
+            </p>
+            <p className="text-zinc-300">
+              To exercise these rights, please email{' '}
+              <a
+                href="mailto:support@yourbody.fyi"
+                className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 font-semibold"
+              >
+                support@yourbody.fyi
+              </a>
+              . You also have the right to submit a complaint to the Office of the Privacy Commissioner of Canada.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -206,7 +243,12 @@ export const PrivacyPage: React.FC = () => {
         </h2>
         <p>
           If you have any questions, concerns, or requests regarding this Privacy Policy or your personal information, please email our privacy team at{' '}
-          <strong>[PRIVACY EMAIL]</strong>
+          <a
+            href="mailto:support@yourbody.fyi"
+            className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 font-semibold"
+          >
+            support@yourbody.fyi
+          </a>
           .
         </p>
       </section>

@@ -31,7 +31,7 @@ describe('Legal Pages', () => {
   });
 
   describe('Terms of Service (/terms)', () => {
-    it('renders signed-out with main heading, health disclaimer, attribution link, and maintainer placeholders', async () => {
+    it('renders signed-out with main heading, health disclaimer, attribution link, and operator details', async () => {
       render(
         <QueryClientProvider client={queryClient}>
           <MemoryRouter initialEntries={['/terms']}>
@@ -55,15 +55,19 @@ describe('Legal Pages', () => {
       expect(screen.getByRole('heading', { name: /AI-Generated Estimates Disclaimer/i })).toBeDefined();
       expect(screen.getByText(/Google Gemini API/i)).toBeDefined();
 
-      // Yearly Stripe billing
+      // Yearly Stripe billing and Basic / Pro plans
       expect(screen.getByText(/Paid subscriptions are billed on a yearly basis in advance via Stripe/i)).toBeDefined();
+      expect(screen.getByText(/Basic and Pro plans/i)).toBeDefined();
 
-      // Maintainer placeholders
-      expect(screen.getAllByText(/\[OPERATOR NAME\]/i).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText(/\[JURISDICTION\]/i)).toBeDefined();
+      // Operator name and jurisdiction
+      expect(screen.getAllByText(/Yourbody/i).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText(/laws of the Province of Ontario/i)).toBeDefined();
+      expect(screen.getByText(/courts of Ontario/i)).toBeDefined();
 
-      // Contact address
-      expect(screen.getByText('[SUPPORT EMAIL]')).toBeDefined();
+      // Contact address link
+      const supportLink = screen.getByRole('link', { name: 'support@yourbody.fyi' });
+      expect(supportLink).toBeDefined();
+      expect(supportLink.getAttribute('href')).toBe('mailto:support@yourbody.fyi');
 
       // Last updated
       expect(screen.getByText('Last updated: 2026-10-10')).toBeDefined();
@@ -112,8 +116,15 @@ describe('Legal Pages', () => {
       expect(screen.getByText(/Device-Local Offline Storage:/i)).toBeDefined();
       expect(screen.getByText(/Error Reports with No User Identifiers:/i)).toBeDefined();
 
-      // Legal bases placeholder
-      expect(screen.getByText(/\[LEGAL BASES\]/i)).toBeDefined();
+      // Legal bases
+      expect(screen.getByText(/Contract:/i)).toBeDefined();
+      expect(screen.getByText(/Consent:/i)).toBeDefined();
+      expect(screen.getByText(/Legitimate Interest:/i)).toBeDefined();
+
+      // PIPEDA Canadian privacy rights
+      expect(screen.getByText(/Canadian Privacy Rights \(PIPEDA\)/i)).toBeDefined();
+      expect(screen.getByText(/Personal Information Protection and Electronic Documents Act/i)).toBeDefined();
+      expect(screen.getByText(/Office of the Privacy Commissioner of Canada/i)).toBeDefined();
 
       // Subprocessors table
       expect(screen.getByRole('heading', { name: /Subprocessors and Third-Party Services/i })).toBeDefined();
@@ -129,8 +140,10 @@ describe('Legal Pages', () => {
       expect(screen.getByText(/No advertising or tracking cookies/i)).toBeDefined();
       expect(screen.getByRole('heading', { name: /Children’s Privacy|Children's Privacy/i })).toBeDefined();
 
-      // Contact
-      expect(screen.getAllByText('[PRIVACY EMAIL]').length).toBeGreaterThanOrEqual(1);
+      // Contact and PIPEDA links
+      const privacyLinks = screen.getAllByRole('link', { name: 'support@yourbody.fyi' });
+      expect(privacyLinks.length).toBeGreaterThanOrEqual(2);
+      expect(privacyLinks[0].getAttribute('href')).toBe('mailto:support@yourbody.fyi');
 
       // Attribution
       const ccLink = screen.getByRole('link', { name: 'CC BY 4.0' });
@@ -166,13 +179,16 @@ describe('Legal Pages', () => {
       // Annual subscriptions and 30-day window
       expect(screen.getByRole('heading', { name: /Annual Subscriptions & Refund Window/i })).toBeDefined();
       expect(screen.getByText(/within 30 days/i)).toBeDefined();
+      expect(screen.getByText(/Basic and Pro plans/i)).toBeDefined();
 
       // EU/UK notice
       expect(screen.getByRole('heading', { name: /European Union & UK Availability/i })).toBeDefined();
       expect(screen.getByText(/European Union \(EU\) or United Kingdom \(UK\) may currently be unavailable/i)).toBeDefined();
 
-      // Contact
-      expect(screen.getAllByText('[SUPPORT EMAIL]').length).toBeGreaterThanOrEqual(1);
+      // Contact links
+      const refundSupportLinks = screen.getAllByRole('link', { name: 'support@yourbody.fyi' });
+      expect(refundSupportLinks.length).toBeGreaterThanOrEqual(2);
+      expect(refundSupportLinks[0].getAttribute('href')).toBe('mailto:support@yourbody.fyi');
 
       // Attribution
       const ccLink = screen.getByRole('link', { name: 'CC BY 4.0' });

@@ -42,7 +42,7 @@ export const TermsPage: React.FC = () => {
           1. Agreement and Operator
         </h2>
         <p>
-          These Terms of Service (&ldquo;Terms&rdquo;) represent a binding legal agreement between you and [OPERATOR NAME] (&ldquo;Operator&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;), governing your access to and use of Yourbody (located at https://www.yourbody.fyi) and any related applications, web interfaces, and tools (collectively, the &ldquo;Service&rdquo;).
+          These Terms of Service (&ldquo;Terms&rdquo;) represent a binding legal agreement between you and Yourbody (&ldquo;Operator&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;), governing your access to and use of Yourbody (located at https://www.yourbody.fyi) and any related applications, web interfaces, and tools (collectively, the &ldquo;Service&rdquo;).
         </p>
         <p>
           When we say &ldquo;You&rdquo; or &ldquo;your&rdquo;, we refer to individuals who create an account or otherwise use the Service. By accessing or using Yourbody, you agree to be bound by these Terms and our related policies. If you do not agree to these Terms, you may not use the Service.
@@ -109,7 +109,7 @@ export const TermsPage: React.FC = () => {
           5. Subscriptions, Billing, and Cancellation
         </h2>
         <p>
-          Certain features and tiers of the Service (such as coach tier capabilities) require a paid subscription.
+          Certain features and tiers of the Service (such as Basic and Pro plans) require a paid subscription.
         </p>
         <ul className="list-disc list-inside space-y-2 pl-1">
           <li>
@@ -152,7 +152,7 @@ export const TermsPage: React.FC = () => {
           You retain all ownership rights to the workout logs, nutrition records, custom exercises, routines, and content you submit to the Service. By submitting content, you grant us a worldwide, non-exclusive, royalty-free license to host, store, and process that content solely as necessary to operate and deliver the Service to you.
         </p>
         <p>
-          The Yourbody application, including visual interfaces, software, branding, and graphics, is the property of [OPERATOR NAME] or its licensors and is protected by applicable copyright, trademark, and intellectual property laws.
+          The Yourbody application, including visual interfaces, software, branding, and graphics, is the property of Yourbody or its licensors and is protected by applicable copyright, trademark, and intellectual property laws.
         </p>
       </section>
 
@@ -171,7 +171,7 @@ export const TermsPage: React.FC = () => {
           The Service is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis without warranties of any kind, whether express, implied, or statutory, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement.
         </p>
         <p>
-          To the maximum extent permitted by applicable law, in no event shall [OPERATOR NAME], its contributors, service providers, or affiliates be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits, data, use, or goodwill, arising out of or related to your use of or inability to use the Service, whether based on contract, tort (including negligence), or any other legal theory.
+          To the maximum extent permitted by applicable law, in no event shall Yourbody, its contributors, service providers, or affiliates be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits, data, use, or goodwill, arising out of or related to your use of or inability to use the Service, whether based on contract, tort (including negligence), or any other legal theory.
         </p>
       </section>
 
@@ -181,7 +181,7 @@ export const TermsPage: React.FC = () => {
           9. Governing Law
         </h2>
         <p>
-          These Terms and any dispute or claim arising out of or relating to them or the Service shall be governed by and construed in accordance with the laws of [JURISDICTION], without giving effect to any choice or conflict of law provision or rule.
+          These Terms and any dispute or claim arising out of or relating to them or the Service shall be governed by and construed in accordance with the laws of the Province of Ontario and the federal laws of Canada applicable therein, without giving effect to any choice or conflict of law provision or rule. Any legal suit, action, or proceeding arising out of or related to these Terms or the Service shall be instituted exclusively in the courts of Ontario, Canada.
         </p>
       </section>
 
@@ -192,7 +192,12 @@ export const TermsPage: React.FC = () => {
         </h2>
         <p>
           If you have questions, feedback, or concerns regarding these Terms of Service, please reach out to our team at{' '}
-          <strong>[SUPPORT EMAIL]</strong>
+          <a
+            href="mailto:support@yourbody.fyi"
+            className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 font-semibold"
+          >
+            support@yourbody.fyi
+          </a>
           .
         </p>
       </section>

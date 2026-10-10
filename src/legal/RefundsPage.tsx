@@ -15,7 +15,12 @@ export const RefundsPage: React.FC = () => {
         </h2>
         <p>
           Unreasonable refund policies are frustrating. We never want you to feel trapped by a subscription. If you are unhappy with our Service or encounter billing issues, reach out to our team at{' '}
-          <strong>[SUPPORT EMAIL]</strong>{' '}
+          <a
+            href="mailto:support@yourbody.fyi"
+            className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 font-semibold"
+          >
+            support@yourbody.fyi
+          </a>{' '}
           and we will work with you to make it right.
         </p>
       </section>
@@ -30,7 +35,7 @@ export const RefundsPage: React.FC = () => {
           </h2>
         </div>
         <p>
-          Yourbody subscriptions (such as Coach tier memberships) are billed on an annual basis in advance via Stripe.
+          Yourbody subscriptions (such as Basic and Pro plans) are billed on an annual basis in advance via Stripe.
         </p>
         <p>
           If you purchase or renew an annual subscription and decide within 30 days that the Service is not right for you, contact us within that 30-day window and we will issue a full refund for that payment.
@@ -60,7 +65,7 @@ export const RefundsPage: React.FC = () => {
             <div>
               <strong className="text-zinc-100 block mb-0.5">Not Satisfied:</strong>
               <span className="text-zinc-300">
-                If you tried the paid service and found that it did not meet your training or coaching expectations within your first 30 days, we will issue a full refund.
+                If you tried the paid service and found that it did not meet your training expectations within your first 30 days, we will issue a full refund.
               </span>
             </div>
           </div>
@@ -109,7 +114,12 @@ export const RefundsPage: React.FC = () => {
         </div>
         <p>
           To request a refund, please send an email to{' '}
-          <strong>[SUPPORT EMAIL]</strong>{' '}
+          <a
+            href="mailto:support@yourbody.fyi"
+            className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 font-semibold"
+          >
+            support@yourbody.fyi
+          </a>{' '}
           from the email address associated with your Yourbody account. Please include your account email and a brief description of the issue. Our support team reviews all requests promptly.
         </p>
       </section>
