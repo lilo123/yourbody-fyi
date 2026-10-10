@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { CreditCard, Sparkles, ExternalLink, AlertCircle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
+import { useToast } from '../../hooks/useToast';
 import { useEntitlement, getEntitlementQueryKey } from '../../hooks/useEntitlement';
 import { StatusBanner } from '../common/StatusBanner';
 import { openBillingPortal } from '../../lib/billing';
@@ -13,17 +14,18 @@ export const SubscriptionCard: React.FC = () => {
   const userId = user?.id;
   const entitlement = useEntitlement();
   const queryClient = useQueryClient();
+  const { show: showToast } = useToast();
 
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
   const [isManagingBilling, setIsManagingBilling] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
 
-  const [billingStatus] = useState<'success' | 'cancelled' | null>(() => {
+  const [billingStatus] = useState<'cancelled' | null>(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
     const param = params.get('billing');
-    if (param === 'success' || param === 'cancelled') return param;
+    if (param === 'cancelled') return param;
     return null;
   });
 
@@ -33,15 +35,21 @@ export const SubscriptionCard: React.FC = () => {
     const billingParam = params.get('billing');
     if (!billingParam) return;
 
-    if (billingParam === 'success' && userId) {
-      void queryClient.invalidateQueries({ queryKey: getEntitlementQueryKey(userId) });
+    if (billingParam === 'success') {
+      showToast({
+        message: 'Subscription updated successfully!',
+        kind: 'success',
+      });
+      if (userId) {
+        void queryClient.invalidateQueries({ queryKey: getEntitlementQueryKey(userId) });
+      }
     }
     params.delete('billing');
     const newSearch = params.toString();
     const newUrl =
       window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
     window.history.replaceState({}, '', newUrl);
-  }, [userId, queryClient]);
+  }, [userId, queryClient, showToast]);
 
   const getBadgeLabel = (): 'Pro' | 'Basic' | 'Trial' | 'Free' => {
     if (entitlement.isPro) return 'Pro';
@@ -100,14 +108,6 @@ export const SubscriptionCard: React.FC = () => {
           {badgeLabel}
         </span>
       </div>
-
-      {billingStatus === 'success' && (
-        <StatusBanner
-          message="Subscription updated successfully!"
-          tone="success"
-          testId="billing-status-banner"
-        />
-      )}
 
       {billingStatus === 'cancelled' && (
         <StatusBanner

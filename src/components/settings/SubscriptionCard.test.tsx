@@ -6,6 +6,13 @@ import * as entitlementModule from '../../hooks/useEntitlement';
 import * as authModule from '../../hooks/useAuth';
 import * as billingModule from '../../lib/billing';
 
+const mockToastShow = vi.fn();
+vi.mock('../../hooks/useToast', () => ({
+  useToast: () => ({
+    show: mockToastShow,
+  }),
+}));
+
 vi.mock('../../hooks/useEntitlement', () => ({
   useEntitlement: vi.fn(),
   getEntitlementQueryKey: (userId: string | null | undefined) => ['entitlement', userId ?? null] as const,
@@ -181,7 +188,7 @@ describe('SubscriptionCard component', () => {
   });
 
   describe('return url handling', () => {
-    it('handles billing=success, invalidates entitlement query and strips search param', async () => {
+    it('handles billing=success, emits success toast, invalidates entitlement query and strips search param', async () => {
       vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
         plan: 'pro',
         isPro: true,
@@ -204,9 +211,12 @@ describe('SubscriptionCard component', () => {
 
       renderCard();
 
-      expect(screen.getByTestId('billing-status-banner')).toHaveTextContent(
-        'Subscription updated successfully!'
-      );
+      // STD-FB-1: Success feedback is rendered via shell toast, not an ad-hoc in-page banner
+      expect(mockToastShow).toHaveBeenCalledWith({
+        message: 'Subscription updated successfully!',
+        kind: 'success',
+      });
+      expect(screen.queryByTestId('billing-status-banner')).toBeNull();
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ['entitlement', 'test-user-id'],
       });
