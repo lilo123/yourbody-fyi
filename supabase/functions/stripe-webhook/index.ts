@@ -64,11 +64,17 @@ async function revokeAccessForCustomer(
   serviceClient: any,
   customerId: string,
 ): Promise<string | null> {
-  const { data: userRow } = await serviceClient
+  const { data: userRow, error: selectError } = await serviceClient
     .from("users")
     .select("id, paid_until")
     .eq("billing_customer_id", customerId)
     .maybeSingle();
+
+  if (selectError) {
+    throw new Error(
+      `Failed to query user by billing_customer_id: ${selectError.message}`,
+    );
+  }
 
   const nowIso = new Date().toISOString();
   let targetPaidUntil = nowIso;
@@ -79,10 +85,16 @@ async function revokeAccessForCustomer(
     }
   }
 
-  await serviceClient
+  const { error: updateError } = await serviceClient
     .from("users")
     .update({ paid_until: targetPaidUntil })
     .eq("billing_customer_id", customerId);
+
+  if (updateError) {
+    throw new Error(
+      `Failed to update paid_until for customer: ${updateError.message}`,
+    );
+  }
 
   return userRow?.id || null;
 }
@@ -369,26 +381,26 @@ export async function handler(req: Request): Promise<Response> {
         const refundCustId =
           typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
 
-        // Full refund iff charge.amount_refunded === charge.amount (amount > 0)
-        const hasAmountInfo = charge.amount != null || charge.amount_refunded != null;
-        const isFullRefund = hasAmountInfo
-          ? typeof charge.amount === "number" &&
-            charge.amount > 0 &&
-            charge.amount_refunded === charge.amount
-          : true; // fallback for minimal test fixtures lacking amount fields
+        const isFullRefund =
+          typeof charge.amount === "number" &&
+          charge.amount > 0 &&
+          charge.amount_refunded === charge.amount;
 
         if (!isFullRefund) {
-          // Partial refund -> no access change (event still recorded)
+          if (charge.amount == null || charge.amount_refunded == null) {
+            console.warn(
+              "[stripe-webhook] charge.refunded event missing amount or amount_refunded",
+            );
+          }
+          // Partial refund or missing amount -> no access change (event still recorded)
           break;
         }
 
         // Check keep_access override
-        if (hasAmountInfo || charge.metadata || charge.payment_intent || charge.refunds) {
-          const keepAccess = await shouldKeepAccess(charge, config.stripe);
-          if (keepAccess) {
-            // Goodwill refund -> do not revoke access
-            break;
-          }
+        const keepAccess = await shouldKeepAccess(charge, config.stripe);
+        if (keepAccess) {
+          // Goodwill refund -> do not revoke access
+          break;
         }
 
         if (refundCustId) {

@@ -470,6 +470,11 @@ Deno.test("stripe-webhook: charge.refunded sets paid_until to now()", async () =
         object: {
           id: "ch_123",
           customer: CUSTOMER_ID,
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: {
+            data: [],
+          },
         },
       },
     });
@@ -1096,6 +1101,92 @@ Deno.test("stripe-webhook: Stripe API lookup failure returns non-2xx and event i
 
     const res = await app.fetch(req);
     assertEquals(res.status >= 500, true);
+    assertEquals(processedAtSet, false);
+    assertEquals(billingEventDeleted, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: user update database error returns 502 and event is not marked processed", async () => {
+  setupEnv();
+
+  let processedAtSet = false;
+  let billingEventDeleted = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/billing_events")) {
+      if (init?.method === "DELETE") {
+        billingEventDeleted = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (init?.method === "PATCH") {
+        processedAtSet = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([{ event_id: "evt_db_error_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        return new Response(
+          JSON.stringify({ message: "relation error", code: "PGRST500" }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_db_error_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_db_error_1",
+          customer: CUSTOMER_ID,
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: {
+            data: [],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 502);
     assertEquals(processedAtSet, false);
     assertEquals(billingEventDeleted, true);
   } finally {
