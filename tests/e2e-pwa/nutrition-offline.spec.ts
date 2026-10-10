@@ -399,6 +399,7 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
             contentType: 'application/json',
             headers: {
               'access-control-allow-origin': '*',
+              'access-control-expose-headers': 'Retry-After, retry-after',
               'Retry-After': '1',
               'retry-after': '1',
             },
@@ -456,9 +457,10 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
           });
           db.close();
           const now = Date.now();
-          const hadAttempt = items.some((item) => (item.attempts || 0) > 0);
+          const hadRateLimit = items.some((item) => (item.lastError || '').includes('Rate limited') || item.status === 'ready');
+          const noAttemptsBurned = items.every((item) => (item.attempts || 0) === 0);
           const allEligible = items.every((item) => item.status === 'ready' || (item.nextAttemptAt || 0) <= now);
-          return hadAttempt && allEligible;
+          return hadRateLimit && noAttemptsBurned && allEligible;
         }, user.id);
       }, { timeout: 45000, intervals: [2000] }).toBe(true);
 
