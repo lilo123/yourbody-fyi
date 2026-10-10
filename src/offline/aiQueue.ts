@@ -366,7 +366,7 @@ export function startAiQueueProcessor(options: AiProcessorOptions): () => void {
             const stored = await db.get('aiq', item.id);
             if (!stored) continue;
 
-            if (errStatus === 429) {
+            if (errStatus === 429 || error?.is429) {
               // 429: Retry-After, NO attempt burn
               let retryAfterSec = DEFAULT_429_RETRY_AFTER_SECONDS;
               if (typeof error?.retryAfter === 'number' && Number.isFinite(error.retryAfter)) {
