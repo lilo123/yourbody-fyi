@@ -126,8 +126,12 @@ function versionJsonPlugin(): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL;
+  const appCommit = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'dev';
 
   return {
+    define: {
+      __APP_COMMIT__: JSON.stringify(appCommit),
+    },
     plugins: [
       react(),
       tailwindcss(),
@@ -229,6 +233,9 @@ export default defineConfig(({ mode }) => {
             }
             if (pkg === 'workbox-window' || pkg.startsWith('workbox-')) {
               return 'vendor';
+            }
+            if (pkg.startsWith('@sentry/')) {
+              return 'sentry';
             }
             return 'vendor';
           },
