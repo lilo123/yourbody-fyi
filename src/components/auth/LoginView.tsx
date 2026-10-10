@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Zap, AlertCircle, Eye, EyeOff, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
@@ -361,6 +361,32 @@ export const LoginView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Footer links */}
+      <footer className="mt-8 text-center text-xs text-zinc-400">
+        <div className="flex items-center justify-center gap-3">
+          <Link
+            to="/terms"
+            className="inline-flex items-center min-h-[44px] hover:text-zinc-200 transition underline underline-offset-4"
+          >
+            Terms
+          </Link>
+          <span aria-hidden="true" className="text-zinc-600">·</span>
+          <Link
+            to="/privacy"
+            className="inline-flex items-center min-h-[44px] hover:text-zinc-200 transition underline underline-offset-4"
+          >
+            Privacy
+          </Link>
+          <span aria-hidden="true" className="text-zinc-600">·</span>
+          <Link
+            to="/refunds"
+            className="inline-flex items-center min-h-[44px] hover:text-zinc-200 transition underline underline-offset-4"
+          >
+            Refunds
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 };
