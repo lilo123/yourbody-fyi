@@ -169,6 +169,51 @@ describe('parseNutrition', () => {
     await expect(parseNutrition({ text: 'test' })).rejects.toThrow('Internal edge function failure');
   });
 
+  it('rejects oversized photo payload client-side before invoking edge function', async () => {
+    const oversizePhoto = {
+      base64: 'largebase64',
+      dataUrl: 'data:image/jpeg;base64,largebase64',
+      mimeType: 'image/jpeg',
+      sizeBytes: 1.6 * 1024 * 1024,
+      width: 1920,
+      height: 1080,
+    };
+
+    await expect(
+      parseNutrition({
+        photo: oversizePhoto,
+      })
+    ).rejects.toMatchObject({
+      code: 'image_too_large',
+      status: 413,
+      message: 'Photo is too large (max 1.5 MB). Please choose a smaller photo.',
+    });
+
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
+  });
+
+  it('unwraps 413 / image_too_large server error with friendly message', async () => {
+    (supabase.functions.invoke as any).mockResolvedValue({
+      data: null,
+      error: {
+        context: {
+          status: 413,
+          json: async () => ({
+            code: 'image_too_large',
+            maxBytes: 1572864,
+            error: 'Meal photo exceeds the 1.5 MB limit (1.80 MB). Please upload a smaller photo.',
+          }),
+        },
+      },
+    });
+
+    await expect(parseNutrition({ text: 'meal photo analysis' })).rejects.toMatchObject({
+      code: 'image_too_large',
+      status: 413,
+      message: 'Meal photo exceeds the 1.5 MB limit (1.80 MB). Please upload a smaller photo.',
+    });
+  });
+
   it('throws on missing nutrition data', async () => {
     (supabase.functions.invoke as any).mockResolvedValue({
       data: {},

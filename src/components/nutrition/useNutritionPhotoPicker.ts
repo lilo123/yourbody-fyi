@@ -3,6 +3,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import {
   compressImageBase64,
   compressImageFile,
+  MAX_PHOTO_BYTES,
   type CompressedImage,
 } from '../../utils/imageCompression';
 
@@ -30,6 +31,11 @@ export function useNutritionPhotoPicker(options?: UseNutritionPhotoPickerOptions
           const mimeType = image.format ? `image/${image.format}` : 'image/jpeg';
           const compressed = await compressImageBase64(image.base64String, mimeType);
           if (compressed && compressed.base64) {
+            if (compressed.sizeBytes > MAX_PHOTO_BYTES) {
+              setSelectedPhoto(null);
+              options?.onError?.('Photo is too large (max 1.5 MB). Please choose a smaller photo.');
+              return;
+            }
             setSelectedPhoto(compressed);
             options?.onPhotoSelected?.(compressed);
             options?.onClearError?.();
@@ -57,6 +63,11 @@ export function useNutritionPhotoPicker(options?: UseNutritionPhotoPickerOptions
       try {
         const compressed = await compressImageFile(file);
         if (compressed && compressed.base64) {
+          if (compressed.sizeBytes > MAX_PHOTO_BYTES) {
+            setSelectedPhoto(null);
+            options?.onError?.('Photo is too large (max 1.5 MB). Please choose a smaller photo.');
+            return;
+          }
           setSelectedPhoto(compressed);
           options?.onPhotoSelected?.(compressed);
           options?.onClearError?.();

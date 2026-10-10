@@ -20,6 +20,15 @@ export function getBase64SizeBytes(base64: string): number {
   return Math.max(0, Math.floor((clean.length * 3) / 4) - padding);
 }
 
+/** Maximum allowed photo payload size for AI nutrition parsing (1.5 MB in binary bytes) */
+export const MAX_PHOTO_BYTES = 1.5 * 1024 * 1024; // 1,572,864 bytes
+
+/** Returns true if a compressed image or raw byte length exceeds the photo upload cap */
+export function isPhotoTooLarge(photoOrBytes: CompressedImage | number): boolean {
+  const bytes = typeof photoOrBytes === 'number' ? photoOrBytes : photoOrBytes.sizeBytes;
+  return bytes > MAX_PHOTO_BYTES;
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes <= 0 || isNaN(bytes) || !Number.isFinite(bytes)) return '0 B';
   if (bytes < 1024) return `${Math.round(bytes)} B`;
