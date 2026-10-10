@@ -4,6 +4,10 @@ import { StagedMealCard } from './StagedMealCard';
 import type { StagedMeal } from './nutritionEngineHelpers';
 import { expectNoA11yViolations, expectNoA11yViolationsForRules } from '../../test/a11y';
 
+vi.mock('../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: vi.fn(() => false),
+}));
+
 function makeStagedMeal(): StagedMeal {
   return {
     name: 'Power Breakfast',

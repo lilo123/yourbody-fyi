@@ -3,6 +3,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AddItemsComposer } from './AddItemsComposer';
 import * as parseNutritionModule from './parseNutrition';
 
+let mockPaywallEnabled = false;
+vi.mock('../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: vi.fn((key: string) => {
+    if (key === 'paywall_enabled') return mockPaywallEnabled;
+    return false;
+  }),
+}));
+
 vi.mock('./parseNutrition', () => ({
   parseNutrition: vi.fn(),
 }));
@@ -17,6 +25,7 @@ describe('AddItemsComposer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPaywallEnabled = false;
   });
 
   it('renders textarea with 16px font and placeholder, and auto-focuses on mount', () => {
@@ -323,11 +332,7 @@ describe('AddItemsComposer', () => {
   });
 
   it('flag on: renders Upgrade button on quota_exceeded and opens UpgradeSheet', async () => {
-    const useFeatureFlagModule = await import('../../hooks/useFeatureFlag');
-    vi.spyOn(useFeatureFlagModule, 'useFeatureFlag').mockImplementation((key) => {
-      if (key === 'paywall_enabled') return true;
-      return false;
-    });
+    mockPaywallEnabled = true;
 
     const quotaErr: any = new Error(
       "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."

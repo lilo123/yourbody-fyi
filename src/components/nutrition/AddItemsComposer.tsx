@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { QueryClient, QueryClientContext, QueryClientProvider } from '@tanstack/react-query';
 import {
   Sparkles,
   X,
@@ -26,7 +25,7 @@ export interface AddItemsComposerProps {
   onCancel: () => void;
 }
 
-const AddItemsComposerContent: React.FC<AddItemsComposerProps> = memo(({
+export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo(({
   customDishes = [],
   scrollMarginBottom,
   onParsed,
@@ -299,24 +298,6 @@ const AddItemsComposerContent: React.FC<AddItemsComposerProps> = memo(({
       )}
     </div>
   );
-});
-
-AddItemsComposerContent.displayName = 'AddItemsComposerContent';
-
-const fallbackQueryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, enabled: false } },
-});
-
-export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo((props) => {
-  const queryClient = React.useContext(QueryClientContext);
-  if (!queryClient) {
-    return (
-      <QueryClientProvider client={fallbackQueryClient}>
-        <AddItemsComposerContent {...props} />
-      </QueryClientProvider>
-    );
-  }
-  return <AddItemsComposerContent {...props} />;
 });
 
 AddItemsComposer.displayName = 'AddItemsComposer';

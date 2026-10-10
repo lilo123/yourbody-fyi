@@ -1,5 +1,4 @@
 import React, { memo, useMemo, useState } from 'react';
-import { QueryClient, QueryClientContext, QueryClientProvider } from '@tanstack/react-query';
 import {
   Sparkles,
   ChevronUp,
@@ -45,7 +44,7 @@ export interface NutritionAiInputProps {
   isQuotaExceeded?: boolean;
 }
 
-const NutritionAiInputContent: React.FC<NutritionAiInputProps> = memo(({
+export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
   textareaRef,
   headingRef,
   nlInput,
@@ -65,24 +64,12 @@ const NutritionAiInputContent: React.FC<NutritionAiInputProps> = memo(({
   fileInputRef,
   hasCustomDishes,
   isOnline: isOnlineProp,
-  isQuotaExceeded: isQuotaExceededProp,
+  isQuotaExceeded = false,
 }) => {
   const hookOnline = useOnlineStatus();
   const isOnline = isOnlineProp !== undefined ? isOnlineProp : hookOnline;
   const paywallEnabled = useFeatureFlag('paywall_enabled');
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
-
-  const isQuota =
-    isQuotaExceededProp !== undefined
-      ? isQuotaExceededProp
-      : isError &&
-        Boolean(
-          status &&
-            (status.includes("AI parsing isn't included in the free plan") ||
-              status.includes("AI parses. Quick log and on-device parsing still work") ||
-              status.includes('quota exceeded') ||
-              status.includes('quota_exceeded'))
-        );
 
   const canParseLocally = useMemo(() => {
     if (!nlInput.trim() || selectedPhoto) return false;
@@ -302,7 +289,7 @@ const NutritionAiInputContent: React.FC<NutritionAiInputProps> = memo(({
           )
         }
         action={
-          paywallEnabled && isQuota ? (
+          paywallEnabled && isQuotaExceeded ? (
             <button
               type="button"
               data-testid="ai-upgrade-btn"
@@ -336,24 +323,6 @@ const NutritionAiInputContent: React.FC<NutritionAiInputProps> = memo(({
       )}
     </div>
   );
-});
-
-NutritionAiInputContent.displayName = 'NutritionAiInputContent';
-
-const fallbackQueryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, enabled: false } },
-});
-
-export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo((props) => {
-  const queryClient = React.useContext(QueryClientContext);
-  if (!queryClient) {
-    return (
-      <QueryClientProvider client={fallbackQueryClient}>
-        <NutritionAiInputContent {...props} />
-      </QueryClientProvider>
-    );
-  }
-  return <NutritionAiInputContent {...props} />;
 });
 
 NutritionAiInput.displayName = 'NutritionAiInput';

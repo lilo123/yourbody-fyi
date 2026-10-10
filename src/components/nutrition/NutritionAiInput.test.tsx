@@ -1,6 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NutritionAiInput, type NutritionAiInputProps } from './NutritionAiInput';
+
+let mockPaywallEnabled = false;
+vi.mock('../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: vi.fn((key: string) => {
+    if (key === 'paywall_enabled') return mockPaywallEnabled;
+    return false;
+  }),
+}));
 
 function defaultProps(overrides: Partial<NutritionAiInputProps> = {}): NutritionAiInputProps {
   return {
@@ -25,6 +33,10 @@ function defaultProps(overrides: Partial<NutritionAiInputProps> = {}): Nutrition
 }
 
 describe('NutritionAiInput live regions and accessibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPaywallEnabled = false;
+  });
   it('mounts persistent idle live regions from the start', () => {
     const { container } = render(<NutritionAiInput {...defaultProps()} />);
 
@@ -248,12 +260,8 @@ describe('NutritionAiInput live regions and accessibility', () => {
       expect(screen.getByTestId('retry-analysis-button')).toBeDefined();
     });
 
-    it('flag on: renders Upgrade button on quota_exceeded and opens UpgradeSheet', async () => {
-      const useFeatureFlagModule = await import('../../hooks/useFeatureFlag');
-      vi.spyOn(useFeatureFlagModule, 'useFeatureFlag').mockImplementation((key) => {
-        if (key === 'paywall_enabled') return true;
-        return false;
-      });
+    it('flag on: renders Upgrade button via isQuotaExceeded prop and opens UpgradeSheet', async () => {
+      mockPaywallEnabled = true;
 
       render(
         <NutritionAiInput
@@ -272,6 +280,23 @@ describe('NutritionAiInput live regions and accessibility', () => {
 
       fireEvent.click(upgradeBtn);
       expect(await screen.findByTestId('upgrade-sheet')).toBeDefined();
+    });
+
+    it('flag on but isQuotaExceeded is false: does not render Upgrade button even if status mentions quota', () => {
+      mockPaywallEnabled = true;
+
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            status: "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free.",
+            isError: true,
+            isQuotaExceeded: false,
+          })}
+        />
+      );
+
+      expect(screen.queryByTestId('ai-upgrade-btn')).toBeNull();
+      expect(screen.getByTestId('retry-analysis-button')).toBeDefined();
     });
   });
 });

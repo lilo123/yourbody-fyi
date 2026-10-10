@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Sparkles, Check, AlertCircle } from 'lucide-react';
-import { Sheet } from '../common/Sheet';
+import React, { useState, useId } from 'react';
+import { Sparkles, Check, AlertCircle, X } from 'lucide-react';
+import { AccessibleModal } from '../common/AccessibleModal';
 import { StatusBanner } from '../common/StatusBanner';
 import { startCheckout, type CheckoutPlan } from '../../lib/billing';
 
@@ -12,6 +12,7 @@ export interface UpgradeSheetProps {
 export const UpgradeSheet: React.FC<UpgradeSheetProps> = ({ isOpen, onClose }) => {
   const [loadingPlan, setLoadingPlan] = useState<CheckoutPlan | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const titleId = useId();
 
   const handleSelectPlan = async (plan: CheckoutPlan) => {
     if (loadingPlan) return;
@@ -32,13 +33,29 @@ export const UpgradeSheet: React.FC<UpgradeSheetProps> = ({ isOpen, onClose }) =
   };
 
   return (
-    <Sheet
+    <AccessibleModal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Choose a Plan"
+      titleId={titleId}
       testId="upgrade-sheet"
+      className="w-full sm:max-w-lg max-h-[90vh] sm:rounded-3xl rounded-t-3xl bg-zinc-900 border border-zinc-800 flex flex-col overflow-hidden shadow-2xl safe-area-pb"
     >
-      <div className="space-y-4">
+      <div className="flex items-center justify-between p-4 border-b border-zinc-800/80 shrink-0">
+        <h2 id={titleId} className="text-sm font-bold text-white truncate">
+          Choose a Plan
+        </h2>
+        <button
+          type="button"
+          aria-label="Close Choose a Plan"
+          onClick={handleClose}
+          data-testid="upgrade-sheet-close"
+          className="inline-flex items-center justify-center rounded-xl transition cursor-pointer select-none active:scale-95 disabled:pointer-events-none disabled:opacity-50 text-zinc-400 hover:text-white hover:bg-zinc-800/60 h-8 w-8 min-h-[44px] min-w-[44px]"
+        >
+          <X className="w-5 h-5" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         <p className="text-xs text-zinc-400">
           Upgrade your subscription to unlock additional AI meal parsing and advanced features.
         </p>
@@ -130,8 +147,9 @@ export const UpgradeSheet: React.FC<UpgradeSheetProps> = ({ isOpen, onClose }) =
           </button>
         </div>
       </div>
-    </Sheet>
+    </AccessibleModal>
   );
 };
 
 export default UpgradeSheet;
+

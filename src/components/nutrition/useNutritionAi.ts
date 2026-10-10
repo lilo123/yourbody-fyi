@@ -29,7 +29,6 @@ export function useNutritionAi({
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
-  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
 
   const {
     selectedPhoto,
@@ -216,8 +215,6 @@ export function useNutritionAi({
     setIsRateLimited,
     isQuotaExceeded,
     setIsQuotaExceeded,
-    isUpgradeOpen,
-    setIsUpgradeOpen,
     isAnalyzing,
     fileInputRef,
     handlePickPhoto,
