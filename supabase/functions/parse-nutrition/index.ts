@@ -402,6 +402,79 @@ export default {
         }
       }
 
+      // Check AI parse quota if enabled in app_config
+      let isQuotaEnabled = false;
+      let photoCost = 2;
+
+      try {
+        const { data: enabledData, error: enabledErr } = await userClient
+          .from('app_config')
+          .select('value')
+          .eq('key', 'ai_quota_enabled')
+          .maybeSingle();
+
+        if (enabledErr) {
+          console.warn('[parse-nutrition] Unable to read ai_quota_enabled config:', enabledErr.message);
+        } else if (enabledData?.value === true) {
+          isQuotaEnabled = true;
+
+          const { data: limitsData, error: limitsErr } = await userClient
+            .from('app_config')
+            .select('value')
+            .eq('key', 'ai_quota_limits')
+            .maybeSingle();
+
+          if (limitsErr) {
+            console.warn('[parse-nutrition] Unable to read ai_quota_limits config:', limitsErr.message);
+          } else if (limitsData?.value && typeof limitsData.value === 'object') {
+            if (typeof limitsData.value.photo_cost === 'number') {
+              photoCost = limitsData.value.photo_cost;
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn('[parse-nutrition] Unexpected error checking AI quota configuration:', err?.message || err);
+      }
+
+      if (isQuotaEnabled) {
+        const cost = cleanBase64 ? photoCost : 1;
+        try {
+          const { data: quotaResult, error: rpcError } = await userClient.rpc('consume_ai_quota', {
+            p_cost: cost,
+          });
+
+          if (rpcError) {
+            console.warn('[parse-nutrition] Failed to consume AI quota RPC (failing open):', rpcError.message);
+          } else if (quotaResult && quotaResult.allowed === false) {
+            const periodStr = quotaResult.period === 'month' ? "this month's" : "today's";
+            const friendlyText = quotaResult.limit === 0
+              ? "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
+              : `You've used ${periodStr} AI parses. Quick log and on-device parsing still work.`;
+
+            return new Response(
+              JSON.stringify({
+                error: friendlyText,
+                code: 'quota_exceeded',
+                plan: quotaResult.plan,
+                limit: quotaResult.limit,
+                used: quotaResult.used,
+                period: quotaResult.period,
+                resetsAt: quotaResult.resets_at ?? quotaResult.resetsAt,
+              }),
+              {
+                status: 429,
+                headers: {
+                  ...corsHeaders,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
+          }
+        } catch (rpcErr: any) {
+          console.warn('[parse-nutrition] consume_ai_quota exception (failing open):', rpcErr?.message || rpcErr);
+        }
+      }
+
       const apiKey = Deno.env.get("GEMINI_API_KEY");
       if (!apiKey) {
         throw new Error("GEMINI_API_KEY is not configured");

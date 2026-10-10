@@ -358,7 +358,7 @@ export function startAiQueueProcessor(options: AiProcessorOptions): () => void {
           if (isStopped) break;
 
           const errStatus = Number(error?.status || error?.statusCode || 0);
-          const errCode = String(error?.code || '');
+          const errCode = String(error?.code || error?.context?.code || '');
           const errMsg = String(error?.message || '');
 
           try {
@@ -366,7 +366,8 @@ export function startAiQueueProcessor(options: AiProcessorOptions): () => void {
             const stored = await db.get('aiq', item.id);
             if (!stored) continue;
 
-            if (errStatus === 429 || error?.is429) {
+            const isRateLimit = (errStatus === 429 || error?.is429) && errCode !== 'quota_exceeded';
+            if (isRateLimit) {
               // 429: Retry-After, NO attempt burn
               let retryAfterSec = DEFAULT_429_RETRY_AFTER_SECONDS;
               if (typeof error?.retryAfter === 'number' && Number.isFinite(error.retryAfter)) {
@@ -391,11 +392,12 @@ export function startAiQueueProcessor(options: AiProcessorOptions): () => void {
             } else if (
               errStatus === 422 ||
               errCode === 'NON_FOOD' ||
+              errCode === 'quota_exceeded' ||
               (errStatus >= 400 && errStatus < 500 && errStatus !== 408)
             ) {
-              // 4xx validation / NON_FOOD -> status 'failed'
+              // 4xx validation / NON_FOOD / quota_exceeded -> status 'failed'
               stored.status = 'failed';
-              stored.lastError = errMsg || 'Validation error';
+              stored.lastError = errMsg || (errCode === 'quota_exceeded' ? 'AI quota exceeded' : 'Validation error');
               await db.put('aiq', stored);
               await listAiItems(userId);
               notifyAiQueueChanged(userId);

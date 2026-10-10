@@ -3,7 +3,7 @@ import type { CustomDish } from '../../types/database';
 import { formatCalories } from '../../utils/nutrition';
 import { parseNutritionBlock } from '../../lib/nutrition/localParse';
 import { buildStagedItem, type StagedMeal } from './nutritionEngineHelpers';
-import { parseNutrition } from './parseNutrition';
+import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
 
 export interface UseNutritionAiOptions {
@@ -164,6 +164,14 @@ export function useNutritionAi({
       }
 
       if (error?.is429 || error?.context?.status === 429 || error?.status === 429) {
+        if (error?.code === 'quota_exceeded') {
+          setIsRateLimited(false);
+          setIsError(true);
+          const quotaMsg = error?.message || formatQuotaExceededMessage(error?.limit, error?.period);
+          setStatus(quotaMsg);
+          return;
+        }
+
         setIsRateLimited(true);
         setIsError(false);
         setStatus('');
