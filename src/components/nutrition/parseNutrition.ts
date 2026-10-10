@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabase';
 import type { CustomDish } from '../../types/database';
 import type { CompressedImage } from '../../utils/imageCompression';
+import { MAX_PHOTO_BYTES } from '../../utils/photoLimits';
 import { roundTo1Decimal } from '../../utils/nutrition';
 import { buildStagedItem, type StagedItem } from './nutritionEngineHelpers';
 
@@ -39,6 +40,15 @@ export async function parseNutrition({
   const trimmed = text.trim();
   if (!trimmed && !photo) {
     throw new Error('Input is empty: please provide text or photo');
+  }
+
+  if (photo && photo.sizeBytes > MAX_PHOTO_BYTES) {
+    const sizeErr: ParseNutritionError = new Error(
+      'Photo is too large (max 1.5 MB). Please choose a smaller photo.'
+    );
+    sizeErr.code = 'image_too_large';
+    sizeErr.status = 413;
+    throw sizeErr;
   }
 
   let timeoutId: any;
@@ -144,6 +154,20 @@ export async function parseNutrition({
       throw rateErr;
     }
 
+    const is413 =
+      error?.context?.status === 413 ||
+      error?.status === 413 ||
+      errorCode === 'image_too_large';
+    if (is413) {
+      const tooLargeMsg =
+        serverMessage ||
+        'Photo is too large (max 1.5 MB). Please choose a smaller photo.';
+      const sizeErr: ParseNutritionError = new Error(tooLargeMsg);
+      sizeErr.code = 'image_too_large';
+      sizeErr.status = 413;
+      throw sizeErr;
+    }
+
     if (serverMessage) {
       const customErr: ParseNutritionError = new Error(serverMessage);
       customErr.code = errorCode;
@@ -161,8 +185,14 @@ export async function parseNutrition({
   }
 
   if (parsed?.error) {
-    const err: ParseNutritionError = new Error(parsed.error);
+    const is413 = parsed.code === 'image_too_large';
+    const err: ParseNutritionError = new Error(
+      is413
+        ? (parsed.error || 'Photo is too large (max 1.5 MB). Please choose a smaller photo.')
+        : parsed.error
+    );
     if (parsed.code) err.code = parsed.code;
+    if (is413) err.status = 413;
     throw err;
   }
 

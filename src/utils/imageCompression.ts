@@ -1,3 +1,7 @@
+import { MAX_PHOTO_BYTES } from './photoLimits';
+
+export { MAX_PHOTO_BYTES };
+
 export interface CompressedImage {
   base64: string; // Clean base64 string without data URI prefix
   dataUrl: string; // Full data:image/...;base64,... URI for rendering
@@ -18,6 +22,13 @@ export function getBase64SizeBytes(base64: string): number {
   if (!clean) return 0;
   const padding = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
   return Math.max(0, Math.floor((clean.length * 3) / 4) - padding);
+}
+
+
+/** Returns true if a compressed image or raw byte length exceeds the photo upload cap */
+export function isPhotoTooLarge(photoOrBytes: CompressedImage | number): boolean {
+  const bytes = typeof photoOrBytes === 'number' ? photoOrBytes : photoOrBytes.sizeBytes;
+  return bytes > MAX_PHOTO_BYTES;
 }
 
 export function formatFileSize(bytes: number): string {

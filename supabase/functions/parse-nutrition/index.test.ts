@@ -1,5 +1,5 @@
 import { assertEquals, assertExists } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import app, { reconcileParentWithItems } from "./index.ts";
+import app, { reconcileParentWithItems, MAX_IMAGE_BYTES, MAX_FALLBACK_MODELS } from "./index.ts";
 
 Deno.env.set("SUPABASE_URL", "https://mock.supabase.co");
 Deno.env.set("SUPABASE_ANON_KEY", "mock-anon-key");
@@ -964,6 +964,8 @@ Deno.test("parse-nutrition detects image/png MIME type automatically from Data U
 Deno.test("parse-nutrition preserves 429 status and Retry-After header even if fallback model returns 503", async () => {
     const originalKey = Deno.env.get("GEMINI_API_KEY");
     Deno.env.set("GEMINI_API_KEY", "test-key");
+    const originalVisionModel = Deno.env.get("GEMINI_VISION_MODEL_ID");
+    Deno.env.set("GEMINI_VISION_MODEL_ID", "gemini-3.8-flash");
 
     const originalFetch = globalThis.fetch;
     const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
@@ -1015,6 +1017,11 @@ Deno.test("parse-nutrition preserves 429 status and Retry-After header even if f
             Deno.env.set("GEMINI_API_KEY", originalKey);
         } else {
             Deno.env.delete("GEMINI_API_KEY");
+        }
+        if (originalVisionModel) {
+            Deno.env.set("GEMINI_VISION_MODEL_ID", originalVisionModel);
+        } else {
+            Deno.env.delete("GEMINI_VISION_MODEL_ID");
         }
     }
 });
@@ -2418,5 +2425,170 @@ Deno.test("parse-nutrition CORS: OPTIONS echoes ACAO for allowed origin and retu
     assertEquals(resDisallowed.headers.get("Access-Control-Allow-Origin"), null);
     const body = await resDisallowed.json();
     assertEquals(body.error, "CORS origin not allowed");
+});
+
+Deno.test("parse-nutrition should return 413 with image_too_large when image exceeds 1.5 MB cap", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        // 1.5 MB = 1572864 bytes. Create a base64 string whose decoded length is ~1.6 MB (2236964 chars)
+        const oversizeBase64 = "A".repeat(2236964);
+
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer valid-jwt-token",
+                "Origin": "https://www.yourbody.fyi",
+            },
+            body: JSON.stringify({
+                image_base64: oversizeBase64,
+            }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 413);
+        assertEquals(res.headers.get("Access-Control-Allow-Origin"), "https://www.yourbody.fyi");
+        const data = await res.json();
+        assertEquals(data.code, "image_too_large");
+        assertEquals(data.maxBytes, MAX_IMAGE_BYTES);
+        assertEquals(typeof data.error, "string");
+        assertEquals(data.error.includes("1.5 MB"), true);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+Deno.test("parse-nutrition should not reject image when decoded size is just under 1.5 MB cap", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            const mockResponse = {
+                candidates: [{
+                    content: {
+                        parts: [{
+                            text: JSON.stringify({
+                                is_food: true,
+                                name: "High Calorie Meal",
+                                calories: 800,
+                                protein: 50,
+                                carbs: 80,
+                                fat: 30,
+                                fiber: 10,
+                                explanation: "Parsed just-under-cap photo",
+                                items: [{ name: "High Calorie Meal", portion: "1 plate", calories: 800, protein: 50, carbs: 80, fat: 30, fiber: 10 }]
+                            })
+                        }]
+                    }
+                }]
+            };
+            return new Response(JSON.stringify(mockResponse), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        // Cap is 1572864 bytes. A clean base64 string of length 2097148 with 0 padding decodes to 1572861 bytes (3 bytes under cap)
+        const justUnderBase64 = "A".repeat(2097148);
+
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({
+                image_base64: justUnderBase64,
+            }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 200);
+        const data = await res.json();
+        assertEquals(data.name, "High Calorie Meal");
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition fallback chain stops after 2 models total", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const calledModels: string[] = [];
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            const match = urlString.match(/models\/([^:]+):/);
+            if (match) {
+                calledModels.push(match[1]);
+            }
+            return new Response(JSON.stringify({
+                error: {
+                    code: 503,
+                    message: "The model is overloaded due to high demand (DECODE_PREEMPTED)"
+                }
+            }), {
+                status: 503,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Test meal without fast path structured format" })
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 503);
+        const uniqueModels = Array.from(new Set(calledModels));
+        assertEquals(uniqueModels.length, MAX_FALLBACK_MODELS);
+        assertEquals(uniqueModels[0], "gemini-3.5-flash-lite");
+        assertEquals(uniqueModels[1], "gemini-3.1-flash-lite");
+        assertEquals(calledModels.includes("gemini-3.7-flash"), false);
+        assertEquals(calledModels.includes("gemini-3.8-flash"), false);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
 });
 

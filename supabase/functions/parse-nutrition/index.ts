@@ -9,6 +9,13 @@ export const OVERALL_BUDGET_VISION_MS = 42000;
 export const OVERALL_BUDGET_TEXT_MS = 27000;
 export const MIN_ATTEMPT_BUDGET_MS = 1500;
 
+// Maximum decoded byte size allowed for meal photo payload (~1.5 MB in binary bytes).
+// Measures decoded binary bytes: Math.floor((cleanBase64.length * 3) / 4) - padding
+export const MAX_IMAGE_BYTES = 1.5 * 1024 * 1024; // 1,572,864 bytes
+
+// Maximum number of models attempted in the Gemini fallback chain
+export const MAX_FALLBACK_MODELS = 2;
+
 // Bounded HTTP retry configuration for @google/genai SDK calls
 const HTTP_RETRY_OPTIONS = {
   attempts: 2,
@@ -360,6 +367,21 @@ export default {
         ? rawMimeType.trim()
         : (detectedMime || "image/jpeg");
 
+      if (cleanBase64) {
+        const padding = cleanBase64.endsWith('==') ? 2 : cleanBase64.endsWith('=') ? 1 : 0;
+        const decodedBytes = Math.max(0, Math.floor((cleanBase64.length * 3) / 4) - padding);
+        if (decodedBytes > MAX_IMAGE_BYTES) {
+          return new Response(
+            JSON.stringify({
+              error: `Meal photo exceeds the 1.5 MB limit (${(decodedBytes / (1024 * 1024)).toFixed(2)} MB). Please upload a smaller photo.`,
+              code: "image_too_large",
+              maxBytes: MAX_IMAGE_BYTES,
+            }),
+            { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       const rawInput = body.input || body.prompt || body.text || "";
       const input = typeof rawInput === 'string' ? rawInput.trim().slice(0, 2000) : "";
       if (!input && !cleanBase64) {
@@ -432,7 +454,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
           "gemini-3.5-flash-lite",
           "gemini-3.1-flash-lite",
           "gemini-3.8-flash",
-        ]));
+        ])).slice(0, MAX_FALLBACK_MODELS);
       } else {
         contents = [
           { text: input },
@@ -443,7 +465,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
           "gemini-3.5-flash-lite",
           "gemini-3.1-flash-lite",
           "gemini-3.7-flash",
-        ]));
+        ])).slice(0, MAX_FALLBACK_MODELS);
       }
 
       const responseSchema = {
