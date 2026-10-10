@@ -276,13 +276,13 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           </h3>
         </div>
         <div className="flex flex-wrap gap-4 text-xs font-semibold text-zinc-400 pt-1">
-          <Link to="/terms" className="hover:text-cyan-300 transition underline underline-offset-4 py-1">
+          <Link to="/terms" className="inline-flex items-center min-h-[44px] hover:text-cyan-300 transition underline underline-offset-4">
             Terms of Service
           </Link>
-          <Link to="/privacy" className="hover:text-cyan-300 transition underline underline-offset-4 py-1">
+          <Link to="/privacy" className="inline-flex items-center min-h-[44px] hover:text-cyan-300 transition underline underline-offset-4">
             Privacy Policy
           </Link>
-          <Link to="/refunds" className="hover:text-cyan-300 transition underline underline-offset-4 py-1">
+          <Link to="/refunds" className="inline-flex items-center min-h-[44px] hover:text-cyan-300 transition underline underline-offset-4">
             Refund Policy
           </Link>
         </div>

@@ -317,21 +317,21 @@ export const LoginView: React.FC = () => {
         <div className="flex items-center justify-center gap-3">
           <Link
             to="/terms"
-            className="hover:text-zinc-200 transition underline underline-offset-4 py-1"
+            className="inline-flex items-center min-h-[44px] hover:text-zinc-200 transition underline underline-offset-4"
           >
             Terms
           </Link>
           <span aria-hidden="true" className="text-zinc-600">·</span>
           <Link
             to="/privacy"
-            className="hover:text-zinc-200 transition underline underline-offset-4 py-1"
+            className="inline-flex items-center min-h-[44px] hover:text-zinc-200 transition underline underline-offset-4"
           >
             Privacy
           </Link>
           <span aria-hidden="true" className="text-zinc-600">·</span>
           <Link
             to="/refunds"
-            className="hover:text-zinc-200 transition underline underline-offset-4 py-1"
+            className="inline-flex items-center min-h-[44px] hover:text-zinc-200 transition underline underline-offset-4"
           >
             Refunds
           </Link>
