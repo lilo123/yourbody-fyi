@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { NutritionAiInput, type NutritionAiInputProps } from './NutritionAiInput';
 
 function defaultProps(overrides: Partial<NutritionAiInputProps> = {}): NutritionAiInputProps {
@@ -229,6 +229,49 @@ describe('NutritionAiInput live regions and accessibility', () => {
 
       expect(screen.getByText('AI needs a connection: use quick log')).toBeDefined();
       expect(screen.getByTestId('analyze-meal-button')).toBeDisabled();
+    });
+  });
+
+  describe('Quota exceeded and paywall flag integration', () => {
+    it('flag off: does not render Upgrade button on quota_exceeded, shows retry', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            status: "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free.",
+            isError: true,
+            isQuotaExceeded: true,
+          })}
+        />
+      );
+
+      expect(screen.queryByTestId('ai-upgrade-btn')).toBeNull();
+      expect(screen.getByTestId('retry-analysis-button')).toBeDefined();
+    });
+
+    it('flag on: renders Upgrade button on quota_exceeded and opens UpgradeSheet', async () => {
+      const useFeatureFlagModule = await import('../../hooks/useFeatureFlag');
+      vi.spyOn(useFeatureFlagModule, 'useFeatureFlag').mockImplementation((key) => {
+        if (key === 'paywall_enabled') return true;
+        return false;
+      });
+
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            status: "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free.",
+            isError: true,
+            isQuotaExceeded: true,
+          })}
+        />
+      );
+
+      const upgradeBtn = screen.getByTestId('ai-upgrade-btn');
+      expect(upgradeBtn).toBeDefined();
+      expect(upgradeBtn.className).toContain('min-h-[44px]');
+      expect(screen.queryByTestId('retry-analysis-button')).toBeNull();
+
+      fireEvent.click(upgradeBtn);
+      expect(await screen.findByTestId('upgrade-sheet')).toBeDefined();
     });
   });
 });

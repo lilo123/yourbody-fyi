@@ -1,4 +1,5 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState } from 'react';
+import { QueryClient, QueryClientContext, QueryClientProvider } from '@tanstack/react-query';
 import {
   Sparkles,
   ChevronUp,
@@ -17,6 +18,9 @@ import { CameraSource } from '@capacitor/camera';
 import { StatusBanner } from '../common/StatusBanner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { parseNutritionBlock } from '../../lib/nutrition/localParse';
+import { useFeatureFlag } from '../../hooks/useFeatureFlag';
+
+const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
 
 export interface NutritionAiInputProps {
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
@@ -38,9 +42,10 @@ export interface NutritionAiInputProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   hasCustomDishes: boolean;
   isOnline?: boolean;
+  isQuotaExceeded?: boolean;
 }
 
-export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
+const NutritionAiInputContent: React.FC<NutritionAiInputProps> = memo(({
   textareaRef,
   headingRef,
   nlInput,
@@ -60,9 +65,24 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
   fileInputRef,
   hasCustomDishes,
   isOnline: isOnlineProp,
+  isQuotaExceeded: isQuotaExceededProp,
 }) => {
   const hookOnline = useOnlineStatus();
   const isOnline = isOnlineProp !== undefined ? isOnlineProp : hookOnline;
+  const paywallEnabled = useFeatureFlag('paywall_enabled');
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+
+  const isQuota =
+    isQuotaExceededProp !== undefined
+      ? isQuotaExceededProp
+      : isError &&
+        Boolean(
+          status &&
+            (status.includes("AI parsing isn't included in the free plan") ||
+              status.includes("AI parses. Quick log and on-device parsing still work") ||
+              status.includes('quota exceeded') ||
+              status.includes('quota_exceeded'))
+        );
 
   const canParseLocally = useMemo(() => {
     if (!nlInput.trim() || selectedPhoto) return false;
@@ -282,7 +302,16 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           )
         }
         action={
-          isError && onAnalyze ? (
+          paywallEnabled && isQuota ? (
+            <button
+              type="button"
+              data-testid="ai-upgrade-btn"
+              onClick={() => setIsUpgradeOpen(true)}
+              className="bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-xs px-3.5 py-2.5 min-h-[44px] min-w-[44px] rounded-xl transition active:scale-95 flex items-center justify-center gap-1.5 shadow-sm touch-manipulation cursor-pointer shrink-0"
+            >
+              <span>Upgrade</span>
+            </button>
+          ) : isError && onAnalyze ? (
             <button
               type="button"
               data-testid="retry-analysis-button"
@@ -296,8 +325,35 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           ) : null
         }
       />
+
+      {isUpgradeOpen && (
+        <React.Suspense fallback={null}>
+          <UpgradeSheet
+            isOpen={isUpgradeOpen}
+            onClose={() => setIsUpgradeOpen(false)}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
+});
+
+NutritionAiInputContent.displayName = 'NutritionAiInputContent';
+
+const fallbackQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false, enabled: false } },
+});
+
+export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo((props) => {
+  const queryClient = React.useContext(QueryClientContext);
+  if (!queryClient) {
+    return (
+      <QueryClientProvider client={fallbackQueryClient}>
+        <NutritionAiInputContent {...props} />
+      </QueryClientProvider>
+    );
+  }
+  return <NutritionAiInputContent {...props} />;
 });
 
 NutritionAiInput.displayName = 'NutritionAiInput';

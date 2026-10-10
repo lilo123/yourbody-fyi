@@ -299,4 +299,56 @@ describe('AddItemsComposer', () => {
       expect(matches.some((el) => !el.closest('.sr-only'))).toBe(true);
     });
   });
+
+  it('flag off: does not render Upgrade button on quota_exceeded', async () => {
+    const quotaErr: any = new Error(
+      "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
+    );
+    quotaErr.code = 'quota_exceeded';
+    (parseNutritionModule.parseNutrition as any).mockRejectedValueOnce(quotaErr);
+
+    render(<AddItemsComposer {...defaultProps} />);
+
+    const textarea = screen.getByRole('textbox', { name: 'Add items' });
+    fireEvent.change(textarea, { target: { value: 'chicken rice' } });
+
+    const analyzeBtn = screen.getByRole('button', { name: /analyze/i });
+    fireEvent.click(analyzeBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('composer-error')).toBeDefined();
+    });
+
+    expect(screen.queryByTestId('composer-upgrade-btn')).toBeNull();
+  });
+
+  it('flag on: renders Upgrade button on quota_exceeded and opens UpgradeSheet', async () => {
+    const useFeatureFlagModule = await import('../../hooks/useFeatureFlag');
+    vi.spyOn(useFeatureFlagModule, 'useFeatureFlag').mockImplementation((key) => {
+      if (key === 'paywall_enabled') return true;
+      return false;
+    });
+
+    const quotaErr: any = new Error(
+      "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
+    );
+    quotaErr.code = 'quota_exceeded';
+    (parseNutritionModule.parseNutrition as any).mockRejectedValueOnce(quotaErr);
+
+    render(<AddItemsComposer {...defaultProps} />);
+
+    const textarea = screen.getByRole('textbox', { name: 'Add items' });
+    fireEvent.change(textarea, { target: { value: 'chicken rice' } });
+
+    const analyzeBtn = screen.getByRole('button', { name: /analyze/i });
+    fireEvent.click(analyzeBtn);
+
+    const upgradeBtn = await screen.findByTestId('composer-upgrade-btn');
+    expect(upgradeBtn).toBeDefined();
+    expect(upgradeBtn.className).toContain('min-h-[44px]');
+
+    fireEvent.click(upgradeBtn);
+
+    expect(await screen.findByTestId('upgrade-sheet')).toBeDefined();
+  });
 });

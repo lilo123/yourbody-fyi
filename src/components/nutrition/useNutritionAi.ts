@@ -28,6 +28,8 @@ export function useNutritionAi({
   const [nlInput, setNlInput] = useState('');
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
 
   const {
     selectedPhoto,
@@ -44,6 +46,7 @@ export function useNutritionAi({
     onClearError: () => {
       setIsError(false);
       setIsRateLimited(false);
+      setIsQuotaExceeded(false);
     },
   });
 
@@ -54,6 +57,7 @@ export function useNutritionAi({
     setIsAnalyzing(true);
     setIsError(false);
     setIsRateLimited(false);
+    setIsQuotaExceeded(false);
 
     // 1. Text-only local parse check (unless forceAi is requested)
     if (!options?.forceAi && !selectedPhoto && textToAnalyze.trim()) {
@@ -167,6 +171,7 @@ export function useNutritionAi({
         if (error?.code === 'quota_exceeded') {
           setIsRateLimited(false);
           setIsError(true);
+          setIsQuotaExceeded(true);
           const quotaMsg = error?.message || formatQuotaExceededMessage(error?.limit, error?.period);
           setStatus(quotaMsg);
           return;
@@ -174,6 +179,7 @@ export function useNutritionAi({
 
         setIsRateLimited(true);
         setIsError(false);
+        setIsQuotaExceeded(false);
         setStatus('');
         return;
       }
@@ -208,6 +214,10 @@ export function useNutritionAi({
     setSelectedPhoto,
     isRateLimited,
     setIsRateLimited,
+    isQuotaExceeded,
+    setIsQuotaExceeded,
+    isUpgradeOpen,
+    setIsUpgradeOpen,
     isAnalyzing,
     fileInputRef,
     handlePickPhoto,
