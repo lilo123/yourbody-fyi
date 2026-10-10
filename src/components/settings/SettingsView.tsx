@@ -1,4 +1,5 @@
 import React, { useState, useId } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import type { UserProfile, UserRole } from '../../types/database';
 import {
@@ -7,6 +8,7 @@ import {
   Shield,
   Dumbbell,
   Timer,
+  FileText,
 } from 'lucide-react';
 import { CoachSettingsCard } from './CoachSettingsCard';
 import { MyCoachCard } from './MyCoachCard';
@@ -264,6 +266,27 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
         profile={profile}
         hasCoachCapability={hasCoachCapability}
       />
+
+      {/* Legal & Policies */}
+      <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-3">
+        <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+          <FileText className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+            Legal & Policies
+          </h3>
+        </div>
+        <div className="flex flex-wrap gap-4 text-xs font-semibold text-zinc-400 pt-1">
+          <Link to="/terms" className="inline-flex items-center min-h-[44px] hover:text-cyan-300 transition underline underline-offset-4">
+            Terms of Service
+          </Link>
+          <Link to="/privacy" className="inline-flex items-center min-h-[44px] hover:text-cyan-300 transition underline underline-offset-4">
+            Privacy Policy
+          </Link>
+          <Link to="/refunds" className="inline-flex items-center min-h-[44px] hover:text-cyan-300 transition underline underline-offset-4">
+            Refund Policy
+          </Link>
+        </div>
+      </div>
     </div>
   );
 };

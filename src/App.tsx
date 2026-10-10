@@ -42,6 +42,15 @@ const CoachCockpit = React.lazy(() =>
 const HistoryView = React.lazy(() =>
   import('./components/history/HistoryView').then((m) => ({ default: m.HistoryView }))
 );
+const TermsPage = React.lazy(() =>
+  import('./legal/TermsPage').then((m) => ({ default: m.TermsPage }))
+);
+const PrivacyPage = React.lazy(() =>
+  import('./legal/PrivacyPage').then((m) => ({ default: m.PrivacyPage }))
+);
+const RefundsPage = React.lazy(() =>
+  import('./legal/RefundsPage').then((m) => ({ default: m.RefundsPage }))
+);
 
 const LazyFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-12 text-cyan-400 text-xs">
@@ -289,6 +298,9 @@ function AppLayout() {
               path="/reset-password" 
               element={<ResetPasswordView />} 
             />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/refunds" element={<RefundsPage />} />
             <Route path="*" element={<LastRouteRedirect />} />
           </Routes>
         </React.Suspense>
