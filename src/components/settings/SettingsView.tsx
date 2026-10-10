@@ -14,6 +14,7 @@ import { CoachSettingsCard } from './CoachSettingsCard';
 import { MyCoachCard } from './MyCoachCard';
 import { MacroGoalsCard } from './MacroGoalsCard';
 import { DataExportCard } from './DataExportCard';
+import { DeleteAccountCard } from './DeleteAccountCard';
 import { useToast } from '../../hooks/useToast';
 import { WeightUnitCard } from './WeightUnitCard';
 import { PrModeCard } from './PrModeCard';
@@ -287,6 +288,9 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           </Link>
         </div>
       </div>
+
+      {/* Delete Account Card (Danger Zone) */}
+      <DeleteAccountCard />
     </div>
   );
 };

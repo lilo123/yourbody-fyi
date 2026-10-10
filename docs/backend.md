@@ -32,6 +32,7 @@ erDiagram
 Edge functions run purely externally. Explicitly define request and response payload shapes:
 - **`parse-nutrition` Request**: `{ text: string }`
 - **`parse-nutrition` Response**: `{ dishes: Array<{ name, energy, protein, ... }> }`
+
 ## AI Quota
 
 ### Overview
@@ -165,3 +166,68 @@ STABLE, SECURITY DEFINER RPC callable by authenticated users (`auth.uid()`). Ret
 }
 ```
 Unauthenticated calls raise an authentication required error (`28000`).
+
+## Account Deletion
+
+### Overview & Feature Flag
+Account deletion is governed by a server-side feature flag stored in `public.app_config`:
+- **Key**: `account_deletion_enabled`
+- **Default Value**: `false` (boolean JSON)
+- **Client Access**: Guarded via `useFeatureFlag('account_deletion_enabled')`. When false or unconfigured, the 'Delete account' danger-zone card is completely hidden.
+- **Server Guard**: Even if called directly, the `delete-account` edge function queries `public.app_config` with the caller's JWT client and returns `403 { code: 'feature_disabled' }` unless `value === true`.
+
+### Edge Function (`delete-account`)
+Configured in `supabase/config.toml` under `[functions.delete-account]` with `verify_jwt = true`.
+
+- **HTTP Method**: POST only (OPTIONS returns 200 with shared CORS headers; other methods return 405).
+- **Authentication**: Requires valid Bearer JWT. Validates caller via `userClient.auth.getUser()`, returning 401 on failure.
+- **Payload Contract**:
+  - Request Body: `{"confirm": "DELETE"}` (returns `400 { code: 'confirmation_required' }` if missing or mismatch).
+  - Success Response: `200 { "deleted": true }`.
+  - Error Response: `500 { "error": "Account deletion failed", "code": "delete_failed" }` without leaking internal errors, identifiers, or credentials.
+  - Privacy & Logging: User IDs, emails, and sensitive keys are never logged.
+
+### Order of Operations
+1. **Client Preparation**:
+   - Checks `useFeatureFlag('account_deletion_enabled')` (hidden if disabled) and `useOnlineStatus()` (disabled when offline).
+   - Allows user to export all personal data first via `executeDataExport` (`src/utils/dataExport.ts`).
+   - Requires explicit textual confirmation: typing `DELETE` unlocks the deletion action.
+   - Invokes `supabase.functions.invoke('delete-account', { body: { confirm: 'DELETE' } })`.
+
+2. **Server-Side Execution**:
+   - Validates CORS origin, HTTP POST method, and Authorization header.
+   - Checks `app_config.account_deletion_enabled === true` using caller client.
+   - Initializes service-role client (`SUPABASE_SERVICE_ROLE_KEY`).
+   - **Stripe Cancellation**: If `STRIPE_SECRET_KEY` is present and user profile contains a `billing_customer_id`, active/trialing/past-due subscriptions are cancelled via Stripe REST API (`DELETE /v1/subscriptions/{id}`). Keys starting with `sk_live_` or `rk_live_` are refused.
+   - **RESTRICT Cleanup**: Cleans up child entities that could violate `ON DELETE RESTRICT` constraints during cascade:
+     - Deletes caller's `template_exercises` and `routine_templates`.
+     - Deletes caller's `sets` and `workouts`.
+     - For caller's custom `exercises`: clone-and-repoint. For each other user U whose `sets` or `template_exercises` reference caller's custom exercise E, creates a cloned copy of E owned by U (`user_id = U`, `is_master = false`), repoints U's referencing rows to the clone, and deletes E. This completely purges User A's custom exercises without leaking to other users or corrupting User B's templates and workout history.
+   - **User Deletion**: Calls `auth.admin.deleteUser(user.id)`, triggering PostgreSQL foreign key cascades.
+
+3. **Client Completion**:
+   - On 200 response, invokes `wipeUserData(userId, { queryClient })`:
+     - Closes and deletes the user's IndexedDB database (`yourbody-offline-${userId}`).
+     - Clears the in-memory React Query cache.
+     - Removes `yourbody_*` localStorage keys scoped to this user and session.
+   - Calls `auth.signOut()`.
+   - Navigates to `/login` with a neutral confirmation notification.
+
+### Data Retention & Cascades
+- **Deleted**:
+  - `auth.users` row and `public.users` row (`20260831150310_init_schema.sql`).
+  - `public.workouts` and `public.sets` (`20260831150310_init_schema.sql`).
+  - `public.routine_templates` and `public.template_exercises` owned by the user (`20260901000000_v2_expansion.sql`).
+  - `public.nutrition_logs` (`20260831150310_init_schema.sql`) and `public.custom_dishes` (`20260903000000_production_hardening.sql`).
+  - `public.coach_athlete_links` where user is coach or athlete (`20260909000000_multi_coach_code_linking.sql`).
+  - `public.exercise_hides` hidden by the user (`20260927030000_exercise_catalog.sql`).
+  - `public.ai_usage` quota records (`20261010010000_ai_quota.sql`).
+  - Local client storage: IndexedDB `yourbody-offline-${userId}`, React Query cache, and user-scoped `yourbody_*` localStorage keys.
+- **Preserved**:
+  - Other users' data is untouched.
+  - `public.billing_events`: `user_id` is set to `NULL` via `ON DELETE SET NULL` (`20261010030000_billing_entitlement.sql`), retaining immutable payment records for accounting and audit compliance.
+  - Routine templates created by coaches for this athlete have `assigned_to` set to `NULL` (`ON DELETE SET NULL`, `20260901000000_v2_expansion.sql`).
+  - Custom exercises referenced by other users are cloned and repointed to the referencing users (`user_id = U`), preserving their templates and history under personal ownership without leaking to global catalog (`20260927000000_exercises_rls_v2.sql`).
+
+### Staging-Only Testing Note
+Account deletion permanently and irreversibly destroys user records and offline data. The `account_deletion_enabled` flag must remain `false` in production environments until formally verified in staging with synthetic test accounts.
