@@ -289,6 +289,20 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
     });
     const page = await context.newPage();
 
+    // Mirror offline state to navigator.onLine across page reloads in Playwright
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'onLine', {
+        get: () => {
+          try {
+            return sessionStorage.getItem('pwa_test_offline') !== 'true';
+          } catch {
+            return true;
+          }
+        },
+        configurable: true,
+      });
+    });
+
     user = await createPwaTestUser('nutr-aiq-tokyo');
     execPsql(`UPDATE public.users SET timezone = 'Asia/Tokyo' WHERE id = '${user.id}';`);
 
@@ -301,12 +315,20 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
       await expect(page.locator('text=No meals logged for this date yet.')).toBeVisible({ timeout: 15000 });
 
       // 1. Go offline
+      await page.evaluate(() => {
+        sessionStorage.setItem('pwa_test_offline', 'true');
+      });
       await goOfflineAndNotify(context, page);
 
       // Seed pre-existing queued text item and photo item in IndexedDB aiq (simulating legacy client queue)
-      const now = new Date();
-      const capturedAt = now.toISOString();
-      const captureDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const { capturedAt, captureDate } = await page.evaluate(() => {
+        const d = new Date();
+        return {
+          capturedAt: d.toISOString(),
+          captureDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+        };
+      });
+      const expectedCaptureDate = captureDate;
 
       await page.evaluate(
         async ({ uid, capturedAt, captureDate, base64Photo }) => {
@@ -383,17 +405,26 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
       await expect(page.locator('[data-testid="pending-review-list"]')).toBeVisible({ timeout: 15000 });
       await expect(page.locator('[data-testid^="pending-review-item-"]')).toHaveCount(2);
 
-      // Record civil date at capture
-      const expectedCaptureDate = await page.evaluate(() => {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      });
 
       // 4. Setup parse-nutrition route: return 429 once (Retry-After: 1), then success
       let parseNutritionCallCount = 0;
+      let t429 = 0;
       await page.route('**/functions/v1/parse-nutrition', async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({
+            status: 200,
+            headers: {
+              'access-control-allow-origin': '*',
+              'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
+              'access-control-allow-methods': 'POST, OPTIONS',
+            },
+          });
+          return;
+        }
+
         parseNutritionCallCount++;
         if (parseNutritionCallCount === 1) {
+          t429 = Date.now();
           await route.fulfill({
             status: 429,
             contentType: 'application/json',
@@ -439,6 +470,9 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
       });
 
       // Reconnect online: processor wakes up and attempts processing
+      await page.evaluate(() => {
+        sessionStorage.removeItem('pwa_test_offline');
+      });
       await goOnline(context, page);
 
       // Poll IDB until 429 backoff has elapsed, then dispatch online event to wake processor
@@ -457,12 +491,30 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
           });
           db.close();
           const now = Date.now();
-          const hadRateLimit = items.some((item) => (item.lastError || '').includes('Rate limited') || item.status === 'ready');
-          const noAttemptsBurned = items.every((item) => (item.attempts || 0) === 0);
+          const hadRateLimit = items.some((item) => (item.lastError || '').includes('Rate limited'));
           const allEligible = items.every((item) => item.status === 'ready' || (item.nextAttemptAt || 0) <= now);
-          return hadRateLimit && noAttemptsBurned && allEligible;
+          return hadRateLimit && allEligible;
         }, user.id);
       }, { timeout: 45000, intervals: [2000] }).toBe(true);
+
+      // Verify Retry-After: 1 was honoured (~1 s backoff) and did not fall back to 15 s default
+      const rateLimitedItem = await page.evaluate(async (uid) => {
+        const openReq = indexedDB.open(`yourbody-offline-${uid}`);
+        const db: IDBDatabase = await new Promise((resolve, reject) => {
+          openReq.onsuccess = () => resolve(openReq.result);
+          openReq.onerror = () => reject(openReq.error);
+        });
+        const tx = db.transaction('aiq', 'readonly');
+        const items = await new Promise<any[]>((resolve, reject) => {
+          const getAllReq = tx.objectStore('aiq').getAll();
+          getAllReq.onsuccess = () => resolve(getAllReq.result);
+          getAllReq.onerror = () => reject(getAllReq.error);
+        });
+        db.close();
+        return items.find((item) => (item.lastError || '').includes('Rate limited'));
+      }, user.id);
+      expect(rateLimitedItem).toBeDefined();
+      expect(rateLimitedItem.nextAttemptAt - t429).toBeLessThanOrEqual(5000);
 
       await page.evaluate(() => {
         window.dispatchEvent(new Event('online'));
@@ -470,6 +522,27 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
 
       // Both items reach 'ready' with "Review" button visible
       await expect(page.locator('[data-testid^="review-aiq-item-"]')).toHaveCount(2, { timeout: 45000 });
+
+      // Verify parseNutrition was called at least 3 times (1 rate limit + 2 successful parses)
+      expect(parseNutritionCallCount).toBeGreaterThanOrEqual(3);
+
+      // Verify 429 did not burn attempts on any item (all attempts stay 0)
+      const attemptsReport = await page.evaluate(async (uid) => {
+        const openReq = indexedDB.open(`yourbody-offline-${uid}`);
+        const db: IDBDatabase = await new Promise((resolve, reject) => {
+          openReq.onsuccess = () => resolve(openReq.result);
+          openReq.onerror = () => reject(openReq.error);
+        });
+        const tx = db.transaction('aiq', 'readonly');
+        const items = await new Promise<any[]>((resolve, reject) => {
+          const getAllReq = tx.objectStore('aiq').getAll();
+          getAllReq.onsuccess = () => resolve(getAllReq.result);
+          getAllReq.onerror = () => reject(getAllReq.error);
+        });
+        db.close();
+        return items.map((it) => it.attempts || 0);
+      }, user.id);
+      expect(attemptsReport.every((attempts) => attempts === 0)).toBe(true);
 
       // 5. Verify IndexedDB aiq photo field is deleted after analysis
       const isPhotoDeleted = await page.evaluate(async (uid) => {
