@@ -45,6 +45,19 @@ The following occurrences are permanently preserved and allowlisted in `check:br
 - Ensure `vercel.json` contains proper routing fallbacks to `index.html` for React Router.
 - Vercel Environment Variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) must point to production assets.
 
+## Frontend Hosting (Cloudflare Pages)
+- **Build command:** `npm run build`
+- **Output directory:** `dist`
+- **Environment variables (names only):**
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+- **Preview Deployments:** Branch and pull request previews are configured to use staging environment variables and assets.
+- **Production URL:** `https://yourbody-fyi.pages.dev` (with preview deployments at `https://<hash>.yourbody-fyi.pages.dev`).
+- **Cutover Checklist (Placeholder):**
+  - Vercel remains the primary production host for `www.yourbody.fyi` and `yourbody.fyi`.
+  - DNS cutover is manual: any updates to DNS records pointing to Cloudflare Pages must be performed manually in Cloudflare DNS.
+  - Prior to cutover, verify header parity (`public/_headers`) and CSP enforcement on the `pages.dev` deployment.
+
 ## Backend Migrations (Supabase)
 - Database schema changes are version controlled in `supabase/migrations/`.
 - Deploy changes via Supabase CLI:
