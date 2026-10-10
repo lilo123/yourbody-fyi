@@ -150,6 +150,7 @@ export async function parseNutrition({
         'Gemini rate limit exceeded (15 RPM). Please wait 15 seconds or switch to manual entry.';
       const rateErr: ParseNutritionError = new Error(rateLimitMsg);
       rateErr.is429 = true;
+      rateErr.status = 429;
       rateErr.retryAfter = retryAfterSeconds || 15;
       throw rateErr;
     }

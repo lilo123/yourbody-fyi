@@ -6,6 +6,7 @@ import zlib from 'node:zlib'
 import fs from 'node:fs'
 import path from 'node:path'
 import { buildCspConnectSrcPolicy } from './src/build/cspPolicy.ts'
+import { resolveCommitSha } from './src/build/versionResolver.ts'
 
 function cspPinPlugin(rawUrl?: string): Plugin {
   let supabaseUrl = rawUrl;
@@ -111,7 +112,7 @@ function versionJsonPlugin(): Plugin {
     name: 'version-json-plugin',
     apply: 'build',
     generateBundle() {
-      const sha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'dev';
+      const sha = resolveCommitSha();
       this.emitFile({
         type: 'asset',
         fileName: 'version.json',
@@ -125,8 +126,12 @@ function versionJsonPlugin(): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL;
+  const appCommit = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'dev';
 
   return {
+    define: {
+      __APP_COMMIT__: JSON.stringify(appCommit),
+    },
     plugins: [
       react(),
       tailwindcss(),
@@ -228,6 +233,9 @@ export default defineConfig(({ mode }) => {
             }
             if (pkg === 'workbox-window' || pkg.startsWith('workbox-')) {
               return 'vendor';
+            }
+            if (pkg.startsWith('@sentry/')) {
+              return 'sentry';
             }
             return 'vendor';
           },

@@ -250,11 +250,12 @@ Dietary Fiber 0g`;
       );
     });
 
-    it('enqueues to AI queue when offline with prose input', async () => {
+    it('does not enqueue to AI queue when offline with prose input and sets connection hint', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true, writable: true });
 
       const onParsedSuccess = vi.fn();
       const setStatus = vi.fn();
+      const setIsError = vi.fn();
       const { result } = renderHook(
         () =>
           useNutritionAi({
@@ -263,7 +264,7 @@ Dietary Fiber 0g`;
             onParsedSuccess,
             onFallbackToManual: vi.fn(),
             setStatus,
-            setIsError: vi.fn(),
+            setIsError,
           }),
         { wrapper }
       );
@@ -277,20 +278,13 @@ Dietary Fiber 0g`;
       });
 
       expect(parseNutrition).not.toHaveBeenCalled();
-      expect(offlineModule.enqueueAiItem).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: mockUserId,
-          kind: 'text',
-          text: 'I had a steak salad for dinner',
-          capturedAt: expect.any(String),
-          captureDate: expect.any(String),
-        })
-      );
-      expect(setStatus).toHaveBeenCalledWith('Queued for analysis when online');
+      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
       expect(onParsedSuccess).not.toHaveBeenCalled();
     });
 
-    it('enqueues photo offline to AI queue, rejecting photo exceeding 4 MB', async () => {
+    it('does not enqueue photo offline to AI queue and sets connection hint', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true, writable: true });
 
       const setStatus = vi.fn();
@@ -308,7 +302,6 @@ Dietary Fiber 0g`;
         { wrapper }
       );
 
-      // Normal photo: enqueues successfully
       act(() => {
         result.current.setSelectedPhoto({
           base64: 'abc123base64',
@@ -324,37 +317,9 @@ Dietary Fiber 0g`;
         await result.current.handleAnalyze();
       });
 
-      expect(offlineModule.enqueueAiItem).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: mockUserId,
-          kind: 'photo',
-          photo: { base64: 'abc123base64', mime: 'image/jpeg' },
-        })
-      );
-      expect(setStatus).toHaveBeenCalledWith('Queued for analysis when online');
-
-      // Oversized photo: mock throws AiPhotoTooLargeError
-      vi.mocked(offlineModule.enqueueAiItem).mockRejectedValueOnce(
-        new offlineModule.AiPhotoTooLargeError(5 * 1024 * 1024)
-      );
-
-      act(() => {
-        result.current.setSelectedPhoto({
-          base64: 'hugephoto',
-          dataUrl: 'data:image/jpeg;base64,hugephoto',
-          mimeType: 'image/jpeg',
-          sizeBytes: 5 * 1024 * 1024,
-          width: 4000,
-          height: 3000,
-        });
-      });
-
-      await act(async () => {
-        await result.current.handleAnalyze();
-      });
-
+      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
       expect(setIsError).toHaveBeenCalledWith(true);
-      expect(setStatus).toHaveBeenCalledWith('Photo too large (max 4 MB)');
+      expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
     });
   });
 

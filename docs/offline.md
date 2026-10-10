@@ -31,7 +31,7 @@ To ensure strict data privacy and isolation on multi-user and shared devices, th
 | `outbox` | KeyPath: `opId`<br>Indices: `seq` (unique), `userId`, `state` | Monotonically ordered mutations queued for sequential replay to Supabase. | `src/offline/outbox.ts` |
 | `idmap` | KeyPath: `clientWorkoutId` | Maps client-generated workout UUIDs to server-canonical IDs when reconciling existing sessions. | `src/offline/idmap.ts` |
 | `meta` | Key-value store | Internal synchronization timestamps, schema versions, and queue configurations. | `src/offline/db.ts` |
-| `aiq` | KeyPath: `id`<br>Indices: `status`, `capturedAt` | Local queue for offline nutritional prompts and captured meal photos awaiting analysis. | `src/offline/aiQueue.ts` |
+| `aiq` | KeyPath: `id`<br>Indices: `status`, `capturedAt` | Legacy queue for nutritional prompts and meal photos from older clients awaiting replay. | `src/offline/aiQueue.ts` |
 
 ### Multi-User Isolation Guarantee
 
@@ -171,14 +171,14 @@ For rapid dietary logging without network overhead, the app provides a determini
 - **Strict Grammar Rejection**: Automatically rejects prose, conversational multi-item descriptions, ambiguous numbers, or conflicting duplicate lines.
 - **Staging UI**: Successfully parsed local items are displayed in `StagedMealCard` with a `"Parsed locally"` badge. When online, an `"Analyze with AI instead"` button allows delegating to Gemini.
 
-### Offline AI Capture Queue (`src/offline/aiQueue.ts`)
+### Online-Only AI Meal Parsing & Legacy Queue Replay (`src/offline/aiQueue.ts`)
 
-When network connectivity is unavailable, natural language text logs and meal photos cannot be processed by the serverless AI endpoint:
-- Offline prompts and photos (compressed to <= 4 MB) are staged in the `aiq` IndexedDB store with their exact capture timestamp (`capturedAt`).
-- Upon reconnect, the queue processor processes items sequentially under `navigator.locks.request('yourbody-aiq-<userId>')` with a rate limit of <= 12 requests per minute (minimum 5-second spacing).
+AI meal parsing (both natural language text analysis and photo recognition) is strictly online-only:
+- **Offline Behavior**: When the browser is offline, natural language submit and photo capture actions are disabled, displaying an accessible hint: `"AI needs a connection: use quick log"`. New AI capture requests are not enqueued to IndexedDB while offline.
+- **Local Fallback**: Deterministic local nutrition block parsing (`src/lib/nutrition/localParse.ts`) and quick/manual logging remain fully operational offline.
+- **Legacy Replay Compatibility**: Existing items already queued in the `aiq` store by previous client versions continue to replay sequentially upon reconnection under `navigator.locks.request('yourbody-aiq-<userId>')` with a rate limit of <= 12 requests per minute (minimum 5-second spacing). Replay is maintained for backwards compatibility and is scheduled for removal in a subsequent release.
 - HTTP 429 responses are respected by extracting `Retry-After` headers without depleting retry quotas.
-- Upon successful analysis, the processed result is saved and the raw photo data is removed from IndexedDB in the same database transaction.
-- *Note on Architecture*: AI meal parsing is planned to become online-only; the current offline queue reflects the existing implementation for retaining user capture intent across network interruptions.
+- Upon successful analysis of legacy items, the processed result is saved and the raw photo data is removed from IndexedDB in the same database transaction.
 
 ---
 
@@ -186,6 +186,7 @@ When network connectivity is unavailable, natural language text logs and meal ph
 
 To prevent irreconcilable conflicts, certain complex administrative and relational operations are guarded and disabled offline:
 
+- **AI Meal & Photo Parsing**: Parsing natural language descriptions and analyzing meal photos with Gemini are online-only. When offline, AI input submit and photo actions are disabled with the message `"AI needs a connection: use quick log"`, preventing creation of new queued AI items. Local nutrition block parsing and quick/manual logging remain available offline.
 - **Exercise & Template Authoring**: Creating or editing custom exercises (`src/components/exercises/CreateExerciseSheet.tsx`) and modifying routine templates require live catalog validation and are disabled offline.
 - **Coach Cockpit Operations**: Managing athlete rosters, linking coach codes, and modifying athlete targets require online multi-party authorization.
 - **Historical Modifications**: Deleting workouts from history, editing/deleting existing logged nutrition entries, and altering custom dishes are disabled offline with inline notices (`"Available when online"`), issuing 0 network calls.

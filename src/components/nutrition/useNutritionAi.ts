@@ -1,9 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { CustomDish } from '../../types/database';
 import { formatCalories } from '../../utils/nutrition';
-import { formatLocalTimestamp, normalizeDateStr, getLocalDateStr } from '../../utils/date';
 import { parseNutritionBlock } from '../../lib/nutrition/localParse';
-import { enqueueAiItem, AiPhotoTooLargeError } from '../../offline';
 import { buildStagedItem, type StagedMeal } from './nutritionEngineHelpers';
 import { parseNutrition } from './parseNutrition';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
@@ -48,31 +46,6 @@ export function useNutritionAi({
       setIsRateLimited(false);
     },
   });
-
-  const enqueueToAiQueue = useCallback(
-    async (text?: string, photo?: typeof selectedPhoto) => {
-      if (!targetUserId) {
-        throw new Error('User required to queue item');
-      }
-      const now = new Date();
-      const capturedAt = formatLocalTimestamp(null, now, timeZone);
-      const captureDate = normalizeDateStr(now, timeZone) || getLocalDateStr(now);
-
-      await enqueueAiItem({
-        userId: targetUserId,
-        kind: photo ? 'photo' : 'text',
-        text: text?.trim() || undefined,
-        photo: photo ? { base64: photo.base64, mime: photo.mimeType } : undefined,
-        capturedAt,
-        captureDate,
-      });
-
-      setStatus('Queued for analysis when online');
-      setNlInput('');
-      setSelectedPhoto(null);
-    },
-    [targetUserId, timeZone, setSelectedPhoto, setStatus]
-  );
 
   const handleAnalyze = async (options?: { forceAi?: boolean; overrideText?: string }) => {
     const textToAnalyze = options?.overrideText !== undefined ? options.overrideText : nlInput;
@@ -125,24 +98,13 @@ export function useNutritionAi({
       }
     }
 
-    // 2. Offline check: if not online, enqueue to AI queue
+    // 2. Offline check: AI parsing is online-only. Do not enqueue new items while offline.
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     if (!isOnline) {
-      try {
-        await enqueueToAiQueue(textToAnalyze, selectedPhoto);
-        setIsAnalyzing(false);
-        return;
-      } catch (err: unknown) {
-        console.warn('[useNutritionAi] Failed to enqueue to AI queue:', err);
-        setIsAnalyzing(false);
-        setIsError(true);
-        if (err instanceof AiPhotoTooLargeError || (err as any)?.code === 'PHOTO_TOO_LARGE') {
-          setStatus('Photo too large (max 4 MB)');
-        } else {
-          setStatus((err as Error)?.message || 'Failed to queue item');
-        }
-        return;
-      }
+      setIsAnalyzing(false);
+      setIsError(true);
+      setStatus('AI needs a connection: use quick log');
+      return;
     }
 
     // 3. Online AI analysis
@@ -186,7 +148,7 @@ export function useNutritionAi({
     } catch (error: any) {
       console.warn('AI Edge function failed:', error);
 
-      // Network / offline failure during online attempt -> fallback to AI queue
+      // Network / offline failure during online attempt -> do not enqueue, report connection requirement
       const isNetworkError =
         (typeof navigator !== 'undefined' && !navigator.onLine) ||
         error?.name === 'TypeError' ||
@@ -194,21 +156,11 @@ export function useNutritionAi({
         error?.message?.includes('NetworkError') ||
         error?.message?.includes('Failed to fetch');
 
-      if (isNetworkError && targetUserId) {
-        try {
-          await enqueueToAiQueue(textToAnalyze, selectedPhoto);
-          setIsAnalyzing(false);
-          return;
-        } catch (queueErr: unknown) {
-          console.warn('[useNutritionAi] Failed to fallback-enqueue to AI queue:', queueErr);
-          setIsError(true);
-          if (queueErr instanceof AiPhotoTooLargeError || (queueErr as any)?.code === 'PHOTO_TOO_LARGE') {
-            setStatus('Photo too large (max 4 MB)');
-          } else {
-            setStatus((queueErr as Error)?.message || 'Failed to queue item');
-          }
-          return;
-        }
+      if (isNetworkError) {
+        setIsError(true);
+        setStatus('AI needs a connection: use quick log');
+        onFallbackToManual(textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''));
+        return;
       }
 
       if (error?.is429 || error?.context?.status === 429 || error?.status === 429) {

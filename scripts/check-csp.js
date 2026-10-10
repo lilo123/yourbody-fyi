@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const vercelConfigPath = path.join(rootDir, 'vercel.json');
+const headersConfigPath = path.join(rootDir, 'public', '_headers');
 const distIndexPath = path.join(rootDir, 'dist', 'index.html');
 
 const SENTRY_INGEST_HOST = 'https://o4512229258690560.ingest.us.sentry.io';
@@ -42,6 +43,30 @@ function extractMetaContent(metaTag) {
   return null;
 }
 
+function parseHeadersFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  const content = fs.readFileSync(filePath, 'utf8');
+  const rules = [];
+  let currentRule = null;
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) {
+      continue;
+    }
+    if (!rawLine.startsWith(' ') && !rawLine.startsWith('\t')) {
+      currentRule = { pattern: line, headers: [] };
+      rules.push(currentRule);
+    } else if (currentRule) {
+      currentRule.headers.push(line);
+    }
+  }
+
+  return rules;
+}
+
 function checkCsp() {
   if (!fs.existsSync(vercelConfigPath)) {
     console.error(`FAIL: vercel.json not found at ${vercelConfigPath}`);
@@ -59,6 +84,7 @@ function checkCsp() {
 
   const violations = [];
   const headersSections = Array.isArray(vercelConfig.headers) ? vercelConfig.headers : [];
+  let vercelCsp = null;
 
   for (let i = 0; i < headersSections.length; i++) {
     const section = headersSections[i];
@@ -76,6 +102,9 @@ function checkCsp() {
       }
 
       if (key.toLowerCase() === 'content-security-policy') {
+        if (source === '/(.*)') {
+          vercelCsp = val;
+        }
         const directives = val.split(';').map((directive) => directive.trim()).filter(Boolean);
         for (const directive of directives) {
           const tokens = directive.split(/\s+/).filter(Boolean);
@@ -96,6 +125,71 @@ function checkCsp() {
               );
             }
           }
+        }
+      }
+    }
+  }
+
+  // Verify public/_headers parity with vercel.json
+  const headersRules = parseHeadersFile(headersConfigPath);
+  if (!headersRules) {
+    violations.push(`FAIL: public/_headers not found at ${headersConfigPath}`);
+  } else {
+    let headersCsp = null;
+    const globalRule = headersRules.find((rule) => rule.pattern === '/*');
+    if (globalRule) {
+      for (const headerLine of globalRule.headers) {
+        const colonIdx = headerLine.indexOf(':');
+        if (colonIdx !== -1) {
+          const key = headerLine.slice(0, colonIdx).trim().toLowerCase();
+          const val = headerLine.slice(colonIdx + 1).trim();
+          if (key === 'content-security-policy') {
+            headersCsp = val;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!headersCsp) {
+      violations.push(
+        '[Headers CSP] Content-Security-Policy missing in public/_headers for /* route.'
+      );
+    } else if (vercelCsp) {
+      const normalize = (str) => str.trim().replace(/\s+/g, ' ');
+      if (normalize(headersCsp) !== normalize(vercelCsp)) {
+        violations.push(
+          `[Headers CSP] CSP in public/_headers does not match vercel.json.\n  Expected: ${vercelCsp}\n  Observed: ${headersCsp}`
+        );
+      }
+    }
+
+    const expectedNoCachePaths = [
+      '/sw.js',
+      '/workbox-*',
+      '/manifest.webmanifest',
+      '/index.html',
+      '/version.json',
+    ];
+
+    for (const expectedPath of expectedNoCachePaths) {
+      const rule = headersRules.find((candidate) => candidate.pattern === expectedPath);
+      if (!rule) {
+        violations.push(
+          `[Headers no-cache] Expected no-cache route "${expectedPath}" not found in public/_headers.`
+        );
+      } else {
+        const hasNoCache = rule.headers.some((headerLine) => {
+          const colonIdx = headerLine.indexOf(':');
+          if (colonIdx === -1) return false;
+          const key = headerLine.slice(0, colonIdx).trim().toLowerCase();
+          const val = headerLine.slice(colonIdx + 1).trim().toLowerCase();
+          return key === 'cache-control' && val === 'no-cache';
+        });
+        if (!hasNoCache) {
+          violations.push(
+            `[Headers no-cache] Route "${expectedPath}" in public/_headers is missing "Cache-Control: no-cache".`
+          );
         }
       }
     }
@@ -207,7 +301,7 @@ function checkCsp() {
     process.exit(1);
   }
 
-  console.log('CSP check passed: No deprecated X-XSS-Protection headers, no banned loopback origins in vercel.json, and meta CSP correctly pins origin.');
+  console.log('CSP check passed: No deprecated X-XSS-Protection headers, no banned loopback origins in vercel.json, public/_headers matches vercel.json CSP and cache rules, and meta CSP correctly pins origin.');
   process.exit(0);
 }
 

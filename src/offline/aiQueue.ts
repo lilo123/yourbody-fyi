@@ -123,6 +123,10 @@ function generateId(): string {
 }
 
 export async function enqueueAiItem(input: EnqueueAiItemInput): Promise<AiQueueItem> {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw new Error('AI needs a connection: use quick log');
+  }
+
   if (input.photo?.base64 && input.photo.base64.length > MAX_PHOTO_BASE64_BYTES) {
     throw new AiPhotoTooLargeError(input.photo.base64.length, MAX_PHOTO_BASE64_BYTES);
   }
@@ -223,6 +227,8 @@ export interface AiProcessorOptions {
   analyze: (item: AiQueueItem) => Promise<unknown>;
 }
 
+// Replay path for existing IndexedDB AI queue items is kept for backwards compatibility
+// with older clients that have queued items, and is scheduled for removal in a later release.
 export function startAiQueueProcessor(options: AiProcessorOptions): () => void {
   const { userId, analyze } = options;
   let isStopped = false;
@@ -360,7 +366,7 @@ export function startAiQueueProcessor(options: AiProcessorOptions): () => void {
             const stored = await db.get('aiq', item.id);
             if (!stored) continue;
 
-            if (errStatus === 429) {
+            if (errStatus === 429 || error?.is429) {
               // 429: Retry-After, NO attempt burn
               let retryAfterSec = DEFAULT_429_RETRY_AFTER_SECONDS;
               if (typeof error?.retryAfter === 'number' && Number.isFinite(error.retryAfter)) {
