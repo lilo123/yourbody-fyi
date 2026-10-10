@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { supabase } from '../../lib/supabase';
-import { parseNutrition } from './parseNutrition';
+import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -129,6 +129,61 @@ describe('parseNutrition', () => {
       is429: true,
       retryAfter: 15,
       message: 'Gemini rate limit exceeded (15 RPM). Please wait 15 seconds or switch to manual entry.',
+    });
+  });
+
+  it('unwraps 429 quota_exceeded error preserving code and quota metadata without Retry-After', async () => {
+    (supabase.functions.invoke as any).mockResolvedValue({
+      data: null,
+      error: {
+        context: {
+          status: 429,
+          json: async () => ({
+            code: 'quota_exceeded',
+            plan: 'trial',
+            limit: 30,
+            used: 30,
+            period: 'day',
+            resetsAt: '2026-10-11T00:00:00Z',
+            error: "You've used today's AI parses. Quick log and on-device parsing still work.",
+          }),
+        },
+      },
+    });
+
+    const errorPromise = parseNutrition({ text: 'rice' });
+    await expect(errorPromise).rejects.toMatchObject({
+      is429: true,
+      status: 429,
+      code: 'quota_exceeded',
+      plan: 'trial',
+      limit: 30,
+      used: 30,
+      period: 'day',
+      resetsAt: '2026-10-11T00:00:00Z',
+      message: "You've used today's AI parses. Quick log and on-device parsing still work.",
+    });
+    const caughtErr = await errorPromise.catch((e) => e);
+    expect(caughtErr.retryAfter).toBeUndefined();
+  });
+
+  describe('formatQuotaExceededMessage', () => {
+    it('returns free plan message when limit is 0', () => {
+      expect(formatQuotaExceededMessage(0, 'month')).toBe(
+        "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
+      );
+    });
+
+    it('returns daily usage message when period is day', () => {
+      expect(formatQuotaExceededMessage(30, 'day')).toBe(
+        "You've used today's AI parses. Quick log and on-device parsing still work."
+      );
+    });
+
+    it('returns monthly usage message when period is month', () => {
+      expect(formatQuotaExceededMessage(100, 'month')).toBe(
+        "You've used this month's AI parses. Quick log and on-device parsing still work."
+      );
     });
   });
 

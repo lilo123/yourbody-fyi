@@ -22,7 +22,39 @@ export interface UserProfile {
   max_athletes?: number;
   weight_unit?: WeightUnit;
   pr_mode?: PrMode;
+  trial_ends_at?: string | null;
   created_at?: string;
+  terms_version?: string | null;
+  terms_accepted_at?: string | null;
+  plan?: 'free' | 'basic' | 'pro' | null;
+  paid_until?: string | null;
+  billing_customer_id?: string | null;
+}
+
+export interface BillingEvent {
+  event_id: string;
+  type: string;
+  user_id: string | null;
+  customer_id: string | null;
+  payload: Record<string, unknown>;
+  received_at: string;
+  processed_at: string | null;
+}
+
+export interface Entitlement {
+  plan_effective: string;
+  plan: 'free' | 'basic' | 'pro' | null;
+  paid_until: string | null;
+  trial_ends_at_effective: string | null;
+  has_pro: boolean;
+}
+
+export interface AiUsage {
+  user_id: string;
+  period_kind: 'day' | 'month';
+  period_start: string;
+  count: number;
+  updated_at: string;
 }
 
 export interface CoachAthleteLink {

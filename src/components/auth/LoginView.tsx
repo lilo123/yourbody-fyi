@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Zap, AlertCircle, Eye, EyeOff, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
+import { isTermsConsentEnabled, CURRENT_TERMS_VERSION } from '../../config/features';
 
 type AuthMode = 'signin' | 'register' | 'check_email' | 'forgot_password';
 
@@ -20,6 +21,7 @@ export const LoginView: React.FC = () => {
   const [infoMsg, setInfoMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     let timer: any;
@@ -46,7 +48,17 @@ export const LoginView: React.FC = () => {
         setLoading(false);
         return;
       }
-      const res = await signUp(email, password, 'athlete');
+      if (isTermsConsentEnabled() && !termsAccepted) {
+        setError('You must agree to the Terms of Service and Privacy Policy');
+        setLoading(false);
+        return;
+      }
+      const res = await signUp(
+        email,
+        password,
+        'athlete',
+        isTermsConsentEnabled() ? CURRENT_TERMS_VERSION : undefined
+      );
       if (res.success && res.needsEmailConfirmation) {
         setInfoMsg(res.message || 'Account created! Please check your email to verify your account.');
         setMode('check_email');
@@ -116,6 +128,7 @@ export const LoginView: React.FC = () => {
               onClick={() => {
                 setMode('signin');
                 setError('');
+                setTermsAccepted(false);
               }}
               className={`flex-1 py-2 min-h-[44px] text-xs font-bold uppercase tracking-wider rounded-xl transition flex items-center justify-center touch-manipulation ${
                 mode === 'signin'
@@ -130,6 +143,7 @@ export const LoginView: React.FC = () => {
               onClick={() => {
                 setMode('register');
                 setError('');
+                setTermsAccepted(false);
               }}
               className={`flex-1 py-2 min-h-[44px] text-xs font-bold uppercase tracking-wider rounded-xl transition flex items-center justify-center touch-manipulation ${
                 mode === 'register'
@@ -268,6 +282,42 @@ export const LoginView: React.FC = () => {
               </div>
             )}
 
+            {mode === 'register' && isTermsConsentEnabled() && (
+              <div className="flex items-start gap-2.5 pt-1">
+                <input
+                  id="login-terms-consent"
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  required
+                  className="mt-1 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-zinc-900 cursor-pointer"
+                />
+                <label
+                  htmlFor="login-terms-consent"
+                  className="text-xs text-zinc-400 leading-relaxed cursor-pointer select-none"
+                >
+                  I agree to the{' '}
+                  <a
+                    href="/terms"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-cyan-400 hover:text-cyan-300 underline"
+                  >
+                    Terms of Service
+                  </a>{' '}
+                  and{' '}
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-cyan-400 hover:text-cyan-300 underline"
+                  >
+                    Privacy Policy
+                  </a>
+                </label>
+              </div>
+            )}
+
             {mode === 'signin' && (
               <div className="flex justify-end">
                 <button
@@ -286,7 +336,7 @@ export const LoginView: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (mode === 'register' && isTermsConsentEnabled() && !termsAccepted)}
               className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3 min-h-[44px] rounded-xl uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95 transition disabled:opacity-50"
             >
               {loading ? (mode === 'register' ? 'Creating Account...' : mode === 'signin' ? 'Signing in...' : 'Processing...') : (

@@ -30,6 +30,19 @@ export interface ParseNutritionError extends Error {
   code?: string;
   status?: number;
   context?: any;
+  plan?: string;
+  limit?: number;
+  used?: number;
+  period?: string;
+  resetsAt?: string;
+}
+
+export function formatQuotaExceededMessage(limit?: number, period?: string): string {
+  if (limit === 0) {
+    return "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free.";
+  }
+  const periodStr = period === 'month' ? "this month's" : "today's";
+  return `You've used ${periodStr} AI parses. Quick log and on-device parsing still work.`;
 }
 
 export async function parseNutrition({
@@ -95,13 +108,24 @@ export async function parseNutrition({
     let serverMessage = '';
     let errorCode = '';
     let retryAfterSeconds: number | undefined;
+    let quotaPlan: string | undefined;
+    let quotaLimit: number | undefined;
+    let quotaUsed: number | undefined;
+    let quotaPeriod: string | undefined;
+    let quotaResetsAt: string | undefined;
 
     if (error?.context) {
       if (error.context.error) serverMessage = error.context.error;
       if (error.context.code) errorCode = error.context.code;
       if (error.context.retryAfter) retryAfterSeconds = Number(error.context.retryAfter);
+      if (error.context.plan) quotaPlan = error.context.plan;
+      if (error.context.limit !== undefined) quotaLimit = Number(error.context.limit);
+      if (error.context.used !== undefined) quotaUsed = Number(error.context.used);
+      if (error.context.period) quotaPeriod = error.context.period;
+      if (error.context.resetsAt) quotaResetsAt = error.context.resetsAt;
+      if (error.context.resets_at) quotaResetsAt = error.context.resets_at;
 
-      if (!serverMessage) {
+      if (!serverMessage || !errorCode) {
         try {
           const ctxClone =
             typeof error.context?.clone === 'function' ? error.context.clone() : error.context;
@@ -110,6 +134,12 @@ export async function parseNutrition({
             if (errData?.error) serverMessage = errData.error;
             if (errData?.code) errorCode = errData.code;
             if (errData?.retryAfter) retryAfterSeconds = Number(errData.retryAfter);
+            if (errData?.plan) quotaPlan = errData.plan;
+            if (errData?.limit !== undefined) quotaLimit = Number(errData.limit);
+            if (errData?.used !== undefined) quotaUsed = Number(errData.used);
+            if (errData?.period) quotaPeriod = errData.period;
+            if (errData?.resetsAt) quotaResetsAt = errData.resetsAt;
+            if (errData?.resets_at) quotaResetsAt = errData.resets_at;
           }
         } catch {
           // ignore
@@ -151,7 +181,17 @@ export async function parseNutrition({
       const rateErr: ParseNutritionError = new Error(rateLimitMsg);
       rateErr.is429 = true;
       rateErr.status = 429;
-      rateErr.retryAfter = retryAfterSeconds || 15;
+      if (errorCode) rateErr.code = errorCode;
+      if (retryAfterSeconds !== undefined) {
+        rateErr.retryAfter = retryAfterSeconds;
+      } else if (errorCode !== 'quota_exceeded') {
+        rateErr.retryAfter = 15;
+      }
+      if (quotaPlan !== undefined) rateErr.plan = quotaPlan;
+      if (quotaLimit !== undefined) rateErr.limit = quotaLimit;
+      if (quotaUsed !== undefined) rateErr.used = quotaUsed;
+      if (quotaPeriod !== undefined) rateErr.period = quotaPeriod;
+      if (quotaResetsAt !== undefined) rateErr.resetsAt = quotaResetsAt;
       throw rateErr;
     }
 

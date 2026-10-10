@@ -18,6 +18,7 @@ import {
   getCachedOutboxSummary,
   setFlusherSessionUser,
 } from '../offline';
+import { isTermsConsentEnabled } from '../config/features';
 
 export const AUTH_STORAGE_PREFIX = 'yourbody_';
 
@@ -69,6 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signedOutRef = useRef(false);
   const isRevalidatingRef = useRef(false);
+  const acceptedTermsUsersRef = useRef<Set<string>>(new Set());
   const userRef = useRef<User | null>(user);
   const queryClient = useQueryClient();
 
@@ -113,9 +115,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = useCallback(async (userId: string, email?: string) => {
     return dedupeInFlight(`profile:${userId}`, async () => {
       try {
+        const profileSelect = isTermsConsentEnabled()
+          ? 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode, terms_accepted_at'
+          : 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode';
+
         const { data, error } = await (supabase
           .from('users') as any)
-          .select('id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode')
+          .select(profileSelect)
           .eq('id', userId)
           .single();
 
@@ -141,6 +147,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } as UserProfile;
           setProfile(userWithTz);
           localStorage.setItem('yourbody_user', JSON.stringify(userWithTz));
+          if (isTermsConsentEnabled()) {
+            const metadataVersion = userRef.current?.user_metadata?.terms_version;
+            if (metadataVersion && !userWithTz.terms_accepted_at && !acceptedTermsUsersRef.current.has(userId)) {
+              acceptedTermsUsersRef.current.add(userId);
+              Promise.resolve(supabase.rpc('accept_terms', { p_version: metadataVersion }))
+                .then(({ error: rpcErr }: any) => {
+                  if (rpcErr) {
+                    console.warn('[AuthContext] accept_terms RPC error:', rpcErr);
+                  }
+                })
+                .catch((err: any) => {
+                  console.warn('[AuthContext] accept_terms RPC error:', err);
+                });
+            }
+          }
           if (data.auto_rest_timer !== undefined && data.auto_rest_timer !== null) {
             localStorage.setItem('yourbody_auto_rest_timer', String(data.auto_rest_timer));
           }
@@ -384,17 +405,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const signUp = useCallback(
-    async (email: string, password = 'password123', _role: UserRole = 'athlete') => {
+    async (email: string, password = 'password123', _role: UserRole = 'athlete', termsVersion?: string) => {
       try {
         const sanitizedEmail = email.trim().toLowerCase();
+        const metadata: Record<string, any> = {
+          username: sanitizedEmail.split('@')[0],
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        };
+        if (isTermsConsentEnabled() && termsVersion) {
+          metadata.terms_version = termsVersion;
+        }
         const { data, error } = await supabase.auth.signUp({
           email: sanitizedEmail,
           password,
           options: {
-            data: {
-              username: sanitizedEmail.split('@')[0],
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
+            data: metadata,
           },
         });
         if (error) {
@@ -435,6 +460,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.id, queryClient]);
 
   const signOut = useCallback(async () => {
+    acceptedTermsUsersRef.current.clear();
     signedOutRef.current = true;
     userRef.current = null;
     const currentUserId = user?.id;

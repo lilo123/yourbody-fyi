@@ -11,7 +11,7 @@ import type { CustomDish } from '../../types/database';
 import { formatFileSize } from '../../utils/imageCompression';
 import { StatusBanner } from '../common/StatusBanner';
 import { getScrollBehavior, type StagedItem } from './nutritionEngineHelpers';
-import { parseNutrition } from './parseNutrition';
+import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
 
 export interface AddItemsComposerProps {
@@ -86,7 +86,10 @@ export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo(({
       onParsed(result.items);
     } catch (err: any) {
       if (isCancelledRef.current) return;
-      if (err?.is429 || err?.status === 429) {
+      if (err?.code === 'quota_exceeded') {
+        const quotaMsg = err?.message || formatQuotaExceededMessage(err?.limit, err?.period);
+        setError(quotaMsg);
+      } else if (err?.is429 || err?.status === 429) {
         setError(
           err?.message ||
             'Gemini rate limit exceeded (15 RPM). Please wait 15 seconds or switch to manual entry.'
