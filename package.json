@@ -58,6 +58,7 @@
     "@capacitor/android": "^7.6.8",
     "@capacitor/cli": "^7.6.8",
     "@playwright/test": "^1.62.1",
+    "@sentry/vite-plugin": "3.5.0",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
