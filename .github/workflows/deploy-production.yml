@@ -166,6 +166,20 @@ jobs:
             sleep 15
           done
 
+      - name: Trigger Cloudflare Pages deployment (optional)
+        if: github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_DEPLOY_HOOK_URL: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$CLOUDFLARE_DEPLOY_HOOK_URL" ]; then
+            echo "Triggering Cloudflare Pages deployment hook..."
+            # Vercel remains the primary host, so a failure here only warns.
+            curl -sS -f -o /dev/null -X POST "$CLOUDFLARE_DEPLOY_HOOK_URL" \
+              || echo "::warning::Cloudflare Pages deploy hook request failed"
+          else
+            echo "CLOUDFLARE_DEPLOY_HOOK_URL not configured; skipping Cloudflare Pages deploy hook."
+          fi
+
       - name: Install Playwright Chromium browser
         run: npx playwright install --with-deps chromium
 

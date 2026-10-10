@@ -8,7 +8,7 @@ SELECT col_not_null('public', 'workouts', 'workout_date', 'workouts.workout_date
 SELECT col_type_is('public', 'workouts', 'workout_date', 'date', 'workouts.workout_date is type date');
 SELECT has_function('public', 'workout_civil_date', ARRAY['timestamp with time zone', 'text'], 'workout_civil_date helper exists');
 
--- 2. Pure function unit tests for RD-5 civil date derivation
+-- 2. Pure function unit tests for civil date derivation
 SELECT is(
   public.workout_civil_date('2026-09-26 00:00:00+00'::timestamptz, 'America/Los_Angeles'),
   '2026-09-26'::date,

@@ -9,6 +9,8 @@ import {
   isWorkerCompressionSupported,
   setWorkerCompressionSupportedForTesting,
   resetWorkerCacheForTesting,
+  MAX_PHOTO_BYTES,
+  isPhotoTooLarge,
 } from './imageCompression';
 
 describe('imageCompression utils', () => {
@@ -777,6 +779,41 @@ describe('imageCompression utils', () => {
       expect(result.base64).toBe('dGltZW91dC1mYWxsYmFjaw==');
 
       vi.useRealTimers();
+    });
+  });
+
+  describe('MAX_PHOTO_BYTES and isPhotoTooLarge', () => {
+    it('defines 1.5 MB photo payload cap constant', () => {
+      expect(MAX_PHOTO_BYTES).toBe(1.5 * 1024 * 1024);
+      expect(MAX_PHOTO_BYTES).toBe(1572864);
+    });
+
+    it('correctly identifies payloads that exceed or stay within cap', () => {
+      expect(isPhotoTooLarge(MAX_PHOTO_BYTES)).toBe(false);
+      expect(isPhotoTooLarge(MAX_PHOTO_BYTES - 1)).toBe(false);
+      expect(isPhotoTooLarge(MAX_PHOTO_BYTES + 1)).toBe(true);
+
+      expect(
+        isPhotoTooLarge({
+          base64: 'abc',
+          dataUrl: 'data:image/jpeg;base64,abc',
+          mimeType: 'image/jpeg',
+          sizeBytes: MAX_PHOTO_BYTES,
+          width: 800,
+          height: 600,
+        })
+      ).toBe(false);
+
+      expect(
+        isPhotoTooLarge({
+          base64: 'abc',
+          dataUrl: 'data:image/jpeg;base64,abc',
+          mimeType: 'image/jpeg',
+          sizeBytes: MAX_PHOTO_BYTES + 100,
+          width: 800,
+          height: 600,
+        })
+      ).toBe(true);
     });
   });
 });

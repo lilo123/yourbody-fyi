@@ -15,7 +15,6 @@ export interface CoachContextType {
   athletes: AthleteInfo[];
   isCoach: boolean;
   switchAthlete: (athleteId: string) => void;
-  addAthlete: (name: string, email?: string) => Promise<AthleteInfo>;
   refreshAthletes: () => Promise<void>;
 }
 

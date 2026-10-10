@@ -1,4 +1,4 @@
--- Redesign read-only prechecks (RD-15, RD-16, P1/W50 audit). Run: scripts/prod-db.sh audit supabase/audits/redesign_prechecks.sql
+-- Redesign read-only prechecks: duplicate workout days, warm-up/drop set counts, and coach visibility audit. Run: scripts/prod-db.sh audit supabase/audits/redesign_prechecks.sql
 -- Pure SELECT; changes nothing.
 WITH utz AS (
   SELECT u.id AS user_id,
@@ -11,7 +11,7 @@ day_utc AS (
   FROM public.workouts w GROUP BY 1, 2
 ),
 day_local AS (
-  -- RD-5 civil date: midnight-UTC rows keep their UTC date; rows with a time use the user's zone.
+  -- Civil date: midnight-UTC rows keep their UTC date; rows with a time use the user's zone.
   SELECT w.user_id,
          CASE WHEN (w.date AT TIME ZONE 'UTC')::time = '00:00:00' THEN (w.date AT TIME ZONE 'UTC')::date
               ELSE (w.date AT TIME ZONE coalesce(utz.tz, 'UTC'))::date END AS d,
@@ -42,12 +42,12 @@ cross_templates AS (
   JOIN public.exercises e ON e.id = te.exercise_id
   WHERE e.is_master = false AND t.user_id IS DISTINCT FROM e.user_id
 )
-SELECT 1 AS ord, 'RD-15 duplicate workout days (UTC date)' AS metric, count(*)::text AS value FROM day_utc WHERE n > 1
-UNION ALL SELECT 2, 'RD-15 duplicate workout days (RD-5 civil date)', count(*)::text FROM day_local WHERE n > 1
-UNION ALL SELECT 3, 'RD-15 users affected (RD-5 civil date)', count(DISTINCT user_id)::text FROM day_local WHERE n > 1
-UNION ALL SELECT 4, 'RD-16 warm-up sets', count(*)::text FROM public.sets WHERE set_type = 'warmup'
-UNION ALL SELECT 5, 'RD-16 drop sets', count(*)::text FROM public.sets WHERE set_type = 'drop'
-UNION ALL SELECT 6, 'RD-16 users with warm-up/drop sets', count(DISTINCT w.user_id)::text
+SELECT 1 AS ord, 'Duplicate workout days (UTC date)' AS metric, count(*)::text AS value FROM day_utc WHERE n > 1
+UNION ALL SELECT 2, 'Duplicate workout days (civil date)', count(*)::text FROM day_local WHERE n > 1
+UNION ALL SELECT 3, 'Users affected (civil date)', count(DISTINCT user_id)::text FROM day_local WHERE n > 1
+UNION ALL SELECT 4, 'Warm-up sets', count(*)::text FROM public.sets WHERE set_type = 'warmup'
+UNION ALL SELECT 5, 'Drop sets', count(*)::text FROM public.sets WHERE set_type = 'drop'
+UNION ALL SELECT 6, 'Users with warm-up/drop sets', count(DISTINCT w.user_id)::text
           FROM public.sets s JOIN public.workouts w ON w.id = s.workout_id WHERE s.set_type IN ('warmup', 'drop')
 UNION ALL SELECT 7, 'P1/W50a sets on unlinked non-master exercises', count(*)::text FROM unlinked_sets
 UNION ALL SELECT 8, 'P1/W50a exercises involved', count(DISTINCT ex)::text FROM unlinked_sets
