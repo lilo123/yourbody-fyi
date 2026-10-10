@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import {
   Sparkles,
   ChevronUp,
@@ -10,10 +10,13 @@ import {
   CheckCircle2,
   RotateCcw,
   Utensils,
+  WifiOff,
 } from 'lucide-react';
 import { formatFileSize, type CompressedImage } from '../../utils/imageCompression';
 import { CameraSource } from '@capacitor/camera';
 import { StatusBanner } from '../common/StatusBanner';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { parseNutritionBlock } from '../../lib/nutrition/localParse';
 
 export interface NutritionAiInputProps {
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
@@ -34,6 +37,7 @@ export interface NutritionAiInputProps {
   isError: boolean;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   hasCustomDishes: boolean;
+  isOnline?: boolean;
 }
 
 export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
@@ -55,7 +59,17 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
   isError,
   fileInputRef,
   hasCustomDishes,
+  isOnline: isOnlineProp,
 }) => {
+  const hookOnline = useOnlineStatus();
+  const isOnline = isOnlineProp !== undefined ? isOnlineProp : hookOnline;
+
+  const canParseLocally = useMemo(() => {
+    if (!nlInput.trim() || selectedPhoto) return false;
+    return parseNutritionBlock(nlInput.trim()).ok;
+  }, [nlInput, selectedPhoto]);
+
+  const isSubmitDisabled = isAnalyzing || (!isOnline ? !canParseLocally : (!nlInput.trim() && !selectedPhoto));
   return (
     <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-4">
       <div className="flex items-center justify-between">
@@ -147,6 +161,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           ref={textareaRef}
           value={nlInput}
           onChange={(e) => onNlInputChange(e.target.value)}
+          aria-describedby={!isOnline ? 'ai-offline-hint' : undefined}
           placeholder={
             selectedPhoto
               ? hasCustomDishes
@@ -157,15 +172,29 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           className="w-full bg-transparent text-white text-base placeholder:text-zinc-600 outline-none resize-none"
           rows={3}
         />
+
+        {!isOnline && (
+          <p
+            id="ai-offline-hint"
+            role="status"
+            data-testid="ai-offline-hint"
+            className="text-xs text-zinc-400 flex items-center gap-1.5"
+          >
+            <WifiOff className="w-3.5 h-3.5 text-zinc-400 shrink-0" aria-hidden="true" />
+            <span>AI needs a connection: use quick log</span>
+          </p>
+        )}
+
         <div className="flex justify-between items-center pt-2 border-t border-zinc-850">
           <div className="flex items-center gap-2">
             <button
               type="button"
               data-testid="camera-trigger"
               onClick={() => onPickPhoto(CameraSource.Camera)}
-              disabled={isAnalyzing}
+              disabled={isAnalyzing || !isOnline}
+              aria-describedby={!isOnline ? 'ai-offline-hint' : undefined}
               className="p-2.5 min-h-[44px] min-w-[44px] rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-cyan-400 border border-border-interactive transition flex items-center justify-center gap-1.5 text-xs font-bold disabled:opacity-50 touch-manipulation"
-              title="Take Photo"
+              title={!isOnline ? 'AI needs a connection: use quick log' : 'Take Photo'}
             >
               <CameraIcon className="w-4 h-4 text-cyan-400" />
               <span className="hidden sm:inline">Camera</span>
@@ -175,9 +204,10 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
               type="button"
               data-testid="gallery-trigger"
               onClick={() => onPickPhoto(CameraSource.Photos)}
-              disabled={isAnalyzing}
+              disabled={isAnalyzing || !isOnline}
+              aria-describedby={!isOnline ? 'ai-offline-hint' : undefined}
               className="p-2.5 min-h-[44px] min-w-[44px] rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-cyan-400 border border-border-interactive transition flex items-center justify-center gap-1.5 text-xs font-bold disabled:opacity-50 touch-manipulation"
-              title="Photo Gallery"
+              title={!isOnline ? 'AI needs a connection: use quick log' : 'Photo Gallery'}
             >
               <ImageIcon className="w-4 h-4 text-cyan-400" />
               <span className="hidden sm:inline">Gallery</span>
@@ -189,6 +219,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
               accept="image/*"
               className="hidden"
               data-testid="hidden-file-input"
+              disabled={!isOnline}
               onChange={onFileChange}
             />
           </div>
@@ -197,8 +228,9 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
             type="button"
             data-testid="analyze-meal-button"
             onClick={onAnalyze}
-            disabled={isAnalyzing || (!nlInput.trim() && !selectedPhoto)}
+            disabled={isSubmitDisabled}
             aria-busy={isAnalyzing ? 'true' : undefined}
+            aria-describedby={!isOnline ? 'ai-offline-hint' : undefined}
             className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs px-4 py-2.5 min-h-[44px] min-w-[44px] rounded-xl shadow-neon-cyan active:scale-95 transition disabled:opacity-50 flex items-center justify-center gap-1.5 touch-manipulation"
           >
             <Sparkles className="w-3.5 h-3.5" />
