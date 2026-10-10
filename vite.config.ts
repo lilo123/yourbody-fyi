@@ -1,10 +1,41 @@
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import zlib from 'node:zlib'
 import fs from 'node:fs'
 import path from 'node:path'
+import { buildCspConnectSrcPolicy } from './src/build/cspPolicy.ts'
+
+function cspPinPlugin(rawUrl?: string): Plugin {
+  let supabaseUrl = rawUrl;
+  return {
+    name: 'csp-pin-plugin',
+    apply: 'build',
+    configResolved(config) {
+      if (!supabaseUrl) {
+        const env = loadEnv(config.mode, config.root || process.cwd(), '');
+        supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL;
+      }
+    },
+    transformIndexHtml() {
+      const policy = buildCspConnectSrcPolicy(supabaseUrl);
+      if (!policy) {
+        return;
+      }
+      return [
+        {
+          tag: 'meta',
+          attrs: {
+            'http-equiv': 'Content-Security-Policy',
+            content: policy,
+          },
+          injectTo: 'head-prepend',
+        },
+      ];
+    },
+  };
+}
 
 function chunkReporterPlugin() {
   return {
@@ -91,111 +122,117 @@ function versionJsonPlugin(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    VitePWA({
-      strategies: 'generateSW',
-      registerType: 'prompt',
-      injectRegister: false,
-      manifest: {
-        name: 'Yourbody.fyi',
-        short_name: 'Yourbody',
-        description: 'Yourbody.fyi | Fitness & Nutrition',
-        theme_color: '#09090b',
-        background_color: '#09090b',
-        display: 'standalone',
-        start_url: '/',
-        scope: '/',
-        icons: [
-          {
-            src: '/pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: '/pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: '/pwa-maskable-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL;
+
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      VitePWA({
+        strategies: 'generateSW',
+        registerType: 'prompt',
+        injectRegister: false,
+        manifest: {
+          name: 'Yourbody.fyi',
+          short_name: 'Yourbody',
+          description: 'Yourbody.fyi | Fitness & Nutrition',
+          theme_color: '#09090b',
+          background_color: '#09090b',
+          display: 'standalone',
+          start_url: '/',
+          scope: '/',
+          icons: [
+            {
+              src: '/pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+            },
+            {
+              src: '/pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+            },
+            {
+              src: '/pwa-maskable-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
+          navigateFallback: '/index.html',
+          cleanupOutdatedCaches: true,
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        },
+        devOptions: {
+          enabled: false,
+        },
+      }),
+      chunkReporterPlugin(),
+      versionJsonPlugin(),
+      cspPinPlugin(supabaseUrl),
+    ],
+    server: {
+      watch: {
+        // Vite's watcher covers the whole project root by default. The e2e gate
+        // streams its Playwright reporter output into docs/evidence/ *while the
+        // browser is driving the app*, and db-snapshot.js writes into scripts/.
+        // Those writes trigger a full page reload mid-test, which resets React
+        // state to the first page of results and surfaces as either a wrong count
+        // or "Execution context was destroyed, most likely because of a
+        // navigation". Verified directly: writing into docs/ every 200ms while
+        // the suite runs makes even the login step time out.
+        //
+        // None of these paths are in the application's module graph, so ignoring
+        // them does not affect HMR for real source edits.
+        ignored: [
+          '**/docs/**',
+          '**/test-results/**',
+          '**/playwright-report/**',
+          '**/dist/**',
+          '**/coverage/**',
+          '**/supabase/**',
+          '**/scripts/.db-snapshot-*.json',
+          '**/*.tsbuildinfo',
         ],
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
-        navigateFallback: '/index.html',
-        cleanupOutdatedCaches: true,
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-      },
-      devOptions: {
-        enabled: false,
-      },
-    }),
-    chunkReporterPlugin(),
-    versionJsonPlugin(),
-  ],
-  server: {
-    watch: {
-      // Vite's watcher covers the whole project root by default. The e2e gate
-      // streams its Playwright reporter output into docs/evidence/ *while the
-      // browser is driving the app*, and db-snapshot.js writes into scripts/.
-      // Those writes trigger a full page reload mid-test, which resets React
-      // state to the first page of results and surfaces as either a wrong count
-      // or "Execution context was destroyed, most likely because of a
-      // navigation". Verified directly: writing into docs/ every 200ms while
-      // the suite runs makes even the login step time out.
-      //
-      // None of these paths are in the application's module graph, so ignoring
-      // them does not affect HMR for real source edits.
-      ignored: [
-        '**/docs/**',
-        '**/test-results/**',
-        '**/playwright-report/**',
-        '**/dist/**',
-        '**/coverage/**',
-        '**/supabase/**',
-        '**/scripts/.db-snapshot-*.json',
-        '**/*.tsbuildinfo',
-      ],
     },
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          const pkg = getPackageName(id);
-          if (!pkg) return;
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const pkg = getPackageName(id);
+            if (!pkg) return;
 
-          if (pkg.startsWith('@supabase/')) {
-            return 'supabase';
-          }
-          if (pkg.startsWith('@tanstack/')) {
-            return 'tanstack';
-          }
-          if (pkg === 'react' || pkg === 'react-dom' || pkg === 'scheduler') {
-            return 'react-vendor';
-          }
-          if (pkg === 'lucide-react') {
-            return 'lucide-react';
-          }
-          if (pkg === 'react-hook-form') {
-            return 'react-hook-form';
-          }
-          if (pkg === 'react-router' || pkg === 'react-router-dom') {
-            return 'react-router-dom';
-          }
-          if (pkg === 'workbox-window' || pkg.startsWith('workbox-')) {
+            if (pkg.startsWith('@supabase/')) {
+              return 'supabase';
+            }
+            if (pkg.startsWith('@tanstack/')) {
+              return 'tanstack';
+            }
+            if (pkg === 'react' || pkg === 'react-dom' || pkg === 'scheduler') {
+              return 'react-vendor';
+            }
+            if (pkg === 'lucide-react') {
+              return 'lucide-react';
+            }
+            if (pkg === 'react-hook-form') {
+              return 'react-hook-form';
+            }
+            if (pkg === 'react-router' || pkg === 'react-router-dom') {
+              return 'react-router-dom';
+            }
+            if (pkg === 'workbox-window' || pkg.startsWith('workbox-')) {
+              return 'vendor';
+            }
             return 'vendor';
-          }
-          return 'vendor';
+          },
         },
       },
     },
-  },
+  };
 })
