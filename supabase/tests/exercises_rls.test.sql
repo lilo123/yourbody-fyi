@@ -237,7 +237,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', '{"role":"authenticated","sub":"' || v_coach_id || '"}', true);
   SELECT count(*) INTO v_seen FROM public.exercises WHERE id = v_ath_ex_id;
   IF v_seen <> 0 THEN
-    RAISE EXCEPTION 'W50 breach: unlinked platform coach saw athlete custom exercise (saw % rows)', v_seen;
+    RAISE EXCEPTION 'Visibility breach: unlinked platform coach saw athlete custom exercise (saw % rows)', v_seen;
   END IF;
 
   PERFORM set_config('role', 'postgres', true);
@@ -337,7 +337,7 @@ BEGIN
   GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
 
   IF v_rows_updated <> 0 THEN
-    RAISE EXCEPTION 'RD-10 breach: coach updated athlete custom exercise (% rows affected)', v_rows_updated;
+    RAISE EXCEPTION 'Visibility breach: coach updated athlete custom exercise (% rows affected)', v_rows_updated;
   END IF;
 
   PERFORM set_config('role', 'postgres', true);
