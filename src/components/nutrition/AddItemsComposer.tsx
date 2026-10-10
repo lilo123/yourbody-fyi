@@ -13,6 +13,9 @@ import { StatusBanner } from '../common/StatusBanner';
 import { getScrollBehavior, type StagedItem } from './nutritionEngineHelpers';
 import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
+import { useFeatureFlag } from '../../hooks/useFeatureFlag';
+
+const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
 
 export interface AddItemsComposerProps {
   customDishes?: CustomDish[];
@@ -32,6 +35,9 @@ export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo(({
   const [text, setText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+  const paywallEnabled = useFeatureFlag('paywall_enabled');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const isCancelledRef = useRef(false);
@@ -74,6 +80,7 @@ export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo(({
     isCancelledRef.current = false;
     setIsAnalyzing(true);
     setError(null);
+    setIsQuotaExceeded(false);
 
     try {
       const result = await parseNutrition({
@@ -89,6 +96,7 @@ export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo(({
       if (err?.code === 'quota_exceeded') {
         const quotaMsg = err?.message || formatQuotaExceededMessage(err?.limit, err?.period);
         setError(quotaMsg);
+        setIsQuotaExceeded(true);
       } else if (err?.is429 || err?.status === 429) {
         setError(
           err?.message ||
@@ -169,6 +177,7 @@ export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo(({
         onChange={(e) => {
           setText(e.target.value);
           if (error) setError(null);
+          if (isQuotaExceeded) setIsQuotaExceeded(false);
         }}
         placeholder="e.g. a banana and 200 ml oat milk"
         disabled={isAnalyzing}
@@ -265,7 +274,28 @@ export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo(({
         testId="composer-error"
         className="text-xs"
         icon={<AlertCircle className="w-4 h-4 shrink-0 text-rose-400" aria-hidden="true" />}
+        action={
+          paywallEnabled && isQuotaExceeded ? (
+            <button
+              type="button"
+              data-testid="composer-upgrade-btn"
+              onClick={() => setIsUpgradeOpen(true)}
+              className="bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-xs px-3 py-1.5 rounded-lg transition active:scale-95 shrink-0 min-h-[44px] flex items-center justify-center touch-manipulation cursor-pointer"
+            >
+              Upgrade
+            </button>
+          ) : undefined
+        }
       />
+
+      {isUpgradeOpen && (
+        <React.Suspense fallback={null}>
+          <UpgradeSheet
+            isOpen={isUpgradeOpen}
+            onClose={() => setIsUpgradeOpen(false)}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 });

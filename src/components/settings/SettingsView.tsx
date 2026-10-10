@@ -19,6 +19,9 @@ import { useToast } from '../../hooks/useToast';
 import { WeightUnitCard } from './WeightUnitCard';
 import { PrModeCard } from './PrModeCard';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useFeatureFlag } from '../../hooks/useFeatureFlag';
+
+const SubscriptionCard = React.lazy(() => import('./SubscriptionCard'));
 
 interface SettingsFormProps {
   profile: UserProfile | null;
@@ -39,6 +42,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
 }) => {
   const { show: showToast } = useToast();
   const isOnline = useOnlineStatus();
+  const paywallEnabled = useFeatureFlag('paywall_enabled');
   const [username, setUsername] = useState(profile?.username || '');
   const [targetCalories, setTargetCalories] = useState(profile?.target_calories || 2200);
   const [targetProtein, setTargetProtein] = useState(profile?.target_protein || 160);
@@ -180,6 +184,13 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Subscription Card */}
+      {paywallEnabled && (
+        <React.Suspense fallback={null}>
+          <SubscriptionCard />
+        </React.Suspense>
+      )}
 
       {/* Coach Mode Card */}
       <CoachSettingsCard

@@ -172,7 +172,6 @@ export const NutritionEngine: React.FC = () => {
     if (!deferredMealDelete.pending) return remainingFuel;
     return calculateRemainingFuel(displayedDailyTotals, targets);
   }, [remainingFuel, displayedDailyTotals, targets, deferredMealDelete.pending]);
-
   // Own query status (not a prefix lookup in the cache, which matched other nutrition_logs keys and was not reactive).
   const isLogsPending = !isNutritionLogsError && (isNutritionLogsPending || !targetUserId);
 
@@ -433,6 +432,7 @@ export const NutritionEngine: React.FC = () => {
           isError={isError}
           fileInputRef={ai.fileInputRef}
           hasCustomDishes={displayedCustomDishes.length > 0}
+          isQuotaExceeded={ai.isQuotaExceeded}
         />
       )}
 

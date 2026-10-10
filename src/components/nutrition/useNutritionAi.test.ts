@@ -56,6 +56,7 @@ describe('useNutritionAi quota exceeded handling', () => {
     });
 
     expect(result.current.isRateLimited).toBe(false);
+    expect(result.current.isQuotaExceeded).toBe(true);
     expect(setIsError).toHaveBeenCalledWith(true);
     expect(setStatus).toHaveBeenCalledWith(
       "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
@@ -81,6 +82,7 @@ describe('useNutritionAi quota exceeded handling', () => {
     });
 
     expect(result.current.isRateLimited).toBe(false);
+    expect(result.current.isQuotaExceeded).toBe(true);
     expect(setIsError).toHaveBeenCalledWith(true);
     expect(setStatus).toHaveBeenCalledWith(
       "You've used today's AI parses. Quick log and on-device parsing still work."
@@ -106,6 +108,7 @@ describe('useNutritionAi quota exceeded handling', () => {
     });
 
     expect(result.current.isRateLimited).toBe(false);
+    expect(result.current.isQuotaExceeded).toBe(true);
     expect(setIsError).toHaveBeenCalledWith(true);
     expect(setStatus).toHaveBeenCalledWith(
       "You've used this month's AI parses. Quick log and on-device parsing still work."
@@ -130,6 +133,7 @@ describe('useNutritionAi quota exceeded handling', () => {
     });
 
     expect(result.current.isRateLimited).toBe(true);
+    expect(result.current.isQuotaExceeded).toBe(false);
     expect(setIsError).toHaveBeenCalledWith(false);
     expect(setStatus).toHaveBeenCalledWith('');
   });

@@ -468,5 +468,28 @@ describe('SettingsView', () => {
     expect(toggleBtn.getAttribute('aria-checked')).toBe(initialChecked);
     expect(mockUpsert).not.toHaveBeenCalled();
   });
+
+  describe('paywall_enabled feature flag gating', () => {
+    it('flag off: does not render Subscription card', async () => {
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      expect(screen.queryByTestId('subscription-card')).toBeNull();
+    });
+
+    it('flag on: renders Subscription card after Profile & Mode', async () => {
+      const useFeatureFlagModule = await import('../../hooks/useFeatureFlag');
+      vi.spyOn(useFeatureFlagModule, 'useFeatureFlag').mockImplementation((key) => {
+        if (key === 'paywall_enabled') return true;
+        return false;
+      });
+
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const card = await screen.findByTestId('subscription-card');
+      expect(card).toBeDefined();
+    });
+  });
 });
 
