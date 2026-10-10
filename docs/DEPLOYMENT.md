@@ -124,7 +124,9 @@ Secrets and variables must be configured in GitHub repository settings:
 The private operations repository (`lilo123/yourbody-ops`) provides automated disaster recovery controls:
 - **Nightly Offsite Backups:** Runs daily at 03:17 UTC via the database session pooler, encrypting full dumps with `age` and archiving artifacts with 14-day retention.
 - **Database Keep-Alive:** Daily lightweight health check preventing database pause on inactive tiers.
-- **Restore Drills:** The maintainer decrypts a backup locally (the age private key is kept offline and never stored in CI). `restore-drill.sh` then restores the decrypted dump into the staging database, times each phase, and compares per-table row counts against the dump.
+- **Restore Drills:** a manually triggered workflow takes a fresh production dump, restores it into the empty staging project, and compares per-table row counts against the dump, recording the duration of each phase. It refuses to run when the staging URL points at production or when staging is not empty, and it prints only table names, counts, and timings.
+- **Staging Reset:** a manually triggered, confirmation-gated workflow empties staging after a drill so no production data remains there. Staging is then rebuilt by the staging deploy workflow.
+- **Backup decryption check:** the age private key is kept offline and never stored in CI. The maintainer can confirm that a nightly artifact decrypts with `age -d -i <key file> backup-*.tar.age | tar -tv`.
 
 ---
 
@@ -138,3 +140,23 @@ Edge functions read their runtime configuration from the Supabase project they r
 | `GEMINI_MODEL_ID`, `GEMINI_VISION_MODEL_ID` | *(Optional)* Model overrides. |
 | `ALLOWED_ORIGINS` | *(Optional)* Comma-separated extra CORS origins. |
 | `ENVIRONMENT` | Set to `production` in production to disable localhost origins. |
+
+---
+
+## 7. Preview Deployments
+
+Every pull request gets a preview deployment from the hosting provider. Previews are built with the **staging** Supabase project, so testing on a preview never touches production data.
+
+| Setting | Where | Value |
+|---------|-------|-------|
+| `VITE_SUPABASE_URL` | Hosting provider env vars, **Preview** only | Staging project URL |
+| `VITE_SUPABASE_ANON_KEY` | Hosting provider env vars, **Preview** only | Staging publishable (anon) key |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Hosting provider env vars, **Production** only | Production values |
+| Auth redirect URLs | Staging project → Authentication → URL Configuration | The preview host pattern |
+| `GEMINI_API_KEY` | Staging project → Edge Functions → Secrets | A key separate from production |
+
+Notes:
+- Both `VITE_*` values are public by design: they are embedded in the browser bundle, and data access is enforced by row-level security. Never place a secret or service-role key in a `VITE_*` variable.
+- Edge functions accept preview origins through `supabase/functions/_shared/cors.ts`. Per-deployment preview hosts are matched by a pattern anchored on the hosting team suffix.
+- When a pull request changes `supabase/**`, the staging deploy workflow applies its migrations and functions to staging, so the preview runs against the matching backend.
+- To check that a preview uses staging, fetch the preview's main JavaScript bundle and confirm it references the staging project host and not production.
