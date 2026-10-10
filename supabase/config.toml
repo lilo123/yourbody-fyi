@@ -423,4 +423,23 @@ verify_jwt = true
 import_map = "./functions/parse-nutrition/deno.json"
 entrypoint = "./functions/parse-nutrition/index.ts"
 
+[functions.create-checkout]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-checkout/deno.json"
+entrypoint = "./functions/create-checkout/index.ts"
+
+[functions.create-portal-session]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-portal-session/deno.json"
+entrypoint = "./functions/create-portal-session/index.ts"
+
+[functions.stripe-webhook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/stripe-webhook/deno.json"
+entrypoint = "./functions/stripe-webhook/index.ts"
+
+
 

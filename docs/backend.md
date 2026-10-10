@@ -165,3 +165,61 @@ STABLE, SECURITY DEFINER RPC callable by authenticated users (`auth.uid()`). Ret
 }
 ```
 Unauthenticated calls raise an authentication required error (`28000`).
+
+## Stripe (test mode, staging)
+
+### Overview
+Stripe integration provides serverless edge functions for checkout session generation, customer portal navigation, and subscription webhook processing. This implementation operates in test mode on staging environments. Live keys are strictly refused by design. No user interface components are included in this PR.
+
+### Edge Functions
+All edge functions are configured in `supabase/config.toml` and execute in the Supabase Deno Edge Runtime:
+
+1. **`create-checkout`** (`verify_jwt = true`):
+   - **Method**: `POST`
+   - **Auth**: Requires valid Supabase user JWT via `Authorization: Bearer <token>`. Caller authenticated via `userClient.auth.getUser()`.
+   - **Request**: `{ "plan": "basic" | "pro" }`
+   - **Origin Validation**: Evaluates the `Origin` header against the shared CORS allowlist. Returns `400` on missing or disallowed origins.
+   - **Checkout Session**: Creates a Stripe Checkout session in `mode: 'subscription'`, setting `client_reference_id = user.id`, `metadata.user_id = user.id`, and `subscription_data.metadata.user_id = user.id`. Reuses existing `users.billing_customer_id` if present; otherwise specifies `customer_email`. Sets `success_url` to `${origin}/settings?billing=success` and `cancel_url` to `${origin}/settings?billing=cancelled`.
+   - **Response**: `{ "url": string }`
+
+2. **`create-portal-session`** (`verify_jwt = true`):
+   - **Method**: `POST`
+   - **Auth**: Requires valid Supabase user JWT via `Authorization: Bearer <token>`.
+   - **Origin Validation**: Resolves `return_url` as `${origin}/settings` only if the `Origin` header passes the shared CORS allowlist (returns `400` otherwise).
+   - **Customer Requirement**: Inspects `users.billing_customer_id` via `service_role`. Returns `409` (`{ "code": "no_billing_customer" }`) if no customer record exists.
+   - **Response**: `{ "url": string }`
+
+3. **`stripe-webhook`** (`verify_jwt = false`):
+   - **Method**: `POST`
+   - **Signature Verification**: Verifies incoming `Stripe-Signature` header against the raw body using `stripe.webhooks.constructEventAsync()` with `STRIPE_WEBHOOK_SECRET` and `Stripe.createSubtleCryptoProvider()`. Returns `400` (`{ "error": "Invalid signature" }`) on verification failure without leaking details.
+   - **Endpoint Path**: `/functions/v1/stripe-webhook`
+
+### Secrets and Environment Configuration
+The following environment secrets must be configured in Supabase (values reside on staging only; production retains none):
+- `STRIPE_SECRET_KEY`: Stripe API secret key (test mode only, starting with `sk_test_`).
+- `STRIPE_WEBHOOK_SECRET`: Webhook signing secret (`whsec_...`).
+- `STRIPE_PRICE_BASIC`: Stripe Price identifier for the basic subscription plan.
+- `STRIPE_PRICE_PRO`: Stripe Price identifier for the pro subscription plan.
+- Standard platform variables: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+### Live Key Refusal
+The shared guard `_shared/stripeConfig.ts` inspects `STRIPE_SECRET_KEY` on invocation. If the key starts with `sk_live_` or `rk_live_`, execution terminates immediately returning `503` (`{ "code": "live_keys_refused" }`). If `STRIPE_SECRET_KEY` is unset or empty, the guard returns `503` (`{ "code": "billing_not_configured" }`). Secret keys are never logged.
+
+### Stripe Dashboard Webhook Configuration
+The webhook listener at `/functions/v1/stripe-webhook` handles the following events, which must be enabled in the Stripe dashboard:
+- `checkout.session.completed`: Sets `users.billing_customer_id` for the corresponding `client_reference_id`.
+- `invoice.paid`: Resolves the user by `billing_customer_id` (fallback to subscription `metadata.user_id`), maps the line item price ID to `plan` (`basic` or `pro`), and updates `paid_until` to the line item period end timestamp (`line.period.end`).
+- `customer.subscription.deleted`: Leaves `paid_until` as-is, granting the user access through the end of the prepaid period with no plan modification.
+- `charge.refunded`: Immediately revokes access by updating `users.paid_until = now()` for the matching customer.
+- Unhandled/unknown event types: Recorded in `billing_events`, marked as processed, and acknowledged with `200` (`{ "ignored": true }`).
+
+### Idempotency and State Mutations
+Incoming webhook events are recorded in `public.billing_events`:
+```sql
+INSERT INTO public.billing_events (event_id, type, customer_id, user_id, payload)
+VALUES (...)
+ON CONFLICT (event_id) DO NOTHING;
+```
+If an event was already processed (row exists), the endpoint immediately returns `200` (`{ "duplicate": true }`) without triggering duplicate state side effects.
+
+Payloads stored in `billing_events` are strictly minimal, capturing only technical identifiers, object types, status flags, transaction amounts, and period expiration timestamps. No customer names, email addresses, payment methods, or physical addresses are stored. All database updates to `public.users` execute through the `service_role` client to satisfy the `protect_user_billing_fields()` trigger.
