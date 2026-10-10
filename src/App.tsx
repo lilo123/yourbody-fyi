@@ -6,7 +6,6 @@ import { CoachProvider } from './context/CoachContext';
 import { Header } from './components/common/Header';
 import { BottomNav } from './components/common/BottomNav';
 import { LoginView } from './components/auth/LoginView';
-import { ResetPasswordView } from './components/auth/ResetPasswordView';
 import { GlobalRestTimerPill } from './components/common/GlobalRestTimerPill';
 import { ToastProvider } from './context/ToastContext';
 import { ToastHost } from './components/common/ToastHost';
@@ -16,11 +15,14 @@ import { SyncToastBridge } from './components/sync/SyncToastBridge';
 import { AttentionBanner } from './components/sync/AttentionBanner';
 import { useOfflinePrefetch } from './offline-prefetch';
 import { registerOutboxUpdateBlocker, startAiQueueProcessor } from './offline';
-import { parseNutrition } from './components/nutrition/parseNutrition';
 import { registerUpdateBlocker } from './pwa/updateSafety';
 import './App.css';
 
 registerOutboxUpdateBlocker(registerUpdateBlocker);
+
+const ResetPasswordView = React.lazy(() =>
+  import('./components/auth/ResetPasswordView').then((m) => ({ default: m.ResetPasswordView }))
+);
 
 const WorkoutEngine = React.lazy(() =>
   import('./components/workout/WorkoutEngine').then((m) => ({ default: m.WorkoutEngine }))
@@ -134,6 +136,7 @@ function AppLayout() {
     return startAiQueueProcessor({
       userId: user.id,
       analyze: async (item) => {
+        const { parseNutrition } = await import('./components/nutrition/parseNutrition');
         return await parseNutrition({
           text: item.text,
           photo: item.photo
