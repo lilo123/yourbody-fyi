@@ -7,6 +7,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { buildCspConnectSrcPolicy } from './src/build/cspPolicy.ts'
 import { resolveCommitSha } from './src/build/versionResolver.ts'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
+import { resolveSentryPluginConfig } from './src/build/sentryPluginConfig.ts'
 
 function cspPinPlugin(rawUrl?: string): Plugin {
   let supabaseUrl = rawUrl;
@@ -122,11 +124,40 @@ function versionJsonPlugin(): Plugin {
   };
 }
 
+function cleanSourceMapsPlugin(outDir = 'dist'): Plugin {
+  return {
+    name: 'clean-sourcemaps-post-build',
+    apply: 'build',
+    enforce: 'post',
+    closeBundle() {
+      const deleteMaps = (dir: string) => {
+        if (!fs.existsSync(dir)) return;
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            deleteMaps(fullPath);
+          } else if (entry.isFile() && entry.name.endsWith('.map')) {
+            try {
+              fs.unlinkSync(fullPath);
+            } catch (err) {
+              console.warn('[cleanSourceMapsPlugin] Failed to delete map:', fullPath, err);
+            }
+          }
+        }
+      };
+      deleteMaps(path.resolve(outDir));
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL;
-  const appCommit = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'dev';
+  const mergedEnv = { ...process.env, ...env };
+  const appCommit = resolveCommitSha(mergedEnv);
+  const sentryConfig = resolveSentryPluginConfig(mergedEnv, appCommit);
 
   return {
     define: {
@@ -180,6 +211,12 @@ export default defineConfig(({ mode }) => {
       chunkReporterPlugin(),
       versionJsonPlugin(),
       cspPinPlugin(supabaseUrl),
+      ...(sentryConfig.enabled && sentryConfig.options
+        ? [
+            sentryVitePlugin(sentryConfig.options),
+            cleanSourceMapsPlugin(),
+          ]
+        : []),
     ],
     server: {
       watch: {
@@ -207,6 +244,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      ...(sentryConfig.sourcemap ? { sourcemap: sentryConfig.sourcemap } : {}),
       rollupOptions: {
         output: {
           manualChunks(id) {

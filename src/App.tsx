@@ -6,7 +6,6 @@ import { CoachProvider } from './context/CoachContext';
 import { Header } from './components/common/Header';
 import { BottomNav } from './components/common/BottomNav';
 import { LoginView } from './components/auth/LoginView';
-import { ResetPasswordView } from './components/auth/ResetPasswordView';
 import { GlobalRestTimerPill } from './components/common/GlobalRestTimerPill';
 import { ToastProvider } from './context/ToastContext';
 import { ToastHost } from './components/common/ToastHost';
@@ -16,11 +15,14 @@ import { SyncToastBridge } from './components/sync/SyncToastBridge';
 import { AttentionBanner } from './components/sync/AttentionBanner';
 import { useOfflinePrefetch } from './offline-prefetch';
 import { registerOutboxUpdateBlocker, startAiQueueProcessor } from './offline';
-import { parseNutrition } from './components/nutrition/parseNutrition';
 import { registerUpdateBlocker } from './pwa/updateSafety';
 import './App.css';
 
 registerOutboxUpdateBlocker(registerUpdateBlocker);
+
+const ResetPasswordView = React.lazy(() =>
+  import('./components/auth/ResetPasswordView').then((m) => ({ default: m.ResetPasswordView }))
+);
 
 const WorkoutEngine = React.lazy(() =>
   import('./components/workout/WorkoutEngine').then((m) => ({ default: m.WorkoutEngine }))
@@ -39,6 +41,15 @@ const CoachCockpit = React.lazy(() =>
 );
 const HistoryView = React.lazy(() =>
   import('./components/history/HistoryView').then((m) => ({ default: m.HistoryView }))
+);
+const TermsPage = React.lazy(() =>
+  import('./legal/TermsPage').then((m) => ({ default: m.TermsPage }))
+);
+const PrivacyPage = React.lazy(() =>
+  import('./legal/PrivacyPage').then((m) => ({ default: m.PrivacyPage }))
+);
+const RefundsPage = React.lazy(() =>
+  import('./legal/RefundsPage').then((m) => ({ default: m.RefundsPage }))
 );
 
 const LazyFallback: React.FC = () => (
@@ -134,6 +145,7 @@ function AppLayout() {
     return startAiQueueProcessor({
       userId: user.id,
       analyze: async (item) => {
+        const { parseNutrition } = await import('./components/nutrition/parseNutrition');
         return await parseNutrition({
           text: item.text,
           photo: item.photo
@@ -286,6 +298,9 @@ function AppLayout() {
               path="/reset-password" 
               element={<ResetPasswordView />} 
             />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/refunds" element={<RefundsPage />} />
             <Route path="*" element={<LastRouteRedirect />} />
           </Routes>
         </React.Suspense>
