@@ -34,6 +34,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage: {
+        Row: {
+          count: number
+          period_kind: string
+          period_start: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          period_kind: string
+          period_start: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          period_kind?: string
+          period_start?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_config: {
         Row: {
           description: string | null
@@ -426,6 +458,7 @@ export type Database = {
           target_fiber: number | null
           target_protein: number | null
           timezone: string | null
+          trial_ends_at: string | null
           username: string | null
           weight_unit: string
         }
@@ -445,6 +478,7 @@ export type Database = {
           target_fiber?: number | null
           target_protein?: number | null
           timezone?: string | null
+          trial_ends_at?: string | null
           username?: string | null
           weight_unit?: string
         }
@@ -464,6 +498,7 @@ export type Database = {
           target_fiber?: number | null
           target_protein?: number | null
           timezone?: string | null
+          trial_ends_at?: string | null
           username?: string | null
           weight_unit?: string
         }
@@ -506,6 +541,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ai_plan_for: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: string
+      }
+      consume_ai_quota: {
+        Args: {
+          p_cost?: number
+        }
+        Returns: Json
+      }
       disconnect_coach: { Args: { target_athlete_id?: string }; Returns: Json }
       get_exercise_stats: {
         Args: { p_user_id: string }

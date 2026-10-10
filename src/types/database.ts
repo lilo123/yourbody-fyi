@@ -22,7 +22,16 @@ export interface UserProfile {
   max_athletes?: number;
   weight_unit?: WeightUnit;
   pr_mode?: PrMode;
+  trial_ends_at?: string | null;
   created_at?: string;
+}
+
+export interface AiUsage {
+  user_id: string;
+  period_kind: 'day' | 'month';
+  period_start: string;
+  count: number;
+  updated_at: string;
 }
 
 export interface CoachAthleteLink {

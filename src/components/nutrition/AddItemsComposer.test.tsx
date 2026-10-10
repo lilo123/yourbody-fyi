@@ -251,4 +251,52 @@ describe('AddItemsComposer', () => {
       expect(onParsed).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('displays friendly message on quota_exceeded error for free plan', async () => {
+    const quotaErr: any = new Error(
+      "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
+    );
+    quotaErr.code = 'quota_exceeded';
+    quotaErr.limit = 0;
+    quotaErr.period = 'month';
+    (parseNutritionModule.parseNutrition as any).mockRejectedValueOnce(quotaErr);
+
+    render(<AddItemsComposer {...defaultProps} />);
+
+    const textarea = screen.getByRole('textbox', { name: 'Add items' });
+    fireEvent.change(textarea, { target: { value: 'chicken rice' } });
+
+    const analyzeBtn = screen.getByRole('button', { name: /analyze/i });
+    fireEvent.click(analyzeBtn);
+
+    await waitFor(() => {
+      // The message is rendered visibly and also announced through a screen-reader-only live region.
+      const matches = screen.getAllByText("AI parsing isn't included in the free plan. Quick log and on-device parsing stay free.");
+      expect(matches.some((el) => !el.closest('.sr-only'))).toBe(true);
+    });
+  });
+
+  it('displays friendly message on quota_exceeded error for daily plan', async () => {
+    const quotaErr: any = new Error(
+      "You've used today's AI parses. Quick log and on-device parsing still work."
+    );
+    quotaErr.code = 'quota_exceeded';
+    quotaErr.limit = 30;
+    quotaErr.period = 'day';
+    (parseNutritionModule.parseNutrition as any).mockRejectedValueOnce(quotaErr);
+
+    render(<AddItemsComposer {...defaultProps} />);
+
+    const textarea = screen.getByRole('textbox', { name: 'Add items' });
+    fireEvent.change(textarea, { target: { value: 'chicken rice' } });
+
+    const analyzeBtn = screen.getByRole('button', { name: /analyze/i });
+    fireEvent.click(analyzeBtn);
+
+    await waitFor(() => {
+      // The message is rendered visibly and also announced through a screen-reader-only live region.
+      const matches = screen.getAllByText("You've used today's AI parses. Quick log and on-device parsing still work.");
+      expect(matches.some((el) => !el.closest('.sr-only'))).toBe(true);
+    });
+  });
 });
