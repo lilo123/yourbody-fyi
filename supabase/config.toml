@@ -423,10 +423,4 @@ verify_jwt = true
 import_map = "./functions/parse-nutrition/deno.json"
 entrypoint = "./functions/parse-nutrition/index.ts"
 
-[functions.create-athlete]
-enabled = true
-verify_jwt = true
-import_map = "./functions/create-athlete/deno.json"
-entrypoint = "./functions/create-athlete/index.ts"
-
 

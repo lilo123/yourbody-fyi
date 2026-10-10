@@ -14,7 +14,7 @@ Checklist for configuring and provisioning the `yourbody.fyi` custom domain:
    - Update Supabase Auth Redirect URLs allowlist to include `https://www.yourbody.fyi/**`, `https://yourbody.fyi/**`, and `capacitor://localhost/**`.
    - Set Edge Function secret `ALLOWED_ORIGINS` in Supabase project dashboard/CLI if any additional origins are needed.
 4. **Redeploy Edge Functions:**
-   - Redeploy Supabase Edge Functions (`parse-nutrition`, `create-athlete`) with updated CORS configuration.
+   - Redeploy Supabase Edge Functions (`parse-nutrition`) with updated CORS configuration.
 
 ## HTTP Strict Transport Security (HSTS)
 - The application enables HSTS via `vercel.json` with `max-age=31536000; includeSubDomains; preload`.

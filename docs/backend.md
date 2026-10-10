@@ -27,12 +27,7 @@ erDiagram
 - **Fallback Chain**: Uses a resilient model fallback sequence: `gemini-3.6-flash` → `gemini-3.5-flash` → `gemini-3.1-flash-lite`.
 - Parses conversational diet logs and extracts multi-dish macros securely.
 
-### Secure Provisioning (`create-athlete`)
-- A secure admin-only workflow required to provision new athlete authentication identities and insert profile records concurrently.
-
 ### API Contracts
 Edge functions run purely externally. Explicitly define request and response payload shapes:
 - **`parse-nutrition` Request**: `{ text: string }`
 - **`parse-nutrition` Response**: `{ dishes: Array<{ name, energy, protein, ... }> }`
-- **`create-athlete` Request**: `{ email, password, name }`
-- **`create-athlete` Response**: `{ user_id, message }`

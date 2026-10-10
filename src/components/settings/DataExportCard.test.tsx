@@ -56,7 +56,6 @@ describe('DataExportCard', () => {
     ],
     isCoach: true,
     switchAthlete: vi.fn(),
-    addAthlete: vi.fn(),
     refreshAthletes: vi.fn(),
   };
 
