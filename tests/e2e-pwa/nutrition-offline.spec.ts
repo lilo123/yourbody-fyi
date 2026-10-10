@@ -205,7 +205,7 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
     await expect(stagedCard).not.toBeVisible();
   });
 
-  test('c) mixed input online preserves explicit numbers to server; mixed input offline queues as Waiting for connection with 0 logged', async ({
+  test('c) mixed input online preserves explicit numbers to server; mixed input offline disables AI submit with connection hint and queues 0 items', async ({
     page,
     context,
   }) => {
@@ -255,23 +255,27 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
     await page.locator('[data-testid="staged-card-actions"] button[aria-label="Discard staged meal"]').click();
     await expect(stagedCard).not.toBeVisible();
 
-    // 2. Mixed input offline
+    // 2. Mixed input offline: AI is online-only, so submit is disabled with connection hint
     await goOfflineAndNotify(context, page);
 
     const mixedOfflineText = 'Whey shake with 30g protein and a banana';
     await page.locator('textarea').fill(mixedOfflineText);
-    await page.locator('[data-testid="analyze-meal-button"]').click();
 
-    // Appears in Pending review as "Waiting for connection"
-    const pendingList = page.locator('[data-testid="pending-review-list"]');
-    await expect(pendingList).toBeVisible({ timeout: 10000 });
+    // Verify hint is visible and submit button is disabled
+    await expect(page.locator('text=AI needs a connection: use quick log')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="analyze-meal-button"]')).toBeDisabled();
 
-    const statusPill = pendingList.locator('[data-testid^="pending-item-status-"]').first();
-    await expect(statusPill).toContainText('Waiting for connection');
+    // Verify nothing is queued in Pending review
+    await expect(page.locator('[data-testid="pending-review-list"]')).not.toBeVisible();
 
     // Assert nothing logged in database or UI
     expect(countRows('public.nutrition_logs', `user_id = '${user.id}'`)).toBe(0);
     await expect(page.locator('[data-testid="meal-log-item"]')).toHaveCount(0);
+
+    // Reconnect restores input without reload
+    await goOnline(context, page);
+    await expect(page.locator('[data-testid="analyze-meal-button"]')).toBeEnabled();
+    await expect(page.locator('text=AI needs a connection: use quick log')).not.toBeVisible();
   });
 
   test('d) queued text + photo offline: reload survival, 429 Retry-After handling, photo deleted from IDB on analysis, review logs with capture timestamp, 422 discard cleans up', async ({
@@ -285,6 +289,20 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
     });
     const page = await context.newPage();
 
+    // Mirror offline state to navigator.onLine across page reloads in Playwright
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'onLine', {
+        get: () => {
+          try {
+            return sessionStorage.getItem('pwa_test_offline') !== 'true';
+          } catch {
+            return true;
+          }
+        },
+        configurable: true,
+      });
+    });
+
     user = await createPwaTestUser('nutr-aiq-tokyo');
     execPsql(`UPDATE public.users SET timezone = 'Asia/Tokyo' WHERE id = '${user.id}';`);
 
@@ -297,26 +315,70 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
       await expect(page.locator('text=No meals logged for this date yet.')).toBeVisible({ timeout: 15000 });
 
       // 1. Go offline
+      await page.evaluate(() => {
+        sessionStorage.setItem('pwa_test_offline', 'true');
+      });
       await goOfflineAndNotify(context, page);
 
-      // Queue text item offline
-      await page.locator('textarea').fill('Tokyo Ramen with chashu and soft egg');
-      await page.locator('[data-testid="analyze-meal-button"]').click();
-
-      // Queue photo item offline
-      const hiddenInput = page.locator('[data-testid="hidden-file-input"]');
-      await hiddenInput.setInputFiles({
-        name: 'meal_tokyo.png',
-        mimeType: 'image/png',
-        buffer: FIXTURE_PNG,
+      // Seed pre-existing queued text item and photo item in IndexedDB aiq (simulating legacy client queue)
+      const { capturedAt, captureDate } = await page.evaluate(() => {
+        const d = new Date();
+        return {
+          capturedAt: d.toISOString(),
+          captureDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+        };
       });
+      const expectedCaptureDate = captureDate;
 
-      await expect(page.locator('[data-testid="photo-preview-container"]')).toBeVisible({ timeout: 10000 });
-      await page.locator('[data-testid="analyze-meal-button"]').click();
+      await page.evaluate(
+        async ({ uid, capturedAt, captureDate, base64Photo }) => {
+          const req = indexedDB.open(`yourbody-offline-${uid}`);
+          const db: IDBDatabase = await new Promise((resolve, reject) => {
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+          const tx = db.transaction('aiq', 'readwrite');
+          const store = tx.objectStore('aiq');
+          store.put({
+            id: 'queued-text-item',
+            userId: uid,
+            kind: 'text',
+            text: 'Tokyo Ramen with chashu and soft egg',
+            capturedAt,
+            captureDate,
+            status: 'queued',
+            attempts: 0,
+            nextAttemptAt: Date.now(),
+          });
+          store.put({
+            id: 'queued-photo-item',
+            userId: uid,
+            kind: 'photo',
+            photo: { base64: base64Photo, mime: 'image/png' },
+            capturedAt,
+            captureDate,
+            status: 'queued',
+            attempts: 0,
+            nextAttemptAt: Date.now(),
+          });
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve(undefined);
+            tx.onerror = () => reject(tx.error);
+          });
+          db.close();
+        },
+        {
+          uid: user.id,
+          capturedAt,
+          captureDate,
+          base64Photo: FIXTURE_PNG.toString('base64'),
+        }
+      );
+      await page.reload();
 
       // 2. Both items queued in Pending review
       const pendingList = page.locator('[data-testid="pending-review-list"]');
-      await expect(pendingList).toBeVisible({ timeout: 10000 });
+      await expect(pendingList).toBeVisible({ timeout: 15000 });
       await expect(page.locator('[data-testid^="pending-review-item-"]')).toHaveCount(2);
 
       // Verify photo item has photo data in IDB initially
@@ -343,22 +405,32 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
       await expect(page.locator('[data-testid="pending-review-list"]')).toBeVisible({ timeout: 15000 });
       await expect(page.locator('[data-testid^="pending-review-item-"]')).toHaveCount(2);
 
-      // Record civil date at capture
-      const expectedCaptureDate = await page.evaluate(() => {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      });
 
       // 4. Setup parse-nutrition route: return 429 once (Retry-After: 1), then success
       let parseNutritionCallCount = 0;
+      let t429 = 0;
       await page.route('**/functions/v1/parse-nutrition', async (route) => {
+        if (route.request().method() === 'OPTIONS') {
+          await route.fulfill({
+            status: 200,
+            headers: {
+              'access-control-allow-origin': '*',
+              'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
+              'access-control-allow-methods': 'POST, OPTIONS',
+            },
+          });
+          return;
+        }
+
         parseNutritionCallCount++;
         if (parseNutritionCallCount === 1) {
+          t429 = Date.now();
           await route.fulfill({
             status: 429,
             contentType: 'application/json',
             headers: {
               'access-control-allow-origin': '*',
+              'access-control-expose-headers': 'Retry-After, retry-after',
               'Retry-After': '1',
               'retry-after': '1',
             },
@@ -398,6 +470,9 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
       });
 
       // Reconnect online: processor wakes up and attempts processing
+      await page.evaluate(() => {
+        sessionStorage.removeItem('pwa_test_offline');
+      });
       await goOnline(context, page);
 
       // Poll IDB until 429 backoff has elapsed, then dispatch online event to wake processor
@@ -416,11 +491,30 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
           });
           db.close();
           const now = Date.now();
-          const hadAttempt = items.some((item) => (item.attempts || 0) > 0);
+          const hadRateLimit = items.some((item) => (item.lastError || '').includes('Rate limited'));
           const allEligible = items.every((item) => item.status === 'ready' || (item.nextAttemptAt || 0) <= now);
-          return hadAttempt && allEligible;
+          return hadRateLimit && allEligible;
         }, user.id);
       }, { timeout: 45000, intervals: [2000] }).toBe(true);
+
+      // Verify Retry-After: 1 was honoured (~1 s backoff) and did not fall back to 15 s default
+      const rateLimitedItem = await page.evaluate(async (uid) => {
+        const openReq = indexedDB.open(`yourbody-offline-${uid}`);
+        const db: IDBDatabase = await new Promise((resolve, reject) => {
+          openReq.onsuccess = () => resolve(openReq.result);
+          openReq.onerror = () => reject(openReq.error);
+        });
+        const tx = db.transaction('aiq', 'readonly');
+        const items = await new Promise<any[]>((resolve, reject) => {
+          const getAllReq = tx.objectStore('aiq').getAll();
+          getAllReq.onsuccess = () => resolve(getAllReq.result);
+          getAllReq.onerror = () => reject(getAllReq.error);
+        });
+        db.close();
+        return items.find((item) => (item.lastError || '').includes('Rate limited'));
+      }, user.id);
+      expect(rateLimitedItem).toBeDefined();
+      expect(rateLimitedItem.nextAttemptAt - t429).toBeLessThanOrEqual(5000);
 
       await page.evaluate(() => {
         window.dispatchEvent(new Event('online'));
@@ -428,6 +522,27 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
 
       // Both items reach 'ready' with "Review" button visible
       await expect(page.locator('[data-testid^="review-aiq-item-"]')).toHaveCount(2, { timeout: 45000 });
+
+      // Verify parseNutrition was called at least 3 times (1 rate limit + 2 successful parses)
+      expect(parseNutritionCallCount).toBeGreaterThanOrEqual(3);
+
+      // Verify 429 did not burn attempts on any item (all attempts stay 0)
+      const attemptsReport = await page.evaluate(async (uid) => {
+        const openReq = indexedDB.open(`yourbody-offline-${uid}`);
+        const db: IDBDatabase = await new Promise((resolve, reject) => {
+          openReq.onsuccess = () => resolve(openReq.result);
+          openReq.onerror = () => reject(openReq.error);
+        });
+        const tx = db.transaction('aiq', 'readonly');
+        const items = await new Promise<any[]>((resolve, reject) => {
+          const getAllReq = tx.objectStore('aiq').getAll();
+          getAllReq.onsuccess = () => resolve(getAllReq.result);
+          getAllReq.onerror = () => reject(getAllReq.error);
+        });
+        db.close();
+        return items.map((it) => it.attempts || 0);
+      }, user.id);
+      expect(attemptsReport.every((attempts) => attempts === 0)).toBe(true);
 
       // 5. Verify IndexedDB aiq photo field is deleted after analysis
       const isPhotoDeleted = await page.evaluate(async (uid) => {
@@ -721,9 +836,32 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
       await page.locator('[data-testid="staged-card-actions"] button:has-text("Log Meal")').click();
       await expect(stagedCard).not.toBeVisible({ timeout: 10000 });
 
-      // User A queues an AI text item offline
-      await page.locator('textarea').fill('User A Secret Shake with blueberries and spinach');
-      await page.locator('[data-testid="analyze-meal-button"]').click();
+      // User A has a legacy queued AI text item in IndexedDB aiq
+      await page.evaluate(async (uid) => {
+        const req = indexedDB.open(`yourbody-offline-${uid}`);
+        const db: IDBDatabase = await new Promise((resolve, reject) => {
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        const tx = db.transaction('aiq', 'readwrite');
+        tx.objectStore('aiq').put({
+          id: 'user-a-secret-shake',
+          userId: uid,
+          kind: 'text',
+          text: 'User A Secret Shake with blueberries and spinach',
+          capturedAt: new Date().toISOString(),
+          captureDate: '2026-10-02',
+          status: 'queued',
+          attempts: 0,
+          nextAttemptAt: Date.now(),
+        });
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve(undefined);
+          tx.onerror = () => reject(tx.error);
+        });
+        db.close();
+      }, userA.id);
+      await page.reload();
 
       // Verify User A sees both
       await expect(page.locator('[data-testid="meal-log-item"]')).toHaveCount(1, { timeout: 10000 });
