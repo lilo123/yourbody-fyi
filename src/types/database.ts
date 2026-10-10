@@ -26,6 +26,27 @@ export interface UserProfile {
   created_at?: string;
   terms_version?: string | null;
   terms_accepted_at?: string | null;
+  plan?: 'free' | 'basic' | 'pro' | null;
+  paid_until?: string | null;
+  billing_customer_id?: string | null;
+}
+
+export interface BillingEvent {
+  event_id: string;
+  type: string;
+  user_id: string | null;
+  customer_id: string | null;
+  payload: Record<string, unknown>;
+  received_at: string;
+  processed_at: string | null;
+}
+
+export interface Entitlement {
+  plan_effective: string;
+  plan: 'free' | 'basic' | 'pro' | null;
+  paid_until: string | null;
+  trial_ends_at_effective: string | null;
+  has_pro: boolean;
 }
 
 export interface AiUsage {
