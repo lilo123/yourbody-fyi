@@ -103,48 +103,6 @@ export const CoachProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('yourbody_selected_athlete', athleteId);
   }, []);
 
-  const addAthlete = useCallback(async (name: string, email?: string): Promise<AthleteInfo> => {
-    const trimmedName = name.trim();
-    const trimmedEmail = email?.trim() || `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '')}@example.com`;
-
-    try {
-      const { data, error } = await supabase.functions.invoke('create-athlete', {
-        body: { name: trimmedName, email: trimmedEmail },
-      });
-
-      if (!error && data?.athlete) {
-        const newAthlete: AthleteInfo = data.athlete;
-        setAthletes((prev) => {
-          const updated = [newAthlete, ...prev.filter((a) => a.id !== newAthlete.id)];
-          localStorage.setItem('yourbody_athletes', JSON.stringify(updated));
-          return updated;
-        });
-        setCoachSelectedAthleteId(newAthlete.id);
-        localStorage.setItem('yourbody_selected_athlete', newAthlete.id);
-        return newAthlete;
-      }
-    } catch (err) {
-      console.error('Edge function invocation failed, falling back:', err);
-    }
-
-    // Local fallback for offline/mock testing environments
-    const fallbackAthlete: AthleteInfo = {
-      id: crypto.randomUUID(),
-      name: trimmedName,
-      email: trimmedEmail,
-      status: 'Active',
-      last_active: new Date().toISOString(),
-    };
-    setAthletes((prev) => {
-      const updated = [fallbackAthlete, ...prev];
-      localStorage.setItem('yourbody_athletes', JSON.stringify(updated));
-      return updated;
-    });
-    setCoachSelectedAthleteId(fallbackAthlete.id);
-    localStorage.setItem('yourbody_selected_athlete', fallbackAthlete.id);
-    return fallbackAthlete;
-  }, []);
-
   const selectedAthlete = useMemo(() => {
     if (isCoach) {
       return athletes.find((a) => a.id === selectedAthleteId) || athletes[0] || null;
@@ -165,7 +123,6 @@ export const CoachProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       athletes,
       isCoach,
       switchAthlete,
-      addAthlete,
       refreshAthletes,
     }),
     [
@@ -174,7 +131,6 @@ export const CoachProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       athletes,
       isCoach,
       switchAthlete,
-      addAthlete,
       refreshAthletes,
     ]
   );
