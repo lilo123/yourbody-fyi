@@ -24,6 +24,8 @@ export interface UserProfile {
   pr_mode?: PrMode;
   trial_ends_at?: string | null;
   created_at?: string;
+  terms_version?: string | null;
+  terms_accepted_at?: string | null;
 }
 
 export interface AiUsage {

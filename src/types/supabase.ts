@@ -457,6 +457,8 @@ export type Database = {
           target_fat: number | null
           target_fiber: number | null
           target_protein: number | null
+          terms_accepted_at: string | null
+          terms_version: string | null
           timezone: string | null
           trial_ends_at: string | null
           username: string | null
@@ -477,6 +479,8 @@ export type Database = {
           target_fat?: number | null
           target_fiber?: number | null
           target_protein?: number | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
           username?: string | null
@@ -497,6 +501,8 @@ export type Database = {
           target_fat?: number | null
           target_fiber?: number | null
           target_protein?: number | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
           timezone?: string | null
           trial_ends_at?: string | null
           username?: string | null
@@ -541,6 +547,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_terms: {
+        Args: { p_version: string }
+        Returns: Json
+      }
       ai_plan_for: {
         Args: {
           p_user_id: string
