@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabase';
 import type { CustomDish } from '../../types/database';
-import { MAX_PHOTO_BYTES, type CompressedImage } from '../../utils/imageCompression';
+import type { CompressedImage } from '../../utils/imageCompression';
+import { MAX_PHOTO_BYTES } from '../../utils/photoLimits';
 import { roundTo1Decimal } from '../../utils/nutrition';
 import { buildStagedItem, type StagedItem } from './nutritionEngineHelpers';
 
