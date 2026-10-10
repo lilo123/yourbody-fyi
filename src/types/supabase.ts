@@ -87,6 +87,44 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_events: {
+        Row: {
+          customer_id: string | null
+          event_id: string
+          payload: Json
+          processed_at: string | null
+          received_at: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          customer_id?: string | null
+          event_id: string
+          payload?: Json
+          processed_at?: string | null
+          received_at?: string
+          type: string
+          user_id?: string | null
+        }
+        Update: {
+          customer_id?: string | null
+          event_id?: string
+          payload?: Json
+          processed_at?: string | null
+          received_at?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_athlete_links: {
         Row: {
           athlete_id: string
@@ -444,6 +482,7 @@ export type Database = {
       users: {
         Row: {
           auto_rest_timer: boolean
+          billing_customer_id: string | null
           coach_code: string | null
           coach_tier: string | null
           created_at: string
@@ -451,6 +490,8 @@ export type Database = {
           id: string
           is_coach_mode: boolean | null
           max_athletes: number | null
+          paid_until: string | null
+          plan: string | null
           role: string | null
           target_calories: number | null
           target_carbs: number | null
@@ -466,6 +507,7 @@ export type Database = {
         }
         Insert: {
           auto_rest_timer?: boolean
+          billing_customer_id?: string | null
           coach_code?: string | null
           coach_tier?: string | null
           created_at?: string
@@ -473,6 +515,8 @@ export type Database = {
           id: string
           is_coach_mode?: boolean | null
           max_athletes?: number | null
+          paid_until?: string | null
+          plan?: string | null
           role?: string | null
           target_calories?: number | null
           target_carbs?: number | null
@@ -488,6 +532,7 @@ export type Database = {
         }
         Update: {
           auto_rest_timer?: boolean
+          billing_customer_id?: string | null
           coach_code?: string | null
           coach_tier?: string | null
           created_at?: string
@@ -495,6 +540,8 @@ export type Database = {
           id?: string
           is_coach_mode?: boolean | null
           max_athletes?: number | null
+          paid_until?: string | null
+          plan?: string | null
           role?: string | null
           target_calories?: number | null
           target_carbs?: number | null
@@ -599,6 +646,22 @@ export type Database = {
           set_count: number
           total_volume: number
         }[]
+      }
+      get_my_entitlement: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      has_paid_plan: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: string | null
+      }
+      has_pro: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: boolean
       }
       is_athlete_of: { Args: { target_coach_id: string }; Returns: boolean }
       is_coach: { Args: never; Returns: boolean }
