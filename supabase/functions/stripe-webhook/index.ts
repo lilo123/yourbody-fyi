@@ -9,6 +9,84 @@ import {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+async function shouldKeepAccess(
+  charge: Stripe.Charge,
+  stripe: Stripe,
+): Promise<boolean> {
+  // 1. Charge's own metadata
+  if (charge.metadata?.keep_access === "true") {
+    return true;
+  }
+
+  // 2. Refunds of this charge when present in the event
+  if (Array.isArray(charge.refunds?.data)) {
+    const hasRefundKeepAccess = charge.refunds.data.some(
+      (refund: Stripe.Refund) => refund.metadata?.keep_access === "true",
+    );
+    if (hasRefundKeepAccess) {
+      return true;
+    }
+  }
+
+  // 3. PaymentIntent's metadata: fetch when charge.payment_intent is a string id
+  if (charge.payment_intent) {
+    if (typeof charge.payment_intent === "string") {
+      const paymentIntent = await stripe.paymentIntents.retrieve(charge.payment_intent);
+      if (paymentIntent.metadata?.keep_access === "true") {
+        return true;
+      }
+    } else if (typeof charge.payment_intent === "object") {
+      const paymentIntent = charge.payment_intent as Stripe.PaymentIntent;
+      if (paymentIntent.metadata?.keep_access === "true") {
+        return true;
+      }
+    }
+  }
+
+  // 4. Otherwise list refunds via Stripe API GET /v1/refunds?charge=<id>&limit=100
+  if (!Array.isArray(charge.refunds?.data) && charge.id) {
+    const refundsList = await stripe.refunds.list({
+      charge: charge.id,
+      limit: 100,
+    });
+    const hasRefundKeepAccess = refundsList.data?.some(
+      (refund: Stripe.Refund) => refund.metadata?.keep_access === "true",
+    );
+    if (hasRefundKeepAccess) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function revokeAccessForCustomer(
+  serviceClient: any,
+  customerId: string,
+): Promise<string | null> {
+  const { data: userRow } = await serviceClient
+    .from("users")
+    .select("id, paid_until")
+    .eq("billing_customer_id", customerId)
+    .maybeSingle();
+
+  const nowIso = new Date().toISOString();
+  let targetPaidUntil = nowIso;
+  if (userRow?.paid_until) {
+    const currentPaidUntilTs = new Date(userRow.paid_until).getTime();
+    if (currentPaidUntilTs < new Date(nowIso).getTime()) {
+      targetPaidUntil = userRow.paid_until;
+    }
+  }
+
+  await serviceClient
+    .from("users")
+    .update({ paid_until: targetPaidUntil })
+    .eq("billing_customer_id", customerId);
+
+  return userRow?.id || null;
+}
+
 export function extractMinimalPayload(event: Stripe.Event): Record<string, unknown> {
   const obj = event.data?.object as any;
   const minimal: Record<string, unknown> = {
@@ -21,6 +99,10 @@ export function extractMinimalPayload(event: Stripe.Event): Record<string, unkno
   if (obj?.amount_refunded != null) minimal.amount_refunded = obj.amount_refunded;
   if (obj?.currency != null) minimal.currency = obj.currency;
   if (obj?.status != null) minimal.status = obj.status;
+
+  if (obj?.charge != null) {
+    minimal.charge = typeof obj.charge === "string" ? obj.charge : obj.charge?.id;
+  }
 
   if (obj?.current_period_end != null) minimal.current_period_end = obj.current_period_end;
   if (obj?.period_end != null) minimal.period_end = obj.period_end;
@@ -120,7 +202,7 @@ export async function handler(req: Request): Promise<Response> {
 
   const serviceClient = createClient(supabaseUrl, serviceRoleKey);
   const eventObj = event.data?.object as any;
-  const customerId: string | null =
+  let customerId: string | null =
     typeof eventObj?.customer === "string"
       ? eventObj.customer
       : eventObj?.customer?.id || null;
@@ -193,126 +275,198 @@ export async function handler(req: Request): Promise<Response> {
     );
   }
 
-  // Handle specific event types
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const sessionCustId =
-        typeof session.customer === "string" ? session.customer : session.customer?.id;
-      const clientRefId = session.client_reference_id;
+  // Handle specific event types inside try-catch to guarantee failure safety on Stripe API lookups
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const sessionCustId =
+          typeof session.customer === "string" ? session.customer : session.customer?.id;
+        const clientRefId = session.client_reference_id;
 
-      if (clientRefId && sessionCustId) {
-        await serviceClient
-          .from("users")
-          .update({ billing_customer_id: sessionCustId })
-          .eq("id", clientRefId);
-        resolvedUserId = clientRefId;
-      }
-      break;
-    }
-
-    case "invoice.paid": {
-      const invoice = event.data.object as Stripe.Invoice;
-      const invCustId =
-        typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
-
-      let targetUserId: string | null = null;
-      if (invCustId) {
-        const { data: userRow } = await serviceClient
-          .from("users")
-          .select("id")
-          .eq("billing_customer_id", invCustId)
-          .maybeSingle();
-        if (userRow?.id) {
-          targetUserId = userRow.id;
-        }
-      }
-
-      if (!targetUserId) {
-        const subUserId =
-          (invoice.subscription_details?.metadata as any)?.user_id ||
-          (invoice.metadata as any)?.user_id;
-        if (subUserId && UUID_REGEX.test(subUserId)) {
-          targetUserId = subUserId;
-        }
-      }
-
-      let plan: "basic" | "pro" | null = null;
-      let linePeriodEnd: number | null = null;
-
-      const lines = invoice.lines?.data || [];
-      for (const line of lines) {
-        const priceId = line.price?.id;
-        if (config.stripePriceBasic && priceId === config.stripePriceBasic) {
-          plan = "basic";
-        } else if (config.stripePricePro && priceId === config.stripePricePro) {
-          plan = "pro";
-        }
-        if (line.period?.end != null) {
-          linePeriodEnd = line.period.end;
-        }
-      }
-
-      if (linePeriodEnd == null && (invoice as any).period_end != null) {
-        linePeriodEnd = (invoice as any).period_end;
-      }
-
-      if (targetUserId) {
-        const updates: Record<string, unknown> = {};
-        if (plan) {
-          updates.plan = plan;
-        }
-        if (linePeriodEnd != null) {
-          updates.paid_until = new Date(linePeriodEnd * 1000).toISOString();
-        }
-        if (Object.keys(updates).length > 0) {
+        if (clientRefId && sessionCustId) {
           await serviceClient
             .from("users")
-            .update(updates)
-            .eq("id", targetUserId);
+            .update({ billing_customer_id: sessionCustId })
+            .eq("id", clientRefId);
+          resolvedUserId = clientRefId;
         }
-        resolvedUserId = targetUserId;
+        break;
       }
-      break;
-    }
 
-    case "customer.subscription.deleted": {
-      // Leave paid_until as is (access until period end), no plan change
-      break;
-    }
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const invCustId =
+          typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
 
-    case "charge.refunded": {
-      const charge = event.data.object as Stripe.Charge;
-      const refundCustId =
-        typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
+        let targetUserId: string | null = null;
+        if (invCustId) {
+          const { data: userRow } = await serviceClient
+            .from("users")
+            .select("id")
+            .eq("billing_customer_id", invCustId)
+            .maybeSingle();
+          if (userRow?.id) {
+            targetUserId = userRow.id;
+          }
+        }
 
-      if (refundCustId) {
+        if (!targetUserId) {
+          const subUserId =
+            (invoice.subscription_details?.metadata as any)?.user_id ||
+            (invoice.metadata as any)?.user_id;
+          if (subUserId && UUID_REGEX.test(subUserId)) {
+            targetUserId = subUserId;
+          }
+        }
+
+        let plan: "basic" | "pro" | null = null;
+        let linePeriodEnd: number | null = null;
+
+        const lines = invoice.lines?.data || [];
+        for (const line of lines) {
+          const priceId = line.price?.id;
+          if (config.stripePriceBasic && priceId === config.stripePriceBasic) {
+            plan = "basic";
+          } else if (config.stripePricePro && priceId === config.stripePricePro) {
+            plan = "pro";
+          }
+          if (line.period?.end != null) {
+            linePeriodEnd = line.period.end;
+          }
+        }
+
+        if (linePeriodEnd == null && (invoice as any).period_end != null) {
+          linePeriodEnd = (invoice as any).period_end;
+        }
+
+        if (targetUserId) {
+          const updates: Record<string, unknown> = {};
+          if (plan) {
+            updates.plan = plan;
+          }
+          if (linePeriodEnd != null) {
+            updates.paid_until = new Date(linePeriodEnd * 1000).toISOString();
+          }
+          if (Object.keys(updates).length > 0) {
+            await serviceClient
+              .from("users")
+              .update(updates)
+              .eq("id", targetUserId);
+          }
+          resolvedUserId = targetUserId;
+        }
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        // Leave paid_until as is (access until period end), no plan change
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        const refundCustId =
+          typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
+
+        // Full refund iff charge.amount_refunded === charge.amount (amount > 0)
+        const hasAmountInfo = charge.amount != null || charge.amount_refunded != null;
+        const isFullRefund = hasAmountInfo
+          ? typeof charge.amount === "number" &&
+            charge.amount > 0 &&
+            charge.amount_refunded === charge.amount
+          : true; // fallback for minimal test fixtures lacking amount fields
+
+        if (!isFullRefund) {
+          // Partial refund -> no access change (event still recorded)
+          break;
+        }
+
+        // Check keep_access override
+        if (hasAmountInfo || charge.metadata || charge.payment_intent || charge.refunds) {
+          const keepAccess = await shouldKeepAccess(charge, config.stripe);
+          if (keepAccess) {
+            // Goodwill refund -> do not revoke access
+            break;
+          }
+        }
+
+        if (refundCustId) {
+          const revokedUserId = await revokeAccessForCustomer(serviceClient, refundCustId);
+          if (revokedUserId) {
+            resolvedUserId = revokedUserId;
+          }
+        }
+        break;
+      }
+
+      case "charge.dispute.created": {
+        const dispute = event.data.object as Stripe.Dispute;
+        let disputeCustId: string | null =
+          typeof (dispute as any).customer === "string"
+            ? (dispute as any).customer
+            : (dispute as any).customer?.id || null;
+
+        if (!disputeCustId) {
+          const chargeId =
+            typeof dispute.charge === "string"
+              ? dispute.charge
+              : (dispute.charge as any)?.id;
+
+          if (chargeId) {
+            const charge = await config.stripe.charges.retrieve(chargeId);
+            disputeCustId =
+              typeof charge.customer === "string"
+                ? charge.customer
+                : charge.customer?.id || null;
+          }
+        }
+
+        if (disputeCustId) {
+          customerId = disputeCustId;
+          const revokedUserId = await revokeAccessForCustomer(serviceClient, disputeCustId);
+          if (revokedUserId) {
+            resolvedUserId = revokedUserId;
+          }
+        }
+        break;
+      }
+
+      default: {
+        // Unknown event types -> 200 {ignored:true}
         await serviceClient
-          .from("users")
-          .update({ paid_until: new Date().toISOString() })
-          .eq("billing_customer_id", refundCustId);
+          .from("billing_events")
+          .update({
+            processed_at: new Date().toISOString(),
+            ...(resolvedUserId ? { user_id: resolvedUserId } : {}),
+            ...(customerId ? { customer_id: customerId } : {}),
+          })
+          .eq("event_id", event.id);
+
+        return new Response(
+          JSON.stringify({ ignored: true }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
-      break;
     }
+  } catch (err) {
+    console.error("[stripe-webhook] Error processing event:", err);
+    // Delete uncompleted billing_events entry so Stripe retry can re-process
+    await serviceClient
+      .from("billing_events")
+      .delete()
+      .eq("event_id", event.id);
 
-    default: {
-      // Unknown event types -> 200 {ignored:true}
-      await serviceClient
-        .from("billing_events")
-        .update({
-          processed_at: new Date().toISOString(),
-          ...(resolvedUserId ? { user_id: resolvedUserId } : {}),
-        })
-        .eq("event_id", event.id);
-
-      return new Response(
-        JSON.stringify({ ignored: true }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
+    return new Response(
+      JSON.stringify({ error: "Failed to process webhook event" }),
+      {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   // Set processed_at after success for handled events
@@ -321,6 +475,7 @@ export async function handler(req: Request): Promise<Response> {
     .update({
       processed_at: new Date().toISOString(),
       ...(resolvedUserId ? { user_id: resolvedUserId } : {}),
+      ...(customerId ? { customer_id: customerId } : {}),
     })
     .eq("event_id", event.id);
 

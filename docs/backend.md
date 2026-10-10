@@ -210,8 +210,18 @@ The webhook listener at `/functions/v1/stripe-webhook` handles the following eve
 - `checkout.session.completed`: Sets `users.billing_customer_id` for the corresponding `client_reference_id`.
 - `invoice.paid`: Resolves the user by `billing_customer_id` (fallback to subscription `metadata.user_id`), maps the line item price ID to `plan` (`basic` or `pro`), and updates `paid_until` to the line item period end timestamp (`line.period.end`).
 - `customer.subscription.deleted`: Leaves `paid_until` as-is, granting the user access through the end of the prepaid period with no plan modification.
-- `charge.refunded`: Immediately revokes access by updating `users.paid_until = now()` for the matching customer.
+- `charge.refunded`: Revokes access on full refunds (`amount_refunded === amount`) unless `keep_access` metadata is present; partial refunds leave access unchanged.
+- `charge.dispute.created`: Resolves the customer via the dispute's charge, revokes access, and records the event in `billing_events` with the resolved `user_id`. The staging webhook endpoint must subscribe to `charge.dispute.created`.
 - Unhandled/unknown event types: Recorded in `billing_events`, marked as processed, and acknowledged with `200` (`{ "ignored": true }`).
+
+### Refunds, Disputes and Goodwill Refunds
+- **Full refund**: A full refund (`amount_refunded === amount` where `amount > 0`) revokes access by updating `paid_until = least(paid_until, now())` for the customer.
+- **Partial refund**: A partial refund does not change user access (`paid_until` and `plan` remain untouched); the event is recorded in `billing_events`.
+- **Disputes**: A dispute (`charge.dispute.created`) resolves the customer via the dispute's charge (fetching `GET /v1/charges/<id>` if the dispute lacks the customer) and revokes access (`paid_until = least(paid_until, now())`). Disputes have no `keep_access` override. The staging webhook endpoint must subscribe to `charge.dispute.created`.
+- **Goodwill refund (override)**: To issue a refund without revoking user access, set metadata `keep_access = true` through either:
+  - **Stripe Dashboard**: Add metadata key `keep_access` with value `true` on the payment (PaymentIntent) page before issuing the refund.
+  - **Stripe CLI**: `stripe refunds create --charge <ch_id> -d "metadata[keep_access]=true"`
+- **Subscription cancellation notice**: Refunding a payment or handling a dispute does not automatically cancel the underlying Stripe subscription. If subscription cancellation is intended, cancel it separately in the Stripe dashboard or via customer portal.
 
 ### Idempotency and State Mutations
 Incoming webhook events are recorded in `public.billing_events`:

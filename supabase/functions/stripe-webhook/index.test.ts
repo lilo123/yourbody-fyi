@@ -556,3 +556,549 @@ Deno.test("stripe-webhook: unknown event type returns 200 ignored:true", async (
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("stripe-webhook: full refund revokes access by updating paid_until", async () => {
+  setupEnv();
+
+  let userUpdatePayload: any = null;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_full_refund_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdatePayload = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_full_refund_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_full_123",
+          customer: CUSTOMER_ID,
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: {
+            data: [],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const before = Date.now();
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    const after = Date.now();
+
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertExists(userUpdatePayload?.paid_until);
+
+    const paidUntilTs = new Date(userUpdatePayload.paid_until).getTime();
+    assertEquals(paidUntilTs >= before - 1000 && paidUntilTs <= after + 1000, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: partial refund does not mutate user paid_until", async () => {
+  setupEnv();
+
+  let userUpdated = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_partial_refund_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdated = true;
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_partial_refund_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_partial_123",
+          customer: CUSTOMER_ID,
+          amount: 5000,
+          amount_refunded: 2000,
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(userUpdated, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: full refund with refund metadata keep_access=true does not revoke", async () => {
+  setupEnv();
+
+  let userUpdated = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_goodwill_refund_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdated = true;
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_goodwill_refund_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_goodwill_123",
+          customer: CUSTOMER_ID,
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: {
+            data: [
+              {
+                id: "re_goodwill_1",
+                metadata: {
+                  keep_access: "true",
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(userUpdated, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: full refund with PaymentIntent metadata keep_access=true does not revoke", async () => {
+  setupEnv();
+
+  let userUpdated = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/payment_intents/pi_goodwill_456")) {
+      return new Response(
+        JSON.stringify({
+          id: "pi_goodwill_456",
+          metadata: { keep_access: "true" },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_goodwill_pi_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdated = true;
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_goodwill_pi_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_goodwill_pi_123",
+          customer: CUSTOMER_ID,
+          amount: 5000,
+          amount_refunded: 5000,
+          payment_intent: "pi_goodwill_456",
+          refunds: {
+            data: [],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(userUpdated, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: full refund with refunds API lookup keep_access=true does not revoke", async () => {
+  setupEnv();
+
+  let userUpdated = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/refunds")) {
+      return new Response(
+        JSON.stringify({
+          object: "list",
+          data: [
+            {
+              id: "re_api_goodwill_1",
+              metadata: { keep_access: "true" },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_goodwill_api_refund_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdated = true;
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_goodwill_api_refund_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_goodwill_api_123",
+          customer: CUSTOMER_ID,
+          amount: 5000,
+          amount_refunded: 5000,
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(userUpdated, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: charge.dispute.created resolves customer via charge, revokes access, and records user_id", async () => {
+  setupEnv();
+
+  let userUpdatePayload: any = null;
+  let recordedUserId: string | null = null;
+  let processedAtSet = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/charges/ch_dispute_target_789")) {
+      return new Response(
+        JSON.stringify({
+          id: "ch_dispute_target_789",
+          customer: CUSTOMER_ID,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      if (init?.method === "PATCH") {
+        processedAtSet = true;
+        const patchBody = JSON.parse(init.body as string);
+        if (patchBody.user_id) {
+          recordedUserId = patchBody.user_id;
+        }
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([{ event_id: "evt_dispute_123" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdatePayload = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_dispute_123",
+      type: "charge.dispute.created",
+      data: {
+        object: {
+          id: "dp_dispute_123",
+          charge: "ch_dispute_target_789",
+          amount: 5000,
+          currency: "usd",
+          status: "needs_response",
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const before = Date.now();
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    const after = Date.now();
+
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(processedAtSet, true);
+    assertEquals(recordedUserId, TEST_USER_ID);
+    assertExists(userUpdatePayload?.paid_until);
+
+    const paidUntilTs = new Date(userUpdatePayload.paid_until).getTime();
+    assertEquals(paidUntilTs >= before - 1000 && paidUntilTs <= after + 1000, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: Stripe API lookup failure returns non-2xx and event is not marked processed", async () => {
+  setupEnv();
+
+  let processedAtSet = false;
+  let billingEventDeleted = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/charges/ch_failing_charge_999")) {
+      return new Response(
+        JSON.stringify({ error: { message: "Simulated Stripe API outage" } }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      if (init?.method === "DELETE") {
+        billingEventDeleted = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (init?.method === "PATCH") {
+        processedAtSet = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([{ event_id: "evt_failing_lookup_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_failing_lookup_1",
+      type: "charge.dispute.created",
+      data: {
+        object: {
+          id: "dp_failing_123",
+          charge: "ch_failing_charge_999",
+          amount: 5000,
+          currency: "usd",
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status >= 500, true);
+    assertEquals(processedAtSet, false);
+    assertEquals(billingEventDeleted, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
