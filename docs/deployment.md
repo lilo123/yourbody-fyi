@@ -71,3 +71,10 @@ To build and release the Yourbody APK/AAB bundle:
    npx cap open android
    ```
    Provide valid keystore credentials when generating the Signed Bundle for the Google Play Store.
+
+## Error Reporting (Sentry)
+Optional error reporting is integrated into both the web client and edge functions, activated only when an ingest DSN is configured:
+- **Frontend (`VITE_SENTRY_DSN`):** Configured via Vercel environment variables. Loaded dynamically in a separate lazy chunk so that the initial bundle is unaffected when the DSN is unset. Configured with `sendDefaultPii: false`, `tracesSampleRate: 0`, no session replay, and navigation-only breadcrumbs. The `beforeSend` hook filters out browser extension errors and scrubs all request data, cookies, and user identifiers.
+- **Edge Functions (`SENTRY_DSN`):** Configured via Supabase edge function secrets. Initialized only in top-level unhandled 500 error paths in edge functions. Never transmits request bodies, meal text, nutrition values, or user identifiers.
+- **Privacy Guarantee:** Under no circumstances are user IDs, email addresses, meal descriptions, or nutrition quantities attached to error events.
+

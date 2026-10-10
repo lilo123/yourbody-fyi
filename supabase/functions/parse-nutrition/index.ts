@@ -18,6 +18,7 @@ const HTTP_RETRY_OPTIONS = {
 };
 
 import { isAllowedOrigin, getCorsHeaders as getBaseCorsHeaders } from "../_shared/cors.ts";
+import { captureException } from "../_shared/errorReporting.ts";
 
 export { isAllowedOrigin };
 
@@ -713,6 +714,11 @@ CORE RESPONSIBILITIES & GUIDELINES:
             },
           }
         );
+      }
+      try {
+        await captureException(error);
+      } catch (sentryErr) {
+        console.warn("[parse-nutrition] Error reporting failed:", sentryErr);
       }
       return new Response(
         JSON.stringify({ error: "Failed to parse meal nutrition. Please check your connection or use manual entry." }),
