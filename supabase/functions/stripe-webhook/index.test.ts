@@ -1932,3 +1932,113 @@ Deno.test("stripe-webhook: invoice.paid lookup failure returns 502 and event not
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("stripe-webhook: invoice.paid users update database error returns 502 and event is not marked processed", async () => {
+  setupEnv();
+
+  let processedAtSet = false;
+  let billingEventDeleted = false;
+  const linePeriodEnd = 1761955200;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/charges/ch_db_error_inv_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "ch_db_error_inv_1",
+          customer: CUSTOMER_ID,
+          amount: 2000,
+          amount_refunded: 0,
+          disputed: false,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      if (init?.method === "DELETE") {
+        billingEventDeleted = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (init?.method === "PATCH") {
+        processedAtSet = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([{ event_id: "evt_db_error_inv_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        return new Response(
+          JSON.stringify({ message: "relation error", code: "PGRST500" }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_db_error_inv_1",
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: "in_db_error_inv_1",
+          customer: CUSTOMER_ID,
+          charge: "ch_db_error_inv_1",
+          lines: {
+            data: [
+              {
+                pricing: {
+                  price_details: {
+                    price: "price_pro_env_456",
+                  },
+                },
+                period: { end: linePeriodEnd },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 502);
+    assertEquals(processedAtSet, false);
+    assertEquals(billingEventDeleted, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

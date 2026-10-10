@@ -506,10 +506,15 @@ export async function handler(req: Request): Promise<Response> {
         const clientRefId = session.client_reference_id;
 
         if (clientRefId && sessionCustId) {
-          await serviceClient
+          const { error: updateError } = await serviceClient
             .from("users")
             .update({ billing_customer_id: sessionCustId })
             .eq("id", clientRefId);
+          if (updateError) {
+            throw new Error(
+              `Failed to update billing_customer_id for user: ${updateError.message}`,
+            );
+          }
           resolvedUserId = clientRefId;
         }
         break;
@@ -522,11 +527,16 @@ export async function handler(req: Request): Promise<Response> {
 
         let targetUserId: string | null = null;
         if (invCustId) {
-          const { data: userRow } = await serviceClient
+          const { data: userRow, error: selectError } = await serviceClient
             .from("users")
             .select("id")
             .eq("billing_customer_id", invCustId)
             .maybeSingle();
+          if (selectError) {
+            throw new Error(
+              `Failed to query user by billing_customer_id: ${selectError.message}`,
+            );
+          }
           if (userRow?.id) {
             targetUserId = userRow.id;
           }
@@ -635,10 +645,15 @@ export async function handler(req: Request): Promise<Response> {
           if (linePeriodEnd != null) {
             updates.paid_until = new Date(linePeriodEnd * 1000).toISOString();
           }
-          await serviceClient
+          const { error: updateError } = await serviceClient
             .from("users")
             .update(updates)
             .eq("id", targetUserId);
+          if (updateError) {
+            throw new Error(
+              `Failed to update plan and paid_until for user: ${updateError.message}`,
+            );
+          }
           resolvedUserId = targetUserId;
         }
         break;
