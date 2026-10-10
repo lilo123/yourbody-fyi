@@ -7,7 +7,6 @@ import {
   encodeCatalogCursor,
   type CatalogExercise,
 } from '../lib/exercises';
-import { fetchTemplateDetail } from '../components/workout/useWorkoutQueries';
 import type { RoutineTemplate } from '../types/database';
 import { isDbClosedError } from '../offline/db';
 
@@ -237,6 +236,7 @@ export async function runOfflinePrefetch(
       }
 
       if (!batchedSuccess) {
+        const { fetchTemplateDetail } = await import('../components/workout/useWorkoutQueries');
         await Promise.all(
           uncachedTemplates.map((t) =>
             queryClient.prefetchQuery({

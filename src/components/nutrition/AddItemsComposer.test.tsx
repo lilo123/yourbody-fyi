@@ -3,6 +3,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AddItemsComposer } from './AddItemsComposer';
 import * as parseNutritionModule from './parseNutrition';
 
+let mockPaywallEnabled = false;
+vi.mock('../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: vi.fn((key: string) => {
+    if (key === 'paywall_enabled') return mockPaywallEnabled;
+    return false;
+  }),
+}));
+
 vi.mock('./parseNutrition', () => ({
   parseNutrition: vi.fn(),
 }));
@@ -17,6 +25,7 @@ describe('AddItemsComposer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPaywallEnabled = false;
   });
 
   it('renders textarea with 16px font and placeholder, and auto-focuses on mount', () => {
@@ -298,5 +307,53 @@ describe('AddItemsComposer', () => {
       const matches = screen.getAllByText("You've used today's AI parses. Quick log and on-device parsing still work.");
       expect(matches.some((el) => !el.closest('.sr-only'))).toBe(true);
     });
+  });
+
+  it('flag off: does not render Upgrade button on quota_exceeded', async () => {
+    const quotaErr: any = new Error(
+      "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
+    );
+    quotaErr.code = 'quota_exceeded';
+    (parseNutritionModule.parseNutrition as any).mockRejectedValueOnce(quotaErr);
+
+    render(<AddItemsComposer {...defaultProps} />);
+
+    const textarea = screen.getByRole('textbox', { name: 'Add items' });
+    fireEvent.change(textarea, { target: { value: 'chicken rice' } });
+
+    const analyzeBtn = screen.getByRole('button', { name: /analyze/i });
+    fireEvent.click(analyzeBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('composer-error')).toBeDefined();
+    });
+
+    expect(screen.queryByTestId('composer-upgrade-btn')).toBeNull();
+  });
+
+  it('flag on: renders Upgrade button on quota_exceeded and opens UpgradeSheet', async () => {
+    mockPaywallEnabled = true;
+
+    const quotaErr: any = new Error(
+      "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
+    );
+    quotaErr.code = 'quota_exceeded';
+    (parseNutritionModule.parseNutrition as any).mockRejectedValueOnce(quotaErr);
+
+    render(<AddItemsComposer {...defaultProps} />);
+
+    const textarea = screen.getByRole('textbox', { name: 'Add items' });
+    fireEvent.change(textarea, { target: { value: 'chicken rice' } });
+
+    const analyzeBtn = screen.getByRole('button', { name: /analyze/i });
+    fireEvent.click(analyzeBtn);
+
+    const upgradeBtn = await screen.findByTestId('composer-upgrade-btn');
+    expect(upgradeBtn).toBeDefined();
+    expect(upgradeBtn.className).toContain('min-h-[44px]');
+
+    fireEvent.click(upgradeBtn);
+
+    expect(await screen.findByTestId('upgrade-sheet')).toBeDefined();
   });
 });

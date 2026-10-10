@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import {
   Sparkles,
   ChevronUp,
@@ -17,6 +17,9 @@ import { CameraSource } from '@capacitor/camera';
 import { StatusBanner } from '../common/StatusBanner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { parseNutritionBlock } from '../../lib/nutrition/localParse';
+import { useFeatureFlag } from '../../hooks/useFeatureFlag';
+
+const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
 
 export interface NutritionAiInputProps {
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
@@ -38,6 +41,7 @@ export interface NutritionAiInputProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   hasCustomDishes: boolean;
   isOnline?: boolean;
+  isQuotaExceeded?: boolean;
 }
 
 export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
@@ -60,9 +64,12 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
   fileInputRef,
   hasCustomDishes,
   isOnline: isOnlineProp,
+  isQuotaExceeded = false,
 }) => {
   const hookOnline = useOnlineStatus();
   const isOnline = isOnlineProp !== undefined ? isOnlineProp : hookOnline;
+  const paywallEnabled = useFeatureFlag('paywall_enabled');
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
 
   const canParseLocally = useMemo(() => {
     if (!nlInput.trim() || selectedPhoto) return false;
@@ -282,7 +289,16 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           )
         }
         action={
-          isError && onAnalyze ? (
+          paywallEnabled && isQuotaExceeded ? (
+            <button
+              type="button"
+              data-testid="ai-upgrade-btn"
+              onClick={() => setIsUpgradeOpen(true)}
+              className="bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-xs px-3.5 py-2.5 min-h-[44px] min-w-[44px] rounded-xl transition active:scale-95 flex items-center justify-center gap-1.5 shadow-sm touch-manipulation cursor-pointer shrink-0"
+            >
+              <span>Upgrade</span>
+            </button>
+          ) : isError && onAnalyze ? (
             <button
               type="button"
               data-testid="retry-analysis-button"
@@ -296,6 +312,15 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           ) : null
         }
       />
+
+      {isUpgradeOpen && (
+        <React.Suspense fallback={null}>
+          <UpgradeSheet
+            isOpen={isUpgradeOpen}
+            onClose={() => setIsUpgradeOpen(false)}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 });

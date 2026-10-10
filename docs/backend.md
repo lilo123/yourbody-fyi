@@ -32,6 +32,7 @@ erDiagram
 Edge functions run purely externally. Explicitly define request and response payload shapes:
 - **`parse-nutrition` Request**: `{ text: string }`
 - **`parse-nutrition` Response**: `{ dishes: Array<{ name, energy, protein, ... }> }`
+
 ## AI Quota
 
 ### Overview
@@ -170,3 +171,135 @@ Unauthenticated calls raise an authentication required error (`28000`).
 
 To support early adopters during the introduction of subscription plans, migration `20261010050000_grandfather_existing_users.sql` executes a one-time grant of one year of Pro access to all existing users (`plan = 'pro'`, `paid_until = greatest(coalesce(paid_until, now()), now() + interval '1 year')`). Prior plan status and expiration dates are preserved in the `public.billing_grandfather` audit table (`user_id`, `prev_plan`, `prev_paid_until`, `granted_until`, `granted_at`), which is protected by RLS with all access revoked from `anon` and `authenticated` roles and configured with `ON DELETE CASCADE` to support user deletion. The grant logic is encapsulated in `public.grandfather_existing_users()`, an idempotent `SECURITY DEFINER` function callable only by administrative database roles. Rollback via `supabase/rollback/20261010050000_down.sql` reverts `plan` and `paid_until` for users whose grant remains untouched (`plan = 'pro' AND paid_until = granted_until`) before removing the function and audit table.
 
+## Stripe (test mode, staging)
+
+### Overview
+Stripe integration provides serverless edge functions for checkout session generation, customer portal navigation, and subscription webhook processing. This implementation operates in test mode on staging environments. Live keys are strictly refused by design. No user interface components are included in this PR.
+
+### Edge Functions
+All edge functions are configured in `supabase/config.toml` and execute in the Supabase Deno Edge Runtime:
+
+1. **`create-checkout`** (`verify_jwt = true`):
+   - **Method**: `POST`
+   - **Auth**: Requires valid Supabase user JWT via `Authorization: Bearer <token>`. Caller authenticated via `userClient.auth.getUser()`.
+   - **Request**: `{ "plan": "basic" | "pro" }`
+   - **Origin Validation**: Evaluates the `Origin` header against the shared CORS allowlist. Returns `400` on missing or disallowed origins.
+   - **Checkout Session**: Creates a Stripe Checkout session in `mode: 'subscription'`, setting `client_reference_id = user.id`, `metadata.user_id = user.id`, and `subscription_data.metadata.user_id = user.id`. Reuses existing `users.billing_customer_id` if present; otherwise specifies `customer_email`. Sets `success_url` to `${origin}/settings?billing=success` and `cancel_url` to `${origin}/settings?billing=cancelled`.
+   - **Response**: `{ "url": string }`
+
+2. **`create-portal-session`** (`verify_jwt = true`):
+   - **Method**: `POST`
+   - **Auth**: Requires valid Supabase user JWT via `Authorization: Bearer <token>`.
+   - **Origin Validation**: Resolves `return_url` as `${origin}/settings` only if the `Origin` header passes the shared CORS allowlist (returns `400` otherwise).
+   - **Customer Requirement**: Inspects `users.billing_customer_id` via `service_role`. Returns `409` (`{ "code": "no_billing_customer" }`) if no customer record exists.
+   - **Response**: `{ "url": string }`
+
+3. **`stripe-webhook`** (`verify_jwt = false`):
+   - **Method**: `POST`
+   - **Signature Verification**: Verifies incoming `Stripe-Signature` header against the raw body using `stripe.webhooks.constructEventAsync()` with `STRIPE_WEBHOOK_SECRET` and `Stripe.createSubtleCryptoProvider()`. Returns `400` (`{ "error": "Invalid signature" }`) on verification failure without leaking details.
+   - **Endpoint Path**: `/functions/v1/stripe-webhook`
+
+### Secrets and Environment Configuration
+The following environment secrets must be configured in Supabase (values reside on staging only; production retains none):
+- `STRIPE_SECRET_KEY`: Stripe API secret key (test mode only, starting with `sk_test_`).
+- `STRIPE_WEBHOOK_SECRET`: Webhook signing secret (`whsec_...`).
+- `STRIPE_PRICE_BASIC`: Stripe Price identifier for the basic subscription plan.
+- `STRIPE_PRICE_PRO`: Stripe Price identifier for the pro subscription plan.
+- Standard platform variables: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+### Live Key Refusal
+The shared guard `_shared/stripeConfig.ts` inspects `STRIPE_SECRET_KEY` on invocation. If the key starts with `sk_live_` or `rk_live_`, execution terminates immediately returning `503` (`{ "code": "live_keys_refused" }`). If `STRIPE_SECRET_KEY` is unset or empty, the guard returns `503` (`{ "code": "billing_not_configured" }`). Secret keys are never logged.
+
+### Stripe Dashboard Webhook Configuration
+The webhook listener at `/functions/v1/stripe-webhook` handles the following events, which must be enabled in the Stripe dashboard:
+- `checkout.session.completed`: Sets `users.billing_customer_id` for the corresponding `client_reference_id`.
+- `invoice.paid`: Resolves the user by `billing_customer_id` (fallback to subscription `metadata.user_id`), maps the line item price ID to `plan` (`basic` or `pro`), and updates `paid_until` to the line item period end timestamp (`line.period.end`).
+- `customer.subscription.deleted`: Leaves `paid_until` as-is, granting the user access through the end of the prepaid period with no plan modification.
+- `charge.refunded`: Revokes access on full refunds (`amount_refunded === amount`) unless `keep_access` metadata is present; partial refunds leave access unchanged.
+- `charge.dispute.created`: Resolves the customer via the dispute's charge, revokes access, and records the event in `billing_events` with the resolved `user_id`. The staging webhook endpoint must subscribe to `charge.dispute.created`.
+- Unhandled/unknown event types: Recorded in `billing_events`, marked as processed, and acknowledged with `200` (`{ "ignored": true }`).
+
+### Refunds, Disputes and Goodwill Refunds
+- **Full refund**: A full refund (`amount_refunded === amount` where `amount > 0`) revokes access by updating `paid_until = least(paid_until, now())` for the customer.
+- **Partial refund**: A partial refund does not change user access (`paid_until` and `plan` remain untouched); the event is recorded in `billing_events`.
+- **Disputes**: A dispute (`charge.dispute.created`) resolves the customer via the dispute's charge (fetching `GET /v1/charges/<id>` if the dispute lacks the customer) and revokes access (`paid_until = least(paid_until, now())`). Disputes have no `keep_access` override. The staging webhook endpoint must subscribe to `charge.dispute.created`.
+- **Goodwill refund (override)**: To issue a refund without revoking user access, set metadata `keep_access = true` through either:
+  - **Stripe Dashboard**: Add metadata key `keep_access` with value `true` on the payment (PaymentIntent) page before issuing the refund.
+  - **Stripe CLI**: `stripe refunds create --charge <ch_id> -d "metadata[keep_access]=true"`
+- **Subscription cancellation notice**: Refunding a payment or handling a dispute does not automatically cancel the underlying Stripe subscription. If subscription cancellation is intended, cancel it separately in the Stripe dashboard or via customer portal.
+
+### Idempotency and State Mutations
+Incoming webhook events are recorded in `public.billing_events`:
+```sql
+INSERT INTO public.billing_events (event_id, type, customer_id, user_id, payload)
+VALUES (...)
+ON CONFLICT (event_id) DO NOTHING;
+```
+If an event was already processed (row exists), the endpoint immediately returns `200` (`{ "duplicate": true }`) without triggering duplicate state side effects.
+
+Payloads stored in `billing_events` are strictly minimal, capturing only technical identifiers, object types, status flags, transaction amounts, and period expiration timestamps. No customer names, email addresses, payment methods, or physical addresses are stored. All database updates to `public.users` execute through the `service_role` client to satisfy the `protect_user_billing_fields()` trigger.
+
+## Account Deletion
+
+### Overview & Feature Flag
+Account deletion is governed by a server-side feature flag stored in `public.app_config`:
+- **Key**: `account_deletion_enabled`
+- **Default Value**: `false` (boolean JSON)
+- **Client Access**: Guarded via `useFeatureFlag('account_deletion_enabled')`. When false or unconfigured, the 'Delete account' danger-zone card is completely hidden.
+- **Server Guard**: Even if called directly, the `delete-account` edge function queries `public.app_config` with the caller's JWT client and returns `403 { code: 'feature_disabled' }` unless `value === true`.
+
+### Edge Function (`delete-account`)
+Configured in `supabase/config.toml` under `[functions.delete-account]` with `verify_jwt = true`.
+
+- **HTTP Method**: POST only (OPTIONS returns 200 with shared CORS headers; other methods return 405).
+- **Authentication**: Requires valid Bearer JWT. Validates caller via `userClient.auth.getUser()`, returning 401 on failure.
+- **Payload Contract**:
+  - Request Body: `{"confirm": "DELETE"}` (returns `400 { code: 'confirmation_required' }` if missing or mismatch).
+  - Success Response: `200 { "deleted": true }`.
+  - Error Response: `500 { "error": "Account deletion failed", "code": "delete_failed" }` without leaking internal errors, identifiers, or credentials.
+  - Privacy & Logging: User IDs, emails, and sensitive keys are never logged.
+
+### Order of Operations
+1. **Client Preparation**:
+   - Checks `useFeatureFlag('account_deletion_enabled')` (hidden if disabled) and `useOnlineStatus()` (disabled when offline).
+   - Allows user to export all personal data first via `executeDataExport` (`src/utils/dataExport.ts`).
+   - Requires explicit textual confirmation: typing `DELETE` unlocks the deletion action.
+   - Invokes `supabase.functions.invoke('delete-account', { body: { confirm: 'DELETE' } })`.
+
+2. **Server-Side Execution**:
+   - Validates CORS origin, HTTP POST method, and Authorization header.
+   - Checks `app_config.account_deletion_enabled === true` using caller client.
+   - Initializes service-role client (`SUPABASE_SERVICE_ROLE_KEY`).
+   - **Stripe Cancellation**: If `STRIPE_SECRET_KEY` is present and user profile contains a `billing_customer_id`, active/trialing/past-due subscriptions are cancelled via Stripe REST API (`DELETE /v1/subscriptions/{id}`). Keys starting with `sk_live_` or `rk_live_` are refused.
+   - **RESTRICT Cleanup**: Cleans up child entities that could violate `ON DELETE RESTRICT` constraints during cascade:
+     - Deletes caller's `template_exercises` and `routine_templates`.
+     - Deletes caller's `sets` and `workouts`.
+     - For caller's custom `exercises`: clone-and-repoint. For each other user U whose `sets` or `template_exercises` reference caller's custom exercise E, creates a cloned copy of E owned by U (`user_id = U`, `is_master = false`), repoints U's referencing rows to the clone, and deletes E. This completely purges User A's custom exercises without leaking to other users or corrupting User B's templates and workout history.
+   - **User Deletion**: Calls `auth.admin.deleteUser(user.id)`, triggering PostgreSQL foreign key cascades.
+
+3. **Client Completion**:
+   - On 200 response, invokes `wipeUserData(userId, { queryClient })`:
+     - Closes and deletes the user's IndexedDB database (`yourbody-offline-${userId}`).
+     - Clears the in-memory React Query cache.
+     - Removes `yourbody_*` localStorage keys scoped to this user and session.
+   - Calls `auth.signOut()`.
+   - Navigates to `/login` with a neutral confirmation notification.
+
+### Data Retention & Cascades
+- **Deleted**:
+  - `auth.users` row and `public.users` row (`20260831150310_init_schema.sql`).
+  - `public.workouts` and `public.sets` (`20260831150310_init_schema.sql`).
+  - `public.routine_templates` and `public.template_exercises` owned by the user (`20260901000000_v2_expansion.sql`).
+  - `public.nutrition_logs` (`20260831150310_init_schema.sql`) and `public.custom_dishes` (`20260903000000_production_hardening.sql`).
+  - `public.coach_athlete_links` where user is coach or athlete (`20260909000000_multi_coach_code_linking.sql`).
+  - `public.exercise_hides` hidden by the user (`20260927030000_exercise_catalog.sql`).
+  - `public.ai_usage` quota records (`20261010010000_ai_quota.sql`).
+  - Local client storage: IndexedDB `yourbody-offline-${userId}`, React Query cache, and user-scoped `yourbody_*` localStorage keys.
+- **Preserved**:
+  - Other users' data is untouched.
+  - `public.billing_events`: `user_id` is set to `NULL` via `ON DELETE SET NULL` (`20261010030000_billing_entitlement.sql`), retaining immutable payment records for accounting and audit compliance.
+  - Routine templates created by coaches for this athlete have `assigned_to` set to `NULL` (`ON DELETE SET NULL`, `20260901000000_v2_expansion.sql`).
+  - Custom exercises referenced by other users are cloned and repointed to the referencing users (`user_id = U`), preserving their templates and history under personal ownership without leaking to global catalog (`20260927000000_exercises_rls_v2.sql`).
+
+### Staging-Only Testing Note
+Account deletion permanently and irreversibly destroys user records and offline data. The `account_deletion_enabled` flag must remain `false` in production environments until formally verified in staging with synthetic test accounts.
