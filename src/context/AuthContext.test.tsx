@@ -12,6 +12,7 @@ import * as offlineModule from '../offline';
 vi.mock('../lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn().mockResolvedValue({ data: {}, error: null }),
     auth: {
       getUser: vi.fn(),
       getSession: vi.fn(),
@@ -646,6 +647,200 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
       });
 
       expect(offlineModule.getAuthRequiredStatus()).toBe(false);
+    });
+  });
+
+  describe('Terms consent post-login acceptance', () => {
+    const originalEnv = import.meta.env.VITE_FEATURE_TERMS_CONSENT;
+
+    beforeEach(() => {
+      (supabase.rpc as any) = vi.fn().mockResolvedValue({ data: {}, error: null });
+    });
+
+    afterEach(() => {
+      (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = originalEnv;
+    });
+
+    it('flag off: does not call accept_terms RPC even when session user has terms_version metadata', async () => {
+      (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = undefined;
+
+      (supabase.auth.getSession as any).mockResolvedValue({
+        data: {
+          session: {
+            user: {
+              id: mockProfile.id,
+              email: mockProfile.email,
+              user_metadata: { terms_version: '2026-10-10' },
+            },
+          },
+        },
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TestConsumer />
+          </AuthProvider>
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+      });
+
+      expect(supabase.rpc).not.toHaveBeenCalled();
+    });
+
+    it('flag on: calls accept_terms RPC once when metadata has terms_version and profile has no terms_accepted_at', async () => {
+      (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = 'true';
+
+      (supabase.auth.getSession as any).mockResolvedValue({
+        data: {
+          session: {
+            user: {
+              id: mockProfile.id,
+              email: mockProfile.email,
+              user_metadata: { terms_version: '2026-10-10' },
+            },
+          },
+        },
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TestConsumer />
+          </AuthProvider>
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(supabase.rpc).toHaveBeenCalledWith('accept_terms', { p_version: '2026-10-10' });
+      });
+
+      expect(supabase.rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it('flag on: does NOT call accept_terms if profile already has terms_accepted_at', async () => {
+      (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = 'true';
+
+      const acceptedProfile: UserProfile = {
+        ...mockProfile,
+        terms_version: '2026-10-10',
+        terms_accepted_at: '2026-10-10T10:00:00Z',
+      };
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        return createSupabaseBuilder(table, acceptedProfile);
+      });
+
+      (supabase.auth.getSession as any).mockResolvedValue({
+        data: {
+          session: {
+            user: {
+              id: acceptedProfile.id,
+              email: acceptedProfile.email,
+              user_metadata: { terms_version: '2026-10-10' },
+            },
+          },
+        },
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TestConsumer />
+          </AuthProvider>
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+      });
+
+      expect(supabase.rpc).not.toHaveBeenCalled();
+    });
+
+    it('flag on: does NOT call accept_terms a second time on refreshProfile', async () => {
+      (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = 'true';
+
+      (supabase.auth.getSession as any).mockResolvedValue({
+        data: {
+          session: {
+            user: {
+              id: mockProfile.id,
+              email: mockProfile.email,
+              user_metadata: { terms_version: '2026-10-10' },
+            },
+          },
+        },
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TestConsumer />
+          </AuthProvider>
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(supabase.rpc).toHaveBeenCalledTimes(1);
+      });
+
+      // Trigger refreshProfile
+      const refreshBtn = screen.getByTestId('auth-refresh-btn');
+      await act(async () => {
+        fireEvent.click(refreshBtn);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('auth-profile-username').textContent).toBe(mockProfile.username);
+      });
+
+      // RPC still called only once
+      expect(supabase.rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it('flag on: fire-and-forget accept_terms RPC warning does not block session resolution', async () => {
+      (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = 'true';
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      (supabase.rpc as any) = vi.fn().mockRejectedValue(new Error('network offline'));
+
+      (supabase.auth.getSession as any).mockResolvedValue({
+        data: {
+          session: {
+            user: {
+              id: mockProfile.id,
+              email: mockProfile.email,
+              user_metadata: { terms_version: '2026-10-10' },
+            },
+          },
+        },
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TestConsumer />
+          </AuthProvider>
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+        expect(screen.getByTestId('auth-user-id').textContent).toBe(mockProfile.id);
+      });
+
+      await waitFor(() => {
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('[AuthContext] accept_terms RPC error:'),
+          expect.any(Error)
+        );
+      });
+
+      warnSpy.mockRestore();
     });
   });
 });

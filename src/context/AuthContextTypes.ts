@@ -10,7 +10,7 @@ export interface AuthContextType {
   isCoachMode: boolean;
   loading: boolean;
   signIn: (email: string, password?: string) => Promise<{ success: boolean; error?: string; role?: UserRole }>;
-  signUp: (email: string, password?: string, role?: UserRole) => Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean; message?: string }>;
+  signUp: (email: string, password?: string, role?: UserRole, termsVersion?: string) => Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean; message?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ success: boolean; error?: string }>;
   switchRole: (newRole: UserRole) => Promise<void>;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { LoginView } from './LoginView';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -230,6 +230,103 @@ describe('LoginView', () => {
     const updatedAssertive = container.querySelectorAll('[role="alert"]')[0];
     expect(updatedAssertive).toBe(assertiveRegions[0]);
     expect(updatedAssertive.textContent).toContain('Password must be at least 6 characters');
+  });
+
+  it('flag off: terms checkbox is absent and registration submit sends default options without terms_version', async () => {
+    const originalEnv = import.meta.env.VITE_FEATURE_TERMS_CONSENT;
+    (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = undefined;
+
+    try {
+      const { fireEvent } = await import('@testing-library/react');
+      renderComponent();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+
+      // Checkbox must be absent
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      expect(screen.queryByText(/Terms of Service/i)).toBeNull();
+
+      const emailInput = screen.getByPlaceholderText('you@example.com');
+      const [passwordInput, confirmInput] = screen.getAllByPlaceholderText('••••••••');
+      const submitBtn = screen.getByRole('button', { name: 'Create Account' }) as HTMLButtonElement;
+
+      expect(submitBtn.disabled).toBe(false);
+
+      fireEvent.change(emailInput, { target: { value: 'consent_off@yourbody.fyi' } });
+      fireEvent.change(passwordInput, { target: { value: 'password123' } });
+      fireEvent.change(confirmInput, { target: { value: 'password123' } });
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(mockSignUp).toHaveBeenCalledTimes(1);
+      });
+
+      const callArgs = mockSignUp.mock.calls[0][0];
+      expect(callArgs.email).toBe('consent_off@yourbody.fyi');
+      expect(callArgs.options.data.terms_version).toBeUndefined();
+    } finally {
+      (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = originalEnv;
+    }
+  });
+
+  it('flag on: terms checkbox is required, links to /terms and /privacy, controls submit button, and sends terms_version in signUp', async () => {
+    const originalEnv = import.meta.env.VITE_FEATURE_TERMS_CONSENT;
+    (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = 'true';
+
+    try {
+      const { fireEvent } = await import('@testing-library/react');
+      const { container } = renderComponent();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+
+      // Checkbox is present and required
+      const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+      expect(checkbox).toBeDefined();
+      expect(checkbox.checked).toBe(false);
+      expect(checkbox.required).toBe(true);
+
+      // Links exist with correct attributes
+      const termsLink = screen.getByRole('link', { name: /Terms of Service/i });
+      const privacyLink = screen.getByRole('link', { name: /Privacy Policy/i });
+      expect(termsLink.getAttribute('href')).toBe('/terms');
+      expect(termsLink.getAttribute('target')).toBe('_blank');
+      expect(termsLink.getAttribute('rel')).toBe('noopener');
+      expect(privacyLink.getAttribute('href')).toBe('/privacy');
+      expect(privacyLink.getAttribute('target')).toBe('_blank');
+      expect(privacyLink.getAttribute('rel')).toBe('noopener');
+
+      const emailInput = screen.getByPlaceholderText('you@example.com');
+      const [passwordInput, confirmInput] = screen.getAllByPlaceholderText('••••••••');
+      const submitBtn = screen.getByRole('button', { name: 'Create Account' }) as HTMLButtonElement;
+
+      fireEvent.change(emailInput, { target: { value: 'consent_on@yourbody.fyi' } });
+      fireEvent.change(passwordInput, { target: { value: 'password123' } });
+      fireEvent.change(confirmInput, { target: { value: 'password123' } });
+
+      // Submit must be disabled when checkbox is unchecked
+      expect(submitBtn.disabled).toBe(true);
+
+      // Check the checkbox -> submit enabled
+      fireEvent.click(checkbox);
+      expect(checkbox.checked).toBe(true);
+      expect(submitBtn.disabled).toBe(false);
+
+      // Submit form
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(mockSignUp).toHaveBeenCalledTimes(1);
+      });
+
+      const callArgs = mockSignUp.mock.calls[0][0];
+      expect(callArgs.email).toBe('consent_on@yourbody.fyi');
+      expect(callArgs.options.data.terms_version).toBe('2026-10-10');
+
+      // A11y verification with checkbox rendered
+      await expectNoA11yViolations(container);
+    } finally {
+      (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = originalEnv;
+    }
   });
 });
 
