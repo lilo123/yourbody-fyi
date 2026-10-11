@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { wipeUserData } from './wipeUserData';
 import * as offlineDbModule from '../offline/db';
+import * as persistControllerModule from '../offline/persistController';
 import { QueryClient } from '@tanstack/react-query';
 
 describe('wipeUserData', () => {
@@ -73,5 +74,23 @@ describe('wipeUserData', () => {
     const deleteSpy = vi.spyOn(offlineDbModule, 'deleteOfflineDb');
     await wipeUserData('');
     expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('calls stopPersisting before deleting offline database and clearing client cache', async () => {
+    const order: string[] = [];
+    vi.spyOn(persistControllerModule, 'stopPersisting').mockImplementation(() => {
+      order.push('stopPersisting');
+    });
+    vi.spyOn(offlineDbModule, 'deleteOfflineDb').mockImplementation(async () => {
+      order.push('deleteOfflineDb');
+    });
+    const queryClient = new QueryClient();
+    vi.spyOn(queryClient, 'clear').mockImplementation(() => {
+      order.push('queryClientClear');
+    });
+
+    await wipeUserData('user-order-test', { queryClient });
+
+    expect(order).toEqual(['stopPersisting', 'deleteOfflineDb', 'queryClientClear']);
   });
 });

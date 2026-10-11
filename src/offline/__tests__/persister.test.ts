@@ -321,6 +321,15 @@ describe('Cache Persister & Whitelist (§A3, §A9, §D)', () => {
       expect(mappedId).toBe('canonical-w-keep');
     });
 
+    it('clearUserReadCache does not create an offline database if one does not already exist', async () => {
+      const nonExistentUserId = 'user-never-existed-456';
+      await clearUserReadCache(nonExistentUserId);
+
+      const dbs = await indexedDB.databases();
+      const db = dbs.find((d) => d.name === `yourbody-offline-${nonExistentUserId}`);
+      expect(db).toBeUndefined();
+    });
+
     it('persistClient, restoreClient, removeClient absorb closed IndexedDB errors without throwing or rejecting', async () => {
       const persister = createIdbPersister(userId);
       const mockClientData: PersistedClient = {
