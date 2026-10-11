@@ -1,16 +1,17 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { CreditCard, Sparkles, ExternalLink, AlertCircle } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { useEntitlement, getEntitlementQueryKey } from '../../hooks/useEntitlement';
 import { StatusBanner } from '../common/StatusBanner';
-import { openBillingPortal } from '../../lib/billing';
+import { openBillingPortal, planLabel } from '../../lib/billing';
 
 const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
 
 export const SubscriptionCard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const userId = user?.id;
   const entitlement = useEntitlement();
   const queryClient = useQueryClient();
@@ -51,23 +52,41 @@ export const SubscriptionCard: React.FC = () => {
     window.history.replaceState({}, '', newUrl);
   }, [userId, queryClient, showToast]);
 
-  const getBadgeLabel = (): 'Pro' | 'Basic' | 'Trial' | 'Free' => {
-    if (entitlement.isPro) return 'Pro';
-    if (entitlement.isPaid && entitlement.plan.toLowerCase() === 'basic') return 'Basic';
-    if (
-      !entitlement.isPaid &&
-      entitlement.trialEndsAt &&
-      new Date(entitlement.trialEndsAt).getTime() > now
-    ) {
-      return 'Trial';
-    }
-    if (entitlement.plan.toLowerCase() === 'pro') return 'Pro';
-    if (entitlement.plan.toLowerCase() === 'basic') return 'Basic';
-    if (entitlement.plan.toLowerCase() === 'trial') return 'Trial';
-    return 'Free';
-  };
+  const isTrial =
+    (!entitlement.isPaid &&
+      Boolean(entitlement.trialEndsAt && new Date(entitlement.trialEndsAt).getTime() > now)) ||
+    entitlement.plan?.toLowerCase() === 'trial';
 
-  const badgeLabel = getBadgeLabel();
+  const badgeLabel = planLabel(
+    entitlement.isPro ? 'pro' : isTrial ? 'trial' : entitlement.plan,
+    profile?.coach_tier,
+    entitlement.isPaid || isTrial
+  );
+  const isCoach = badgeLabel === 'Coach' || badgeLabel === 'Coach Pro';
+  const defaultAthleteLimit = badgeLabel === 'Coach Pro' ? 25 : 10;
+
+  // Active athlete count and limit for coaches
+  const { data: athleteCount = 0 } = useQuery({
+    queryKey: ['coach_active_athletes_count', userId],
+    enabled: Boolean(userId && isCoach),
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase.rpc('my_coach_limits');
+        if (!error && data) {
+          const row = Array.isArray(data) ? data[0] : data;
+          if (row && typeof row.athlete_count === 'number') {
+            return row.athlete_count;
+          }
+        }
+      } catch {
+        // fallback
+      }
+      return 0;
+    },
+    staleTime: 60 * 1000,
+  });
+
+  const athleteLimit = defaultAthleteLimit;
 
   const handleManageBilling = async () => {
     if (isManagingBilling) return;
@@ -96,9 +115,11 @@ export const SubscriptionCard: React.FC = () => {
         <span
           data-testid="subscription-plan-badge"
           className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-            badgeLabel === 'Pro'
+            badgeLabel === 'Coach Pro'
+              ? 'bg-gradient-to-r from-purple-500/20 to-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan'
+              : badgeLabel === 'Coach'
               ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-300 border border-cyan-500/40 shadow-neon-cyan'
-              : badgeLabel === 'Basic'
+              : badgeLabel === 'Personal'
               ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
               : badgeLabel === 'Trial'
               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -131,6 +152,14 @@ export const SubscriptionCard: React.FC = () => {
           <div className="text-sm font-semibold text-white">
             Current plan: <span className="capitalize text-zinc-200">{badgeLabel}</span>
           </div>
+          {isCoach && (
+            <p
+              data-testid="subscription-athletes-count"
+              className="text-xs text-zinc-400"
+            >
+              {athleteCount} / {athleteLimit} athletes
+            </p>
+          )}
           {entitlement.paidUntil && (
             <p
               data-testid="subscription-active-until"
@@ -142,7 +171,7 @@ export const SubscriptionCard: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {!entitlement.isPro && (
+          {!entitlement.isPro && badgeLabel !== 'Coach Pro' && (
             <button
               type="button"
               data-testid="subscription-upgrade-btn"

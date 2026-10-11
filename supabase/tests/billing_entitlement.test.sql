@@ -254,14 +254,14 @@ BEGIN
   UPDATE public.users SET plan = 'pro', paid_until = now() - interval '5 days', created_at = now() - interval '30 days', trial_ends_at = NULL WHERE id = v_expired_pro;
   UPDATE public.users SET plan = NULL, paid_until = NULL, created_at = now() WHERE id = v_trial_user;
 
-  -- 1) Basic user: limit 100 per month
+  -- 1) Basic user: limit 5 per day
   PERFORM set_config('role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', '{"role":"authenticated","sub":"' || v_basic_user || '"}', true);
   v_res := public.consume_ai_quota(1);
   IF (v_res->>'allowed')::boolean <> true
      OR v_res->>'plan' <> 'basic'
-     OR (v_res->>'limit')::integer <> 100
-     OR v_res->>'period' <> 'month' THEN
+     OR (v_res->>'limit')::integer <> 5
+     OR v_res->>'period' <> 'day' THEN
     RAISE EXCEPTION 'Basic user consume unexpected: %', v_res;
   END IF;
 
@@ -298,7 +298,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', '', true);
 END;
 $$;
-SELECT pass('consume_ai_quota: basic user gets limit 100 per month');
+SELECT pass('consume_ai_quota: basic user gets limit 5 per day');
 SELECT pass('consume_ai_quota: pro user gets limit 30 per day');
 SELECT pass('consume_ai_quota: expired pro past trial resolves to free (limit 0)');
 SELECT pass('consume_ai_quota: trial user resolves to trial (limit 30 per day)');

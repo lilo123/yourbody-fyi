@@ -213,7 +213,7 @@ describe('SettingsView', () => {
 
     expect(screen.getByText('Coach Mode & Roster')).toBeDefined();
     expect(screen.getByTestId('active-coach-code').textContent).toContain('YB-DEMO01');
-    expect(screen.getByTestId('coach-capacity-badge').textContent).toContain('0 / 10 Athletes (pro)');
+    expect(screen.getByText('0 / 10 Athletes (Coach)')).toBeDefined();
     expect(screen.getByTestId('copy-coach-code-btn')).toBeDefined();
     expect(screen.getByTestId('vanity-code-input')).toBeDefined();
     expect(screen.getByTestId('save-vanity-code-btn')).toBeDefined();
@@ -304,8 +304,7 @@ describe('SettingsView', () => {
     renderComponent();
     await screen.findByDisplayValue('Coach Demo');
 
-    const badge = screen.getByTestId('coach-capacity-badge');
-    expect(badge.textContent).toContain('(free)');
+    expect(screen.getByText('0 / 3 Athletes (Free)')).toBeDefined();
   });
 
   it('renders My Coach card and allows linking to a coach via link_to_coach RPC', async () => {
