@@ -2,6 +2,7 @@ import { useContext } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { AuthContext } from '../context/AuthContextTypes';
+import type { AiPlan } from '../types/database';
 
 export interface EntitlementRpcResponse {
   plan_effective: string;
@@ -72,10 +73,11 @@ export function useEntitlement(): UseEntitlementReturn {
   }
 
   const isPro = Boolean(data.has_pro);
-  const isPaid = isPro || data.plan_effective === 'basic' || (
-    data.plan === 'basic' &&
-    Boolean(data.paid_until && new Date(data.paid_until).getTime() > Date.now())
-  );
+  const isPaid =
+    isPro ||
+    data.plan_effective === 'basic' ||
+    (data.plan === 'basic' &&
+      Boolean(data.paid_until && new Date(data.paid_until).getTime() > Date.now()));
 
   return {
     plan: data.plan_effective || 'free',
@@ -86,3 +88,4 @@ export function useEntitlement(): UseEntitlementReturn {
     isLoading: false,
   };
 }
+export type { AiPlan };

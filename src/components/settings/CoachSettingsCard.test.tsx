@@ -7,8 +7,13 @@ import type { UserProfile } from '../../types/database';
 import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, clearMockHistory, getRecordedTables, getRecordedSelects } from '../../test/supabaseBuilderMock';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import * as entitlementModule from '../../hooks/useEntitlement';
 
 vi.mock('../../hooks/useOnlineStatus');
+
+vi.mock('../../hooks/useEntitlement', () => ({
+  useEntitlement: vi.fn(),
+}));
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -24,6 +29,14 @@ describe('CoachSettingsCard accessibility', () => {
     vi.clearAllMocks();
     clearMockHistory();
     vi.mocked(useOnlineStatus).mockReturnValue(true);
+    vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
+      plan: 'pro',
+      isPro: true,
+      isPaid: true,
+      trialEndsAt: null,
+      paidUntil: '2028-01-01T00:00:00Z',
+      isLoading: false,
+    });
     queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -190,5 +203,92 @@ describe('CoachSettingsCard accessibility', () => {
     expect(input.getAttribute('title')).toBe('Available when online');
     expect(saveBtn).toBeDisabled();
     expect(saveBtn.getAttribute('title')).toBe('Available when online');
+  });
+
+  describe('effective athlete limits and tier labels', () => {
+    it('renders 10 limit and Coach tier label for pro coach', () => {
+      vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
+        plan: 'pro',
+        isPro: true,
+        isPaid: true,
+        trialEndsAt: null,
+        paidUntil: '2028-01-01T00:00:00Z',
+        isLoading: false,
+      });
+
+      renderCard();
+
+      const badge = screen.getByTestId('coach-capacity-badge');
+      expect(badge.textContent).toContain('0 / 10 Athletes (Coach)');
+    });
+
+    it('renders 25 limit and Coach Pro tier label for enterprise coach', () => {
+      vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
+        plan: 'pro',
+        isPro: true,
+        isPaid: true,
+        trialEndsAt: null,
+        paidUntil: '2028-01-01T00:00:00Z',
+        isLoading: false,
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <CoachSettingsCard
+            profile={{ ...mockProfile, coach_tier: 'enterprise' }}
+            hasCoachCapability={true}
+          />
+        </QueryClientProvider>
+      );
+
+      const badge = screen.getByTestId('coach-capacity-badge');
+      expect(badge.textContent).toContain('0 / 25 Athletes (Coach Pro)');
+    });
+
+    it('renders 3 limit and Free tier label for free tier coach', () => {
+      vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
+        plan: 'free',
+        isPro: false,
+        isPaid: false,
+        trialEndsAt: null,
+        paidUntil: null,
+        isLoading: false,
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <CoachSettingsCard
+            profile={{ ...mockProfile, coach_tier: 'free' }}
+            hasCoachCapability={true}
+          />
+        </QueryClientProvider>
+      );
+
+      const badge = screen.getByTestId('coach-capacity-badge');
+      expect(badge.textContent).toContain('0 / 3 Athletes (Free)');
+    });
+
+    it('renders 3 limit and Free tier label for lapsed coach even if coach_tier was pro', () => {
+      vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
+        plan: 'free',
+        isPro: false,
+        isPaid: false,
+        trialEndsAt: null,
+        paidUntil: '2020-01-01T00:00:00Z',
+        isLoading: false,
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <CoachSettingsCard
+            profile={{ ...mockProfile, coach_tier: 'pro' }}
+            hasCoachCapability={true}
+          />
+        </QueryClientProvider>
+      );
+
+      const badge = screen.getByTestId('coach-capacity-badge');
+      expect(badge.textContent).toContain('0 / 3 Athletes (Free)');
+    });
   });
 });
