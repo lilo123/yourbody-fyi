@@ -5,6 +5,7 @@ export * from './types';
 export {
   getOfflineDb,
   getOfflineDbName,
+  offlineDbExists,
   closeOfflineDb,
   closeAllOfflineDbs,
   clearUserRqStore,
