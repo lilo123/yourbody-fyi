@@ -2422,11 +2422,18 @@ describe('HistoryView', () => {
       await waitFor(() => {
         expect(screen.getByTestId('toggle-unlogged-exercises')).toBeDefined();
       });
-      fireEvent.click(screen.getByTestId('toggle-unlogged-exercises'));
+      expect(screen.getByTestId('toggle-unlogged-exercises')).toHaveTextContent('Unlogged Exercises (1050)');
 
+      // Verify boundary exercises from first and last pages via search without mounting 1000+ DOM cards
+      const searchInput = screen.getByPlaceholderText('Search exercise library...');
+      fireEvent.change(searchInput, { target: { value: 'Exercise 1049' } });
+      await waitFor(() => {
+        expect(screen.getByText('Exercise 1049')).toBeDefined();
+      });
+
+      fireEvent.change(searchInput, { target: { value: 'Exercise 0000' } });
       await waitFor(() => {
         expect(screen.getByText('Exercise 0000')).toBeDefined();
-        expect(screen.getByText('Exercise 1049')).toBeDefined();
       });
     });
   });
