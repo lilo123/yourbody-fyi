@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import app, { reconcileParentWithItems, MAX_IMAGE_BYTES, MAX_FALLBACK_MODELS } from "./index.ts";
 
 Deno.env.set("SUPABASE_URL", "https://mock.supabase.co");
