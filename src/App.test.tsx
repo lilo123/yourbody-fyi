@@ -177,26 +177,30 @@ describe('App Shell & Navigation', () => {
   });
 
   it('renders Cyberpunk pulse spinner and retry button in ProtectedRoute when loading exceeds 2s', async () => {
+    window.history.pushState({}, '', '/workout');
     vi.useFakeTimers();
-    (supabase.auth.getSession as any).mockImplementation(() => new Promise(() => {}));
-    localStorage.clear();
+    try {
+      (supabase.auth.getSession as any).mockImplementation(() => new Promise(() => {}));
+      localStorage.clear();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    );
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
 
-    expect(screen.getByText('Connecting to Yourbody...')).toBeDefined();
-    expect(screen.queryByTestId('auth-retry-button')).toBeNull();
+      expect(screen.getByText('Connecting to Yourbody...')).toBeDefined();
+      expect(screen.queryByTestId('auth-retry-button')).toBeNull();
 
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
 
-    expect(screen.getByTestId('auth-retry-button')).toBeDefined();
-    expect(screen.getByText('Connecting to Yourbody... Tap to Retry')).toBeDefined();
-    vi.useRealTimers();
+      expect(screen.getByTestId('auth-retry-button')).toBeDefined();
+      expect(screen.getByText('Connecting to Yourbody... Tap to Retry')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders protected content immediately without showing loading spinner when cached user exists in localStorage', () => {
@@ -278,6 +282,67 @@ describe('App Shell & Navigation', () => {
       expect(roleButton.getAttribute('aria-label')).toContain(roleButton.textContent?.trim() || '');
       expect(screen.queryByText('Coach Dashboard')).toBeNull();
     }, { timeout: 10000 });
+  });
+
+  it('renders landing headline for a logged-out browser visitor at /', async () => {
+    (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
+    (supabase.auth.getSession as any).mockResolvedValue({ data: { session: null } });
+    localStorage.clear();
+    window.history.pushState({}, '', '/');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /Track workouts and meals\. Even without signal\./i })
+      ).toBeDefined();
+    });
+    expect(screen.getAllByText('Start free').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('redirects and does not render landing headline for a standalone-mode visitor at /', async () => {
+    (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
+    (supabase.auth.getSession as any).mockResolvedValue({ data: { session: null } });
+    localStorage.clear();
+    window.history.pushState({}, '', '/');
+
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(display-mode: standalone)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
+
+      // In standalone mode, root redirect kicks in: does NOT display landing headline
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('heading', { name: /Track workouts and meals\. Even without signal\./i })
+        ).toBeNull();
+      });
+
+      // Instead, it redirected to /workout where unauthenticated user eventually hits login
+      await waitFor(() => {
+        expect(screen.getAllByText('Sign In').length).toBeGreaterThanOrEqual(1);
+      });
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 });
 
