@@ -308,6 +308,208 @@ async function resolveChargesForInvoice(
   return resolvedCharges;
 }
 
+export interface EntitlementResolutionInput {
+  currentPlan?: string | null;
+  incomingPlan: "basic" | "pro";
+  currentPaidUntil?: string | null;
+  incomingPaidUntil?: string | null;
+  currentCoachTier?: string | null;
+  incomingCoachTier?: string | null;
+  isGrandfatherActive: boolean;
+}
+
+export interface EntitlementResolutionResult {
+  plan: "basic" | "pro";
+  paid_until: string | null;
+  coach_tier?: string | null;
+}
+
+export function resolveGrandfatherAwareEntitlements(
+  input: EntitlementResolutionInput,
+): EntitlementResolutionResult {
+  const {
+    currentPlan,
+    incomingPlan,
+    currentPaidUntil,
+    incomingPaidUntil,
+    currentCoachTier,
+    incomingCoachTier,
+    isGrandfatherActive,
+  } = input;
+
+  if (!isGrandfatherActive) {
+    return {
+      plan: incomingPlan,
+      paid_until: incomingPaidUntil || currentPaidUntil || null,
+      ...(incomingCoachTier !== undefined ? { coach_tier: incomingCoachTier } : {}),
+    };
+  }
+
+  // Grandfather grant is active:
+  // 1. Keep higher plan ('pro' > 'basic' > 'free')
+  const planRank: Record<string, number> = { pro: 2, basic: 1, free: 0 };
+  const currentPlanRank = currentPlan ? (planRank[currentPlan] ?? 0) : 0;
+  const incomingPlanRank = planRank[incomingPlan] ?? 0;
+  const effectivePlan =
+    currentPlanRank > incomingPlanRank
+      ? (currentPlan as "basic" | "pro")
+      : incomingPlan;
+
+  // 2. paid_until = greatest(current paid_until, period end)
+  let effectivePaidUntil = incomingPaidUntil || currentPaidUntil || null;
+  if (currentPaidUntil && incomingPaidUntil) {
+    const currentTs = new Date(currentPaidUntil).getTime();
+    const incomingTs = new Date(incomingPaidUntil).getTime();
+    if (!isNaN(currentTs) && !isNaN(incomingTs)) {
+      effectivePaidUntil = currentTs > incomingTs ? currentPaidUntil : incomingPaidUntil;
+    }
+  }
+
+  // 3. Extensible coach_tier resolution (enterprise > pro > free) for subsequent tiers PR
+  let effectiveCoachTier = incomingCoachTier;
+  if (currentCoachTier !== undefined || incomingCoachTier !== undefined) {
+    const coachTierRank: Record<string, number> = { enterprise: 2, pro: 1, free: 0 };
+    const currentTierRank = currentCoachTier ? (coachTierRank[currentCoachTier] ?? 0) : 0;
+    const incomingTierRank = incomingCoachTier ? (coachTierRank[incomingCoachTier] ?? 0) : 0;
+    effectiveCoachTier = currentTierRank > incomingTierRank ? currentCoachTier : incomingCoachTier;
+  }
+
+  return {
+    plan: effectivePlan,
+    paid_until: effectivePaidUntil,
+    ...(effectiveCoachTier !== undefined ? { coach_tier: effectiveCoachTier } : {}),
+  };
+}
+
+async function cancelSubscriptionForChargeOrCustomer(
+  charge: Stripe.Charge | null,
+  customerId: string | null,
+  stripe: Stripe,
+): Promise<string | null> {
+  let subscriptionId: string | null = null;
+
+  // In Stripe API version 2026-09-30, charge.invoice is removed.
+  // We resolve the subscription via charge -> payment_intent -> invoice -> parent.subscription_details.subscription.
+  // If the charge was not linked to an invoice (or resolution fails), we fall back to querying the
+  // customer's subscriptions for an active/trialing/past_due/unpaid subscription, since the application
+  // enforces a strict 1:1 invariant of at most one subscription per user.
+  // If no subscription exists, this was a one-off payment and we succeed as a no-op.
+  if (charge) {
+    let paymentIntentId: string | null = null;
+    if (typeof charge.payment_intent === "string" && charge.payment_intent.length > 0) {
+      paymentIntentId = charge.payment_intent;
+    } else if (charge.payment_intent && typeof charge.payment_intent === "object") {
+      paymentIntentId = (charge.payment_intent as any).id || null;
+    }
+
+    let invoiceId: string | null = null;
+    if (paymentIntentId) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        if (typeof paymentIntent.invoice === "string" && paymentIntent.invoice.length > 0) {
+          invoiceId = paymentIntent.invoice;
+        } else if (paymentIntent.invoice && typeof paymentIntent.invoice === "object") {
+          invoiceId = (paymentIntent.invoice as any).id || null;
+        }
+      } catch (err: any) {
+        const isMissing =
+          err?.code === "resource_missing" ||
+          err?.statusCode === 404 ||
+          err?.raw?.statusCode === 404 ||
+          err?.raw?.code === "resource_missing";
+        if (!isMissing) {
+          throw err;
+        }
+      }
+    }
+
+    if (!invoiceId && (charge as any).invoice) {
+      if (typeof (charge as any).invoice === "string") {
+        invoiceId = (charge as any).invoice;
+      } else if (typeof (charge as any).invoice === "object") {
+        invoiceId = (charge as any).invoice.id || null;
+      }
+    }
+
+    if (invoiceId) {
+      try {
+        const invoice = await stripe.invoices.retrieve(invoiceId);
+        const parentSub = (invoice as any).parent?.subscription_details?.subscription;
+        if (typeof parentSub === "string" && parentSub.length > 0) {
+          subscriptionId = parentSub;
+        } else if (parentSub && typeof parentSub === "object" && typeof parentSub.id === "string") {
+          subscriptionId = parentSub.id;
+        }
+
+        if (!subscriptionId) {
+          const invSub = (invoice as any).subscription;
+          if (typeof invSub === "string" && invSub.length > 0) {
+            subscriptionId = invSub;
+          } else if (invSub && typeof invSub === "object" && typeof invSub.id === "string") {
+            subscriptionId = invSub.id;
+          }
+        }
+      } catch (err: any) {
+        const isMissing =
+          err?.code === "resource_missing" ||
+          err?.statusCode === 404 ||
+          err?.raw?.statusCode === 404 ||
+          err?.raw?.code === "resource_missing";
+        if (!isMissing) {
+          throw err;
+        }
+      }
+    }
+  }
+
+  const resolvedCustomerId =
+    customerId ||
+    (typeof charge?.customer === "string" ? charge.customer : (charge?.customer as any)?.id) ||
+    null;
+
+  if (!subscriptionId && resolvedCustomerId) {
+    const subsList = await stripe.subscriptions.list({
+      customer: resolvedCustomerId,
+      status: "all",
+      limit: 10,
+    });
+    const candidate = subsList.data?.find((s: Stripe.Subscription) =>
+      ["active", "trialing", "past_due", "unpaid"].includes(s.status),
+    );
+    if (candidate?.id) {
+      subscriptionId = candidate.id;
+    }
+  }
+
+  if (!subscriptionId) {
+    return null;
+  }
+
+  try {
+    await stripe.subscriptions.cancel(subscriptionId, {
+      prorate: false,
+      invoice_now: false,
+    });
+  } catch (err: any) {
+    const isResourceMissing =
+      err?.code === "resource_missing" ||
+      err?.statusCode === 404 ||
+      err?.raw?.statusCode === 404 ||
+      err?.raw?.code === "resource_missing";
+    const isAlreadyCanceled =
+      err?.message?.toLowerCase().includes("already canceled") ||
+      err?.raw?.message?.toLowerCase().includes("already canceled");
+
+    if (isResourceMissing || isAlreadyCanceled) {
+      return subscriptionId;
+    }
+
+    throw err;
+  }
+
+  return subscriptionId;
+}
+
 export function extractMinimalPayload(event: Stripe.Event): Record<string, unknown> {
   const obj = event.data?.object as any;
   const minimal: Record<string, unknown> = {
@@ -526,10 +728,11 @@ export async function handler(req: Request): Promise<Response> {
           typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
 
         let targetUserId: string | null = null;
+        let currentUserRow: { id: string; plan?: string | null; paid_until?: string | null } | null = null;
         if (invCustId) {
           const { data: userRow, error: selectError } = await serviceClient
             .from("users")
-            .select("id")
+            .select("id, plan, paid_until")
             .eq("billing_customer_id", invCustId)
             .maybeSingle();
           if (selectError) {
@@ -539,6 +742,7 @@ export async function handler(req: Request): Promise<Response> {
           }
           if (userRow?.id) {
             targetUserId = userRow.id;
+            currentUserRow = userRow;
           }
         }
 
@@ -549,6 +753,22 @@ export async function handler(req: Request): Promise<Response> {
             (invoice.metadata as any)?.user_id;
           if (subUserId && UUID_REGEX.test(subUserId)) {
             targetUserId = subUserId;
+          }
+        }
+
+        if (targetUserId && !currentUserRow) {
+          const { data: userRow, error: selectError } = await serviceClient
+            .from("users")
+            .select("id, plan, paid_until")
+            .eq("id", targetUserId)
+            .maybeSingle();
+          if (selectError) {
+            throw new Error(
+              `Failed to query user by id: ${selectError.message}`,
+            );
+          }
+          if (userRow) {
+            currentUserRow = userRow;
           }
         }
 
@@ -639,12 +859,48 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         if (targetUserId) {
-          const updates: Record<string, unknown> = {
-            plan,
-          };
-          if (linePeriodEnd != null) {
-            updates.paid_until = new Date(linePeriodEnd * 1000).toISOString();
+          // Check grandfather status in public.billing_grandfather (granted_until > now())
+          let isGrandfatherActive = false;
+          const { data: gfRow, error: gfError } = await serviceClient
+            .from("billing_grandfather")
+            .select("granted_until")
+            .eq("user_id", targetUserId)
+            .maybeSingle();
+
+          if (gfError) {
+            throw new Error(
+              `Failed to query billing_grandfather: ${gfError.message}`,
+            );
           }
+
+          if (gfRow?.granted_until) {
+            const grantedUntilTs = new Date(gfRow.granted_until).getTime();
+            if (!isNaN(grantedUntilTs) && grantedUntilTs > Date.now()) {
+              isGrandfatherActive = true;
+            }
+          }
+
+          const incomingPaidUntilIso =
+            linePeriodEnd != null ? new Date(linePeriodEnd * 1000).toISOString() : null;
+
+          const effective = resolveGrandfatherAwareEntitlements({
+            currentPlan: currentUserRow?.plan,
+            incomingPlan: plan,
+            currentPaidUntil: currentUserRow?.paid_until,
+            incomingPaidUntil: incomingPaidUntilIso,
+            isGrandfatherActive,
+          });
+
+          const updates: Record<string, unknown> = {
+            plan: effective.plan,
+          };
+          if (effective.paid_until != null) {
+            updates.paid_until = effective.paid_until;
+          }
+          if (effective.coach_tier !== undefined) {
+            updates.coach_tier = effective.coach_tier;
+          }
+
           const { error: updateError } = await serviceClient
             .from("users")
             .update(updates)
@@ -666,8 +922,8 @@ export async function handler(req: Request): Promise<Response> {
 
       case "charge.refunded": {
         const charge = event.data.object as Stripe.Charge;
-        const refundCustId =
-          typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
+        const refundCustId: string | null =
+          typeof charge.customer === "string" ? charge.customer : charge.customer?.id || null;
 
         const isFullRefund =
           typeof charge.amount === "number" &&
@@ -697,6 +953,9 @@ export async function handler(req: Request): Promise<Response> {
             resolvedUserId = revokedUserId;
           }
         }
+
+        // Auto-cancel related subscription
+        await cancelSubscriptionForChargeOrCustomer(charge, refundCustId, config.stripe);
         break;
       }
 
@@ -707,14 +966,23 @@ export async function handler(req: Request): Promise<Response> {
             ? (dispute as any).customer
             : (dispute as any).customer?.id || null;
 
-        if (!disputeCustId) {
-          const chargeId =
-            typeof dispute.charge === "string"
-              ? dispute.charge
-              : (dispute.charge as any)?.id;
+        let charge: Stripe.Charge | null = null;
+        const chargeId =
+          typeof dispute.charge === "string"
+            ? dispute.charge
+            : (dispute.charge as any)?.id;
 
-          if (chargeId) {
-            const charge = await config.stripe.charges.retrieve(chargeId);
+        if (chargeId) {
+          charge = await config.stripe.charges.retrieve(chargeId);
+          if (!disputeCustId) {
+            disputeCustId =
+              typeof charge.customer === "string"
+                ? charge.customer
+                : charge.customer?.id || null;
+          }
+        } else if (typeof dispute.charge === "object" && dispute.charge !== null) {
+          charge = dispute.charge as Stripe.Charge;
+          if (!disputeCustId) {
             disputeCustId =
               typeof charge.customer === "string"
                 ? charge.customer
@@ -729,6 +997,9 @@ export async function handler(req: Request): Promise<Response> {
             resolvedUserId = revokedUserId;
           }
         }
+
+        // Auto-cancel related subscription
+        await cancelSubscriptionForChargeOrCustomer(charge, disputeCustId, config.stripe);
         break;
       }
 
