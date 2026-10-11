@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { LandingView } from './LandingView';
 
@@ -129,5 +129,130 @@ describe('LandingView component', () => {
     expect(appFaq).toBeDefined();
     fireEvent.click(appFaq);
     expect(screen.getByText(/Add to Home screen/i)).toBeDefined();
+  });
+
+  describe('Hero interactive set-logging demo', () => {
+    it('logs a set, displays Saved state, and announces via polite live region', () => {
+      renderLanding();
+
+      // Initial state has Set 1 and Set 2
+      expect(screen.getByText('185 lbs × 8 reps')).toBeDefined();
+      expect(screen.getByText('205 lbs × 6 reps')).toBeDefined();
+      expect(screen.queryByText('225 lbs × 4 reps')).toBeNull();
+
+      // Click "Log set"
+      const logSetBtn = screen.getByRole('button', { name: 'Log set' });
+      fireEvent.click(logSetBtn);
+
+      // Set 3 is now in the list
+      expect(screen.getByText('Set 3')).toBeDefined();
+      expect(screen.getByText('225 lbs × 4 reps')).toBeDefined();
+
+      // Live region announcement
+      expect(screen.getByText('Set 3 logged: 225 lbs x 4')).toBeDefined();
+
+      // Rest countdown pill is active
+      const timer = screen.getByTestId('demo-rest-timer');
+      expect(timer).toHaveTextContent('Rest: 1:30');
+    });
+
+    it('steppers adjust weight and reps', () => {
+      renderLanding();
+
+      const incWeight = screen.getByRole('button', { name: 'Increase weight' });
+      const decWeight = screen.getByRole('button', { name: 'Decrease weight' });
+      const incReps = screen.getByRole('button', { name: 'Increase reps' });
+      const decReps = screen.getByRole('button', { name: 'Decrease reps' });
+
+      // Stepper initially 225 lbs, 4 reps
+      expect(screen.getByText('225 lbs')).toBeDefined();
+      expect(screen.getByText('4 reps')).toBeDefined();
+
+      fireEvent.click(incWeight);
+      expect(screen.getByText('230 lbs')).toBeDefined();
+
+      fireEvent.click(decWeight);
+      expect(screen.getByText('225 lbs')).toBeDefined();
+
+      fireEvent.click(incReps);
+      expect(screen.getByText('5 reps')).toBeDefined();
+
+      fireEvent.click(decReps);
+      expect(screen.getByText('4 reps')).toBeDefined();
+    });
+
+    it('toggles existing set row done check', () => {
+      renderLanding();
+
+      expect(screen.getByText('2 sets completed')).toBeDefined();
+
+      const toggleSet1 = screen.getByRole('button', { name: 'Toggle set 1' });
+      fireEvent.click(toggleSet1);
+
+      expect(screen.getByText('1 set completed')).toBeDefined();
+
+      fireEvent.click(toggleSet1);
+      expect(screen.getByText('2 sets completed')).toBeDefined();
+    });
+
+    it('restores initial state on reset', () => {
+      renderLanding();
+
+      const logSetBtn = screen.getByRole('button', { name: 'Log set' });
+      fireEvent.click(logSetBtn);
+      expect(screen.getByText('Set 3')).toBeDefined();
+
+      const resetBtn = screen.getByRole('button', { name: 'Reset' });
+      fireEvent.click(resetBtn);
+
+      expect(screen.queryByText('Set 3')).toBeNull();
+      expect(screen.queryByTestId('demo-rest-timer')).toBeNull();
+      expect(screen.getByText('2 sets completed')).toBeDefined();
+    });
+
+    it('caps at 8 sets and disables Log set button', () => {
+      renderLanding();
+
+      const logSetBtn = screen.getByRole('button', { name: 'Log set' });
+      // Initially 2 sets. Clicking 6 times brings it to 8 sets.
+      for (let index = 0; index < 6; index++) {
+        fireEvent.click(logSetBtn);
+      }
+
+      expect(screen.getByText('Set 8')).toBeDefined();
+      expect(logSetBtn).toBeDisabled();
+
+      // Attempting to log a 9th set does nothing
+      fireEvent.click(logSetBtn);
+      expect(screen.queryByText('Set 9')).toBeNull();
+    });
+
+    it('counts down rest timer each second and cleans up on unmount', () => {
+      vi.useFakeTimers();
+      try {
+        const { unmount } = renderLanding();
+
+        const logSetBtn = screen.getByRole('button', { name: 'Log set' });
+        fireEvent.click(logSetBtn);
+
+        const timer = screen.getByTestId('demo-rest-timer');
+        expect(timer).toHaveTextContent('Rest: 1:30');
+
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+        expect(timer).toHaveTextContent('Rest: 1:29');
+
+        act(() => {
+          vi.advanceTimersByTime(29000);
+        });
+        expect(timer).toHaveTextContent('Rest: 1:00');
+
+        // Unmount cleans up interval without leaks or errors
+        unmount();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

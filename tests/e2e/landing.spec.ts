@@ -155,4 +155,51 @@ test.describe('Landing Page & Root Route Decisions', () => {
     });
     expect(hasHorizontalOverflow).toBe(false);
   });
+
+  test('interactive hero demo logs set and appends new set row', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    const logSetBtn = page.getByRole('button', { name: 'Log set' });
+    await expect(logSetBtn).toBeVisible();
+
+    await expect(page.getByRole('button', { name: 'Toggle set 3' })).toHaveCount(0);
+
+    await logSetBtn.click();
+
+    await expect(page.getByRole('button', { name: 'Toggle set 3' })).toBeVisible();
+    await expect(page.getByText('225 lbs × 4 reps')).toBeVisible();
+
+    const liveRegion = page.locator('output[aria-live="polite"]');
+    await expect(liveRegion).toContainText('Set 3 logged: 225 lbs x 4');
+  });
+
+  test('interactive hero demo at 390x844 logs set and shows new row', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    const logSetBtn = page.getByRole('button', { name: 'Log set' });
+    await expect(logSetBtn).toBeVisible();
+
+    await logSetBtn.click();
+
+    await expect(page.getByRole('button', { name: 'Toggle set 3' })).toBeVisible();
+    await expect(page.getByText('225 lbs × 4 reps')).toBeVisible();
+  });
+
+  test('capture demo screenshot at 1440', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'Desktop Chrome') return;
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    const logSetBtn = page.getByRole('button', { name: 'Log set' });
+    await expect(logSetBtn).toBeVisible();
+    await logSetBtn.click();
+    await expect(page.getByRole('button', { name: 'Toggle set 3' })).toBeVisible();
+
+    const hero = page.locator('[data-testid="landing-main-container"]');
+    await hero.screenshot({ path: '/tmp/demo-1440-raw.png' });
+  });
 });
