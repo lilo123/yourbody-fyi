@@ -344,6 +344,31 @@ describe('App Shell & Navigation', () => {
       window.matchMedia = originalMatchMedia;
     }
   });
+
+  it('renders auth loading fallback at / while loading without cached user (no landing rendered, no redirect)', () => {
+    (supabase.auth.getSession as any).mockImplementation(() => new Promise(() => {}));
+    localStorage.clear();
+    window.history.pushState({}, '', '/');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    // Auth loading fallback is rendered
+    expect(screen.getByText('Connecting to Yourbody...')).toBeDefined();
+
+    // No landing headline is rendered
+    expect(
+      screen.queryByRole('heading', { name: /Track workouts and meals\. Even without signal\./i })
+    ).toBeNull();
+    expect(screen.queryByText('Start free')).toBeNull();
+
+    // No redirect occurred: stays at '/' and neither login nor workout engine is mounted
+    expect(window.location.pathname).toBe('/');
+    expect(screen.queryByPlaceholderText('you@example.com')).toBeNull();
+  });
 });
 
 
