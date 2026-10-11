@@ -19,6 +19,7 @@ function numbersEqual(a: any, b: any, tolerance = 1e-6): boolean {
 }
 
 function normalizeSetType(val: unknown): string {
+  // Server treats NULL/undefined as 'working' via COALESCE; 'normal' is accepted as legacy alias for ops queued by the old client before upgrade
   if (val == null || val === 'normal') return 'working';
   return String(val);
 }

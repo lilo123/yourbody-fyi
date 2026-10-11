@@ -39,7 +39,6 @@ export function useWorkoutEditSheet({
     if (targetSet) {
       setEditingSet({
         ...targetSet,
-        ...(((targetSet.set_type as unknown as string) === 'normal') ? { set_type: 'working' as const } : {}),
         workout_date: workoutDate,
         workout_name: activeRoutineName,
       });

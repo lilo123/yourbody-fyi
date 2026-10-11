@@ -75,11 +75,11 @@ describe('useWorkoutEditSheet', () => {
     expect(scheduleDelete).toHaveBeenCalledWith(dummySet);
   });
 
-  it('normalizes legacy "normal" set_type to canonical "working"', () => {
-    const legacySet = {
+  it('preserves set_type on editingSet when opening sheet', () => {
+    const warmupSet = {
       ...dummySet,
-      id: 's-legacy',
-      set_type: 'normal',
+      id: 's-warmup',
+      set_type: 'warmup',
     };
     const { result } = renderHook(() =>
       useWorkoutEditSheet({
@@ -87,7 +87,7 @@ describe('useWorkoutEditSheet', () => {
         activeRoutineName: 'Chest Day',
         workoutDate: '2026-09-27',
         targetUserId: 'user-1',
-        getSetsForExerciseToday: () => [legacySet],
+        getSetsForExerciseToday: () => [warmupSet],
         pendingSetId: null,
         pendingDeletedSetIds: new Set(),
         scheduleDelete: vi.fn(),
@@ -99,6 +99,6 @@ describe('useWorkoutEditSheet', () => {
     });
 
     expect(result.current.isEditSheetOpen).toBe(true);
-    expect(result.current.editingSet?.set_type).toBe('working');
+    expect(result.current.editingSet?.set_type).toBe('warmup');
   });
 });

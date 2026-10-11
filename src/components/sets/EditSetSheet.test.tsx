@@ -782,4 +782,29 @@ describe("EditSetSheet", () => {
       );
     });
   });
+
+  it("preserves warmup set_type and rpe 8 in expected pre-image when editing reps", async () => {
+    const warmupSetWithRpe = {
+      ...mockSet,
+      set_type: "warmup" as const,
+      rpe: 8,
+    };
+
+    renderSheet({ set: warmupSetWithRpe });
+
+    fireEvent.change(screen.getByTestId("edit-set-reps-input"), { target: { value: "11" } });
+    fireEvent.click(screen.getByTestId("save-set-btn"));
+
+    await waitFor(() => {
+      expect(mockExpected).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exercise_id: "ex-1",
+          set_type: "warmup",
+          rpe: 8,
+          weight: 185,
+          reps: 8,
+        })
+      );
+    });
+  });
 });
