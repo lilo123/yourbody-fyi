@@ -23,6 +23,7 @@ import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 
 const SubscriptionCard = React.lazy(() => import('./SubscriptionCard'));
 const AccountCard = React.lazy(() => import('./AccountCard'));
+const OwnerDashboardCard = React.lazy(() => import('./OwnerDashboardCard'));
 
 interface SettingsFormProps {
   profile: UserProfile | null;
@@ -44,6 +45,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
   const { show: showToast } = useToast();
   const isOnline = useOnlineStatus();
   const paywallEnabled = useFeatureFlag('paywall_enabled');
+  const ownerDashboardEnabled = useFeatureFlag('owner_dashboard_enabled');
   const [username, setUsername] = useState(profile?.username || '');
   const [targetCalories, setTargetCalories] = useState(profile?.target_calories || 2200);
   const [targetProtein, setTargetProtein] = useState(profile?.target_protein || 160);
@@ -190,6 +192,13 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
       {paywallEnabled && (
         <React.Suspense fallback={null}>
           <SubscriptionCard />
+        </React.Suspense>
+      )}
+
+      {/* Owner Dashboard Card */}
+      {ownerDashboardEnabled && (
+        <React.Suspense fallback={null}>
+          <OwnerDashboardCard />
         </React.Suspense>
       )}
 
