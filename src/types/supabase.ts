@@ -667,6 +667,13 @@ export type Database = {
       is_coach: { Args: never; Returns: boolean }
       is_coach_of: { Args: { target_athlete_id: string }; Returns: boolean }
       link_to_coach: { Args: { input_code: string }; Returns: Json }
+      my_coach_limits: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          athlete_count: number
+          athlete_limit: number
+        }[]
+      }
       save_routine_template: {
         Args: {
           p_assigned_to?: string

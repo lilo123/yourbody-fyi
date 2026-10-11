@@ -17,48 +17,139 @@ describe('UpgradeSheet component', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Basic and Pro options with benefits and 44px tap targets', () => {
+  it('renders Personal, Coach, and Coach Pro options with spec bullets and 44px tap targets', () => {
     render(<UpgradeSheet {...defaultProps} />);
 
     expect(screen.getByRole('heading', { name: 'Choose a Plan' })).toBeDefined();
-    expect(screen.getByText('Essential AI meal analysis and personal workout tracking.')).toBeDefined();
-    expect(screen.getByText('Full AI meal analysis with higher limits and advanced features.')).toBeDefined();
 
-    const basicBtn = screen.getByTestId('upgrade-plan-basic-btn');
-    const proBtn = screen.getByTestId('upgrade-plan-pro-btn');
+    // Shared free features line
+    expect(
+      screen.getByText('Workout and meal tracking, quick log and on-device parsing are free for everyone.')
+    ).toBeDefined();
 
-    expect(basicBtn.className).toContain('min-h-[44px]');
-    expect(proBtn.className).toContain('min-h-[44px]');
+    // Personal bullets
+    expect(screen.getByText('AI meal logging, 5 a day')).toBeDefined();
+    expect(screen.getByText('Coach up to 3 athletes')).toBeDefined();
+
+    // Coach and Coach Pro bullets
+    expect(screen.getAllByText('AI meal logging, 30 a day').length).toBe(2);
+    expect(screen.getByText('Coach up to 10 athletes')).toBeDefined();
+    expect(screen.getByText('Coach up to 25 athletes')).toBeDefined();
+    expect(screen.getAllByText('Each athlete gets AI meal logging, 5 a day').length).toBe(2);
+
+    // Assert none of the removed phrases appear anywhere in the document
+    const removedPhrases = [
+      'Unlimited AI food logging',
+      'templates',
+      'photos',
+      'cockpit',
+      'program assignment',
+      'messaging',
+      'branding',
+      'priority support',
+    ];
+    for (const phrase of removedPhrases) {
+      expect(screen.queryByText(new RegExp(phrase, 'i'))).toBeNull();
+    }
+
+    const personalBtn = screen.getByTestId('upgrade-plan-personal-btn');
+    const coachBtn = screen.getByTestId('upgrade-plan-coach-btn');
+    const coachProBtn = screen.getByTestId('upgrade-plan-coach_pro-btn');
+
+    expect(personalBtn.className).toContain('min-h-[44px]');
+    expect(coachBtn.className).toContain('min-h-[44px]');
+    expect(coachProBtn.className).toContain('min-h-[44px]');
+
+    const closeBtn = screen.getByTestId('upgrade-sheet-close');
+    expect(closeBtn.className).toContain('min-h-[44px]');
+    expect(closeBtn.className).toContain('min-w-[44px]');
   });
 
-  it('calls startCheckout with "basic" when Basic option is selected', async () => {
+  it('defaults to yearly interval and displays yearly prices', () => {
+    render(<UpgradeSheet {...defaultProps} />);
+
+    const yearToggle = screen.getByTestId('interval-toggle-year');
+    expect(yearToggle.getAttribute('aria-checked')).toBe('true');
+
+    expect(screen.getByText('$10/yr')).toBeDefined();
+    expect(screen.getByText('$40/yr')).toBeDefined();
+    expect(screen.getByText('$80/yr')).toBeDefined();
+  });
+
+  it('toggles between monthly and yearly intervals and updates prices', () => {
+    render(<UpgradeSheet {...defaultProps} />);
+
+    const monthToggle = screen.getByTestId('interval-toggle-month');
+    fireEvent.click(monthToggle);
+
+    expect(monthToggle.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('$2/mo')).toBeDefined();
+    expect(screen.getByText('$5/mo')).toBeDefined();
+    expect(screen.getByText('$10/mo')).toBeDefined();
+
+    const yearToggle = screen.getByTestId('interval-toggle-year');
+    fireEvent.click(yearToggle);
+
+    expect(yearToggle.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('$10/yr')).toBeDefined();
+    expect(screen.getByText('$40/yr')).toBeDefined();
+    expect(screen.getByText('$80/yr')).toBeDefined();
+  });
+
+  it('calls startCheckout with { plan: "personal", interval: "year" } when Personal option is selected on default interval', async () => {
     vi.mocked(billingModule.startCheckout).mockResolvedValueOnce({
       ok: true,
       success: true,
-      url: 'https://checkout.stripe.test/basic',
+      url: 'https://checkout.stripe.test/personal',
     });
 
     render(<UpgradeSheet {...defaultProps} />);
 
-    const basicBtn = screen.getByTestId('upgrade-plan-basic-btn');
-    fireEvent.click(basicBtn);
+    const personalBtn = screen.getByTestId('upgrade-plan-personal-btn');
+    fireEvent.click(personalBtn);
 
-    expect(billingModule.startCheckout).toHaveBeenCalledWith('basic');
+    expect(billingModule.startCheckout).toHaveBeenCalledWith({
+      plan: 'personal',
+      interval: 'year',
+    });
   });
 
-  it('calls startCheckout with "pro" when Pro option is selected', async () => {
+  it('calls startCheckout with { plan: "coach", interval: "month" } when toggled to monthly', async () => {
     vi.mocked(billingModule.startCheckout).mockResolvedValueOnce({
       ok: true,
       success: true,
-      url: 'https://checkout.stripe.test/pro',
+      url: 'https://checkout.stripe.test/coach_monthly',
     });
 
     render(<UpgradeSheet {...defaultProps} />);
 
-    const proBtn = screen.getByTestId('upgrade-plan-pro-btn');
-    fireEvent.click(proBtn);
+    fireEvent.click(screen.getByTestId('interval-toggle-month'));
 
-    expect(billingModule.startCheckout).toHaveBeenCalledWith('pro');
+    const coachBtn = screen.getByTestId('upgrade-plan-coach-btn');
+    fireEvent.click(coachBtn);
+
+    expect(billingModule.startCheckout).toHaveBeenCalledWith({
+      plan: 'coach',
+      interval: 'month',
+    });
+  });
+
+  it('calls startCheckout with { plan: "coach_pro", interval: "year" } when Coach Pro option is selected', async () => {
+    vi.mocked(billingModule.startCheckout).mockResolvedValueOnce({
+      ok: true,
+      success: true,
+      url: 'https://checkout.stripe.test/coach_pro',
+    });
+
+    render(<UpgradeSheet {...defaultProps} />);
+
+    const coachProBtn = screen.getByTestId('upgrade-plan-coach_pro-btn');
+    fireEvent.click(coachProBtn);
+
+    expect(billingModule.startCheckout).toHaveBeenCalledWith({
+      plan: 'coach_pro',
+      interval: 'year',
+    });
   });
 
   it('displays loading state and disables buttons while checkout is pending', async () => {
@@ -71,16 +162,17 @@ describe('UpgradeSheet component', () => {
 
     render(<UpgradeSheet {...defaultProps} />);
 
-    const proBtn = screen.getByTestId('upgrade-plan-pro-btn');
-    fireEvent.click(proBtn);
+    const coachBtn = screen.getByTestId('upgrade-plan-coach-btn');
+    fireEvent.click(coachBtn);
 
-    expect(proBtn.getAttribute('aria-busy')).toBe('true');
-    expect(screen.getByTestId('upgrade-plan-basic-btn')).toBeDisabled();
-    expect(proBtn).toHaveTextContent('Redirecting...');
+    expect(coachBtn.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByTestId('upgrade-plan-personal-btn')).toBeDisabled();
+    expect(screen.getByTestId('upgrade-plan-coach_pro-btn')).toBeDisabled();
+    expect(coachBtn).toHaveTextContent('Redirecting...');
 
     resolveCheckout({ ok: false, error: 'Cancelled' });
     await waitFor(() => {
-      expect(proBtn.getAttribute('aria-busy')).toBeNull();
+      expect(coachBtn.getAttribute('aria-busy')).toBeNull();
     });
   });
 
@@ -93,8 +185,8 @@ describe('UpgradeSheet component', () => {
 
     render(<UpgradeSheet {...defaultProps} />);
 
-    const proBtn = screen.getByTestId('upgrade-plan-pro-btn');
-    fireEvent.click(proBtn);
+    const coachProBtn = screen.getByTestId('upgrade-plan-coach_pro-btn');
+    fireEvent.click(coachProBtn);
 
     await waitFor(() => {
       expect(screen.getByTestId('upgrade-sheet-error')).toHaveTextContent(

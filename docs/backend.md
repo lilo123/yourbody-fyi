@@ -169,12 +169,22 @@ Unauthenticated calls raise an authentication required error (`28000`).
 
 ### Grandfather Pro Grant
 
-To support early adopters during the introduction of subscription plans, migration `20261010050000_grandfather_existing_users.sql` executes a one-time grant of one year of Pro access to all existing users (`plan = 'pro'`, `paid_until = greatest(coalesce(paid_until, now()), now() + interval '1 year')`). Prior plan status and expiration dates are preserved in the `public.billing_grandfather` audit table (`user_id`, `prev_plan`, `prev_paid_until`, `granted_until`, `granted_at`), which is protected by RLS with all access revoked from `anon` and `authenticated` roles and configured with `ON DELETE CASCADE` to support user deletion. The grant logic is encapsulated in `public.grandfather_existing_users()`, an idempotent `SECURITY DEFINER` function callable only by administrative database roles. Rollback via `supabase/rollback/20261010050000_down.sql` reverts `plan` and `paid_until` for users whose grant remains untouched (`plan = 'pro' AND paid_until = granted_until`) before removing the function and audit table.
+To support early adopters during the introduction of subscription plans, migration `20261010050000_grandfather_existing_users.sql` executes a one-time grant of one year of Pro access to all existing users (`plan = 'pro'`, `paid_until = greatest(coalesce(paid_until, now()), now() + interval '1 year')`). Prior plan status and expiration dates are preserved in the `public.billing_grandfather` audit table (`user_id`, `prev_plan`, `prev_paid_until`, `granted_until`, `granted_at`), which is protected by RLS with all access revoked from `anon` and `authenticated` roles and configured with `ON DELETE CASCADE` to support user deletion. The grant logic is encapsulated in `public.grandfather_existing_users()`, an idempotent `SECURITY DEFINER` function callable only by administrative database roles. Rollback via `supabase/rollback/20261010050000_down.sql` reverts `plan` and `paid_until` for users whose grant remains untouched (`plan = 'pro' AND paid_until = granted_until`) before removing the function and audit table. Under the updated coach tiers specification, grandfathered users count as **Coach Pro** (plan `pro`, `coach_tier = 'enterprise'`, 25 athletes, athlete AI) extended until **2035-10-10T00:00:00Z**.
 
 ## Stripe (test mode, staging)
 
 ### Overview
-Stripe integration provides serverless edge functions for checkout session generation, customer portal navigation, and subscription webhook processing. This implementation operates in test mode on staging environments. Live keys are strictly refused by design. No user interface components are included in this PR.
+Stripe integration provides serverless edge functions for checkout session generation, customer portal navigation, and subscription webhook processing. This implementation operates in test mode on staging environments. Live keys are strictly refused by design unless `STRIPE_LIVE_ENABLED=true` is set.
+
+### Subscription Tiers and Pricing Architecture
+
+The application supports three subscription tiers mapped to database `plan` and `coach_tier` values:
+
+| Tier | Database `plan` | Database `coach_tier` | Stripe Lookup Keys | Capacity / Quota |
+|---|---|---|---|---|
+| **Personal** | `basic` | `free` | `personal_monthly`, `personal_yearly` | 3 athletes, 5 own AI parses/day |
+| **Coach** | `pro` | `pro` | `coach_monthly`, `coach_yearly` | 10 athletes, 30 own AI parses/day, 5/day each active athlete |
+| **Coach Pro** | `pro` | `enterprise` | `coach_pro_monthly`, `coach_pro_yearly` | 25 athletes, 30 own AI parses/day, 5/day each active athlete |
 
 ### Edge Functions
 All edge functions are configured in `supabase/config.toml` and execute in the Supabase Deno Edge Runtime:
@@ -182,9 +192,16 @@ All edge functions are configured in `supabase/config.toml` and execute in the S
 1. **`create-checkout`** (`verify_jwt = true`):
    - **Method**: `POST`
    - **Auth**: Requires valid Supabase user JWT via `Authorization: Bearer <token>`. Caller authenticated via `userClient.auth.getUser()`.
-   - **Request**: `{ "plan": "basic" | "pro" }`
+   - **Request**: `{ "plan": "personal" | "coach" | "coach_pro", "interval": "month" | "year" }`. Any other body or shape returns `400 { "error": "invalid_plan", "code": "invalid_plan" }`.
    - **Origin Validation**: Evaluates the `Origin` header against the shared CORS allowlist. Returns `400` on missing or disallowed origins.
-   - **Checkout Session**: Creates a Stripe Checkout session in `mode: 'subscription'`, setting `client_reference_id = user.id`, `metadata.user_id = user.id`, and `subscription_data.metadata.user_id = user.id`. Reuses existing `users.billing_customer_id` if present; otherwise specifies `customer_email`. Sets `success_url` to `${origin}/settings?billing=success` and `cancel_url` to `${origin}/settings?billing=cancelled`.
+   - **Price Resolution & Fallback**:
+     - Resolves the Stripe price by lookup key `<plan>_<monthly|yearly>` via `GET /v1/prices?lookup_keys[]=…&active=true&expand[]=data.product` in a single API call.
+     - Fallback when lookup key is not found:
+       - `personal` + `year` falls back to the legacy staging price ID `STRIPE_PRICE_BASIC`.
+       - `coach` + `year` falls back to the legacy staging price ID `STRIPE_PRICE_PRO`.
+       - If no fallback exists (monthly intervals, Coach Pro, or unset env vars), returns `503 { "code": "price_not_configured" }`.
+     - Validates that the resolved price's `livemode` matches the active Stripe key mode (`config.isLive`), returning `503 { "code": "price_mode_mismatch" }` on mismatch.
+   - **Checkout Session**: Creates a Stripe Checkout session in `mode: 'subscription'`, setting `client_reference_id = user.id`, `metadata: { user_id, plan, interval }`, and `subscription_data.metadata: { user_id, plan, interval }`. Reuses existing `users.billing_customer_id` if present; otherwise specifies `customer_email`. Sets `success_url` to `${origin}/settings?billing=success` and `cancel_url` to `${origin}/settings?billing=cancelled`.
    - **Response**: `{ "url": string }`
 
 2. **`create-portal-session`** (`verify_jwt = true`):
@@ -203,8 +220,8 @@ All edge functions are configured in `supabase/config.toml` and execute in the S
 The following environment secrets must be configured in Supabase (values reside on staging only; production retains none):
 - `STRIPE_SECRET_KEY`: Stripe API secret key (test mode starting with `sk_test_`, or live mode starting with `sk_live_`/`rk_live_` when enabled).
 - `STRIPE_WEBHOOK_SECRET`: Webhook signing secret (`whsec_...`).
-- `STRIPE_PRICE_BASIC`: Stripe Price identifier for the basic subscription plan.
-- `STRIPE_PRICE_PRO`: Stripe Price identifier for the pro subscription plan.
+- `STRIPE_PRICE_BASIC`: Fallback Stripe Price identifier for the annual basic (Personal) subscription plan.
+- `STRIPE_PRICE_PRO`: Fallback Stripe Price identifier for the annual pro (Coach) subscription plan.
 - `STRIPE_LIVE_ENABLED`: Explicit boolean flag (`"true"`) required to unlock live Stripe operations.
 - Standard platform variables: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 
@@ -222,8 +239,8 @@ The environment secret `STRIPE_LIVE_ENABLED` acts as an explicit gatekeeper for 
 
 #### Price Mode Check
 Whenever a checkout session is initiated (`create-checkout`), the service validates price mode consistency before creating the checkout session:
-1. Resolves the configured price ID for the chosen tier (`STRIPE_PRICE_BASIC` or `STRIPE_PRICE_PRO`).
-2. Fetches the price object from Stripe (`GET /v1/prices/{id}`).
+1. Resolves the price via lookup key or configured fallback price ID (`STRIPE_PRICE_BASIC` or `STRIPE_PRICE_PRO`).
+2. Fetches the price object from Stripe if using fallback, or inspects the price returned by the lookup list call.
 3. Verifies that `price.livemode` matches the active Stripe key mode (`config.isLive`).
 4. If a mismatch is detected (e.g. a test price passed with a live key, or a live price with a test key), the function immediately aborts session creation and returns `503` (`{ "code": "price_mode_mismatch", "error": "Price livemode does not match Stripe key mode." }`).
 
@@ -235,7 +252,8 @@ When webhook events are received at `/functions/v1/stripe-webhook`:
 
 #### Restricted Key Permissions
 When using a Stripe restricted API key (`rk_live_...` or `rk_test_...`), the key must possess permissions corresponding to the exact Stripe endpoints invoked across the edge functions:
-- `GET /v1/prices/{id}`: `Prices: Read` (validates price livemode during checkout creation)
+- `GET /v1/prices`: `Prices: Read` (lists prices by lookup key during checkout creation)
+- `GET /v1/prices/{id}`: `Prices: Read` (retrieves price details for fallback price validation and webhook lookup resolution)
 - `POST /v1/checkout/sessions`: `Checkout Sessions: Write` (creates customer checkout sessions)
 - `POST /v1/billing_portal/sessions`: `Customer Portal: Write` (creates customer billing portal sessions)
 - `GET /v1/subscriptions`: `Subscriptions: Read` (lists customer subscriptions for cleanup and resolution)
@@ -249,7 +267,13 @@ When using a Stripe restricted API key (`rk_live_...` or `rk_test_...`), the key
 ### Stripe Dashboard Webhook Configuration
 The webhook listener at `/functions/v1/stripe-webhook` handles the following events, which must be enabled in the Stripe dashboard:
 - `checkout.session.completed`: Sets `users.billing_customer_id` for the corresponding `client_reference_id`.
-- `invoice.paid`: Resolves the user by `billing_customer_id` (fallback to subscription `metadata.user_id`), maps the price ID to `plan` (`basic` or `pro`) using fallback resolution (`line.pricing.price_details.price`, `line.price.id`, or subscription item price lookup), and updates `paid_until` to the period end timestamp (`line.period.end` or `period_end`). If the plan cannot be resolved, leaves user records unchanged to avoid granting time without an active tier. Before writing entitlement grants, inspects the invoice payment (via `invoice.payments`, `charge`, or `payment_intent`) and skips the grant if the payment is disputed (`charge.disputed === true`) or fully refunded (`amount_refunded === amount` without `keep_access`), recording the processed event in `billing_events` without re-granting access. If the user has an active grant in `public.billing_grandfather` (`granted_until > now()`), preserves the higher tier (`pro` > `basic`) and extends `paid_until = greatest(current paid_until, period end)`.
+- `invoice.paid`: Resolves the user by `billing_customer_id` (fallback to subscription `metadata.user_id`). Maps the price to `(plan, coach_tier)` via:
+  - Lookup keys: `personal_*` -> `('basic', 'free')`, `coach_monthly | coach_yearly` -> `('pro', 'pro')`, `coach_pro_*` -> `('pro', 'enterprise')`.
+  - Line retrieval: If the invoice line has only a price ID, retrieves `GET /v1/prices/{id}` to inspect its `lookup_key`.
+  - Fallback by ID: `STRIPE_PRICE_BASIC` -> `('basic', 'free')`, `STRIPE_PRICE_PRO` -> `('pro', 'pro')`.
+  - Unknown price: Leaves user records unchanged (never writes `paid_until` without a plan).
+  - Mode validation: Enforces price `livemode === config.isLive` on retrieved prices.
+  - Updates `public.users` with `plan`, `coach_tier`, and `paid_until` to the period end timestamp (`line.period.end` or `period_end`). Before writing entitlement grants, inspects the invoice payment (via `invoice.payments`, `charge`, or `payment_intent`) and skips the grant if the payment is disputed (`charge.disputed === true`) or fully refunded (`amount_refunded === amount` without `keep_access`), recording the processed event in `billing_events` without re-granting access. If the user has an active grant in `public.billing_grandfather` (`granted_until > now()`), preserves the higher tier (`pro` > `basic`), higher coach_tier (`enterprise` > `pro` > `free`), and extends `paid_until = greatest(current paid_until, period end)`. A Personal purchase by a non-grandfathered Coach writes `plan = 'basic'` and `coach_tier = 'free'`.
 - `customer.subscription.deleted`: Leaves `paid_until` as-is, granting the user access through the end of the prepaid period with no plan modification.
 - `charge.refunded`: Revokes access on full refunds (`amount_refunded === amount`) unless `keep_access` metadata is present; immediately cancels the related Stripe subscription without proration (`prorate=false`, `invoice_now=false`). Partial refunds leave access and subscription unchanged.
 - `charge.dispute.created`: Resolves the customer via the dispute's charge, revokes access, immediately cancels the related Stripe subscription without proration, and records the event in `billing_events` with the resolved `user_id`. The staging webhook endpoint must subscribe to `charge.dispute.created`.
@@ -268,10 +292,11 @@ The webhook listener at `/functions/v1/stripe-webhook` handles the following eve
   -- Restore plan and paid_until for a won dispute user
   UPDATE public.users
   SET plan = 'pro', -- or 'basic'
+      coach_tier = 'pro', -- or 'free' / 'enterprise'
       paid_until = now() + interval '30 days' -- or specific period
   WHERE id = '<user_uuid>';
   ```
-- **Grandfather-aware entitlement grants (`invoice.paid`)**: When processing `invoice.paid`, the webhook checks `public.billing_grandfather` for the target user. If an active grant exists (`granted_until > now()`), the update retains the higher plan tier (`pro` > `basic`) and updates `paid_until = greatest(current paid_until, period_end)`. Users whose grant has expired (`granted_until <= now()`) or non-grandfathered users follow the standard plan and paid_until overwrite.
+- **Grandfather-aware entitlement grants (`invoice.paid`)**: When processing `invoice.paid`, the webhook checks `public.billing_grandfather` for the target user. If an active grant exists (`granted_until > now()`), the update retains the higher plan tier (`pro` > `basic`), higher coach tier (`enterprise` > `pro` > `free`), and updates `paid_until = greatest(current paid_until, period_end)`. Users whose grant has expired (`granted_until <= now()`) or non-grandfathered users follow the standard plan and paid_until overwrite.
 - **Restricted API Key Permissions**: In addition to read permissions on Charges, Invoices, PaymentIntents, and Customers, the Stripe restricted key requires `Subscriptions: write` (specifically `DELETE /v1/subscriptions/{id}`) to enable automated subscription cancellation upon full refunds and disputes.
 
 ### Idempotency and State Mutations
