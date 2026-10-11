@@ -69,6 +69,170 @@ Deno.test("stripe-webhook: refuses live key starting with sk_live_ (503 live_key
   assertEquals(data.code, "live_keys_refused");
 });
 
+Deno.test("stripe-webhook: honors STRIPE_LIVE_ENABLED switch with live key (proceeds to process live event)", async () => {
+  setupEnv();
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_live_" + "webhook_prod_key");
+  Deno.env.set("STRIPE_LIVE_ENABLED", "true");
+
+  let eventRecorded = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/billing_events")) {
+      eventRecorded = true;
+      return new Response(JSON.stringify([{ event_id: "evt_live_1" }]), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_live_1",
+      type: "customer.subscription.deleted",
+      livemode: true,
+      data: {
+        object: {
+          id: "sub_live_123",
+          customer: CUSTOMER_ID,
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(eventRecorded, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("STRIPE_LIVE_ENABLED");
+    setupEnv();
+  }
+});
+
+Deno.test("stripe-webhook: webhook mode mismatch (test key, live event) returns 200 ignored:true without DB writes", async () => {
+  setupEnv();
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_test_" + "webhook_test_key");
+  Deno.env.delete("STRIPE_LIVE_ENABLED");
+
+  let dbCalled = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/")) {
+      dbCalled = true;
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_mismatch_live",
+      type: "customer.subscription.deleted",
+      livemode: true,
+      data: {
+        object: {
+          id: "sub_live_999",
+          customer: CUSTOMER_ID,
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.ignored, true);
+    assertEquals(dbCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    setupEnv();
+  }
+});
+
+Deno.test("stripe-webhook: webhook mode mismatch (live key + flag, test event) returns 200 ignored:true without DB writes", async () => {
+  setupEnv();
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_live_" + "webhook_prod_key");
+  Deno.env.set("STRIPE_LIVE_ENABLED", "true");
+
+  let dbCalled = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/")) {
+      dbCalled = true;
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_mismatch_test",
+      type: "customer.subscription.deleted",
+      livemode: false,
+      data: {
+        object: {
+          id: "sub_test_888",
+          customer: CUSTOMER_ID,
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.ignored, true);
+    assertEquals(dbCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("STRIPE_LIVE_ENABLED");
+    setupEnv();
+  }
+});
+
 Deno.test("stripe-webhook: missing or bad signature returns 400 with no details", async () => {
   setupEnv();
 

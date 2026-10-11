@@ -104,7 +104,9 @@ export default {
       // 5. Stripe subscription cancellation if configured
       const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY')?.trim();
       if (stripeSecretKey) {
-        if (stripeSecretKey.startsWith('sk_live_') || stripeSecretKey.startsWith('rk_live_')) {
+        const isLiveKey = stripeSecretKey.startsWith('sk_live_') || stripeSecretKey.startsWith('rk_live_');
+        const liveEnabled = Deno.env.get('STRIPE_LIVE_ENABLED') === 'true';
+        if (isLiveKey && !liveEnabled) {
           throw new Error('Live Stripe keys are not permitted');
         }
         try {

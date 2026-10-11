@@ -2,7 +2,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type Stripe from "npm:stripe@17.7.0";
 import { isAllowedOrigin, getCorsHeaders } from "../_shared/cors.ts";
-import { resolveStripeConfig, LiveKeyRefusedError, createBillingErrorResponse } from "../_shared/stripeConfig.ts";
+import {
+  resolveStripeConfig,
+  LiveKeyRefusedError,
+  PriceModeMismatchError,
+  validatePriceMode,
+  createBillingErrorResponse,
+} from "../_shared/stripeConfig.ts";
 
 export async function handler(req: Request): Promise<Response> {
   const origin = req.headers.get("Origin") || req.headers.get("origin");
@@ -147,6 +153,12 @@ export async function handler(req: Request): Promise<Response> {
   }
 
   try {
+    // Price mode check: fetch price object and verify livemode matches key mode
+    const price = await config.stripe.prices.retrieve(priceId);
+    if (!validatePriceMode(price, config.isLive)) {
+      return createBillingErrorResponse("price_mode_mismatch", corsHeaders);
+    }
+
     // Read existing billing_customer_id using service client
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: userData } = await serviceClient
@@ -197,6 +209,9 @@ export async function handler(req: Request): Promise<Response> {
   } catch (err) {
     if (err instanceof LiveKeyRefusedError || (err as any)?.code === "live_keys_refused") {
       return createBillingErrorResponse("live_keys_refused", corsHeaders);
+    }
+    if (err instanceof PriceModeMismatchError || (err as any)?.code === "price_mode_mismatch") {
+      return createBillingErrorResponse("price_mode_mismatch", corsHeaders);
     }
     console.error("[create-checkout] Failed to create checkout session:", (err as Error)?.message || err);
     return new Response(
