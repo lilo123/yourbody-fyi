@@ -85,6 +85,19 @@ describe('LandingView component', () => {
 
     const refundsLink = screen.getByRole('link', { name: /Refund Policy/i });
     expect(refundsLink.getAttribute('href')).toBe('/refunds');
+
+    const emailLink = screen.getByRole('link', { name: /support@yourbody\.fyi/i });
+    expect(emailLink.getAttribute('href')).toBe('mailto:support@yourbody.fyi');
+  });
+
+  it('renders feature sections including PWA home screen installation', () => {
+    renderLanding();
+
+    expect(screen.getByRole('heading', { level: 3, name: /The Offline Gym Logger/i })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 3, name: /AI Meal & Macro Logging/i })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 3, name: /Coach Mode \(Optional Power\)/i })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 3, name: /Why a web app you can install/i })).toBeDefined();
+    expect(screen.getAllByText(/Add to Home Screen/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders FAQ section and expands items on click', () => {

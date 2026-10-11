@@ -79,7 +79,7 @@ export const HeroSection: React.FC = () => {
             <div className="flex items-center justify-between text-xs text-zinc-100 font-semibold bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-1.5">
               <span className="text-cyan-400">Set 3</span>
               <span>225 lbs × 4 reps</span>
-              <span className="text-cyan-300">Saved</span>
+              <span className="text-cyan-300">Saved on this phone</span>
             </div>
           </div>
         </div>

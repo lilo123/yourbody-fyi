@@ -369,6 +369,23 @@ describe('App Shell & Navigation', () => {
     expect(window.location.pathname).toBe('/');
     expect(screen.queryByPlaceholderText('you@example.com')).toBeNull();
   });
+
+  it('redirects to last route and does not render landing for a logged-in visitor at /', async () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Yourbody.fyi')).toBeDefined();
+      expect(screen.getByTestId('nav-workout')).toBeDefined();
+    });
+
+    expect(
+      screen.queryByRole('heading', { name: /Track workouts and meals\. Even without signal\./i })
+    ).toBeNull();
+  });
 });
 
 
