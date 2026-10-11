@@ -98,11 +98,11 @@ export const SetRow: React.FC<SetRowProps> = memo((props) => {
               onUnlogSet?.(exIndex, rowIdx);
             }}
             disabled={isMutating}
-            aria-label={`Unlog set ${displayedIndex}`}
+            aria-label={`Unlog set ${displayedIndex} of ${exName}`}
             aria-pressed={true}
             data-testid={`unlog-set-btn-${exIndex}-${rowIdx}`}
             className="relative w-8 h-8 rounded-full bg-cyan-500 text-zinc-950 flex items-center justify-center shadow-[0_0_10px_rgba(6,182,212,0.4)] transition hover:bg-cyan-400 active:scale-95 disabled:opacity-50 touch-manipulation cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-400/80 before:absolute before:-inset-y-1.5 before:-left-1 before:-right-2 before:min-w-[44px] before:min-h-[44px] before:content-['']"
-            title={`Unlog set ${displayedIndex}`}
+            title={`Unlog set ${displayedIndex} of ${exName}`}
           >
             <Check className="w-4 h-4 stroke-[3]" />
           </button>
@@ -184,7 +184,7 @@ export const SetRow: React.FC<SetRowProps> = memo((props) => {
           disabled={isMutating}
           className="relative w-8 h-8 rounded-full border-2 border-border-interactive hover:border-cyan-400 hover:bg-cyan-500/10 text-transparent hover:text-cyan-400 flex items-center justify-center transition active:scale-95 disabled:opacity-50 touch-manipulation cursor-pointer before:absolute before:-inset-y-1.5 before:-left-1 before:-right-2 before:min-w-[44px] before:min-h-[44px] before:content-['']"
           title="Commit Set (One-tap)"
-          aria-label={`Log set ${setIndex}`}
+          aria-label={`Commit set ${setIndex} for ${exName}`}
           aria-pressed={false}
           data-testid={`commit-set-btn-${exIndex}-${rowIdx}`}
         >

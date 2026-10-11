@@ -114,7 +114,7 @@ describe('SetRow', () => {
 
       const unlogBtn = screen.getByTestId('unlog-set-btn-0-0');
       expect(unlogBtn).toBeInTheDocument();
-      expect(unlogBtn).toHaveAttribute('aria-label', 'Unlog set 3');
+      expect(unlogBtn).toHaveAttribute('aria-label', 'Unlog set 3 of Bench Press');
       expect(unlogBtn).toHaveAttribute('aria-pressed', 'true');
 
       fireEvent.click(unlogBtn);
