@@ -9,6 +9,7 @@ import { getAuthRequiredStatus, setAuthRequiredStatus } from '../outbox';
 import { enqueue, getOutboxOps } from '../outbox';
 import { setIdMapping, getIdMapping } from '../idmap';
 import { getOfflineDb } from '../db';
+import { wipeUserData } from '../../utils/wipeUserData';
 import type { UserProfile } from '../../types/database';
 
 vi.mock('../../lib/supabase', () => ({
@@ -260,5 +261,58 @@ describe('auth_guard (A8 + A9 Offline Auth Guarantees)', () => {
 
     const opsAfter = await getOutboxOps(userId);
     expect(opsAfter).toHaveLength(1);
+
+    const dbsAfter = await indexedDB.databases();
+    expect(dbsAfter.some((d) => d.name === `yourbody-offline-${userId}`)).toBe(true);
+  });
+
+  it('account deletion flow (wipeUserData followed by signOut) does not leave or recreate offline IndexedDB', async () => {
+    const userId = mockUser.id;
+    localStorage.setItem('yourbody_user', JSON.stringify(mockUser));
+
+    (supabase.auth.getSession as any).mockResolvedValue({
+      data: {
+        session: { user: { id: userId, email: mockUser.email } },
+      },
+    });
+
+    // Populate IndexedDB with offline data so DB exists
+    const db = await getOfflineDb(userId);
+    await db.put('rq', { clientState: { mutations: [], queries: [] }, timestamp: Date.now() }, 'persisted-query-cache');
+    await setIdMapping(userId, 'client-w-1', 'server-w-1');
+    db.close();
+
+    // Verify DB exists in indexedDB.databases()
+    const dbsBefore = await indexedDB.databases();
+    expect(dbsBefore.some((d) => d.name === `yourbody-offline-${userId}`)).toBe(true);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-user-id').textContent).toBe(userId);
+    });
+
+    // Account deletion flow: wipeUserData then signOut
+    await wipeUserData(userId, { queryClient });
+
+    const signOutBtn = screen.getByTestId('auth-signout-btn');
+    await act(async () => {
+      fireEvent.click(signOutBtn);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-user-id').textContent).toBe('none');
+    });
+
+    // Verify no offline DB exists for this user in indexedDB.databases()
+    const dbsAfter = await indexedDB.databases();
+    const userDb = dbsAfter.find((d) => d.name === `yourbody-offline-${userId}`);
+    expect(userDb).toBeUndefined();
   });
 });

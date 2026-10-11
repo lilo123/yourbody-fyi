@@ -497,13 +497,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfile(null);
     queryClient.clear();
 
+    stopPersisting();
+
     // A9: on sign-out delete that user's rq store + queryClient.clear(), keep outbox/idmap
     if (currentUserId) {
-      clearUserReadCache(currentUserId).catch((e) => {
+      try {
+        await clearUserReadCache(currentUserId);
+      } catch (e) {
         console.warn('[AuthContext] Failed to clear user rq store:', e);
-      });
+      }
     }
-    stopPersisting();
   }, [user?.id, queryClient]);
 
   const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
