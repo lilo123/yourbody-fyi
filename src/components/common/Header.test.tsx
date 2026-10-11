@@ -211,6 +211,7 @@ describe('Header connection status badge', () => {
       const { container } = renderHeader();
 
       await waitFor(() => {
+        expect(screen.getByText('Yourbody.fyi')).toBeDefined();
         expect(container.querySelector('header [title="Athlete Account"]')).not.toBeNull();
       });
 
@@ -554,6 +555,7 @@ describe('Header connection status badge', () => {
       const { container } = renderHeader();
 
       await waitFor(() => {
+        expect(screen.getByText('Yourbody.fyi')).toBeDefined();
         const athleteChip = container.querySelector('header [title="Athlete Account"]');
         expect(athleteChip).not.toBeNull();
         expect(athleteChip?.className).toContain('hidden');
