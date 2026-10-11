@@ -488,6 +488,7 @@ async function cancelSubscriptionForChargeOrCustomer(
   charge: Stripe.Charge | null,
   customerId: string | null,
   stripe: Stripe,
+  minimalPayload?: Record<string, unknown>,
 ): Promise<string | null> {
   let subscriptionId: string | null = null;
 
@@ -637,6 +638,24 @@ async function cancelSubscriptionForChargeOrCustomer(
       err?.raw?.message?.toLowerCase().includes("already canceled");
 
     if (isResourceMissing || isAlreadyCanceled) {
+      return subscriptionId;
+    }
+
+    const statusCode = err?.statusCode ?? err?.status ?? err?.raw?.statusCode;
+    const errorMessage = (err?.message ?? err?.raw?.message ?? "").toLowerCase();
+    const isApprovalRequired =
+      err?.code === "approval_required" ||
+      err?.raw?.code === "approval_required" ||
+      ((statusCode === 400 || statusCode === undefined) &&
+        errorMessage.includes("approval request"));
+
+    if (isApprovalRequired) {
+      console.error(
+        `[stripe-webhook] Stripe subscription cancellation held for approval for subscription ${subscriptionId}`,
+      );
+      if (minimalPayload) {
+        minimalPayload.cancel_pending_approval = true;
+      }
       return subscriptionId;
     }
 
@@ -1311,7 +1330,7 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         // Auto-cancel related subscription
-        await cancelSubscriptionForChargeOrCustomer(charge, refundCustId, config.stripe);
+        await cancelSubscriptionForChargeOrCustomer(charge, refundCustId, config.stripe, minimalPayload);
         break;
       }
 
@@ -1355,7 +1374,7 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         // Auto-cancel related subscription
-        await cancelSubscriptionForChargeOrCustomer(charge, disputeCustId, config.stripe);
+        await cancelSubscriptionForChargeOrCustomer(charge, disputeCustId, config.stripe, minimalPayload);
         break;
       }
 
@@ -1403,6 +1422,7 @@ export async function handler(req: Request): Promise<Response> {
       processed_at: new Date().toISOString(),
       ...(resolvedUserId ? { user_id: resolvedUserId } : {}),
       ...(customerId ? { customer_id: customerId } : {}),
+      payload: minimalPayload,
     })
     .eq("event_id", event.id);
 
