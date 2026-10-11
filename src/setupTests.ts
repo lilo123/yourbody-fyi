@@ -56,7 +56,8 @@ afterEach(() => {
     });
   }
   stopPersisting();
-  closeAllOfflineDbs();
+  resetOutboxForTesting();
   resetFlusherForTesting();
+  closeAllOfflineDbs();
 });
 

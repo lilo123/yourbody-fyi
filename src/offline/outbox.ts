@@ -133,7 +133,12 @@ export function notifyOutboxChanged(userId?: string): void {
   ensureListeners();
   for (const sub of globalSubscribers) {
     try {
-      sub();
+      const res: unknown = sub();
+      if (res && typeof (res as Promise<unknown>).catch === 'function') {
+        (res as Promise<unknown>).catch((e: unknown) => {
+          console.error('[outbox] subscriber error:', e);
+        });
+      }
     } catch (e) {
       console.error('[outbox] subscriber error:', e);
     }
@@ -143,7 +148,12 @@ export function notifyOutboxChanged(userId?: string): void {
     if (userSubs) {
       for (const sub of userSubs) {
         try {
-          sub();
+          const res: unknown = sub();
+          if (res && typeof (res as Promise<unknown>).catch === 'function') {
+            (res as Promise<unknown>).catch((e: unknown) => {
+              console.error('[outbox] user subscriber error:', e);
+            });
+          }
         } catch (e) {
           console.error('[outbox] user subscriber error:', e);
         }
