@@ -216,6 +216,19 @@ All edge functions are configured in `supabase/config.toml` and execute in the S
    - **Signature Verification**: Verifies incoming `Stripe-Signature` header against the raw body using `stripe.webhooks.constructEventAsync()` with `STRIPE_WEBHOOK_SECRET` and `Stripe.createSubtleCryptoProvider()`. Returns `400` (`{ "error": "Invalid signature" }`) on verification failure without leaking details.
    - **Endpoint Path**: `/functions/v1/stripe-webhook`
 
+4. **`sync-billing-email`** (`verify_jwt = true`):
+   - **Method**: `POST`
+   - **Auth**: Requires valid Supabase user JWT via `Authorization: Bearer <token>`. Caller authenticated via `userClient.auth.getUser()`. Always uses the confirmed email from Auth; any email in the request body is strictly ignored.
+   - **Why**: Keeps the Stripe customer's email in sync when a user updates their confirmed account email, ensuring payment receipts and invoices reach their current address without relying on external webhooks. Note that the Stripe Customer Portal (`create-portal-session`) also allows users to directly edit their billing email.
+   - **Behavior**:
+     - Inspects `users.billing_customer_id` via `service_role`. If the user has no customer ID, returns `200 { "synced": false, "reason": "no_customer" }`.
+     - Validates Stripe configuration via `resolveStripeConfig` (returns `503` if unconfigured or live keys are refused).
+     - Retrieves the customer from Stripe (`GET /v1/customers/{id}`). If the customer is deleted or returns 404, returns `200 { "synced": false, "reason": "no_customer" }`.
+     - If `customer.email` already equals the confirmed auth email, returns `200 { "synced": false, "reason": "unchanged" }`.
+     - Otherwise updates the customer email in Stripe (`POST /v1/customers/{id}`) and returns `200 { "synced": true }`.
+     - Stripe communication or API errors return `502 { "code": "stripe_error" }`.
+     - Operates strictly with a single retrieval and optional update per request with no retry loops.
+
 ### Secrets and Environment Configuration
 The following environment secrets must be configured in Supabase (values reside on staging only; production retains none):
 - `STRIPE_SECRET_KEY`: Stripe API secret key (test mode starting with `sk_test_`, or live mode starting with `sk_live_`/`rk_live_` when enabled).
@@ -256,6 +269,8 @@ When using a Stripe restricted API key (`rk_live_...` or `rk_test_...`), the key
 - `GET /v1/prices/{id}`: `Prices: Read` (retrieves price details for fallback price validation and webhook lookup resolution)
 - `POST /v1/checkout/sessions`: `Checkout Sessions: Write` (creates customer checkout sessions)
 - `POST /v1/billing_portal/sessions`: `Customer Portal: Write` (creates customer billing portal sessions)
+- `GET /v1/customers/{id}`: `Customers: Read` (retrieves customer to inspect existing email)
+- `POST /v1/customers/{id}`: `Customers: Write` (updates customer billing email in sync-billing-email)
 - `GET /v1/subscriptions`: `Subscriptions: Read` (lists customer subscriptions for cleanup and resolution)
 - `GET /v1/subscriptions/{id}`: `Subscriptions: Read` (retrieves subscription line details)
 - `DELETE /v1/subscriptions/{id}`: `Subscriptions: Write` (cancels subscriptions upon account deletion, full refunds, or charge disputes)
@@ -274,10 +289,41 @@ The webhook listener at `/functions/v1/stripe-webhook` handles the following eve
   - Unknown price: Leaves user records unchanged (never writes `paid_until` without a plan).
   - Mode validation: Enforces price `livemode === config.isLive` on retrieved prices.
   - Updates `public.users` with `plan`, `coach_tier`, and `paid_until` to the period end timestamp (`line.period.end` or `period_end`). Before writing entitlement grants, inspects the invoice payment (via `invoice.payments`, `charge`, or `payment_intent`) and skips the grant if the payment is disputed (`charge.disputed === true`) or fully refunded (`amount_refunded === amount` without `keep_access`), recording the processed event in `billing_events` without re-granting access. If the user has an active grant in `public.billing_grandfather` (`granted_until > now()`), preserves the higher tier (`pro` > `basic`), higher coach_tier (`enterprise` > `pro` > `free`), and extends `paid_until = greatest(current paid_until, period end)`. A Personal purchase by a non-grandfathered Coach writes `plan = 'basic'` and `coach_tier = 'free'`.
+- `customer.subscription.updated`: Handles plan switching between Personal, Coach, and Coach Pro. When a subscription item price changes, resolves `(plan, coach_tier)` from the new price and updates `public.users` immediately. Preserves `paid_until = greatest(current paid_until, subscription.current_period_end)` so upgrades grant immediate tier access and downgrades preserve prepaid time. Grandfathered users retain their higher tier and grandfather expiration via the grandfather entitlement helper. Status-only updates (e.g. `cancel_at_period_end` toggles) and unknown prices perform no writes to `public.users`. Terminal statuses (`canceled`, `incomplete_expired`) and delinquency statuses (`past_due`, `unpaid`) make no access modifications here.
 - `customer.subscription.deleted`: Leaves `paid_until` as-is, granting the user access through the end of the prepaid period with no plan modification.
 - `charge.refunded`: Revokes access on full refunds (`amount_refunded === amount`) unless `keep_access` metadata is present; immediately cancels the related Stripe subscription without proration (`prorate=false`, `invoice_now=false`). Partial refunds leave access and subscription unchanged.
 - `charge.dispute.created`: Resolves the customer via the dispute's charge, revokes access, immediately cancels the related Stripe subscription without proration, and records the event in `billing_events` with the resolved `user_id`. The staging webhook endpoint must subscribe to `charge.dispute.created`.
 - Unhandled/unknown event types: Recorded in `billing_events`, marked as processed, and acknowledged with `200` (`{ "ignored": true }`). Note that `charge.dispute.closed` is not subscribed.
+
+### Plan Switching
+
+#### Overview
+Subscribers can upgrade or downgrade between tiers (Personal <-> Coach <-> Coach Pro) via the Stripe Customer Portal or Checkout. Plan switches trigger two webhook events in Stripe:
+1. `customer.subscription.updated`: Arrives immediately when the subscription's item price is updated.
+2. `invoice.paid`: Arrives when Stripe issues and collects the prorated invoice (`billing_reason = 'subscription_update'`).
+
+#### Immediate Access and Prepaid Time Preservation
+- **Immediate Tier Activation**: When `customer.subscription.updated` arrives with a new price, the webhook maps the price to `(plan, coach_tier)` and writes them immediately to `public.users`. An upgrading user gains immediate access to higher athlete capacities and AI quotas without waiting for invoice finalization.
+- **Non-destructive Period Retention**: `paid_until` is updated as `greatest(current paid_until, subscription.current_period_end)`. Mid-period upgrades extend access to the new period end; mid-period downgrades keep prepaid time intact, never shortening access the user has already paid for.
+- **Grandfather Protection**: For users with an active grant in `public.billing_grandfather` (`granted_until > now()`), plan switching retains the higher plan (`pro` > `basic`), higher coach tier (`enterprise` > `pro` > `free`), and greatest expiration timestamp (`2035-10-10T00:00:00Z`).
+- **Status & Non-price Updates**: If status is `canceled` or `incomplete_expired`, processing is deferred to `customer.subscription.deleted`. If status is `past_due` or `unpaid`, user records remain unchanged (entitlement is governed by `paid_until`). Status-only toggles (such as `cancel_at_period_end`) and unknown price IDs do not mutate `public.users`.
+- **Fault Tolerance**: Database or Stripe API errors return `502` and remove the uncompleted row from `public.billing_events`, allowing Stripe webhook retries to reprocess the event.
+
+#### Proration Invoicing (`invoice.paid`)
+When switching plans mid-cycle, Stripe calculates prorated credits and charges, generating an invoice with `billing_reason = 'subscription_update'`:
+- **Line Resolution**: The webhook resolves `(plan, coach_tier)` from the positive proration line (or subscription item fallback) and skips negative credit adjustments from overriding the new plan.
+- **Proration Period End**: To prevent prorated line intervals from shortening existing access periods, `invoice.paid` applies `greatest(current paid_until, line.period.end)` whenever `invoice.billing_reason === 'subscription_update'`.
+
+#### Owner Configuration: Enabling "Switch Plans" in Live Customer Portal
+By owner decision, the staging/sandbox Customer Portal currently keeps "Switch plans" disabled. When enabling plan switching in the production Stripe Customer Portal:
+1. Navigate to **Stripe Dashboard > Settings > Billing > Customer portal**.
+2. Under **Subscriptions**, check **Switch plans**.
+3. Under **Products**, add the three subscription products and their monthly/yearly prices:
+   - **Personal** (`personal_monthly`, `personal_yearly`)
+   - **Coach** (`coach_monthly`, `coach_yearly`)
+   - **Coach Pro** (`coach_pro_monthly`, `coach_pro_yearly`)
+4. Under **Proration behavior**:
+   - **Recommendation**: Select **"Always invoice immediately"**. Immediate invoicing automatically charges or credits the customer's payment method on file upon plan change, fires `invoice.paid`, and avoids carrying unbilled balances into future billing cycles.
 
 ### Refunds, Disputes, Auto-Cancellation and Won Disputes
 - **Full refund**: A full refund (`amount_refunded === amount` where `amount > 0`) revokes access by updating `paid_until = least(paid_until, now())` for the customer and immediately cancels the related Stripe subscription (`DELETE /v1/subscriptions/{id}` with `prorate=false` and `invoice_now=false`). Subscription resolution inspects charge -> payment intent -> invoice -> `parent.subscription_details.subscription`, falling back to the customer's active/trialing/past_due/unpaid subscriptions. If no subscription exists (e.g. one-off payment), cancellation is safely skipped.

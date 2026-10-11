@@ -453,4 +453,11 @@ verify_jwt = true
 import_map = "./functions/owner-stats/deno.json"
 entrypoint = "./functions/owner-stats/index.ts"
 
+[functions.sync-billing-email]
+enabled = true
+verify_jwt = true
+import_map = "./functions/sync-billing-email/deno.json"
+entrypoint = "./functions/sync-billing-email/index.ts"
+
+
 
