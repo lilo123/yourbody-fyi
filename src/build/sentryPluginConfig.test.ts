@@ -19,6 +19,7 @@ describe('resolveSentryPluginConfig', () => {
     expect(result.options?.project).toBe('proj-x');
     expect(result.options?.telemetry).toBe(false);
     expect(result.options?.release.name).toBe('sha-abc');
+    expect(result.options?.release.inject).toBe(false);
     expect(result.options?.sourcemaps.filesToDeleteAfterUpload).toEqual(['dist/**/*.map', 'dist/*.map']);
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -93,5 +94,32 @@ describe('resolveSentryPluginConfig', () => {
         'sha-abc'
       ).enabled
     ).toBe(false);
+  });
+
+  it('enables measure mode with upload disabled when SENTRY_PLUGIN_MEASURE is true', () => {
+    const env = {
+      SENTRY_PLUGIN_MEASURE: 'true',
+    };
+    const sha = 'sha-measure';
+    const result = resolveSentryPluginConfig(env, sha);
+
+    expect(result.enabled).toBe(true);
+    expect(result.sourcemap).toBe('hidden');
+    expect(result.options).not.toBeNull();
+    expect(result.options?.authToken).toBeUndefined();
+    expect(result.options?.org).toBeUndefined();
+    expect(result.options?.project).toBeUndefined();
+    expect(result.options?.telemetry).toBe(false);
+    expect(result.options?.release.name).toBe('sha-measure');
+    expect(result.options?.release.inject).toBe(false);
+    expect(result.options?.release.create).toBe(false);
+    expect(result.options?.release.finalize).toBe(false);
+    expect(result.options?.sourcemaps.assets).toEqual([]);
+    expect(result.options?.sourcemaps.filesToDeleteAfterUpload).toEqual(['dist/**/*.map', 'dist/*.map']);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => result.options?.errorHandler(new Error('simulated error'))).not.toThrow();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
