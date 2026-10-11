@@ -201,14 +201,50 @@ All edge functions are configured in `supabase/config.toml` and execute in the S
 
 ### Secrets and Environment Configuration
 The following environment secrets must be configured in Supabase (values reside on staging only; production retains none):
-- `STRIPE_SECRET_KEY`: Stripe API secret key (test mode only, starting with `sk_test_`).
+- `STRIPE_SECRET_KEY`: Stripe API secret key (test mode starting with `sk_test_`, or live mode starting with `sk_live_`/`rk_live_` when enabled).
 - `STRIPE_WEBHOOK_SECRET`: Webhook signing secret (`whsec_...`).
 - `STRIPE_PRICE_BASIC`: Stripe Price identifier for the basic subscription plan.
 - `STRIPE_PRICE_PRO`: Stripe Price identifier for the pro subscription plan.
+- `STRIPE_LIVE_ENABLED`: Explicit boolean flag (`"true"`) required to unlock live Stripe operations.
 - Standard platform variables: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-### Live Key Refusal
-The shared guard `_shared/stripeConfig.ts` inspects `STRIPE_SECRET_KEY` on invocation. If the key starts with `sk_live_` or `rk_live_`, execution terminates immediately returning `503` (`{ "code": "live_keys_refused" }`). If `STRIPE_SECRET_KEY` is unset or empty, the guard returns `503` (`{ "code": "billing_not_configured" }`). Secret keys are never logged.
+### Live Key Refusal & Switch
+The shared guard `_shared/stripeConfig.ts` inspects `STRIPE_SECRET_KEY` on invocation. If the key starts with `sk_live_` or `rk_live_`, it is refused with `503` (`{ "code": "live_keys_refused" }`) unless `STRIPE_LIVE_ENABLED` is explicitly and exactly set to `'true'`. If `STRIPE_SECRET_KEY` is unset or empty, the guard returns `503` (`{ "code": "billing_not_configured" }`). Secret keys are never logged.
+
+### Going live
+
+#### Live Mode Switch (`STRIPE_LIVE_ENABLED`)
+The environment secret `STRIPE_LIVE_ENABLED` acts as an explicit gatekeeper for live Stripe operations. By default, this secret is unset in all environments, keeping the backend inert and fail-safe.
+- **Accepted value**: Exactly `'true'` (string). Any other value—including unset, `'TRUE'`, `'1'`, `'yes'`, or `' true'`—causes live keys to be refused immediately with 503 `live_keys_refused`.
+- **What it unlocks**: When configured with the exact value `'true'`, edge functions allow live Stripe secret keys (`sk_live_...` or restricted live keys `rk_live_...`), operating in live mode (`isLive: true`).
+- **Test mode invariance**: When using test keys (`sk_test_...` or `rk_test_...`), `STRIPE_LIVE_ENABLED` has no effect; the backend remains in test mode (`isLive: false`).
+- **Emergency rollback**: To immediately revert to fail-safe live key refusal, unset `STRIPE_LIVE_ENABLED` (or set it to any value other than `'true'`). Edge functions will immediately refuse any live keys, returning `503` (`{ "code": "live_keys_refused" }`) without creating checkout sessions, modifying subscriptions, or processing webhook side-effects.
+
+#### Price Mode Check
+Whenever a checkout session is initiated (`create-checkout`), the service validates price mode consistency before creating the checkout session:
+1. Resolves the configured price ID for the chosen tier (`STRIPE_PRICE_BASIC` or `STRIPE_PRICE_PRO`).
+2. Fetches the price object from Stripe (`GET /v1/prices/{id}`).
+3. Verifies that `price.livemode` matches the active Stripe key mode (`config.isLive`).
+4. If a mismatch is detected (e.g. a test price passed with a live key, or a live price with a test key), the function immediately aborts session creation and returns `503` (`{ "code": "price_mode_mismatch", "error": "Price livemode does not match Stripe key mode." }`).
+
+#### Webhook Mode Check
+When webhook events are received at `/functions/v1/stripe-webhook`:
+1. The webhook verifies the event signature with `STRIPE_WEBHOOK_SECRET`.
+2. The event's `livemode` attribute is compared against the active key mode (`config.isLive`).
+3. If `event.livemode !== config.isLive`, the event is acknowledged with `200` (`{ "ignored": true }`) and logged as a livemode mismatch warning. No database operations or mutations (zero writes to `billing_events` or `users`) are performed.
+
+#### Restricted Key Permissions
+When using a Stripe restricted API key (`rk_live_...` or `rk_test_...`), the key must possess permissions corresponding to the exact Stripe endpoints invoked across the edge functions:
+- `GET /v1/prices/{id}`: `Prices: Read` (validates price livemode during checkout creation)
+- `POST /v1/checkout/sessions`: `Checkout Sessions: Write` (creates customer checkout sessions)
+- `POST /v1/billing_portal/sessions`: `Customer Portal: Write` (creates customer billing portal sessions)
+- `GET /v1/subscriptions`: `Subscriptions: Read` (lists customer subscriptions for cleanup and resolution)
+- `GET /v1/subscriptions/{id}`: `Subscriptions: Read` (retrieves subscription line details)
+- `DELETE /v1/subscriptions/{id}`: `Subscriptions: Write` (cancels subscriptions upon account deletion, full refunds, or charge disputes)
+- `GET /v1/invoices/{id}`: `Invoices: Read` (retrieves invoice payment targets)
+- `GET /v1/charges/{id}`: `Charges: Read` (resolves charge dispute targets and refund states)
+- `GET /v1/payment_intents/{id}`: `PaymentIntents: Read` (inspects payment intent charges and keep_access metadata)
+- `GET /v1/refunds`: `Refunds: Read` (lists charge refunds to check keep_access metadata)
 
 ### Stripe Dashboard Webhook Configuration
 The webhook listener at `/functions/v1/stripe-webhook` handles the following events, which must be enabled in the Stripe dashboard:

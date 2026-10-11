@@ -611,3 +611,81 @@ Deno.test("delete-account: refuses live Stripe keys (sk_live_ / rk_live_)", asyn
     }
   }
 });
+
+Deno.test("delete-account: honors STRIPE_LIVE_ENABLED switch with live key (cancels subscriptions and proceeds)", async () => {
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_live_" + "delete_account_live_key");
+  Deno.env.set("STRIPE_LIVE_ENABLED", "true");
+  const stripeCancelledIds: string[] = [];
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const urlStr = input.toString();
+    const method = init?.method || "GET";
+
+    if (urlStr.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: VALID_USER_ID }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (urlStr.includes("/rest/v1/app_config")) {
+      return new Response(JSON.stringify({ value: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (urlStr.includes("/rest/v1/users")) {
+      return new Response(JSON.stringify({ billing_customer_id: "cus_mock_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (urlStr.includes("api.stripe.com/v1/subscriptions")) {
+      if (method === "GET") {
+        return new Response(
+          JSON.stringify({
+            data: [
+              { id: "sub_live_active_1", status: "active" },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (method === "DELETE") {
+        const subId = urlStr.split("/subscriptions/")[1];
+        stripeCancelledIds.push(subId);
+        return new Response(JSON.stringify({ id: subId, status: "canceled" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+    if (urlStr.includes("/auth/v1/admin/users/")) {
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const req = new Request("http://localhost/delete-account", {
+      method: "POST",
+      headers: { Authorization: VALID_TOKEN },
+      body: JSON.stringify({ confirm: "DELETE" }),
+    });
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.deleted, true);
+    assertEquals(stripeCancelledIds, ["sub_live_active_1"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("STRIPE_SECRET_KEY");
+    Deno.env.delete("STRIPE_LIVE_ENABLED");
+  }
+});

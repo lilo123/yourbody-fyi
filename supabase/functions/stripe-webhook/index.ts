@@ -610,6 +610,20 @@ export async function handler(req: Request): Promise<Response> {
     );
   }
 
+  // Webhook mode check: event.livemode must match key mode (config.isLive)
+  if (Boolean(event.livemode) !== config.isLive) {
+    console.warn(
+      `[stripe-webhook] Event livemode (${event.livemode}) does not match key livemode (${config.isLive}); ignoring event ${event.id}`,
+    );
+    return new Response(
+      JSON.stringify({ ignored: true }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 

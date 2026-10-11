@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import app from "./index.ts";
 
 const ALLOWED_ORIGIN = "https://www.yourbody.fyi";
@@ -80,6 +80,69 @@ Deno.test("create-portal-session: refuses live key starting with sk_live_ (503 l
     assertEquals(data.code, "live_keys_refused");
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-portal-session: honors STRIPE_LIVE_ENABLED switch with live key (proceeds to create portal session)", async () => {
+  setupEnv();
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_live_" + "portal_live_key");
+  Deno.env.set("STRIPE_LIVE_ENABLED", "true");
+
+  const CUSTOMER_ID = "cus_portal_live_789";
+  let capturedStripeBody = "";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      return new Response(JSON.stringify({ billing_customer_id: CUSTOMER_ID }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/billing_portal/sessions")) {
+      capturedStripeBody = (init?.body as string) || "";
+      return new Response(
+        JSON.stringify({
+          id: "bps_live_123",
+          url: "https://billing.stripe.com/p/session/bps_live_123",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-portal-session", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.url, "https://billing.stripe.com/p/session/bps_live_123");
+
+    const params = new URLSearchParams(capturedStripeBody);
+    assertEquals(params.get("customer"), CUSTOMER_ID);
+    assertEquals(params.get("return_url"), `${ALLOWED_ORIGIN}/settings`);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("STRIPE_LIVE_ENABLED");
   }
 });
 
