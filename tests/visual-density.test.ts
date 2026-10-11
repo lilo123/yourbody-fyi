@@ -6362,7 +6362,7 @@ test.describe("Route-Wide Density & Tap Grid", () => {
 
       const headline = page.getByRole("heading", {
         level: 1,
-        name: /Track workouts and meals\. Even without signal\./i,
+        name: /You know your workout\. We just help you track it\./i,
       });
       await expect(headline).not.toBeVisible();
       await expect(page.locator('input[type="email"]')).toBeVisible();

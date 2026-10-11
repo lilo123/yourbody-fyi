@@ -15,12 +15,12 @@ describe('LandingView component', () => {
     renderLanding();
     const heading = screen.getByRole('heading', {
       level: 1,
-      name: /Track workouts and meals\. Even without signal\./i,
+      name: /You know your workout\. We just help you track it\./i,
     });
     expect(heading).toBeDefined();
 
     expect(
-      screen.getByText(/A fast workout and nutrition tracker that keeps working when your gym has no signal/i)
+      screen.getByText(/A no-frills log for your lifts and meals\. Free forever, with coach mode built in\. Your data stays yours\./i)
     ).toBeDefined();
   });
 
@@ -28,7 +28,7 @@ describe('LandingView component', () => {
     renderLanding();
 
     // Free tier
-    expect(screen.getByText('Free')).toBeDefined();
+    expect(screen.getByText('Free forever')).toBeDefined();
     expect(screen.getByText('$0')).toBeDefined();
 
     // Paid tiers
@@ -90,26 +90,44 @@ describe('LandingView component', () => {
     expect(emailLink.getAttribute('href')).toBe('mailto:support@yourbody.fyi');
   });
 
-  it('renders feature sections including PWA home screen installation', () => {
+  it('renders the four pillar feature cards in exact order', () => {
     renderLanding();
 
-    expect(screen.getByRole('heading', { level: 3, name: /The Offline Gym Logger/i })).toBeDefined();
-    expect(screen.getByRole('heading', { level: 3, name: /AI Meal & Macro Logging/i })).toBeDefined();
-    expect(screen.getByRole('heading', { level: 3, name: /Coach Mode \(Optional Power\)/i })).toBeDefined();
-    expect(screen.getByRole('heading', { level: 3, name: /Why a web app you can install/i })).toBeDefined();
-    expect(screen.getAllByText(/Add to Home Screen/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('heading', { level: 3, name: /No frills\./i })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 3, name: /Free forever\./i })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 3, name: /Coach mode\./i })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 3, name: /Your body, your data\./i })).toBeDefined();
+
+    expect(
+      screen.getByText(/No programs to buy, no streaks, no feed\. Log sets and meals in seconds and get back to training\./i)
+    ).toBeDefined();
+    expect(
+      screen.getByText(/Workout and meal tracking, quick log and coach mode for up to 3 athletes cost nothing, now and later\./i)
+    ).toBeDefined();
+    expect(
+      screen.getByText(/Coach up to 3 athletes free, 10 on Coach, 25 on Coach Pro\./i)
+    ).toBeDefined();
+    expect(
+      screen.getByText(/No ads\. Your workouts and meals are never sold\. Export everything any time\./i)
+    ).toBeDefined();
   });
 
   it('renders FAQ section and expands items on click', () => {
     renderLanding();
 
-    const offlineFaq = screen.getByRole('button', { name: /Does it work offline\?/i });
+    const offlineFaq = screen.getByRole('button', { name: /Does it work in a gym with no signal\?/i });
     expect(offlineFaq).toBeDefined();
 
     // Click to expand
     fireEvent.click(offlineFaq);
     expect(
-      screen.getByText(/Yes for workout logging, set tracking, quick log, and on-device parsing\./i)
+      screen.getByText(/Yes for logging workouts and quick meal logs: they save on your phone and sync when you're back online/i)
     ).toBeDefined();
+
+    // App installation FAQ
+    const appFaq = screen.getByRole('button', { name: /Is there an app\?/i });
+    expect(appFaq).toBeDefined();
+    fireEvent.click(appFaq);
+    expect(screen.getByText(/Add to Home screen/i)).toBeDefined();
   });
 });

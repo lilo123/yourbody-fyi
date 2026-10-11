@@ -252,6 +252,14 @@ function AppLayout() {
 
   const shouldMountHistory = Boolean(user && (visitedUserId === user.id || onHistory));
 
+  if (location.pathname === '/' && shouldShowLanding(user)) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
+        <RootRoute />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
       <Header />

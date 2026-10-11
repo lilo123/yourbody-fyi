@@ -298,10 +298,12 @@ describe('App Shell & Navigation', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /Track workouts and meals\. Even without signal\./i })
+        screen.getByRole('heading', { name: /You know your workout\. We just help you track it\./i })
       ).toBeDefined();
     });
     expect(screen.getAllByText('Start free').length).toBeGreaterThanOrEqual(1);
+    // App header (connection status) must NOT be present on logged-out landing
+    expect(screen.queryByTestId('connection-status')).toBeNull();
   });
 
   it('redirects and does not render landing headline for a standalone-mode visitor at /', async () => {
@@ -332,7 +334,7 @@ describe('App Shell & Navigation', () => {
       // In standalone mode, root redirect kicks in: does NOT display landing headline
       await waitFor(() => {
         expect(
-          screen.queryByRole('heading', { name: /Track workouts and meals\. Even without signal\./i })
+          screen.queryByRole('heading', { name: /You know your workout\. We just help you track it\./i })
         ).toBeNull();
       });
 
@@ -361,7 +363,7 @@ describe('App Shell & Navigation', () => {
 
     // No landing headline is rendered
     expect(
-      screen.queryByRole('heading', { name: /Track workouts and meals\. Even without signal\./i })
+      screen.queryByRole('heading', { name: /You know your workout\. We just help you track it\./i })
     ).toBeNull();
     expect(screen.queryByText('Start free')).toBeNull();
 
@@ -383,8 +385,10 @@ describe('App Shell & Navigation', () => {
     });
 
     expect(
-      screen.queryByRole('heading', { name: /Track workouts and meals\. Even without signal\./i })
+      screen.queryByRole('heading', { name: /You know your workout\. We just help you track it\./i })
     ).toBeNull();
+    // App header IS present on authenticated app view
+    expect(screen.getByTestId('connection-status')).toBeDefined();
   });
 });
 

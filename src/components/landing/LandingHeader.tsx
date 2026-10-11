@@ -4,8 +4,8 @@ import { Zap } from 'lucide-react';
 
 export const LandingHeader: React.FC = () => {
   return (
-    <header className="bg-zinc-900/90 backdrop-blur-xl border-b border-zinc-800/80 sticky top-0 z-30 pt-[max(env(safe-area-inset-top),12px)] pb-3 shadow-lg">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between">
+    <header data-testid="landing-header" className="bg-zinc-900/90 backdrop-blur-xl border-b border-zinc-800/80 sticky top-0 z-30 pt-[max(env(safe-area-inset-top),12px)] pb-3 shadow-lg w-full">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Brand */}
         <Link
           to="/"

@@ -4,8 +4,8 @@ import { Zap } from 'lucide-react';
 
 export const LandingFooter: React.FC = () => {
   return (
-    <footer className="border-t border-zinc-800/80 bg-zinc-950 py-12">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+    <footer className="border-t border-zinc-800/80 bg-zinc-950 py-12 w-full">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
         {/* Brand / Copyright */}
         <div className="flex flex-col items-center md:items-start text-center md:text-left gap-1">
           <div className="flex items-center gap-2">
