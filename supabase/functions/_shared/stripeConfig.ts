@@ -20,7 +20,8 @@ export class PriceModeMismatchError extends Error {
 export type BillingErrorCode =
   | "billing_not_configured"
   | "live_keys_refused"
-  | "price_mode_mismatch";
+  | "price_mode_mismatch"
+  | "price_not_configured";
 
 export interface StripeConfig {
   stripeSecretKey: string;
@@ -89,6 +90,8 @@ export function createBillingErrorResponse(
     errorMsg = "Live Stripe keys are not allowed in this environment.";
   } else if (code === "price_mode_mismatch") {
     errorMsg = "Price livemode does not match Stripe key mode.";
+  } else if (code === "price_not_configured") {
+    errorMsg = "Price is not configured.";
   }
 
   return new Response(

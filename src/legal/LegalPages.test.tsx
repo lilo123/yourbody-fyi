@@ -55,9 +55,9 @@ describe('Legal Pages', () => {
       expect(screen.getByRole('heading', { name: /AI-Generated Estimates Disclaimer/i })).toBeDefined();
       expect(screen.getByText(/Google Gemini API/i)).toBeDefined();
 
-      // Yearly Stripe billing and Basic / Pro plans
+      // Yearly Stripe billing and Personal, Coach, and Coach Pro plans
       expect(screen.getByText(/Paid subscriptions are billed on a yearly basis in advance via Stripe/i)).toBeDefined();
-      expect(screen.getByText(/Basic and Pro plans/i)).toBeDefined();
+      expect(screen.getByText(/Personal, Coach, and Coach Pro plans/i)).toBeDefined();
 
       // Operator name and jurisdiction
       expect(screen.getAllByText(/Yourbody/i).length).toBeGreaterThanOrEqual(1);
@@ -179,7 +179,7 @@ describe('Legal Pages', () => {
       // Annual subscriptions and 30-day window
       expect(screen.getByRole('heading', { name: /Annual Subscriptions & Refund Window/i })).toBeDefined();
       expect(screen.getByText(/within 30 days/i)).toBeDefined();
-      expect(screen.getByText(/Basic and Pro plans/i)).toBeDefined();
+      expect(screen.getByText(/Personal, Coach, and Coach Pro plans/i)).toBeDefined();
 
       // EU/UK notice
       expect(screen.getByRole('heading', { name: /European Union & UK Availability/i })).toBeDefined();

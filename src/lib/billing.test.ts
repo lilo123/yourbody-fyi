@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { supabase } from './supabase';
-import { startCheckout, openBillingPortal, extractBillingErrorMessage } from './billing';
+import { startCheckout, openBillingPortal, extractBillingErrorMessage, planLabel } from './billing';
 
 vi.mock('./supabase', () => ({
   supabase: {
@@ -27,41 +27,60 @@ describe('billing client helpers', () => {
   });
 
   describe('startCheckout', () => {
-    it('invokes create-checkout with basic plan and redirects to returned url', async () => {
+    it('invokes create-checkout with personal plan and yearly default', async () => {
       vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
-        data: { url: 'https://checkout.stripe.test/basic_123' },
+        data: { url: 'https://checkout.stripe.test/personal_yearly_123' },
         error: null,
       });
 
-      const result = await startCheckout('basic');
+      const result = await startCheckout('personal');
 
       expect(supabase.functions.invoke).toHaveBeenCalledWith('create-checkout', {
-        body: { plan: 'basic' },
+        body: { plan: 'personal', interval: 'year' },
       });
-      expect(window.location.assign).toHaveBeenCalledWith('https://checkout.stripe.test/basic_123');
+      expect(window.location.assign).toHaveBeenCalledWith('https://checkout.stripe.test/personal_yearly_123');
       expect(result).toEqual({
         ok: true,
         success: true,
-        url: 'https://checkout.stripe.test/basic_123',
+        url: 'https://checkout.stripe.test/personal_yearly_123',
       });
     });
 
-    it('invokes create-checkout with pro plan and redirects to returned url', async () => {
+    it('invokes create-checkout with coach plan and monthly interval', async () => {
       vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
-        data: { url: 'https://checkout.stripe.test/pro_123' },
+        data: { url: 'https://checkout.stripe.test/coach_monthly_123' },
         error: null,
       });
 
-      const result = await startCheckout('pro');
+      const result = await startCheckout('coach', 'month');
 
       expect(supabase.functions.invoke).toHaveBeenCalledWith('create-checkout', {
-        body: { plan: 'pro' },
+        body: { plan: 'coach', interval: 'month' },
       });
-      expect(window.location.assign).toHaveBeenCalledWith('https://checkout.stripe.test/pro_123');
+      expect(window.location.assign).toHaveBeenCalledWith('https://checkout.stripe.test/coach_monthly_123');
       expect(result).toEqual({
         ok: true,
         success: true,
-        url: 'https://checkout.stripe.test/pro_123',
+        url: 'https://checkout.stripe.test/coach_monthly_123',
+      });
+    });
+
+    it('invokes create-checkout with options object { plan, interval }', async () => {
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: { url: 'https://checkout.stripe.test/coach_pro_yearly_123' },
+        error: null,
+      });
+
+      const result = await startCheckout({ plan: 'coach_pro', interval: 'year' });
+
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('create-checkout', {
+        body: { plan: 'coach_pro', interval: 'year' },
+      });
+      expect(window.location.assign).toHaveBeenCalledWith('https://checkout.stripe.test/coach_pro_yearly_123');
+      expect(result).toEqual({
+        ok: true,
+        success: true,
+        url: 'https://checkout.stripe.test/coach_pro_yearly_123',
       });
     });
 
@@ -75,7 +94,7 @@ describe('billing client helpers', () => {
         } as any,
       });
 
-      const result = await startCheckout('pro');
+      const result = await startCheckout('coach');
 
       expect(window.location.assign).not.toHaveBeenCalled();
       expect(result.ok).toBe(false);
@@ -91,7 +110,7 @@ describe('billing client helpers', () => {
         } as any,
       });
 
-      const result = await startCheckout('basic');
+      const result = await startCheckout('personal');
 
       expect(window.location.assign).not.toHaveBeenCalled();
       expect(result.ok).toBe(false);
@@ -107,7 +126,7 @@ describe('billing client helpers', () => {
         } as any,
       });
 
-      const result = await startCheckout('basic');
+      const result = await startCheckout('personal');
 
       expect(result.ok).toBe(false);
       expect(result.error).toBe('No billing account yet.');
@@ -118,7 +137,7 @@ describe('billing client helpers', () => {
         new Error('Network connection timeout')
       );
 
-      const result = await startCheckout('pro');
+      const result = await startCheckout('coach_pro');
 
       expect(result.ok).toBe(false);
       expect(result.error).toBe('Unable to process billing request. Please try again.');
@@ -185,6 +204,38 @@ describe('billing client helpers', () => {
 
       const msg = await extractBillingErrorMessage(errorWithContext);
       expect(msg).toBe("Billing isn't available yet.");
+    });
+  });
+
+  describe('planLabel', () => {
+    it('returns "Personal" for basic plan', () => {
+      expect(planLabel('basic')).toBe('Personal');
+      expect(planLabel('personal')).toBe('Personal');
+    });
+
+    it('returns "Coach" for pro plan with default or pro coach_tier', () => {
+      expect(planLabel('pro')).toBe('Coach');
+      expect(planLabel('pro', 'pro')).toBe('Coach');
+      expect(planLabel('coach')).toBe('Coach');
+    });
+
+    it('returns "Coach Pro" for pro plan with enterprise tier', () => {
+      expect(planLabel('pro', 'enterprise')).toBe('Coach Pro');
+      expect(planLabel('pro', 'enterprise_pro')).toBe('Coach Pro');
+      expect(planLabel('coach_pro')).toBe('Coach Pro');
+    });
+
+    it('returns "Trial" for trial plan', () => {
+      expect(planLabel('trial')).toBe('Trial');
+    });
+
+    it('returns "Free" for free, null, or inactive plans', () => {
+      expect(planLabel('free')).toBe('Free');
+      expect(planLabel(null)).toBe('Free');
+      expect(planLabel(undefined)).toBe('Free');
+      expect(planLabel('pro', 'enterprise', false)).toBe('Free');
+      expect(planLabel('basic', null, false)).toBe('Free');
+      expect(planLabel('coach', null, false)).toBe('Free');
     });
   });
 });

@@ -5,6 +5,7 @@ import { SubscriptionCard } from './SubscriptionCard';
 import * as entitlementModule from '../../hooks/useEntitlement';
 import * as authModule from '../../hooks/useAuth';
 import * as billingModule from '../../lib/billing';
+import { supabase } from '../../lib/supabase';
 
 const mockToastShow = vi.fn();
 vi.mock('../../hooks/useToast', () => ({
@@ -22,9 +23,19 @@ vi.mock('../../hooks/useAuth', () => ({
   useAuth: vi.fn(),
 }));
 
-vi.mock('../../lib/billing', () => ({
-  openBillingPortal: vi.fn(),
-  startCheckout: vi.fn(),
+vi.mock('../../lib/billing', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/billing')>();
+  return {
+    ...actual,
+    openBillingPortal: vi.fn(),
+    startCheckout: vi.fn(),
+  };
+});
+
+vi.mock('../../lib/supabase', () => ({
+  supabase: {
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+  },
 }));
 
 describe('SubscriptionCard component', () => {
@@ -38,9 +49,9 @@ describe('SubscriptionCard component', () => {
 
     vi.mocked(authModule.useAuth).mockReturnValue({
       user: { id: 'test-user-id', email: 'test@example.com' } as any,
-      profile: null,
-      role: 'athlete',
-      isCoachMode: false,
+      profile: { coach_tier: 'pro' } as any,
+      role: 'coach',
+      isCoachMode: true,
       loading: false,
       updateProfile: vi.fn(),
       switchRole: vi.fn(),
@@ -56,8 +67,20 @@ describe('SubscriptionCard component', () => {
       </QueryClientProvider>
     );
 
-  describe('badge variants', () => {
-    it('renders "Pro" badge variant for pro subscriber', () => {
+  describe('badge variants and coach limits', () => {
+    it('renders "Coach" badge variant and athlete limit 10 for pro coach', () => {
+      vi.mocked(authModule.useAuth).mockReturnValue({
+        user: { id: 'test-user-id', email: 'test@example.com' } as any,
+        profile: { coach_tier: 'pro' } as any,
+        role: 'coach',
+        isCoachMode: true,
+        loading: false,
+        updateProfile: vi.fn(),
+        switchRole: vi.fn(),
+        refreshProfile: vi.fn(),
+        signOut: vi.fn(),
+      } as any);
+
       vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
         plan: 'pro',
         isPro: true,
@@ -70,13 +93,80 @@ describe('SubscriptionCard component', () => {
       renderCard();
 
       const badge = screen.getByTestId('subscription-plan-badge');
-      expect(badge.textContent).toBe('Pro');
+      expect(badge.textContent).toBe('Coach');
       expect(screen.queryByTestId('subscription-upgrade-btn')).toBeNull();
       expect(screen.getByTestId('subscription-manage-billing-btn')).toBeDefined();
       expect(screen.getByTestId('subscription-active-until')).toBeDefined();
+      expect(screen.getByTestId('subscription-athletes-count').textContent).toBe('0 / 10 athletes');
     });
 
-    it('renders "Basic" badge variant for basic subscriber', () => {
+    it('renders "Coach Pro" badge variant and athlete limit 25 for enterprise coach', () => {
+      vi.mocked(authModule.useAuth).mockReturnValue({
+        user: { id: 'test-user-id', email: 'test@example.com' } as any,
+        profile: { coach_tier: 'enterprise' } as any,
+        role: 'coach',
+        isCoachMode: true,
+        loading: false,
+        updateProfile: vi.fn(),
+        switchRole: vi.fn(),
+        refreshProfile: vi.fn(),
+        signOut: vi.fn(),
+      } as any);
+
+      vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
+        plan: 'pro',
+        isPro: true,
+        isPaid: true,
+        trialEndsAt: null,
+        paidUntil: '2027-10-10T00:00:00Z',
+        isLoading: false,
+      });
+
+      renderCard();
+
+      const badge = screen.getByTestId('subscription-plan-badge');
+      expect(badge.textContent).toBe('Coach Pro');
+      expect(screen.queryByTestId('subscription-upgrade-btn')).toBeNull();
+      expect(screen.getByTestId('subscription-manage-billing-btn')).toBeDefined();
+      expect(screen.getByTestId('subscription-active-until')).toBeDefined();
+      expect(screen.getByTestId('subscription-athletes-count').textContent).toBe('0 / 25 athletes');
+    });
+
+    it('renders athlete count and limit returned from my_coach_limits RPC', async () => {
+      vi.mocked(authModule.useAuth).mockReturnValue({
+        user: { id: 'test-user-id', email: 'test@example.com' } as any,
+        profile: { coach_tier: 'pro' } as any,
+        role: 'coach',
+        isCoachMode: true,
+        loading: false,
+        updateProfile: vi.fn(),
+        switchRole: vi.fn(),
+        refreshProfile: vi.fn(),
+        signOut: vi.fn(),
+      } as any);
+
+      vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
+        plan: 'pro',
+        isPro: true,
+        isPaid: true,
+        trialEndsAt: null,
+        paidUntil: '2027-10-10T00:00:00Z',
+        isLoading: false,
+      });
+
+      vi.mocked(supabase.rpc).mockResolvedValueOnce({
+        data: [{ athlete_count: 7, athlete_limit: 10 }],
+        error: null,
+      } as any);
+
+      renderCard();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('subscription-athletes-count').textContent).toBe('7 / 10 athletes');
+      });
+    });
+
+    it('renders "Personal" badge variant for basic paid subscriber', () => {
       vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
         plan: 'basic',
         isPro: false,
@@ -89,9 +179,10 @@ describe('SubscriptionCard component', () => {
       renderCard();
 
       const badge = screen.getByTestId('subscription-plan-badge');
-      expect(badge.textContent).toBe('Basic');
+      expect(badge.textContent).toBe('Personal');
       expect(screen.getByTestId('subscription-upgrade-btn')).toBeDefined();
       expect(screen.getByTestId('subscription-manage-billing-btn')).toBeDefined();
+      expect(screen.queryByTestId('subscription-athletes-count')).toBeNull();
     });
 
     it('renders "Trial" badge variant when not paid and trialEndsAt is in future', () => {
@@ -112,6 +203,7 @@ describe('SubscriptionCard component', () => {
       expect(screen.getByTestId('subscription-upgrade-btn')).toBeDefined();
       expect(screen.queryByTestId('subscription-manage-billing-btn')).toBeNull();
       expect(screen.queryByTestId('subscription-active-until')).toBeNull();
+      expect(screen.queryByTestId('subscription-athletes-count')).toBeNull();
     });
 
     it('renders "Free" badge variant when expired or free plan', () => {
@@ -130,6 +222,7 @@ describe('SubscriptionCard component', () => {
       expect(badge.textContent).toBe('Free');
       expect(screen.getByTestId('subscription-upgrade-btn')).toBeDefined();
       expect(screen.queryByTestId('subscription-manage-billing-btn')).toBeNull();
+      expect(screen.queryByTestId('subscription-athletes-count')).toBeNull();
     });
   });
 
@@ -201,7 +294,6 @@ describe('SubscriptionCard component', () => {
       const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
       const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
 
-      // Mock search query
       delete (window as any).location;
       window.location = {
         pathname: '/settings',
@@ -211,7 +303,6 @@ describe('SubscriptionCard component', () => {
 
       renderCard();
 
-      // STD-FB-1: Success feedback is rendered via shell toast, not an ad-hoc in-page banner
       expect(mockToastShow).toHaveBeenCalledWith({
         message: 'Subscription updated successfully!',
         kind: 'success',
