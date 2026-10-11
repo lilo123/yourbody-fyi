@@ -13,7 +13,8 @@ export default defineConfig({
   use: {
     baseURL,
     serviceWorkers: 'allow',
-    trace: 'off',
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
+    screenshot: 'only-on-failure',
   },
   projects: [
     {
