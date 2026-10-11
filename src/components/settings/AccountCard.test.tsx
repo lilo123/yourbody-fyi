@@ -4,10 +4,14 @@ import { AccountCard } from './AccountCard';
 import * as authModule from '../../hooks/useAuth';
 import * as onlineModule from '../../hooks/useOnlineStatus';
 import * as toastModule from '../../hooks/useToast';
+import * as billingModule from '../../lib/billing';
 
 vi.mock('../../hooks/useAuth');
 vi.mock('../../hooks/useOnlineStatus');
 vi.mock('../../hooks/useToast');
+vi.mock('../../lib/billing', () => ({
+  syncBillingEmail: vi.fn().mockResolvedValue({ ok: true, synced: true }),
+}));
 
 describe('AccountCard component', () => {
   const mockShowToast = vi.fn();
@@ -296,8 +300,29 @@ describe('AccountCard component', () => {
           message: 'Email updated',
           kind: 'success',
         });
+        expect(billingModule.syncBillingEmail).toHaveBeenCalledTimes(1);
       });
 
+      expect(window.location.search).toBe('');
+    });
+
+    it('handles return with ?email=changed when confirmation completed but offline: does not sync billing email', async () => {
+      vi.mocked(onlineModule.useOnlineStatus).mockReturnValue(false);
+      window.history.replaceState({}, '', '/settings?email=changed');
+      mockRefreshSession.mockResolvedValueOnce({ ...defaultUser, new_email: undefined });
+
+      render(<AccountCard />);
+
+      await waitFor(() => {
+        expect(mockRefreshSession).toHaveBeenCalled();
+        expect(mockRefreshProfile).toHaveBeenCalled();
+        expect(mockShowToast).toHaveBeenCalledWith({
+          message: 'Email updated',
+          kind: 'success',
+        });
+      });
+
+      expect(billingModule.syncBillingEmail).not.toHaveBeenCalled();
       expect(window.location.search).toBe('');
     });
 
@@ -319,6 +344,7 @@ describe('AccountCard component', () => {
         });
       });
 
+      expect(billingModule.syncBillingEmail).not.toHaveBeenCalled();
       expect(window.location.search).toBe('');
     });
   });

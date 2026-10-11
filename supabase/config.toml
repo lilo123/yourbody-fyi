@@ -447,4 +447,17 @@ verify_jwt = true
 import_map = "./functions/delete-account/deno.json"
 entrypoint = "./functions/delete-account/index.ts"
 
+[functions.owner-stats]
+enabled = true
+verify_jwt = true
+import_map = "./functions/owner-stats/deno.json"
+entrypoint = "./functions/owner-stats/index.ts"
+
+[functions.sync-billing-email]
+enabled = true
+verify_jwt = true
+import_map = "./functions/sync-billing-email/deno.json"
+entrypoint = "./functions/sync-billing-email/index.ts"
+
+
 
