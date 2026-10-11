@@ -9,6 +9,7 @@ import { buildCspConnectSrcPolicy } from './src/build/cspPolicy.ts'
 import { resolveCommitSha } from './src/build/versionResolver.ts'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { resolveSentryPluginConfig } from './src/build/sentryPluginConfig.ts'
+import { preconnectPlugin } from './src/build/preconnectHints.ts'
 
 function cspPinPlugin(rawUrl?: string): Plugin {
   let supabaseUrl = rawUrl;
@@ -215,6 +216,7 @@ export default defineConfig(({ mode }) => {
       chunkReporterPlugin(),
       versionJsonPlugin(),
       cspPinPlugin(supabaseUrl),
+      preconnectPlugin(supabaseUrl),
       ...(sentryConfig.enabled && sentryConfig.options
         ? [
             sentryVitePlugin(sentryConfig.options),
