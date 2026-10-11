@@ -99,6 +99,215 @@ async function revokeAccessForCustomer(
   return userRow?.id || null;
 }
 
+function resolvePriceIdFromLine(line: any): string | null {
+  if (!line || typeof line !== "object") {
+    return null;
+  }
+
+  // 1. line.pricing?.price_details?.price (string or object with id)
+  const pricingPrice = line.pricing?.price_details?.price;
+  if (typeof pricingPrice === "string" && pricingPrice.length > 0) {
+    return pricingPrice;
+  }
+  if (
+    pricingPrice &&
+    typeof pricingPrice === "object" &&
+    typeof pricingPrice.id === "string" &&
+    pricingPrice.id.length > 0
+  ) {
+    return pricingPrice.id;
+  }
+
+  // 2. line.price?.id (or string line.price)
+  const linePrice = line.price;
+  if (typeof linePrice === "string" && linePrice.length > 0) {
+    return linePrice;
+  }
+  if (
+    linePrice &&
+    typeof linePrice === "object" &&
+    typeof linePrice.id === "string" &&
+    linePrice.id.length > 0
+  ) {
+    return linePrice.id;
+  }
+
+  return null;
+}
+
+function resolveSubscriptionId(invoice: any, lines: any[]): string | null {
+  if (!invoice || typeof invoice !== "object") {
+    return null;
+  }
+
+  // 1. invoice.parent?.subscription_details?.subscription
+  const parentSub = invoice.parent?.subscription_details?.subscription;
+  if (typeof parentSub === "string" && parentSub.length > 0) {
+    return parentSub;
+  }
+  if (
+    parentSub &&
+    typeof parentSub === "object" &&
+    typeof parentSub.id === "string" &&
+    parentSub.id.length > 0
+  ) {
+    return parentSub.id;
+  }
+
+  // 2. line.parent?.subscription_item_details
+  for (const line of lines) {
+    const itemDetails = line?.parent?.subscription_item_details;
+    if (typeof itemDetails === "string" && itemDetails.startsWith("sub_")) {
+      return itemDetails;
+    }
+    const lineSub = itemDetails?.subscription;
+    if (typeof lineSub === "string" && lineSub.length > 0) {
+      return lineSub;
+    }
+    if (
+      lineSub &&
+      typeof lineSub === "object" &&
+      typeof lineSub.id === "string" &&
+      lineSub.id.length > 0
+    ) {
+      return lineSub.id;
+    }
+  }
+
+  // 3. invoice.subscription
+  const invSub = invoice.subscription;
+  if (typeof invSub === "string" && invSub.length > 0) {
+    return invSub;
+  }
+  if (
+    invSub &&
+    typeof invSub === "object" &&
+    typeof invSub.id === "string" &&
+    invSub.id.length > 0
+  ) {
+    return invSub.id;
+  }
+
+  return null;
+}
+
+function collectPaymentTargets(
+  inv: any,
+  chargeIds: Set<string>,
+  paymentIntentIds: Set<string>,
+  directCharges: Stripe.Charge[],
+): void {
+  if (!inv || typeof inv !== "object") {
+    return;
+  }
+
+  if (typeof inv.charge === "string" && inv.charge.length > 0) {
+    chargeIds.add(inv.charge);
+  } else if (inv.charge && typeof inv.charge === "object") {
+    directCharges.push(inv.charge as Stripe.Charge);
+  }
+
+  if (typeof inv.payment_intent === "string" && inv.payment_intent.length > 0) {
+    paymentIntentIds.add(inv.payment_intent);
+  } else if (inv.payment_intent && typeof inv.payment_intent === "object") {
+    const intent = inv.payment_intent;
+    if (typeof intent.latest_charge === "string" && intent.latest_charge.length > 0) {
+      chargeIds.add(intent.latest_charge);
+    } else if (intent.latest_charge && typeof intent.latest_charge === "object") {
+      directCharges.push(intent.latest_charge as Stripe.Charge);
+    } else if (typeof intent.id === "string" && intent.id.length > 0) {
+      paymentIntentIds.add(intent.id);
+    }
+  }
+
+  if (Array.isArray(inv.payments?.data)) {
+    for (const item of inv.payments.data) {
+      const paymentItem = item?.payment;
+      if (paymentItem && typeof paymentItem === "object") {
+        if (paymentItem.type === "payment_intent" || paymentItem.payment_intent) {
+          const piTarget = paymentItem.payment_intent;
+          if (typeof piTarget === "string" && piTarget.length > 0) {
+            paymentIntentIds.add(piTarget);
+          } else if (piTarget && typeof piTarget === "object") {
+            if (typeof piTarget.latest_charge === "string" && piTarget.latest_charge.length > 0) {
+              chargeIds.add(piTarget.latest_charge);
+            } else if (piTarget.latest_charge && typeof piTarget.latest_charge === "object") {
+              directCharges.push(piTarget.latest_charge as Stripe.Charge);
+            } else if (typeof piTarget.id === "string" && piTarget.id.length > 0) {
+              paymentIntentIds.add(piTarget.id);
+            }
+          }
+        } else if (paymentItem.type === "charge" || paymentItem.charge) {
+          const chTarget = paymentItem.charge;
+          if (typeof chTarget === "string" && chTarget.length > 0) {
+            chargeIds.add(chTarget);
+          } else if (chTarget && typeof chTarget === "object") {
+            directCharges.push(chTarget as Stripe.Charge);
+          }
+        }
+      }
+
+      if (typeof item?.charge === "string" && item.charge.length > 0) {
+        chargeIds.add(item.charge);
+      } else if (item?.charge && typeof item.charge === "object") {
+        directCharges.push(item.charge as Stripe.Charge);
+      }
+    }
+  }
+}
+
+async function resolveChargesForInvoice(
+  invoice: any,
+  stripe: Stripe,
+): Promise<Stripe.Charge[]> {
+  const directCharges: Stripe.Charge[] = [];
+  const chargeIds = new Set<string>();
+  const paymentIntentIds = new Set<string>();
+
+  collectPaymentTargets(invoice, chargeIds, paymentIntentIds, directCharges);
+
+  if (
+    directCharges.length === 0 &&
+    chargeIds.size === 0 &&
+    paymentIntentIds.size === 0 &&
+    invoice?.id
+  ) {
+    const retrievedInvoice = await stripe.invoices.retrieve(invoice.id, {
+      expand: ["payments.data.payment.payment_intent"],
+    });
+    collectPaymentTargets(retrievedInvoice, chargeIds, paymentIntentIds, directCharges);
+  }
+
+  for (const intentId of paymentIntentIds) {
+    const paymentIntent = await stripe.paymentIntents.retrieve(intentId);
+    if (
+      typeof paymentIntent.latest_charge === "string" &&
+      paymentIntent.latest_charge.length > 0
+    ) {
+      chargeIds.add(paymentIntent.latest_charge);
+    } else if (
+      paymentIntent.latest_charge &&
+      typeof paymentIntent.latest_charge === "object"
+    ) {
+      directCharges.push(paymentIntent.latest_charge as Stripe.Charge);
+    }
+  }
+
+  const resolvedCharges: Stripe.Charge[] = [...directCharges];
+
+  for (const targetChargeId of chargeIds) {
+    const alreadyResolved = resolvedCharges.some(
+      (existing) => existing.id === targetChargeId,
+    );
+    if (!alreadyResolved) {
+      const fetchedCharge = await stripe.charges.retrieve(targetChargeId);
+      resolvedCharges.push(fetchedCharge);
+    }
+  }
+
+  return resolvedCharges;
+}
+
 export function extractMinimalPayload(event: Stripe.Event): Record<string, unknown> {
   const obj = event.data?.object as any;
   const minimal: Record<string, unknown> = {
@@ -297,10 +506,15 @@ export async function handler(req: Request): Promise<Response> {
         const clientRefId = session.client_reference_id;
 
         if (clientRefId && sessionCustId) {
-          await serviceClient
+          const { error: updateError } = await serviceClient
             .from("users")
             .update({ billing_customer_id: sessionCustId })
             .eq("id", clientRefId);
+          if (updateError) {
+            throw new Error(
+              `Failed to update billing_customer_id for user: ${updateError.message}`,
+            );
+          }
           resolvedUserId = clientRefId;
         }
         break;
@@ -313,11 +527,16 @@ export async function handler(req: Request): Promise<Response> {
 
         let targetUserId: string | null = null;
         if (invCustId) {
-          const { data: userRow } = await serviceClient
+          const { data: userRow, error: selectError } = await serviceClient
             .from("users")
             .select("id")
             .eq("billing_customer_id", invCustId)
             .maybeSingle();
+          if (selectError) {
+            throw new Error(
+              `Failed to query user by billing_customer_id: ${selectError.message}`,
+            );
+          }
           if (userRow?.id) {
             targetUserId = userRow.id;
           }
@@ -326,6 +545,7 @@ export async function handler(req: Request): Promise<Response> {
         if (!targetUserId) {
           const subUserId =
             (invoice.subscription_details?.metadata as any)?.user_id ||
+            ((invoice as any).parent?.subscription_details?.metadata as any)?.user_id ||
             (invoice.metadata as any)?.user_id;
           if (subUserId && UUID_REGEX.test(subUserId)) {
             targetUserId = subUserId;
@@ -337,7 +557,7 @@ export async function handler(req: Request): Promise<Response> {
 
         const lines = invoice.lines?.data || [];
         for (const line of lines) {
-          const priceId = line.price?.id;
+          const priceId = resolvePriceIdFromLine(line);
           if (config.stripePriceBasic && priceId === config.stripePriceBasic) {
             plan = "basic";
           } else if (config.stripePricePro && priceId === config.stripePricePro) {
@@ -348,23 +568,91 @@ export async function handler(req: Request): Promise<Response> {
           }
         }
 
+        // If plan is still unknown, attempt subscription item price resolution
+        if (!plan) {
+          const subId = resolveSubscriptionId(invoice, lines);
+          if (subId) {
+            const subscription = await config.stripe.subscriptions.retrieve(subId);
+            const subItems = subscription?.items?.data || [];
+            for (const item of subItems) {
+              const itemPriceId = resolvePriceIdFromLine(item) || (item as any)?.plan?.id;
+              if (config.stripePriceBasic && itemPriceId === config.stripePriceBasic) {
+                plan = "basic";
+                break;
+              } else if (config.stripePricePro && itemPriceId === config.stripePricePro) {
+                plan = "pro";
+                break;
+              }
+            }
+          }
+        }
+
         if (linePeriodEnd == null && (invoice as any).period_end != null) {
           linePeriodEnd = (invoice as any).period_end;
         }
 
-        if (targetUserId) {
-          const updates: Record<string, unknown> = {};
-          if (plan) {
-            updates.plan = plan;
+        // If plan cannot be resolved, leave user unchanged and log warning
+        if (!plan) {
+          console.warn(
+            `[stripe-webhook] invoice.paid could not resolve plan for invoice ${invoice.id}; leaving user unchanged`,
+          );
+          if (targetUserId) {
+            resolvedUserId = targetUserId;
           }
+          break;
+        }
+
+        // Prevent re-grant after revocation: check if payment charge is disputed or refunded
+        const charges = await resolveChargesForInvoice(invoice, config.stripe);
+        let skipGrant = false;
+        for (const charge of charges) {
+          if (charge.disputed === true) {
+            console.warn(
+              `[stripe-webhook] Skipping invoice.paid grant for invoice ${invoice.id}: charge ${charge.id} is disputed`,
+            );
+            skipGrant = true;
+            break;
+          }
+
+          const isFullRefund =
+            typeof charge.amount === "number" &&
+            charge.amount > 0 &&
+            charge.amount_refunded === charge.amount;
+
+          if (isFullRefund) {
+            const keepAccess = await shouldKeepAccess(charge, config.stripe);
+            if (!keepAccess) {
+              console.warn(
+                `[stripe-webhook] Skipping invoice.paid grant for invoice ${invoice.id}: charge ${charge.id} is fully refunded`,
+              );
+              skipGrant = true;
+              break;
+            }
+          }
+        }
+
+        if (skipGrant) {
+          if (targetUserId) {
+            resolvedUserId = targetUserId;
+          }
+          break;
+        }
+
+        if (targetUserId) {
+          const updates: Record<string, unknown> = {
+            plan,
+          };
           if (linePeriodEnd != null) {
             updates.paid_until = new Date(linePeriodEnd * 1000).toISOString();
           }
-          if (Object.keys(updates).length > 0) {
-            await serviceClient
-              .from("users")
-              .update(updates)
-              .eq("id", targetUserId);
+          const { error: updateError } = await serviceClient
+            .from("users")
+            .update(updates)
+            .eq("id", targetUserId);
+          if (updateError) {
+            throw new Error(
+              `Failed to update plan and paid_until for user: ${updateError.message}`,
+            );
           }
           resolvedUserId = targetUserId;
         }
