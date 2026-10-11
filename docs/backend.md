@@ -213,20 +213,30 @@ The shared guard `_shared/stripeConfig.ts` inspects `STRIPE_SECRET_KEY` on invoc
 ### Stripe Dashboard Webhook Configuration
 The webhook listener at `/functions/v1/stripe-webhook` handles the following events, which must be enabled in the Stripe dashboard:
 - `checkout.session.completed`: Sets `users.billing_customer_id` for the corresponding `client_reference_id`.
-- `invoice.paid`: Resolves the user by `billing_customer_id` (fallback to subscription `metadata.user_id`), maps the line item price ID to `plan` (`basic` or `pro`), and updates `paid_until` to the line item period end timestamp (`line.period.end`).
+- `invoice.paid`: Resolves the user by `billing_customer_id` (fallback to subscription `metadata.user_id`), maps the price ID to `plan` (`basic` or `pro`) using fallback resolution (`line.pricing.price_details.price`, `line.price.id`, or subscription item price lookup), and updates `paid_until` to the period end timestamp (`line.period.end` or `period_end`). If the plan cannot be resolved, leaves user records unchanged to avoid granting time without an active tier. Before writing entitlement grants, inspects the invoice payment (via `invoice.payments`, `charge`, or `payment_intent`) and skips the grant if the payment is disputed (`charge.disputed === true`) or fully refunded (`amount_refunded === amount` without `keep_access`), recording the processed event in `billing_events` without re-granting access. If the user has an active grant in `public.billing_grandfather` (`granted_until > now()`), preserves the higher tier (`pro` > `basic`) and extends `paid_until = greatest(current paid_until, period end)`.
 - `customer.subscription.deleted`: Leaves `paid_until` as-is, granting the user access through the end of the prepaid period with no plan modification.
-- `charge.refunded`: Revokes access on full refunds (`amount_refunded === amount`) unless `keep_access` metadata is present; partial refunds leave access unchanged.
-- `charge.dispute.created`: Resolves the customer via the dispute's charge, revokes access, and records the event in `billing_events` with the resolved `user_id`. The staging webhook endpoint must subscribe to `charge.dispute.created`.
-- Unhandled/unknown event types: Recorded in `billing_events`, marked as processed, and acknowledged with `200` (`{ "ignored": true }`).
+- `charge.refunded`: Revokes access on full refunds (`amount_refunded === amount`) unless `keep_access` metadata is present; immediately cancels the related Stripe subscription without proration (`prorate=false`, `invoice_now=false`). Partial refunds leave access and subscription unchanged.
+- `charge.dispute.created`: Resolves the customer via the dispute's charge, revokes access, immediately cancels the related Stripe subscription without proration, and records the event in `billing_events` with the resolved `user_id`. The staging webhook endpoint must subscribe to `charge.dispute.created`.
+- Unhandled/unknown event types: Recorded in `billing_events`, marked as processed, and acknowledged with `200` (`{ "ignored": true }`). Note that `charge.dispute.closed` is not subscribed.
 
-### Refunds, Disputes and Goodwill Refunds
-- **Full refund**: A full refund (`amount_refunded === amount` where `amount > 0`) revokes access by updating `paid_until = least(paid_until, now())` for the customer.
-- **Partial refund**: A partial refund does not change user access (`paid_until` and `plan` remain untouched); the event is recorded in `billing_events`.
-- **Disputes**: A dispute (`charge.dispute.created`) resolves the customer via the dispute's charge (fetching `GET /v1/charges/<id>` if the dispute lacks the customer) and revokes access (`paid_until = least(paid_until, now())`). Disputes have no `keep_access` override. The staging webhook endpoint must subscribe to `charge.dispute.created`.
-- **Goodwill refund (override)**: To issue a refund without revoking user access, set metadata `keep_access = true` through either:
+### Refunds, Disputes, Auto-Cancellation and Won Disputes
+- **Full refund**: A full refund (`amount_refunded === amount` where `amount > 0`) revokes access by updating `paid_until = least(paid_until, now())` for the customer and immediately cancels the related Stripe subscription (`DELETE /v1/subscriptions/{id}` with `prorate=false` and `invoice_now=false`). Subscription resolution inspects charge -> payment intent -> invoice -> `parent.subscription_details.subscription`, falling back to the customer's active/trialing/past_due/unpaid subscriptions. If no subscription exists (e.g. one-off payment), cancellation is safely skipped.
+- **Partial refund**: A partial refund does not change user access (`paid_until` and `plan` remain untouched) and does not cancel the subscription; the event is recorded in `billing_events`.
+- **Disputes**: A dispute (`charge.dispute.created`) resolves the customer via the dispute's charge (fetching `GET /v1/charges/<id>` if the dispute lacks the customer), revokes access (`paid_until = least(paid_until, now())`), and immediately cancels the related Stripe subscription without proration. Disputes have no `keep_access` override. The staging webhook endpoint must subscribe to `charge.dispute.created`.
+- **Goodwill refund (override)**: To issue a refund without revoking user access or cancelling the subscription, set metadata `keep_access = true` through either:
   - **Stripe Dashboard**: Add metadata key `keep_access` with value `true` on the payment (PaymentIntent) page before issuing the refund.
   - **Stripe CLI**: `stripe refunds create --charge <ch_id> -d "metadata[keep_access]=true"`
-- **Subscription cancellation notice**: Refunding a payment or handling a dispute does not automatically cancel the underlying Stripe subscription. If subscription cancellation is intended, cancel it separately in the Stripe dashboard or via customer portal.
+  Goodwill full refunds never cancel the subscription.
+- **Won dispute (manual restoration step)**: `charge.dispute.closed` is **not subscribed** by the webhook endpoint; access is NOT restored automatically upon winning a dispute. Because the Stripe subscription was already cancelled when the dispute was created, the customer must re-subscribe through the app/checkout to resume recurring billing. To manually restore the user's access for their remaining paid period in the interim, the owner executes a service-role SQL update against `public.users`:
+  ```sql
+  -- Restore plan and paid_until for a won dispute user
+  UPDATE public.users
+  SET plan = 'pro', -- or 'basic'
+      paid_until = now() + interval '30 days' -- or specific period
+  WHERE id = '<user_uuid>';
+  ```
+- **Grandfather-aware entitlement grants (`invoice.paid`)**: When processing `invoice.paid`, the webhook checks `public.billing_grandfather` for the target user. If an active grant exists (`granted_until > now()`), the update retains the higher plan tier (`pro` > `basic`) and updates `paid_until = greatest(current paid_until, period_end)`. Users whose grant has expired (`granted_until <= now()`) or non-grandfathered users follow the standard plan and paid_until overwrite.
+- **Restricted API Key Permissions**: In addition to read permissions on Charges, Invoices, PaymentIntents, and Customers, the Stripe restricted key requires `Subscriptions: write` (specifically `DELETE /v1/subscriptions/{id}`) to enable automated subscription cancellation upon full refunds and disputes.
 
 ### Idempotency and State Mutations
 Incoming webhook events are recorded in `public.billing_events`:
