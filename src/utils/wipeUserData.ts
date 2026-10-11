@@ -1,4 +1,5 @@
 import { deleteOfflineDb } from '../offline/db';
+import { stopPersisting } from '../offline/persistController';
 import type { QueryClient } from '@tanstack/react-query';
 
 export interface WipeUserDataOptions {
@@ -7,22 +8,30 @@ export interface WipeUserDataOptions {
 
 /**
  * Wipes all client-side cached and persisted data for the specified user.
- * 1. Closes and deletes the user's IndexedDB database (`yourbody-offline-${userId}`).
- * 2. Clears the in-memory React Query cache.
- * 3. Removes user-scoped and session `yourbody_*` localStorage keys,
+ * 1. Stops any active query persistence.
+ * 2. Closes and deletes the user's IndexedDB database (`yourbody-offline-${userId}`).
+ * 3. Clears the in-memory React Query cache.
+ * 4. Removes user-scoped and session `yourbody_*` localStorage keys,
  *    preserving keys belonging to other users or third-party applications.
  */
 export async function wipeUserData(userId: string, options?: WipeUserDataOptions): Promise<void> {
   if (!userId) return;
 
-  // 1. Delete user-specific IndexedDB database
+  // 1. Stop query persister so cache clear does not trigger IDB re-persisting
+  try {
+    stopPersisting();
+  } catch (err) {
+    console.warn('[wipeUserData] Failed to stop persisting:', err);
+  }
+
+  // 2. Delete user-specific IndexedDB database
   try {
     await deleteOfflineDb(userId);
   } catch (err) {
     console.warn('[wipeUserData] Failed to delete offline database:', err);
   }
 
-  // 2. Clear React Query client cache
+  // 3. Clear React Query client cache
   if (options?.queryClient) {
     try {
       options.queryClient.clear();
