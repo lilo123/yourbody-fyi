@@ -90,7 +90,7 @@ export const HeroSection: React.FC = () => {
             <Clock className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Rest: 1:30</span>
           </div>
-          <span className="text-xs text-zinc-400">Instant on-device save</span>
+          <span className="text-xs text-zinc-400">Saves on your phone first</span>
         </div>
       </div>
 

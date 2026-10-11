@@ -24,7 +24,7 @@ export const FeaturesSection: React.FC = () => {
               The Offline Gym Logger
             </h3>
             <p className="mt-3 text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              Fast set and rep logging with zero loading spinners and an automatic rest timer. Works without signal when your gym has zero cellular reception. Sets save on your phone first and sync automatically once you&apos;re back online.
+              Fast set and rep logging with an automatic rest timer. Sets save on your phone first, so logging doesn&apos;t wait for the network. Works without signal when your gym has zero cellular reception, and syncs automatically once you&apos;re back online.
             </p>
 
             {/* Stylized UI Pattern */}
@@ -42,7 +42,7 @@ export const FeaturesSection: React.FC = () => {
             </div>
           </div>
           <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center gap-2 text-xs font-semibold text-cyan-300">
-            <span>Instant on-device saving · Automatic rest timer</span>
+            <span>Saves on your phone first · Rest timer</span>
           </div>
         </div>
 
@@ -100,7 +100,7 @@ export const FeaturesSection: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs text-zinc-400">
-                <span>Client adherence tracking</span>
+                <span>Review workout activity & macros</span>
                 <span>5 AI meal logs / day each</span>
               </div>
             </div>
@@ -120,7 +120,7 @@ export const FeaturesSection: React.FC = () => {
               Why a web app you can install
             </h3>
             <p className="mt-3 text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              A Progressive Web App installs directly from your web browser to your home screen like an app, but takes less storage and opens instantly. No app store downloads, no large updates, and works seamlessly across iOS and Android.
+              A Progressive Web App installs from the browser to your home screen and opens like an app, using minimal device storage. No app store downloads, no large updates, and works seamlessly across iOS and Android.
             </p>
 
             {/* Stylized UI Pattern */}

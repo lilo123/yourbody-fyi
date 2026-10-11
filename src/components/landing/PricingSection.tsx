@@ -74,7 +74,7 @@ export const PricingSection: React.FC = () => {
               </li>
               <li className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <span>Unlimited workout & meal tracking</span>
+                <span>Workout & meal tracking</span>
               </li>
               <li className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
@@ -251,7 +251,7 @@ export const PricingSection: React.FC = () => {
       </div>
 
       <div className="mt-8 text-center text-xs text-zinc-400">
-        Base features included in all plans: unlimited workout & meal tracking, quick log, on-device parsing.
+        Base features included in all plans: workout & meal tracking, quick log, on-device parsing.
         Paid plans will become active when billing launches.
       </div>
     </section>
