@@ -59,6 +59,12 @@ jobs:
       - name: Verify performance budget
         run: npm run perf:budget
 
+      - name: Build application (Sentry plugin active)
+        run: npm run build:sentry
+
+      - name: Verify performance budget (Sentry plugin active)
+        run: npm run perf:budget
+
       - name: Verify mock fidelity
         run: npm run check:mocks
 
