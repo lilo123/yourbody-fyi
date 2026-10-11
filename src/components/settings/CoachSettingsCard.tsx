@@ -14,6 +14,7 @@ import { useToast } from '../../hooks/useToast';
 import { Button } from '../common/Button';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useEntitlement } from '../../hooks/useEntitlement';
+import { planLabel } from '../../lib/billing';
 
 interface CoachSettingsCardProps {
   profile: UserProfile | null;
@@ -53,10 +54,8 @@ export const CoachSettingsCard: React.FC<CoachSettingsCardProps> = ({
       (entitlement.paidUntil && new Date(entitlement.paidUntil).getTime() <= Date.now()) ||
       (profile?.paid_until && new Date(profile.paid_until).getTime() <= Date.now())
     );
-    if (!isLapsed && (entitlement.isPro || profile?.coach_tier === 'enterprise' || profile?.coach_tier === 'pro')) {
-      return profile?.coach_tier === 'enterprise' ? 'Coach Pro' : 'Coach';
-    }
-    return 'Free';
+    const isCoachTierActive = !isLapsed && Boolean(entitlement.isPro || profile?.coach_tier === 'enterprise' || profile?.coach_tier === 'pro');
+    return planLabel(isCoachTierActive ? 'pro' : 'free', profile?.coach_tier, isCoachTierActive);
   })();
 
   // Coach active athlete count
@@ -199,12 +198,7 @@ export const CoachSettingsCard: React.FC<CoachSettingsCardProps> = ({
           className="text-xs font-bold tabular-nums bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-full border border-cyan-500/30"
           data-testid="coach-capacity-badge"
         >
-          <span className="sr-only">
-            {activeAthleteCount} / {profile?.max_athletes ?? effectiveLimit} Athletes ({profile?.coach_tier || 'free'})
-          </span>
-          <span aria-hidden="true">
-            {activeAthleteCount} / {effectiveLimit} Athletes ({tierLabel})
-          </span>
+          {activeAthleteCount} / {effectiveLimit} Athletes ({tierLabel})
         </span>
       </div>
 

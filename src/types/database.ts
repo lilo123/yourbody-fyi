@@ -26,7 +26,7 @@ export interface UserProfile {
   created_at?: string;
   terms_version?: string | null;
   terms_accepted_at?: string | null;
-  plan?: 'free' | 'basic' | 'pro' | 'personal' | 'coach' | 'coach_pro' | null;
+  plan?: 'free' | 'basic' | 'pro' | null;
   paid_until?: string | null;
   billing_customer_id?: string | null;
 }
@@ -45,7 +45,7 @@ export type AiPlan = 'pro' | 'basic' | 'trial' | 'athlete' | 'free';
 
 export interface Entitlement {
   plan_effective: string;
-  plan: 'free' | 'basic' | 'pro' | 'personal' | 'coach' | 'coach_pro' | null;
+  plan: 'free' | 'basic' | 'pro' | null;
   paid_until: string | null;
   trial_ends_at_effective: string | null;
   has_pro: boolean;

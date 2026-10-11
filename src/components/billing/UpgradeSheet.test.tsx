@@ -17,13 +17,40 @@ describe('UpgradeSheet component', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Personal, Coach, and Coach Pro options with benefits and 44px tap targets', () => {
+  it('renders Personal, Coach, and Coach Pro options with spec bullets and 44px tap targets', () => {
     render(<UpgradeSheet {...defaultProps} />);
 
     expect(screen.getByRole('heading', { name: 'Choose a Plan' })).toBeDefined();
-    expect(screen.getByText(/3 athletes • 5 daily AI parses/i)).toBeDefined();
-    expect(screen.getByText(/10 athletes • 30 daily AI parses • 5 daily AI parses per athlete/i)).toBeDefined();
-    expect(screen.getByText(/25 athletes • 30 daily AI parses • 5 daily AI parses per athlete/i)).toBeDefined();
+
+    // Shared free features line
+    expect(
+      screen.getByText('Workout and meal tracking, quick log and on-device parsing are free for everyone.')
+    ).toBeDefined();
+
+    // Personal bullets
+    expect(screen.getByText('AI meal logging, 5 a day')).toBeDefined();
+    expect(screen.getByText('Coach up to 3 athletes')).toBeDefined();
+
+    // Coach and Coach Pro bullets
+    expect(screen.getAllByText('AI meal logging, 30 a day').length).toBe(2);
+    expect(screen.getByText('Coach up to 10 athletes')).toBeDefined();
+    expect(screen.getByText('Coach up to 25 athletes')).toBeDefined();
+    expect(screen.getAllByText('Each athlete gets AI meal logging, 5 a day').length).toBe(2);
+
+    // Assert none of the removed phrases appear anywhere in the document
+    const removedPhrases = [
+      'Unlimited AI food logging',
+      'templates',
+      'photos',
+      'cockpit',
+      'program assignment',
+      'messaging',
+      'branding',
+      'priority support',
+    ];
+    for (const phrase of removedPhrases) {
+      expect(screen.queryByText(new RegExp(phrase, 'i'))).toBeNull();
+    }
 
     const personalBtn = screen.getByTestId('upgrade-plan-personal-btn');
     const coachBtn = screen.getByTestId('upgrade-plan-coach-btn');

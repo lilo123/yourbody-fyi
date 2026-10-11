@@ -6,7 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { useEntitlement, getEntitlementQueryKey } from '../../hooks/useEntitlement';
 import { StatusBanner } from '../common/StatusBanner';
-import { openBillingPortal } from '../../lib/billing';
+import { openBillingPortal, planLabel } from '../../lib/billing';
 
 const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
 
@@ -52,43 +52,16 @@ export const SubscriptionCard: React.FC = () => {
     window.history.replaceState({}, '', newUrl);
   }, [userId, queryClient, showToast]);
 
-  const getBadgeLabel = (): 'Coach Pro' | 'Coach' | 'Personal' | 'Trial' | 'Free' => {
-    // Pro tier check (paid pro plan)
-    if (entitlement.isPro || (entitlement.isPaid && entitlement.plan?.toLowerCase() === 'pro')) {
-      if (profile?.coach_tier === 'enterprise') return 'Coach Pro';
-      return 'Coach';
-    }
+  const isTrial =
+    (!entitlement.isPaid &&
+      Boolean(entitlement.trialEndsAt && new Date(entitlement.trialEndsAt).getTime() > now)) ||
+    entitlement.plan?.toLowerCase() === 'trial';
 
-    // Personal tier check (paid basic or personal plan)
-    if (
-      (entitlement.isPaid && entitlement.plan?.toLowerCase() === 'basic') ||
-      (entitlement.isPaid && entitlement.plan?.toLowerCase() === 'personal')
-    ) {
-      return 'Personal';
-    }
-
-    // Trial check (unpaid, within trial window)
-    if (
-      !entitlement.isPaid &&
-      entitlement.trialEndsAt &&
-      new Date(entitlement.trialEndsAt).getTime() > now
-    ) {
-      return 'Trial';
-    }
-
-    const planLower = entitlement.plan?.toLowerCase() || '';
-    if (planLower === 'coach_pro' || planLower === 'enterprise') return 'Coach Pro';
-    if (planLower === 'coach') return 'Coach';
-    if (planLower === 'pro') {
-      return profile?.coach_tier === 'enterprise' ? 'Coach Pro' : 'Coach';
-    }
-    if (planLower === 'personal' || planLower === 'basic') return 'Personal';
-    if (planLower === 'trial') return 'Trial';
-
-    return 'Free';
-  };
-
-  const badgeLabel = getBadgeLabel();
+  const badgeLabel = planLabel(
+    entitlement.isPro ? 'pro' : isTrial ? 'trial' : entitlement.plan,
+    profile?.coach_tier,
+    entitlement.isPaid || isTrial
+  );
   const isCoach = badgeLabel === 'Coach' || badgeLabel === 'Coach Pro';
   const defaultAthleteLimit = badgeLabel === 'Coach Pro' ? 25 : 10;
 

@@ -15,7 +15,7 @@ interface PlanDetails {
   badge: string;
   monthlyPrice: string;
   yearlyPrice: string;
-  benefit: string;
+  bullets: string[];
   testIdCard: string;
   testIdBtn: string;
 }
@@ -27,7 +27,10 @@ const PLANS: PlanDetails[] = [
     badge: 'Essential',
     monthlyPrice: '$2/mo',
     yearlyPrice: '$10/yr',
-    benefit: '3 athletes • 5 daily AI parses • Personal tracking',
+    bullets: [
+      'AI meal logging, 5 a day',
+      'Coach up to 3 athletes',
+    ],
     testIdCard: 'plan-card-personal',
     testIdBtn: 'upgrade-plan-personal-btn',
   },
@@ -37,7 +40,11 @@ const PLANS: PlanDetails[] = [
     badge: 'Recommended',
     monthlyPrice: '$5/mo',
     yearlyPrice: '$40/yr',
-    benefit: '10 athletes • 30 daily AI parses • 5 daily AI parses per athlete',
+    bullets: [
+      'AI meal logging, 30 a day',
+      'Coach up to 10 athletes',
+      'Each athlete gets AI meal logging, 5 a day',
+    ],
     testIdCard: 'plan-card-coach',
     testIdBtn: 'upgrade-plan-coach-btn',
   },
@@ -47,7 +54,11 @@ const PLANS: PlanDetails[] = [
     badge: 'Pro Roster',
     monthlyPrice: '$10/mo',
     yearlyPrice: '$80/yr',
-    benefit: '25 athletes • 30 daily AI parses • 5 daily AI parses per athlete',
+    bullets: [
+      'AI meal logging, 30 a day',
+      'Coach up to 25 athletes',
+      'Each athlete gets AI meal logging, 5 a day',
+    ],
     testIdCard: 'plan-card-coach_pro',
     testIdBtn: 'upgrade-plan-coach_pro-btn',
   },
@@ -102,7 +113,7 @@ export const UpgradeSheet: React.FC<UpgradeSheetProps> = ({ isOpen, onClose }) =
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         <p className="text-xs text-zinc-400">
-          Upgrade your subscription to unlock athlete roster capacity and enhanced AI meal parsing.
+          Workout and meal tracking, quick log and on-device parsing are free for everyone.
         </p>
 
         {/* Monthly / Yearly Toggle */}
@@ -203,19 +214,23 @@ export const UpgradeSheet: React.FC<UpgradeSheetProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 text-xs text-zinc-300">
-                  <Check
-                    className={`w-4 h-4 shrink-0 mt-0.5 ${
-                      planItem.plan === 'coach_pro'
-                        ? 'text-purple-400'
-                        : planItem.plan === 'coach'
-                        ? 'text-cyan-400'
-                        : 'text-zinc-400'
-                    }`}
-                    aria-hidden="true"
-                  />
-                  <span>{planItem.benefit}</span>
-                </div>
+                <ul className="space-y-1.5 text-xs text-zinc-300">
+                  {planItem.bullets.map((bullet) => (
+                    <li key={bullet} className="flex items-start gap-2">
+                      <Check
+                        className={`w-4 h-4 shrink-0 mt-0.5 ${
+                          planItem.plan === 'coach_pro'
+                            ? 'text-purple-400'
+                            : planItem.plan === 'coach'
+                            ? 'text-cyan-400'
+                            : 'text-zinc-400'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>{bullet}</span>
+                    </li>
+                  ))}
+                </ul>
 
                 <button
                   type="button"

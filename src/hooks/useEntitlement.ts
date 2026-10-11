@@ -76,8 +76,7 @@ export function useEntitlement(): UseEntitlementReturn {
   const isPaid =
     isPro ||
     data.plan_effective === 'basic' ||
-    data.plan_effective === 'personal' ||
-    ((data.plan === 'basic' || data.plan === 'personal') &&
+    (data.plan === 'basic' &&
       Boolean(data.paid_until && new Date(data.paid_until).getTime() > Date.now()));
 
   return {

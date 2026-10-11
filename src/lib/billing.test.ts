@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { supabase } from './supabase';
-import { startCheckout, openBillingPortal, extractBillingErrorMessage } from './billing';
+import { startCheckout, openBillingPortal, extractBillingErrorMessage, planLabel } from './billing';
 
 vi.mock('./supabase', () => ({
   supabase: {
@@ -204,6 +204,38 @@ describe('billing client helpers', () => {
 
       const msg = await extractBillingErrorMessage(errorWithContext);
       expect(msg).toBe("Billing isn't available yet.");
+    });
+  });
+
+  describe('planLabel', () => {
+    it('returns "Personal" for basic plan', () => {
+      expect(planLabel('basic')).toBe('Personal');
+      expect(planLabel('personal')).toBe('Personal');
+    });
+
+    it('returns "Coach" for pro plan with default or pro coach_tier', () => {
+      expect(planLabel('pro')).toBe('Coach');
+      expect(planLabel('pro', 'pro')).toBe('Coach');
+      expect(planLabel('coach')).toBe('Coach');
+    });
+
+    it('returns "Coach Pro" for pro plan with enterprise tier', () => {
+      expect(planLabel('pro', 'enterprise')).toBe('Coach Pro');
+      expect(planLabel('pro', 'enterprise_pro')).toBe('Coach Pro');
+      expect(planLabel('coach_pro')).toBe('Coach Pro');
+    });
+
+    it('returns "Trial" for trial plan', () => {
+      expect(planLabel('trial')).toBe('Trial');
+    });
+
+    it('returns "Free" for free, null, or inactive plans', () => {
+      expect(planLabel('free')).toBe('Free');
+      expect(planLabel(null)).toBe('Free');
+      expect(planLabel(undefined)).toBe('Free');
+      expect(planLabel('pro', 'enterprise', false)).toBe('Free');
+      expect(planLabel('basic', null, false)).toBe('Free');
+      expect(planLabel('coach', null, false)).toBe('Free');
     });
   });
 });

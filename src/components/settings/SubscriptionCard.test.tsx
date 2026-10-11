@@ -23,10 +23,14 @@ vi.mock('../../hooks/useAuth', () => ({
   useAuth: vi.fn(),
 }));
 
-vi.mock('../../lib/billing', () => ({
-  openBillingPortal: vi.fn(),
-  startCheckout: vi.fn(),
-}));
+vi.mock('../../lib/billing', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/billing')>();
+  return {
+    ...actual,
+    openBillingPortal: vi.fn(),
+    startCheckout: vi.fn(),
+  };
+});
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
