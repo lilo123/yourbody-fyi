@@ -14,7 +14,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL,
-    trace: process.env.CI ? 'retain-on-failure' : 'off',
+    trace: 'off',
     screenshot: 'off',
     video: 'off',
   },
