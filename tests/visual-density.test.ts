@@ -8675,6 +8675,9 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
             return route.continue();
           });
 
+          await page.reload();
+          await page.waitForLoadState('domcontentloaded');
+
           await page.evaluate(() => {
             Object.defineProperty(navigator, 'onLine', { configurable: true, writable: true, value: false });
             window.dispatchEvent(new Event('offline'));
