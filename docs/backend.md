@@ -274,10 +274,41 @@ The webhook listener at `/functions/v1/stripe-webhook` handles the following eve
   - Unknown price: Leaves user records unchanged (never writes `paid_until` without a plan).
   - Mode validation: Enforces price `livemode === config.isLive` on retrieved prices.
   - Updates `public.users` with `plan`, `coach_tier`, and `paid_until` to the period end timestamp (`line.period.end` or `period_end`). Before writing entitlement grants, inspects the invoice payment (via `invoice.payments`, `charge`, or `payment_intent`) and skips the grant if the payment is disputed (`charge.disputed === true`) or fully refunded (`amount_refunded === amount` without `keep_access`), recording the processed event in `billing_events` without re-granting access. If the user has an active grant in `public.billing_grandfather` (`granted_until > now()`), preserves the higher tier (`pro` > `basic`), higher coach_tier (`enterprise` > `pro` > `free`), and extends `paid_until = greatest(current paid_until, period end)`. A Personal purchase by a non-grandfathered Coach writes `plan = 'basic'` and `coach_tier = 'free'`.
+- `customer.subscription.updated`: Handles plan switching between Personal, Coach, and Coach Pro. When a subscription item price changes, resolves `(plan, coach_tier)` from the new price and updates `public.users` immediately. Preserves `paid_until = greatest(current paid_until, subscription.current_period_end)` so upgrades grant immediate tier access and downgrades preserve prepaid time. Grandfathered users retain their higher tier and grandfather expiration via the grandfather entitlement helper. Status-only updates (e.g. `cancel_at_period_end` toggles) and unknown prices perform no writes to `public.users`. Terminal statuses (`canceled`, `incomplete_expired`) and delinquency statuses (`past_due`, `unpaid`) make no access modifications here.
 - `customer.subscription.deleted`: Leaves `paid_until` as-is, granting the user access through the end of the prepaid period with no plan modification.
 - `charge.refunded`: Revokes access on full refunds (`amount_refunded === amount`) unless `keep_access` metadata is present; immediately cancels the related Stripe subscription without proration (`prorate=false`, `invoice_now=false`). Partial refunds leave access and subscription unchanged.
 - `charge.dispute.created`: Resolves the customer via the dispute's charge, revokes access, immediately cancels the related Stripe subscription without proration, and records the event in `billing_events` with the resolved `user_id`. The staging webhook endpoint must subscribe to `charge.dispute.created`.
 - Unhandled/unknown event types: Recorded in `billing_events`, marked as processed, and acknowledged with `200` (`{ "ignored": true }`). Note that `charge.dispute.closed` is not subscribed.
+
+### Plan Switching
+
+#### Overview
+Subscribers can upgrade or downgrade between tiers (Personal <-> Coach <-> Coach Pro) via the Stripe Customer Portal or Checkout. Plan switches trigger two webhook events in Stripe:
+1. `customer.subscription.updated`: Arrives immediately when the subscription's item price is updated.
+2. `invoice.paid`: Arrives when Stripe issues and collects the prorated invoice (`billing_reason = 'subscription_update'`).
+
+#### Immediate Access and Prepaid Time Preservation
+- **Immediate Tier Activation**: When `customer.subscription.updated` arrives with a new price, the webhook maps the price to `(plan, coach_tier)` and writes them immediately to `public.users`. An upgrading user gains immediate access to higher athlete capacities and AI quotas without waiting for invoice finalization.
+- **Non-destructive Period Retention**: `paid_until` is updated as `greatest(current paid_until, subscription.current_period_end)`. Mid-period upgrades extend access to the new period end; mid-period downgrades keep prepaid time intact, never shortening access the user has already paid for.
+- **Grandfather Protection**: For users with an active grant in `public.billing_grandfather` (`granted_until > now()`), plan switching retains the higher plan (`pro` > `basic`), higher coach tier (`enterprise` > `pro` > `free`), and greatest expiration timestamp (`2035-10-10T00:00:00Z`).
+- **Status & Non-price Updates**: If status is `canceled` or `incomplete_expired`, processing is deferred to `customer.subscription.deleted`. If status is `past_due` or `unpaid`, user records remain unchanged (entitlement is governed by `paid_until`). Status-only toggles (such as `cancel_at_period_end`) and unknown price IDs do not mutate `public.users`.
+- **Fault Tolerance**: Database or Stripe API errors return `502` and remove the uncompleted row from `public.billing_events`, allowing Stripe webhook retries to reprocess the event.
+
+#### Proration Invoicing (`invoice.paid`)
+When switching plans mid-cycle, Stripe calculates prorated credits and charges, generating an invoice with `billing_reason = 'subscription_update'`:
+- **Line Resolution**: The webhook resolves `(plan, coach_tier)` from the positive proration line (or subscription item fallback) and skips negative credit adjustments from overriding the new plan.
+- **Proration Period End**: To prevent prorated line intervals from shortening existing access periods, `invoice.paid` applies `greatest(current paid_until, line.period.end)` whenever `invoice.billing_reason === 'subscription_update'`.
+
+#### Owner Configuration: Enabling "Switch Plans" in Live Customer Portal
+By owner decision, the staging/sandbox Customer Portal currently keeps "Switch plans" disabled. When enabling plan switching in the production Stripe Customer Portal:
+1. Navigate to **Stripe Dashboard > Settings > Billing > Customer portal**.
+2. Under **Subscriptions**, check **Switch plans**.
+3. Under **Products**, add the three subscription products and their monthly/yearly prices:
+   - **Personal** (`personal_monthly`, `personal_yearly`)
+   - **Coach** (`coach_monthly`, `coach_yearly`)
+   - **Coach Pro** (`coach_pro_monthly`, `coach_pro_yearly`)
+4. Under **Proration behavior**:
+   - **Recommendation**: Select **"Always invoice immediately"**. Immediate invoicing automatically charges or credits the customer's payment method on file upon plan change, fires `invoice.paid`, and avoids carrying unbilled balances into future billing cycles.
 
 ### Refunds, Disputes, Auto-Cancellation and Won Disputes
 - **Full refund**: A full refund (`amount_refunded === amount` where `amount > 0`) revokes access by updating `paid_until = least(paid_until, now())` for the customer and immediately cancels the related Stripe subscription (`DELETE /v1/subscriptions/{id}` with `prorate=false` and `invoice_now=false`). Subscription resolution inspects charge -> payment intent -> invoice -> `parent.subscription_details.subscription`, falling back to the customer's active/trialing/past_due/unpaid subscriptions. If no subscription exists (e.g. one-off payment), cancellation is safely skipped.
