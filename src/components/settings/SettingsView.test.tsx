@@ -92,11 +92,13 @@ describe('SettingsView', () => {
     renderComponent();
     await screen.findByDisplayValue('Coach Demo');
     expect(screen.getByText('Daily Macro Goals')).toBeDefined();
-    expect(screen.getByText('Calories (kcal)')).toBeDefined();
-    expect(screen.getByText('Protein (g)')).toBeDefined();
-    expect(screen.getByText('Carbs (g)')).toBeDefined();
-    expect(screen.getByText('Fat (g)')).toBeDefined();
-    expect(screen.getByText('Fiber (g)')).toBeDefined();
+    expect(screen.getByText('Calories')).toBeDefined();
+    expect(screen.getByText('Protein')).toBeDefined();
+    expect(screen.getByText('Carbs')).toBeDefined();
+    expect(screen.getByText('Fat')).toBeDefined();
+    expect(screen.getByText('Fiber')).toBeDefined();
+    expect(screen.getByText('kcal')).toBeDefined();
+    expect(screen.getAllByText('g')).toHaveLength(4);
     expect(screen.getByRole('button', { name: /Save Goals/i })).toBeDefined();
 
     expect(getRecordedTables()).toContain('users');
