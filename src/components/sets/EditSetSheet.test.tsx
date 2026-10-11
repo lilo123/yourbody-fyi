@@ -27,7 +27,9 @@ const createAuthContextValue = (weightUnit: 'lb' | 'kg' = 'lb'): AuthContextType
 
 const mockUpdateEq = vi.fn();
 const mockUpdate = vi.fn();
+const mockExpected = vi.fn();
 const mockDbFrom = vi.fn();
+const mockFetchSetById = vi.fn();
 
 vi.mock("../../lib/supabase", () => ({
   supabase: {
@@ -37,11 +39,15 @@ vi.mock("../../lib/supabase", () => ({
   },
 }));
 
+vi.mock("../../lib/fetchSet", () => ({
+  fetchSetById: (...args: any[]) => mockFetchSetById(...args),
+}));
+
 vi.mock("../../lib/sets", async () => {
   const actual = await vi.importActual<any>("../../lib/sets");
   return {
     ...actual,
-    updateSet: vi.fn().mockImplementation((_client, id, updates) => {
+    updateSet: vi.fn().mockImplementation((_client, id, updates, expected) => {
       mockUpdate({
         weight: updates.weight,
         reps: updates.reps,
@@ -49,6 +55,7 @@ vi.mock("../../lib/sets", async () => {
         rpe: updates.rpe,
         exercise_id: updates.exerciseId,
       });
+      mockExpected(expected);
       const eqRes = mockUpdateEq("id", id);
       if (eqRes) {
         return Promise.resolve(eqRes).then((res: any) => {
@@ -103,6 +110,18 @@ describe("EditSetSheet", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    mockFetchSetById.mockImplementation((_client: any, setId: string) =>
+      Promise.resolve({
+        id: setId,
+        workout_id: "workout-456",
+        exercise_id: "ex-1",
+        weight: 185,
+        reps: 8,
+        rpe: 8.5,
+        set_type: "working",
+      })
+    );
 
     const updateResult = {
       data: [{ id: "set-123", exercise_id: "ex-1", weight: 185, reps: 8, rpe: 8.5, set_type: "working" }],
@@ -596,6 +615,169 @@ describe("EditSetSheet", () => {
       expect(mockUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           weight: expect.closeTo(220.462, 2),
+        })
+      );
+    });
+  });
+
+  it("maps changed elsewhere error to friendly banner and displays accessible Reload button", async () => {
+    const errResult = { data: null, error: { message: "changed elsewhere" } };
+    const errBuilder = Object.assign(Promise.resolve(errResult), {
+      select: vi.fn().mockResolvedValue(errResult),
+    });
+    mockUpdateEq.mockReturnValueOnce(errBuilder);
+
+    renderSheet();
+    const repsInput = screen.getByTestId("edit-set-reps-input");
+    fireEvent.change(repsInput, { target: { value: "14" } });
+    fireEvent.click(screen.getByTestId("save-set-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("This set was changed on another device.");
+    });
+
+    const reloadBtn = screen.getByTestId("reload-set-btn");
+    expect(reloadBtn).toBeInTheDocument();
+    expect(reloadBtn).toHaveTextContent("Reload");
+    expect(reloadBtn).toHaveClass("min-h-[44px]");
+  });
+
+  it("maps deleted elsewhere error to friendly banner", async () => {
+    const errResult = { data: null, error: { message: "deleted elsewhere" } };
+    const errBuilder = Object.assign(Promise.resolve(errResult), {
+      select: vi.fn().mockResolvedValue(errResult),
+    });
+    mockUpdateEq.mockReturnValueOnce(errBuilder);
+
+    renderSheet();
+    const repsInput = screen.getByTestId("edit-set-reps-input");
+    fireEvent.change(repsInput, { target: { value: "14" } });
+    fireEvent.click(screen.getByTestId("save-set-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("This set was deleted on another device.");
+    });
+    expect(screen.getByTestId("reload-set-btn")).toBeInTheDocument();
+  });
+
+  it("Reload flow: refetches latest server values, updates inputs, clears banner, and allows saving again", async () => {
+    const errResult = { data: null, error: { message: "changed elsewhere" } };
+    const errBuilder = Object.assign(Promise.resolve(errResult), {
+      select: vi.fn().mockResolvedValue(errResult),
+    });
+    mockUpdateEq.mockReturnValueOnce(errBuilder);
+
+    renderSheet();
+    const repsInput = screen.getByTestId("edit-set-reps-input");
+    fireEvent.change(repsInput, { target: { value: "14" } });
+    fireEvent.click(screen.getByTestId("save-set-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("This set was changed on another device.");
+    });
+
+    // Mock fetchSetById returning fresh row from another device: 205 lb, 12 reps, RPE 9, working
+    mockFetchSetById.mockResolvedValueOnce({
+      id: "set-123",
+      workout_id: "workout-456",
+      exercise_id: "ex-1",
+      weight: 205,
+      reps: 12,
+      rpe: 9,
+      set_type: "working",
+    });
+
+    const reloadBtn = screen.getByTestId("reload-set-btn");
+    fireEvent.click(reloadBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("reload-set-btn")).toBeNull();
+      expect(screen.getByRole("alert")).toHaveTextContent("");
+    });
+
+    expect(mockFetchSetById).toHaveBeenCalledWith(expect.anything(), "set-123");
+
+    // Inputs now reflect fresh server values
+    const weightInput = screen.getByTestId("edit-set-weight-input") as HTMLInputElement;
+    expect(weightInput.value).toBe("205");
+    expect((screen.getByTestId("edit-set-reps-input") as HTMLInputElement).value).toBe("12");
+    expect((screen.getByTestId("edit-set-rpe-input") as HTMLInputElement).value).toBe("9");
+
+    // Save button should be disabled because form matches newly reloaded values (not dirty)
+    expect(screen.getByTestId("save-set-btn")).toBeDisabled();
+
+    // Now user makes an edit from the reloaded values
+    fireEvent.change(screen.getByTestId("edit-set-reps-input"), { target: { value: "13" } });
+    expect(screen.getByTestId("save-set-btn")).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("save-set-btn"));
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          weight: 205,
+          reps: 13,
+          rpe: 9,
+          set_type: "working",
+        })
+      );
+      expect(mockExpected).toHaveBeenCalledWith(
+        expect.objectContaining({
+          weight: 205,
+          reps: 12,
+          rpe: 9,
+          set_type: "working",
+        })
+      );
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("Reload flow closes the sheet if set was deleted on the server", async () => {
+    const errResult = { data: null, error: { message: "deleted elsewhere" } };
+    const errBuilder = Object.assign(Promise.resolve(errResult), {
+      select: vi.fn().mockResolvedValue(errResult),
+    });
+    mockUpdateEq.mockReturnValueOnce(errBuilder);
+
+    renderSheet();
+    fireEvent.change(screen.getByTestId("edit-set-reps-input"), { target: { value: "14" } });
+    fireEvent.click(screen.getByTestId("save-set-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("This set was deleted on another device.");
+    });
+
+    mockFetchSetById.mockResolvedValueOnce(null);
+
+    fireEvent.click(screen.getByTestId("reload-set-btn"));
+
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  it("builds normalized expected pre-image from resolved exercise UUID and normalized set_type", async () => {
+    const setWithDrift = {
+      ...mockSet,
+      exercise_id: "non-uuid-name",
+      exercise_name: "Incline Bench Press",
+      set_type: "normal" as any,
+      rpe: undefined,
+    };
+
+    renderSheet({ set: setWithDrift });
+
+    fireEvent.change(screen.getByTestId("edit-set-reps-input"), { target: { value: "11" } });
+    fireEvent.click(screen.getByTestId("save-set-btn"));
+
+    await waitFor(() => {
+      expect(mockExpected).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exercise_id: "ex-1",
+          set_type: "working",
+          weight: 185,
+          reps: 8,
         })
       );
     });

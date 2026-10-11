@@ -74,4 +74,31 @@ describe('useWorkoutEditSheet', () => {
     expect(result.current.editingSet).toBeNull();
     expect(scheduleDelete).toHaveBeenCalledWith(dummySet);
   });
+
+  it('normalizes legacy "normal" set_type to canonical "working"', () => {
+    const legacySet = {
+      ...dummySet,
+      id: 's-legacy',
+      set_type: 'normal',
+    };
+    const { result } = renderHook(() =>
+      useWorkoutEditSheet({
+        activeExercises: ['Bench Press'],
+        activeRoutineName: 'Chest Day',
+        workoutDate: '2026-09-27',
+        targetUserId: 'user-1',
+        getSetsForExerciseToday: () => [legacySet],
+        pendingSetId: null,
+        pendingDeletedSetIds: new Set(),
+        scheduleDelete: vi.fn(),
+      })
+    );
+
+    act(() => {
+      result.current.handleEditSet(0, 0);
+    });
+
+    expect(result.current.isEditSheetOpen).toBe(true);
+    expect(result.current.editingSet?.set_type).toBe('working');
+  });
 });
