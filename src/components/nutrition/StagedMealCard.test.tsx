@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { StagedMealCard } from './StagedMealCard';
 import type { StagedMeal } from './nutritionEngineHelpers';
@@ -807,6 +807,21 @@ describe('StagedMealCard', () => {
     expect(screen.queryByTestId('day-total-over-protein')).toBeNull();
   });
   describe('Batch 3: sticky action row and scrollIntoView', () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const originalMatchMedia = window.matchMedia;
+
+    afterEach(() => {
+      if (originalScrollIntoView) {
+        Element.prototype.scrollIntoView = originalScrollIntoView;
+      } else {
+        delete (Element.prototype as any).scrollIntoView;
+      }
+      if (originalMatchMedia) {
+        window.matchMedia = originalMatchMedia;
+      } else {
+        delete (window as any).matchMedia;
+      }
+    });
     it('action row has the sticky class and bottom style set to nav height', () => {
       const meal = makeMultiItemMeal();
       render(

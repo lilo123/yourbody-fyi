@@ -208,10 +208,10 @@ describe('Header connection status badge', () => {
     it('(a) athlete off /coach: link is not rendered', async () => {
       mockUserProfile.role = 'athlete';
       window.history.pushState({}, '', '/workout');
-      renderHeader();
+      const { container } = renderHeader();
 
       await waitFor(() => {
-        expect(screen.getByText('Yourbody.fyi')).toBeDefined();
+        expect(container.querySelector('header [title="Athlete Account"]')).not.toBeNull();
       });
 
       expect(screen.queryByTestId('coach-dashboard-link')).toBeNull();
@@ -554,13 +554,11 @@ describe('Header connection status badge', () => {
       const { container } = renderHeader();
 
       await waitFor(() => {
-        expect(screen.getByText('Yourbody.fyi')).toBeDefined();
+        const athleteChip = container.querySelector('header [title="Athlete Account"]');
+        expect(athleteChip).not.toBeNull();
+        expect(athleteChip?.className).toContain('hidden');
+        expect(athleteChip?.className).toContain('sm:flex');
       });
-
-      const athleteChip = container.querySelector('header [title="Athlete Account"]');
-      expect(athleteChip).not.toBeNull();
-      expect(athleteChip?.className).toContain('hidden');
-      expect(athleteChip?.className).toContain('sm:flex');
     });
 
     it('YB3: Controls have min-w-[44px] min-h-[44px] and inner visuals have h-9 rounded-full', async () => {
