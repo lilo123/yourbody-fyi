@@ -2309,11 +2309,18 @@ Deno.test("stripe-webhook: full refund cancels related subscription immediately 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_full_refund_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_full_refund_1", invoice: "in_full_refund_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (url.includes("/v1/payment_intents/pi_full_refund_1")) {
       return new Response(
         JSON.stringify({
           id: "pi_full_refund_1",
-          invoice: "in_full_refund_1",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -2418,11 +2425,18 @@ Deno.test("stripe-webhook: dispute cancels related subscription immediately with
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_dispute_cancel_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_dispute_cancel_1", invoice: "in_dispute_cancel_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (url.includes("/v1/payment_intents/pi_dispute_cancel_1")) {
       return new Response(
         JSON.stringify({
           id: "pi_dispute_cancel_1",
-          invoice: "in_dispute_cancel_1",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -2644,11 +2658,18 @@ Deno.test("stripe-webhook: already-canceled or resource_missing 404 returns 200 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_missing_sub_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_missing_sub_1", invoice: "in_missing_sub_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (url.includes("/v1/payment_intents/pi_missing_sub_1")) {
       return new Response(
         JSON.stringify({
           id: "pi_missing_sub_1",
-          invoice: "in_missing_sub_1",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -2740,11 +2761,18 @@ Deno.test("stripe-webhook: auto-cancel Stripe 500 error returns 502 and removes 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_stripe_err_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_stripe_err_1", invoice: "in_stripe_err_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (url.includes("/v1/payment_intents/pi_stripe_err_1")) {
       return new Response(
         JSON.stringify({
           id: "pi_stripe_err_1",
-          invoice: "in_stripe_err_1",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -2830,6 +2858,112 @@ Deno.test("stripe-webhook: auto-cancel Stripe 500 error returns 502 and removes 
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("stripe-webhook: auto-cancel resolves invoice via legacy PaymentIntent.invoice when invoice_payments returns 404", async () => {
+  setupEnv();
+
+  let cancelCalled = false;
+  let cancelUrl = "";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_legacy_sub_1")) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: "resource_missing",
+            message: "No such endpoint or invoice_payment",
+            type: "invalid_request_error",
+          },
+        }),
+        { status: 404, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/payment_intents/pi_legacy_sub_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "pi_legacy_sub_1",
+          invoice: "in_legacy_sub_1",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/invoices/in_legacy_sub_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "in_legacy_sub_1",
+          parent: {
+            subscription_details: {
+              subscription: "sub_legacy_1",
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/subscriptions/sub_legacy_1")) {
+      if (init?.method === "DELETE") {
+        cancelCalled = true;
+        cancelUrl = url;
+        return new Response(
+          JSON.stringify({ id: "sub_legacy_1", status: "canceled" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_legacy_cancel_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_legacy_cancel_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_legacy_cancel_1",
+          customer: CUSTOMER_ID,
+          payment_intent: "pi_legacy_sub_1",
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: { data: [] },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(cancelCalled, true);
+    assertEquals(cancelUrl.includes("sub_legacy_1"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 
 Deno.test("stripe-webhook: auto-cancel falls back to customer subscriptions when charge has no invoice", async () => {
   setupEnv();

@@ -507,21 +507,54 @@ async function cancelSubscriptionForChargeOrCustomer(
 
     let invoiceId: string | null = null;
     if (paymentIntentId) {
-      try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-        if (typeof paymentIntent.invoice === "string" && paymentIntent.invoice.length > 0) {
-          invoiceId = paymentIntent.invoice;
-        } else if (paymentIntent.invoice && typeof paymentIntent.invoice === "object") {
-          invoiceId = (paymentIntent.invoice as any).id || null;
+      // 1. Pinned API version (2026-09-30.endive): query Invoice Payments API via client rawRequest
+      if (typeof (stripe as any).rawRequest === "function") {
+        try {
+          const res = await (stripe as any).rawRequest(
+            "GET",
+            `/v1/invoice_payments?payment[type]=payment_intent&payment[payment_intent]=${encodeURIComponent(paymentIntentId)}`,
+          ) as any;
+          const payments = Array.isArray(res?.data) ? res.data : [];
+          for (const item of payments) {
+            const inv = item?.invoice;
+            if (typeof inv === "string" && inv.length > 0) {
+              invoiceId = inv;
+              break;
+            } else if (inv && typeof inv === "object" && typeof inv.id === "string" && inv.id.length > 0) {
+              invoiceId = inv.id;
+              break;
+            }
+          }
+        } catch (err: any) {
+          const isMissing =
+            err?.code === "resource_missing" ||
+            err?.statusCode === 404 ||
+            err?.raw?.statusCode === 404 ||
+            err?.raw?.code === "resource_missing";
+          if (!isMissing) {
+            throw err;
+          }
         }
-      } catch (err: any) {
-        const isMissing =
-          err?.code === "resource_missing" ||
-          err?.statusCode === 404 ||
-          err?.raw?.statusCode === 404 ||
-          err?.raw?.code === "resource_missing";
-        if (!isMissing) {
-          throw err;
+      }
+
+      // 2. Old-shape fallback: retrieve PaymentIntent and inspect paymentIntent.invoice
+      if (!invoiceId) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          if (typeof paymentIntent.invoice === "string" && paymentIntent.invoice.length > 0) {
+            invoiceId = paymentIntent.invoice;
+          } else if (paymentIntent.invoice && typeof paymentIntent.invoice === "object") {
+            invoiceId = (paymentIntent.invoice as any).id || null;
+          }
+        } catch (err: any) {
+          const isMissing =
+            err?.code === "resource_missing" ||
+            err?.statusCode === 404 ||
+            err?.raw?.statusCode === 404 ||
+            err?.raw?.code === "resource_missing";
+          if (!isMissing) {
+            throw err;
+          }
         }
       }
     }
