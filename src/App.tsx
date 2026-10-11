@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, Activity } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useLayoutEffect, useRef, Activity } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { CoachProvider } from './context/CoachContext';
@@ -16,6 +16,7 @@ import { AttentionBanner } from './components/sync/AttentionBanner';
 import { useOfflinePrefetch } from './offline-prefetch';
 import { registerOutboxUpdateBlocker, startAiQueueProcessor } from './offline';
 import { registerUpdateBlocker } from './pwa/updateSafety';
+import { shouldShowLanding } from './utils/routeDecision';
 import './App.css';
 
 registerOutboxUpdateBlocker(registerUpdateBlocker);
@@ -51,6 +52,7 @@ const PrivacyPage = React.lazy(() =>
 const RefundsPage = React.lazy(() =>
   import('./legal/RefundsPage').then((m) => ({ default: m.RefundsPage }))
 );
+const LandingView = React.lazy(() => import('./components/landing/LandingView'));
 
 const LazyFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-12 text-cyan-400 text-xs">
@@ -58,20 +60,40 @@ const LazyFallback: React.FC = () => (
   </div>
 );
 
-// Guard for authenticated routes
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading, refreshProfile } = useAuth();
+const AuthLoadingFallback: React.FC = () => {
+  const { refreshProfile } = useAuth();
   const [showRetry, setShowRetry] = useState(false);
 
   /* oxlint-disable react/set-state-in-effect */
   useEffect(() => {
-    if (!loading || user) {
-      setShowRetry(false);
-      return;
-    }
     const timer = setTimeout(() => setShowRetry(true), 2000);
     return () => clearTimeout(timer);
-  }, [loading, user]);
+  }, []);
+
+  return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
+      <div className="w-8 h-8 rounded-full border-2 border-cyan-500/20 border-t-cyan-400 animate-spin" />
+      <div className="text-cyan-400 text-xs tracking-wider">Connecting to Yourbody...</div>
+      {showRetry && (
+        <button
+          type="button"
+          onClick={() => {
+            setShowRetry(false);
+            refreshProfile();
+          }}
+          data-testid="auth-retry-button"
+          className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-bold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition shadow-neon-cyan active:scale-95 touch-manipulation flex items-center justify-center"
+        >
+          Connecting to Yourbody... Tap to Retry
+        </button>
+      )}
+    </div>
+  );
+};
+
+// Guard for authenticated routes
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
 
   // Display content immediately when optimistic cached user is available
   if (user) {
@@ -79,25 +101,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   if (loading) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
-        <div className="w-8 h-8 rounded-full border-2 border-cyan-500/20 border-t-cyan-400 animate-spin" />
-        <div className="text-cyan-400 text-xs tracking-wider">Connecting to Yourbody...</div>
-        {showRetry && (
-          <button
-            type="button"
-            onClick={() => {
-              setShowRetry(false);
-              refreshProfile();
-            }}
-            data-testid="auth-retry-button"
-            className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-bold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition shadow-neon-cyan active:scale-95 touch-manipulation flex items-center justify-center"
-          >
-            Connecting to Yourbody... Tap to Retry
-          </button>
-        )}
-      </div>
-    );
+    return <AuthLoadingFallback />;
   }
   return <Navigate to="/login" replace />;
 };
@@ -128,11 +132,30 @@ const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
 // Redirect '/' and '*' to user's last tab route (default /workout) per A12
 const LastRouteRedirect: React.FC = () => {
   const { user, isCoachMode } = useAuth();
+  const navigate = useNavigate();
   let destination = getLastRoute(user?.id);
   if (destination === '/coach' && user && !isCoachMode) {
     destination = '/workout';
   }
-  return <Navigate to={destination} replace />;
+  useLayoutEffect(() => {
+    navigate(destination, { replace: true });
+  }, [destination, navigate]);
+  return null;
+};
+
+const RootRoute: React.FC = () => {
+  const { user, loading } = useAuth();
+  if (loading && !user) {
+    return <AuthLoadingFallback />;
+  }
+  if (!loading && shouldShowLanding(user)) {
+    return (
+      <React.Suspense fallback={<LazyFallback />}>
+        <LandingView />
+      </React.Suspense>
+    );
+  }
+  return <LastRouteRedirect />;
 };
 
 function AppLayout() {
@@ -236,7 +259,7 @@ function AppLayout() {
       <main className={`flex-1 max-w-xl w-full mx-auto p-4 ${user ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]' : 'pb-8'}`}>
         <React.Suspense fallback={<LazyFallback />}>
           <Routes>
-            <Route path="/" element={<LastRouteRedirect />} />
+            <Route path="/" element={<RootRoute />} />
             <Route
               path="/workout"
               element={
