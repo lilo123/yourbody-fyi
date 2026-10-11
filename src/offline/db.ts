@@ -107,11 +107,79 @@ export async function closeAllOfflineDbs(): Promise<void> {
   }
 }
 
+export async function offlineDbExists(userId: string): Promise<boolean> {
+  if (!userId) {
+    return false;
+  }
+  const dbName = getOfflineDbName(userId);
+  if (dbCache.has(dbName)) {
+    return true;
+  }
+  if (typeof indexedDB === 'undefined') {
+    return false;
+  }
+  if (typeof indexedDB.databases === 'function') {
+    try {
+      const dbs = await indexedDB.databases();
+      return dbs.some((db) => db.name === dbName);
+    } catch {
+      // If indexedDB.databases() throws or fails, fall back to probe
+    }
+  }
+  return new Promise<boolean>((resolve) => {
+    let existed = true;
+    let req: IDBOpenDBRequest;
+    try {
+      req = indexedDB.open(dbName);
+    } catch {
+      resolve(false);
+      return;
+    }
+    req.onupgradeneeded = (e) => {
+      if (e.oldVersion === 0) {
+        existed = false;
+        try {
+          req.transaction?.abort();
+        } catch {
+          // ignore abort error
+        }
+      }
+    };
+    req.onsuccess = (e) => {
+      try {
+        (e.target as IDBOpenDBRequest).result.close();
+      } catch {
+        // ignore close error
+      }
+      resolve(existed);
+    };
+    req.onerror = () => {
+      resolve(false);
+    };
+  });
+}
+
 export async function clearUserRqStore(userId: string): Promise<void> {
-  const db = await getOfflineDb(userId);
-  const tx = db.transaction('rq', 'readwrite');
-  await tx.store.clear();
-  await tx.done;
+  if (!userId) {
+    return;
+  }
+  const exists = await offlineDbExists(userId);
+  if (!exists) {
+    return;
+  }
+  try {
+    const db = await getOfflineDb(userId);
+    if (!db.objectStoreNames.contains('rq')) {
+      return;
+    }
+    const tx = db.transaction('rq', 'readwrite');
+    await tx.store.clear();
+    await tx.done;
+  } catch (err) {
+    if (!isDbClosedError(err)) {
+      console.warn('[db] Failed to clear user rq store:', err);
+    }
+  }
 }
 
 export async function deleteOfflineDb(userId: string): Promise<void> {
