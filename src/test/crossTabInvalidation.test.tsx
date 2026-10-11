@@ -28,6 +28,7 @@ describe('Cross-Tab Invalidation', () => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     vi.clearAllMocks();
     clearMockHistory();
+    localStorage.setItem('yourbody_user', JSON.stringify({ id: 'test-user-1', email: 'test@example.com' }));
   });
 
   it('logging a set triggers invalidateWorkoutDerived and updates History without reload', async () => {

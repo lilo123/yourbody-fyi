@@ -1,6 +1,55 @@
 import { supabase } from './supabase';
 
-export type CheckoutPlan = 'basic' | 'pro';
+export type CheckoutPlan = 'personal' | 'coach' | 'coach_pro';
+export type CheckoutInterval = 'month' | 'year';
+
+export type PlanDisplayLabel = 'Personal' | 'Coach' | 'Coach Pro' | 'Trial' | 'Free';
+
+/**
+ * Derives a human-facing tier display label from the database plan and coach tier.
+ * DB users.plan values are only 'free' | 'basic' | 'pro'.
+ * Display names:
+ *   - 'basic' -> 'Personal'
+ *   - 'pro' with coach_tier 'enterprise' (or 'enterprise_pro') -> 'Coach Pro'
+ *   - 'pro' -> 'Coach'
+ *   - 'trial' -> 'Trial'
+ *   - 'free' or inactive -> 'Free'
+ */
+export function planLabel(
+  plan?: string | null,
+  coachTier?: string | null,
+  isActive: boolean = true
+): PlanDisplayLabel {
+  if (!isActive) {
+    return 'Free';
+  }
+  const normalizedPlan = plan?.toLowerCase();
+  if (normalizedPlan === 'pro') {
+    const normalizedTier = coachTier?.toLowerCase();
+    if (normalizedTier === 'enterprise' || normalizedTier === 'enterprise_pro') {
+      return 'Coach Pro';
+    }
+    return 'Coach';
+  }
+  if (normalizedPlan === 'basic' || normalizedPlan === 'personal') {
+    return 'Personal';
+  }
+  if (normalizedPlan === 'coach_pro') {
+    return 'Coach Pro';
+  }
+  if (normalizedPlan === 'coach') {
+    return 'Coach';
+  }
+  if (normalizedPlan === 'trial') {
+    return 'Trial';
+  }
+  return 'Free';
+}
+
+export interface CheckoutOptions {
+  plan: CheckoutPlan;
+  interval?: CheckoutInterval;
+}
 
 export interface BillingResult {
   ok: boolean;
@@ -38,10 +87,17 @@ export async function extractBillingErrorMessage(error: any): Promise<string> {
   return 'Unable to process billing request. Please try again.';
 }
 
-export async function startCheckout(plan: CheckoutPlan): Promise<BillingResult> {
+export async function startCheckout(
+  planOrOptions: CheckoutPlan | CheckoutOptions,
+  maybeInterval?: CheckoutInterval
+): Promise<BillingResult> {
+  const plan = typeof planOrOptions === 'object' ? planOrOptions.plan : planOrOptions;
+  const interval =
+    (typeof planOrOptions === 'object' ? planOrOptions.interval : maybeInterval) || 'year';
+
   try {
     const { data, error } = await supabase.functions.invoke('create-checkout', {
-      body: { plan },
+      body: { plan, interval },
     });
 
     if (error) {

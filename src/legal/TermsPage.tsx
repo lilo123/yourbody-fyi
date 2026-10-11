@@ -109,7 +109,7 @@ export const TermsPage: React.FC = () => {
           5. Subscriptions, Billing, and Cancellation
         </h2>
         <p>
-          Certain features and tiers of the Service (such as Basic and Pro plans) require a paid subscription.
+          Certain features and tiers of the Service (such as Personal, Coach, and Coach Pro plans) require a paid subscription.
         </p>
         <ul className="list-disc list-inside space-y-2 pl-1">
           <li>

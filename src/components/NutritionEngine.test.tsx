@@ -210,10 +210,11 @@ describe('NutritionEngine', () => {
 
     renderComponent();
 
+    const user = userEvent.setup({ delay: null });
     const input = screen.getByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await userEvent.type(input, '3 eggs and 2 slices sourdough');
+    await user.type(input, '3 eggs and 2 slices sourdough');
     fireEvent.click(screen.getByText('Analyze Meal'));
 
     await waitFor(() => {

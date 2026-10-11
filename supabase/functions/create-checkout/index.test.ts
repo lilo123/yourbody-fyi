@@ -26,7 +26,7 @@ Deno.test("create-checkout: missing config returns 503 with billing_not_configur
       "Authorization": "Bearer valid-token",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ plan: "basic" }),
+    body: JSON.stringify({ plan: "personal", interval: "year" }),
   });
 
   const originalFetch = globalThis.fetch;
@@ -62,7 +62,7 @@ Deno.test("create-checkout: refuses live key starting with sk_live_ (503 live_ke
       "Authorization": "Bearer valid-token",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ plan: "basic" }),
+    body: JSON.stringify({ plan: "personal", interval: "year" }),
   });
 
   const originalFetch = globalThis.fetch;
@@ -98,7 +98,7 @@ Deno.test("create-checkout: refuses restricted live key starting with rk_live_ (
       "Authorization": "Bearer valid-token",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ plan: "basic" }),
+    body: JSON.stringify({ plan: "personal", interval: "year" }),
   });
 
   const originalFetch = globalThis.fetch;
@@ -133,7 +133,7 @@ Deno.test("create-checkout: rejects disallowed origin with 400", async () => {
       "Authorization": "Bearer valid-token",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ plan: "basic" }),
+    body: JSON.stringify({ plan: "personal", interval: "year" }),
   });
 
   const res = await app.fetch(req);
@@ -151,14 +151,14 @@ Deno.test("create-checkout: rejects missing Authorization header with 401", asyn
       "Origin": ALLOWED_ORIGIN,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ plan: "basic" }),
+    body: JSON.stringify({ plan: "personal", interval: "year" }),
   });
 
   const res = await app.fetch(req);
   assertEquals(res.status, 401);
 });
 
-Deno.test("create-checkout: rejects invalid plan with 400", async () => {
+Deno.test("create-checkout: rejects invalid plan with 400 and invalid_plan code", async () => {
   setupEnv();
 
   const req = new Request("http://localhost/create-checkout", {
@@ -168,7 +168,7 @@ Deno.test("create-checkout: rejects invalid plan with 400", async () => {
       "Authorization": "Bearer valid-token",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ plan: "invalid_tier" }),
+    body: JSON.stringify({ plan: "invalid_tier", interval: "year" }),
   });
 
   const originalFetch = globalThis.fetch;
@@ -188,6 +188,7 @@ Deno.test("create-checkout: rejects invalid plan with 400", async () => {
     assertEquals(res.status, 400);
     const data = await res.json();
     assertExists(data.error);
+    assertEquals(data.code, "invalid_plan");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -197,6 +198,7 @@ Deno.test("create-checkout: passes client_reference_id and basic price for new c
   setupEnv();
 
   let capturedStripeBody = "";
+  let priceFetchCalled = false;
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
@@ -212,6 +214,25 @@ Deno.test("create-checkout: passes client_reference_id and basic price for new c
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
+    }
+    if (url.includes("api.stripe.com/v1/prices") && !url.includes("/checkout/")) {
+      priceFetchCalled = true;
+      return new Response(
+        JSON.stringify({
+          object: "list",
+          data: [
+            {
+              id: "price_personal_yearly_123",
+              livemode: false,
+              lookup_key: "personal_yearly",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
     if (url.includes("api.stripe.com/v1/checkout/sessions")) {
       capturedStripeBody = (init?.body as string) || "";
@@ -237,20 +258,25 @@ Deno.test("create-checkout: passes client_reference_id and basic price for new c
         "Authorization": "Bearer valid-token",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ plan: "basic" }),
+      body: JSON.stringify({ plan: "personal", interval: "year" }),
     });
 
     const res = await app.fetch(req);
     assertEquals(res.status, 200);
     const data = await res.json();
     assertEquals(data.url, "https://checkout.stripe.com/c/pay/cs_test_mock_session");
+    assertEquals(priceFetchCalled, true);
 
     const params = new URLSearchParams(capturedStripeBody);
     assertEquals(params.get("client_reference_id"), TEST_USER_ID);
     assertEquals(params.get("metadata[user_id]"), TEST_USER_ID);
+    assertEquals(params.get("metadata[plan]"), "personal");
+    assertEquals(params.get("metadata[interval]"), "year");
     assertEquals(params.get("subscription_data[metadata][user_id]"), TEST_USER_ID);
+    assertEquals(params.get("subscription_data[metadata][plan]"), "personal");
+    assertEquals(params.get("subscription_data[metadata][interval]"), "year");
     assertEquals(params.get("customer_email"), TEST_EMAIL);
-    assertEquals(params.get("line_items[0][price]"), "price_basic_123");
+    assertEquals(params.get("line_items[0][price]"), "price_personal_yearly_123");
     assertEquals(params.get("success_url"), `${ALLOWED_ORIGIN}/settings?billing=success`);
     assertEquals(params.get("cancel_url"), `${ALLOWED_ORIGIN}/settings?billing=cancelled`);
   } finally {
@@ -263,6 +289,7 @@ Deno.test("create-checkout: passes existing billing_customer_id and pro price", 
 
   const EXISTING_CUSTOMER_ID = "cus_existing_999";
   let capturedStripeBody = "";
+  let priceFetchCalled = false;
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
@@ -278,6 +305,25 @@ Deno.test("create-checkout: passes existing billing_customer_id and pro price", 
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
+    }
+    if (url.includes("api.stripe.com/v1/prices") && !url.includes("/checkout/")) {
+      priceFetchCalled = true;
+      return new Response(
+        JSON.stringify({
+          object: "list",
+          data: [
+            {
+              id: "price_coach_yearly_456",
+              livemode: false,
+              lookup_key: "coach_yearly",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
     if (url.includes("api.stripe.com/v1/checkout/sessions")) {
       capturedStripeBody = (init?.body as string) || "";
@@ -303,19 +349,786 @@ Deno.test("create-checkout: passes existing billing_customer_id and pro price", 
         "Authorization": "Bearer valid-token",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ plan: "pro" }),
+      body: JSON.stringify({ plan: "coach", interval: "year" }),
     });
 
     const res = await app.fetch(req);
     assertEquals(res.status, 200);
     const data = await res.json();
     assertEquals(data.url, "https://checkout.stripe.com/c/pay/cs_test_pro_session");
+    assertEquals(priceFetchCalled, true);
 
     const params = new URLSearchParams(capturedStripeBody);
     assertEquals(params.get("client_reference_id"), TEST_USER_ID);
     assertEquals(params.get("customer"), EXISTING_CUSTOMER_ID);
     assertEquals(params.get("customer_email"), null);
-    assertEquals(params.get("line_items[0][price]"), "price_pro_456");
+    assertEquals(params.get("line_items[0][price]"), "price_coach_yearly_456");
+    assertEquals(params.get("metadata[plan]"), "coach");
+    assertEquals(params.get("metadata[interval]"), "year");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: honors STRIPE_LIVE_ENABLED switch with live key (proceeds to create session)", async () => {
+  setupEnv();
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_live_" + "test_live_key");
+  Deno.env.set("STRIPE_LIVE_ENABLED", "true");
+
+  let priceFetchCalled = false;
+  let sessionCreateCalled = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      return new Response(JSON.stringify({ billing_customer_id: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices") && !url.includes("/checkout/")) {
+      priceFetchCalled = true;
+      return new Response(
+        JSON.stringify({
+          object: "list",
+          data: [
+            {
+              id: "price_personal_live_123",
+              livemode: true,
+              lookup_key: "personal_yearly",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("api.stripe.com/v1/checkout/sessions")) {
+      sessionCreateCalled = true;
+      return new Response(
+        JSON.stringify({
+          id: "cs_live_session_123",
+          url: "https://checkout.stripe.com/c/pay/cs_live_session_123",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "personal", interval: "year" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.url, "https://checkout.stripe.com/c/pay/cs_live_session_123");
+    assertEquals(priceFetchCalled, true);
+    assertEquals(sessionCreateCalled, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("STRIPE_LIVE_ENABLED");
+  }
+});
+
+Deno.test("create-checkout: price mode mismatch (test key, live price) returns 503 price_mode_mismatch", async () => {
+  setupEnv();
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_test_" + "mock_123");
+  Deno.env.delete("STRIPE_LIVE_ENABLED");
+
+  let priceFetchCalled = false;
+  let sessionCreateCalled = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices") && !url.includes("/checkout/")) {
+      priceFetchCalled = true;
+      return new Response(
+        JSON.stringify({
+          object: "list",
+          data: [
+            {
+              id: "price_personal_live_123",
+              livemode: true, // Live price with test key
+              lookup_key: "personal_yearly",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("api.stripe.com/v1/checkout/sessions")) {
+      sessionCreateCalled = true;
+      return new Response(JSON.stringify({ id: "cs_unexpected" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "personal", interval: "year" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 503);
+    const data = await res.json();
+    assertEquals(data.code, "price_mode_mismatch");
+    assertEquals(priceFetchCalled, true);
+    assertEquals(sessionCreateCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: price mode mismatch (live key + flag, test price) returns 503 price_mode_mismatch", async () => {
+  setupEnv();
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_live_" + "test_live_key");
+  Deno.env.set("STRIPE_LIVE_ENABLED", "true");
+
+  let priceFetchCalled = false;
+  let sessionCreateCalled = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices") && !url.includes("/checkout/")) {
+      priceFetchCalled = true;
+      return new Response(
+        JSON.stringify({
+          object: "list",
+          data: [
+            {
+              id: "price_coach_test_456",
+              livemode: false, // Test price with live key
+              lookup_key: "coach_yearly",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("api.stripe.com/v1/checkout/sessions")) {
+      sessionCreateCalled = true;
+      return new Response(JSON.stringify({ id: "cs_unexpected" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "coach", interval: "year" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 503);
+    const data = await res.json();
+    assertEquals(data.code, "price_mode_mismatch");
+    assertEquals(priceFetchCalled, true);
+    assertEquals(sessionCreateCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("STRIPE_LIVE_ENABLED");
+  }
+});
+
+// =========================================================================
+// PART 2: Comprehensive Tiers & Lookup Key Tests
+// =========================================================================
+
+Deno.test("create-checkout: rejects legacy plan 'basic' with 400 invalid_plan", async () => {
+  setupEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    if (input.toString().includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "basic", interval: "year" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 400);
+    const data = await res.json();
+    assertEquals(data.code, "invalid_plan");
+    assertEquals(data.error, "invalid_plan");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: rejects legacy plan 'pro' with 400 invalid_plan", async () => {
+  setupEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    if (input.toString().includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "pro", interval: "year" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 400);
+    const data = await res.json();
+    assertEquals(data.code, "invalid_plan");
+    assertEquals(data.error, "invalid_plan");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: rejects missing interval with 400 invalid_plan", async () => {
+  setupEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    if (input.toString().includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "personal" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 400);
+    const data = await res.json();
+    assertEquals(data.code, "invalid_plan");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: rejects invalid interval with 400 invalid_plan", async () => {
+  setupEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    if (input.toString().includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "personal", interval: "week" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 400);
+    const data = await res.json();
+    assertEquals(data.code, "invalid_plan");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: rejects non-object or array body with 400 invalid_plan", async () => {
+  setupEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    if (input.toString().includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    for (const invalidPayload of [[], "plain_string", null]) {
+      const req = new Request("http://localhost/create-checkout", {
+        method: "POST",
+        headers: {
+          "Origin": ALLOWED_ORIGIN,
+          "Authorization": "Bearer valid-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(invalidPayload),
+      });
+
+      const res = await app.fetch(req);
+      assertEquals(res.status, 400);
+      const data = await res.json();
+      assertEquals(data.code, "invalid_plan");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: queries Stripe with lookup_key, active=true, and expand[]=data.product for each tier", async () => {
+  setupEnv();
+
+  const testCases = [
+    { plan: "personal", interval: "month", expectedLookup: "personal_monthly" },
+    { plan: "personal", interval: "year", expectedLookup: "personal_yearly" },
+    { plan: "coach", interval: "month", expectedLookup: "coach_monthly" },
+    { plan: "coach", interval: "year", expectedLookup: "coach_yearly" },
+    { plan: "coach_pro", interval: "month", expectedLookup: "coach_pro_monthly" },
+    { plan: "coach_pro", interval: "year", expectedLookup: "coach_pro_yearly" },
+  ];
+
+  for (const tc of testCases) {
+    let capturedUrl = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+      const url = input.toString();
+      if (url.includes("/auth/v1/user")) {
+        return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("/rest/v1/users")) {
+        return new Response(JSON.stringify({ billing_customer_id: null }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("api.stripe.com/v1/prices")) {
+        capturedUrl = url;
+        return new Response(
+          JSON.stringify({
+            object: "list",
+            data: [
+              {
+                id: `price_${tc.expectedLookup}`,
+                livemode: false,
+                lookup_key: tc.expectedLookup,
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (url.includes("api.stripe.com/v1/checkout/sessions")) {
+        return new Response(
+          JSON.stringify({
+            id: `cs_${tc.expectedLookup}`,
+            url: `https://checkout.stripe.com/c/pay/cs_${tc.expectedLookup}`,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return originalFetch(input);
+    };
+
+    try {
+      const req = new Request("http://localhost/create-checkout", {
+        method: "POST",
+        headers: {
+          "Origin": ALLOWED_ORIGIN,
+          "Authorization": "Bearer valid-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ plan: tc.plan, interval: tc.interval }),
+      });
+
+      const res = await app.fetch(req);
+      assertEquals(res.status, 200);
+      const data = await res.json();
+      assertEquals(data.url, `https://checkout.stripe.com/c/pay/cs_${tc.expectedLookup}`);
+
+      // Verify query params: lookup_keys, active=true, expand
+      assertEquals(capturedUrl.includes("lookup_keys"), true);
+      assertEquals(capturedUrl.includes(tc.expectedLookup), true);
+      assertEquals(capturedUrl.includes("active=true"), true);
+      assertEquals(capturedUrl.includes("data.product"), true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+});
+
+Deno.test("create-checkout: falls back to STRIPE_PRICE_BASIC when personal_yearly lookup key not found", async () => {
+  setupEnv();
+
+  let pricesListCalled = false;
+  let priceRetrieveCalled = false;
+  let sessionPriceId = "";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      return new Response(JSON.stringify({ billing_customer_id: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices?") || (url.includes("api.stripe.com/v1/prices") && !url.includes("price_basic_123") && !url.includes("/checkout/"))) {
+      pricesListCalled = true;
+      return new Response(JSON.stringify({ object: "list", data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices/price_basic_123")) {
+      priceRetrieveCalled = true;
+      return new Response(
+        JSON.stringify({ id: "price_basic_123", livemode: false }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("api.stripe.com/v1/checkout/sessions")) {
+      const params = new URLSearchParams(init?.body as string);
+      sessionPriceId = params.get("line_items[0][price]") || "";
+      return new Response(
+        JSON.stringify({
+          id: "cs_fallback_session",
+          url: "https://checkout.stripe.com/c/pay/cs_fallback_session",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "personal", interval: "year" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    assertEquals(pricesListCalled, true);
+    assertEquals(priceRetrieveCalled, true);
+    assertEquals(sessionPriceId, "price_basic_123");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: falls back to STRIPE_PRICE_PRO when coach_yearly lookup key not found", async () => {
+  setupEnv();
+
+  let pricesListCalled = false;
+  let priceRetrieveCalled = false;
+  let sessionPriceId = "";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      return new Response(JSON.stringify({ billing_customer_id: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices?") || (url.includes("api.stripe.com/v1/prices") && !url.includes("price_pro_456") && !url.includes("/checkout/"))) {
+      pricesListCalled = true;
+      return new Response(JSON.stringify({ object: "list", data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices/price_pro_456")) {
+      priceRetrieveCalled = true;
+      return new Response(
+        JSON.stringify({ id: "price_pro_456", livemode: false }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("api.stripe.com/v1/checkout/sessions")) {
+      const params = new URLSearchParams(init?.body as string);
+      sessionPriceId = params.get("line_items[0][price]") || "";
+      return new Response(
+        JSON.stringify({
+          id: "cs_pro_fallback_session",
+          url: "https://checkout.stripe.com/c/pay/cs_pro_fallback_session",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "coach", interval: "year" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    assertEquals(pricesListCalled, true);
+    assertEquals(priceRetrieveCalled, true);
+    assertEquals(sessionPriceId, "price_pro_456");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: returns 503 price_not_configured when lookup key not found and no fallback configured", async () => {
+  setupEnv();
+
+  const casesWithoutFallback = [
+    { plan: "personal", interval: "month" },
+    { plan: "coach", interval: "month" },
+    { plan: "coach_pro", interval: "month" },
+    { plan: "coach_pro", interval: "year" },
+  ];
+
+  for (const tc of casesWithoutFallback) {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+      const url = input.toString();
+      if (url.includes("/auth/v1/user")) {
+        return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("api.stripe.com/v1/prices")) {
+        return new Response(JSON.stringify({ object: "list", data: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(input);
+    };
+
+    try {
+      const req = new Request("http://localhost/create-checkout", {
+        method: "POST",
+        headers: {
+          "Origin": ALLOWED_ORIGIN,
+          "Authorization": "Bearer valid-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(tc),
+      });
+
+      const res = await app.fetch(req);
+      assertEquals(res.status, 503);
+      const data = await res.json();
+      assertEquals(data.code, "price_not_configured");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+});
+
+Deno.test("create-checkout: returns 503 price_not_configured when yearly fallback secrets are unset", async () => {
+  setupEnv();
+  Deno.env.delete("STRIPE_PRICE_BASIC");
+  Deno.env.delete("STRIPE_PRICE_PRO");
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices")) {
+      return new Response(JSON.stringify({ object: "list", data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    for (const plan of ["personal", "coach"]) {
+      const req = new Request("http://localhost/create-checkout", {
+        method: "POST",
+        headers: {
+          "Origin": ALLOWED_ORIGIN,
+          "Authorization": "Bearer valid-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ plan, interval: "year" }),
+      });
+
+      const res = await app.fetch(req);
+      assertEquals(res.status, 503);
+      const data = await res.json();
+      assertEquals(data.code, "price_not_configured");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("create-checkout: mode check fails with 503 price_mode_mismatch on live lookup price with test key", async () => {
+  setupEnv();
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_test_" + "test_key_123");
+  Deno.env.delete("STRIPE_LIVE_ENABLED");
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: TEST_USER_ID, email: TEST_EMAIL }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.stripe.com/v1/prices")) {
+      return new Response(
+        JSON.stringify({
+          object: "list",
+          data: [
+            {
+              id: "price_coach_pro_live",
+              livemode: true, // Mismatch: live price with test key
+              lookup_key: "coach_pro_yearly",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input);
+  };
+
+  try {
+    const req = new Request("http://localhost/create-checkout", {
+      method: "POST",
+      headers: {
+        "Origin": ALLOWED_ORIGIN,
+        "Authorization": "Bearer valid-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plan: "coach_pro", interval: "year" }),
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 503);
+    const data = await res.json();
+    assertEquals(data.code, "price_mode_mismatch");
   } finally {
     globalThis.fetch = originalFetch;
   }

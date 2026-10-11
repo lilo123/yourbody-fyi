@@ -2,7 +2,19 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type Stripe from "npm:stripe@17.7.0";
 import { isAllowedOrigin, getCorsHeaders } from "../_shared/cors.ts";
-import { resolveStripeConfig, LiveKeyRefusedError, createBillingErrorResponse } from "../_shared/stripeConfig.ts";
+import {
+  resolveStripeConfig,
+  LiveKeyRefusedError,
+  PriceModeMismatchError,
+  validatePriceMode,
+  createBillingErrorResponse,
+} from "../_shared/stripeConfig.ts";
+
+export const VALID_PLANS = ["personal", "coach", "coach_pro"] as const;
+export type ValidPlan = (typeof VALID_PLANS)[number];
+
+export const VALID_INTERVALS = ["month", "year"] as const;
+export type ValidInterval = (typeof VALID_INTERVALS)[number];
 
 export async function handler(req: Request): Promise<Response> {
   const origin = req.headers.get("Origin") || req.headers.get("origin");
@@ -116,9 +128,19 @@ export async function handler(req: Request): Promise<Response> {
   }
 
   const plan = body?.plan;
-  if (plan !== "basic" && plan !== "pro") {
+  const interval = body?.interval;
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body) ||
+    typeof plan !== "string" ||
+    typeof interval !== "string" ||
+    !VALID_PLANS.includes(plan as ValidPlan) ||
+    !VALID_INTERVALS.includes(interval as ValidInterval)
+  ) {
     return new Response(
-      JSON.stringify({ error: "Invalid plan: must be 'basic' or 'pro'" }),
+      JSON.stringify({ error: "invalid_plan", code: "invalid_plan" }),
       {
         status: 400,
         headers: {
@@ -129,24 +151,44 @@ export async function handler(req: Request): Promise<Response> {
     );
   }
 
-  const priceId = plan === "basic" ? config.stripePriceBasic : config.stripePricePro;
-  if (!priceId) {
-    return new Response(
-      JSON.stringify({
-        code: "billing_not_configured",
-        error: `Stripe price for ${plan} plan is not configured.`,
-      }),
-      {
-        status: 503,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-  }
+  const lookupKey = `${plan}_${interval === "month" ? "monthly" : "yearly"}`;
 
   try {
+    // 1. Query Stripe for active price matching lookup key (with data.product expanded)
+    const pricesList = await config.stripe.prices.list({
+      lookup_keys: [lookupKey],
+      active: true,
+      expand: ["data.product"],
+    });
+
+    let price: Stripe.Price | undefined = pricesList.data?.[0];
+
+    // 2. Fallback when not found via lookup key:
+    // personal + year -> STRIPE_PRICE_BASIC
+    // coach + year -> STRIPE_PRICE_PRO
+    // otherwise 503 price_not_configured
+    if (!price) {
+      let fallbackPriceId: string | null = null;
+      if (plan === "personal" && interval === "year") {
+        fallbackPriceId = config.stripePriceBasic;
+      } else if (plan === "coach" && interval === "year") {
+        fallbackPriceId = config.stripePricePro;
+      }
+
+      if (!fallbackPriceId) {
+        return createBillingErrorResponse("price_not_configured", corsHeaders);
+      }
+
+      price = await config.stripe.prices.retrieve(fallbackPriceId);
+    }
+
+    // 3. Apply price-mode check to resolved price
+    if (!validatePriceMode(price, config.isLive)) {
+      return createBillingErrorResponse("price_mode_mismatch", corsHeaders);
+    }
+
+    const priceId = price.id;
+
     // Read existing billing_customer_id using service client
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: userData } = await serviceClient
@@ -166,10 +208,14 @@ export async function handler(req: Request): Promise<Response> {
       client_reference_id: user.id,
       metadata: {
         user_id: user.id,
+        plan,
+        interval,
       },
       subscription_data: {
         metadata: {
           user_id: user.id,
+          plan,
+          interval,
         },
       },
       success_url: `${origin}/settings?billing=success`,
@@ -197,6 +243,9 @@ export async function handler(req: Request): Promise<Response> {
   } catch (err) {
     if (err instanceof LiveKeyRefusedError || (err as any)?.code === "live_keys_refused") {
       return createBillingErrorResponse("live_keys_refused", corsHeaders);
+    }
+    if (err instanceof PriceModeMismatchError || (err as any)?.code === "price_mode_mismatch") {
+      return createBillingErrorResponse("price_mode_mismatch", corsHeaders);
     }
     console.error("[create-checkout] Failed to create checkout session:", (err as Error)?.message || err);
     return new Response(
