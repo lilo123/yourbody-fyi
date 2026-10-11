@@ -374,3 +374,55 @@ Configured in `supabase/config.toml` under `[functions.delete-account]` with `ve
 
 ### Staging-Only Testing Note
 Account deletion permanently and irreversibly destroys user records and offline data. The `account_deletion_enabled` flag must remain `false` in production environments until formally verified in staging with synthetic test accounts.
+
+## Owner Dashboard
+
+### Overview
+The Owner Dashboard provides administrative visibility into subscription distributions and AI usage metrics for authorized project owners. It operates via a read-only serverless edge function (`owner-stats`) querying a SECURITY DEFINER database function (`public.get_owner_stats()`). The dashboard exposes aggregated counts only; it never returns or displays personal identifiable information (PII) such as email addresses, user names, or user IDs.
+
+### Configuration & Access Control
+Access to the dashboard is double-gated behind an environment secret and a database feature flag:
+- **Secret (`OWNER_USER_IDS`)**: A comma-separated list of authorized Supabase auth user UUIDs (e.g. `OWNER_USER_IDS="<uuid1>,<uuid2>"`). If unset, empty, or if the authenticated caller's user ID is not in this list, the edge function immediately returns `403 { "error": "Forbidden: Not an owner", "code": "forbidden" }`.
+- **Feature Flag (`owner_dashboard_enabled`)**: A boolean key in `public.app_config`. Both the client card and edge function verify this flag; if missing or `false`, the client does not render the card and the edge function returns `403 { "error": "Feature disabled", "code": "feature_disabled" }`.
+- Both the secret and feature flag are unset/disabled by default.
+
+### Edge Function (`owner-stats`)
+- **Path**: `/functions/v1/owner-stats` (`verify_jwt = true` in `supabase/config.toml`).
+- **HTTP Methods**: `GET` and `POST` (plus `OPTIONS` for CORS preflight).
+- **Authentication**: Validates caller Bearer JWT with the anon client (`auth.getUser()`).
+- **Authorization**: Enforces caller user ID presence in `OWNER_USER_IDS` and checks `app_config.owner_dashboard_enabled = true`.
+- **Database Access**: Uses `service_role` to invoke `public.get_owner_stats()`. Execution permissions are revoked from `PUBLIC`, `anon`, and `authenticated`.
+- **Response Shape**:
+  ```json
+  {
+    "generated_at": "2026-10-11T12:00:00Z",
+    "tiers": {
+      "personal": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "coach": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "coach_pro": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "trial": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "free": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 }
+    },
+    "ai_today": {
+      "total_uses": 0,
+      "distinct_users": 0,
+      "by_plan": [
+        { "plan": "pro", "uses": 0 }
+      ]
+    }
+  }
+  ```
+
+### How to Enable
+To activate the Owner Dashboard for specific project owners:
+1. Configure the `OWNER_USER_IDS` secret in Supabase:
+   ```bash
+   supabase secrets set OWNER_USER_IDS="<user_uuid_1>,<user_uuid_2>"
+   ```
+2. Enable the feature flag in `public.app_config` using a `service_role` database client:
+   ```sql
+   INSERT INTO public.app_config (key, value, description)
+   VALUES ('owner_dashboard_enabled', 'true'::jsonb, 'Enables owner dashboard card in Settings')
+   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+   ```
+3. To disable, set the flag to `false` or unset `OWNER_USER_IDS`.
