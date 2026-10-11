@@ -21,14 +21,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
+const targetDir = process.argv[2] || process.env.PERF_DIST_DIR || 'dist';
 const budgetConfigPath = path.resolve(rootDir, 'perf-budget.json');
-const distDir = path.resolve(rootDir, 'dist');
+const distDir = path.resolve(rootDir, targetDir);
 const reportPath = path.resolve(distDir, 'bundle-size-report.json');
 const indexHtmlPath = path.resolve(distDir, 'index.html');
 const componentsDir = path.resolve(rootDir, 'src', 'components');
 
 console.log('====================================================');
-console.log('⚡ Yourbody Performance Budget Verification');
+console.log(`⚡ Yourbody Performance Budget Verification (${targetDir})`);
 console.log('====================================================\n');
 
 // 1. Load budget thresholds

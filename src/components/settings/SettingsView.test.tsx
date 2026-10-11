@@ -417,6 +417,8 @@ describe('SettingsView', () => {
   it('passes axe accessibility audits with no violations', async () => {
     const { container } = renderComponent();
     await screen.findByDisplayValue('Coach Demo');
+    await screen.findByTestId('coach-capacity-badge');
+    await screen.findByTestId('toggle-auto-timer');
     await expectNoA11yViolations(container);
   });
 

@@ -124,11 +124,15 @@ function versionJsonPlugin(): Plugin {
   };
 }
 
-function cleanSourceMapsPlugin(outDir = 'dist'): Plugin {
+function cleanSourceMapsPlugin(): Plugin {
+  let resolvedOutDir = 'dist';
   return {
     name: 'clean-sourcemaps-post-build',
     apply: 'build',
     enforce: 'post',
+    configResolved(config) {
+      resolvedOutDir = config.build.outDir || 'dist';
+    },
     closeBundle() {
       const deleteMaps = (dir: string) => {
         if (!fs.existsSync(dir)) return;
@@ -146,7 +150,7 @@ function cleanSourceMapsPlugin(outDir = 'dist'): Plugin {
           }
         }
       };
-      deleteMaps(path.resolve(outDir));
+      deleteMaps(path.resolve(resolvedOutDir));
     },
   };
 }
