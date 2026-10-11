@@ -35,7 +35,7 @@ export const RefundsPage: React.FC = () => {
           </h2>
         </div>
         <p>
-          Yourbody subscriptions (such as Basic and Pro plans) are billed on an annual basis in advance via Stripe.
+          Yourbody subscriptions (such as Personal, Coach, and Coach Pro plans) are billed on an annual basis in advance via Stripe.
         </p>
         <p>
           If you purchase or renew an annual subscription and decide within 30 days that the Service is not right for you, contact us within that 30-day window and we will issue a full refund for that payment.

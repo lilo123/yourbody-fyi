@@ -1,6 +1,12 @@
 import { supabase } from './supabase';
 
-export type CheckoutPlan = 'basic' | 'pro';
+export type CheckoutPlan = 'personal' | 'coach' | 'coach_pro';
+export type CheckoutInterval = 'month' | 'year';
+
+export interface CheckoutOptions {
+  plan: CheckoutPlan;
+  interval?: CheckoutInterval;
+}
 
 export interface BillingResult {
   ok: boolean;
@@ -38,10 +44,17 @@ export async function extractBillingErrorMessage(error: any): Promise<string> {
   return 'Unable to process billing request. Please try again.';
 }
 
-export async function startCheckout(plan: CheckoutPlan): Promise<BillingResult> {
+export async function startCheckout(
+  planOrOptions: CheckoutPlan | CheckoutOptions,
+  maybeInterval?: CheckoutInterval
+): Promise<BillingResult> {
+  const plan = typeof planOrOptions === 'object' ? planOrOptions.plan : planOrOptions;
+  const interval =
+    (typeof planOrOptions === 'object' ? planOrOptions.interval : maybeInterval) || 'year';
+
   try {
     const { data, error } = await supabase.functions.invoke('create-checkout', {
-      body: { plan },
+      body: { plan, interval },
     });
 
     if (error) {

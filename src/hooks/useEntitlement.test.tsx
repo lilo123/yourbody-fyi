@@ -138,6 +138,39 @@ describe('useEntitlement', () => {
     });
   });
 
+  it('success mapping: correctly maps athlete plan', async () => {
+    const athleteResponse: EntitlementRpcResponse = {
+      plan_effective: 'athlete',
+      plan: null,
+      paid_until: null,
+      trial_ends_at_effective: null,
+      has_pro: false,
+    };
+
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({
+      data: athleteResponse as any,
+      error: null,
+    } as any);
+
+    const { result } = renderHook(() => useEntitlement(), {
+      wrapper: createWrapper(mockUser),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.plan).toBe('athlete');
+    });
+
+    expect(result.current).toEqual({
+      plan: 'athlete',
+      isPro: false,
+      isPaid: false,
+      trialEndsAt: null,
+      paidUntil: null,
+      isLoading: false,
+    });
+  });
+
   it('success mapping: correctly maps trial user', async () => {
     const trialResponse: EntitlementRpcResponse = {
       plan_effective: 'trial',

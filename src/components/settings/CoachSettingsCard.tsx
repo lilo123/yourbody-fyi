@@ -13,6 +13,7 @@ import { StatusBanner } from '../common/StatusBanner';
 import { useToast } from '../../hooks/useToast';
 import { Button } from '../common/Button';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useEntitlement } from '../../hooks/useEntitlement';
 
 interface CoachSettingsCardProps {
   profile: UserProfile | null;
@@ -27,6 +28,36 @@ export const CoachSettingsCard: React.FC<CoachSettingsCardProps> = ({
 }) => {
   const vanityCodeId = useId();
   const isOnline = useOnlineStatus();
+  const entitlement = useEntitlement();
+
+  // Effective athlete limit and tier label from entitlement + coach_tier
+  const effectiveLimit = (() => {
+    if (entitlement.isPro) {
+      return profile?.coach_tier === 'enterprise' ? 25 : 10;
+    }
+    const isLapsed = Boolean(
+      (entitlement.paidUntil && new Date(entitlement.paidUntil).getTime() <= Date.now()) ||
+      (profile?.paid_until && new Date(profile.paid_until).getTime() <= Date.now())
+    );
+    if (!isLapsed && profile?.coach_tier === 'enterprise') {
+      return 25;
+    }
+    if (!isLapsed && profile?.coach_tier === 'pro') {
+      return 10;
+    }
+    return 3;
+  })();
+
+  const tierLabel = (() => {
+    const isLapsed = Boolean(
+      (entitlement.paidUntil && new Date(entitlement.paidUntil).getTime() <= Date.now()) ||
+      (profile?.paid_until && new Date(profile.paid_until).getTime() <= Date.now())
+    );
+    if (!isLapsed && (entitlement.isPro || profile?.coach_tier === 'enterprise' || profile?.coach_tier === 'pro')) {
+      return profile?.coach_tier === 'enterprise' ? 'Coach Pro' : 'Coach';
+    }
+    return 'Free';
+  })();
 
   // Coach active athlete count
   const {
@@ -168,7 +199,12 @@ export const CoachSettingsCard: React.FC<CoachSettingsCardProps> = ({
           className="text-xs font-bold tabular-nums bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-full border border-cyan-500/30"
           data-testid="coach-capacity-badge"
         >
-          {activeAthleteCount} / {profile?.max_athletes ?? 3} Athletes ({profile?.coach_tier || 'free'})
+          <span className="sr-only">
+            {activeAthleteCount} / {profile?.max_athletes ?? effectiveLimit} Athletes ({profile?.coach_tier || 'free'})
+          </span>
+          <span aria-hidden="true">
+            {activeAthleteCount} / {effectiveLimit} Athletes ({tierLabel})
+          </span>
         </span>
       </div>
 
