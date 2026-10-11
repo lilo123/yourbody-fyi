@@ -209,6 +209,17 @@ jobs:
         continue-on-error: true
         run: npm run perf:verify
 
+      - name: Upload Playwright test results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-results-desktop-chrome
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   e2e-mobile-safari:
     name: E2E - Mobile Safari
     runs-on: ubuntu-24.04
@@ -243,6 +254,17 @@ jobs:
       - name: Run E2E tests (Mobile Safari)
         run: npx playwright test tests/e2e --project='Mobile Safari' --workers=1
 
+      - name: Upload Playwright test results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-results-mobile-safari
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   e2e-narrow-safari:
     name: E2E - Narrow Safari
     runs-on: ubuntu-24.04
@@ -276,6 +298,17 @@ jobs:
 
       - name: Run E2E tests (Narrow Safari 320px)
         run: npx playwright test tests/e2e --project='Narrow Safari (320px)' --workers=1
+
+      - name: Upload Playwright test results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-results-narrow-safari
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
 
   density:
     name: Visual Density
@@ -316,3 +349,14 @@ jobs:
 
       - name: Run visual density gate
         run: npm run test:density
+
+      - name: Upload Playwright test results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-results-visual-density
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
