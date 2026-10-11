@@ -374,8 +374,16 @@ async function resolvePlanAndTierFromLine(
         }
       }
     }
-  } catch (_err) {
-    // If Stripe price retrieve fails (e.g. mock test environment or network error), proceed to fallback by ID
+  } catch (err: any) {
+    const isResourceMissing =
+      err?.code === "resource_missing" ||
+      err?.statusCode === 404 ||
+      err?.raw?.statusCode === 404 ||
+      err?.raw?.code === "resource_missing";
+    if (!isResourceMissing) {
+      throw err;
+    }
+    // Only 404/resource_missing falls through to fallback by ID
   }
 
   // 3. Fallback by ID: STRIPE_PRICE_BASIC -> (basic, free), STRIPE_PRICE_PRO -> (pro, pro)

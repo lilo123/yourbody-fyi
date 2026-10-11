@@ -25,6 +25,20 @@ async function createSignedHeader(payload: string, secret = WEBHOOK_SECRET): Pro
   });
 }
 
+function mockStripePriceNotFound(): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: "resource_missing",
+        message: "No such price",
+        param: "id",
+        type: "invalid_request_error",
+      },
+    }),
+    { status: 404, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 Deno.test("stripe-webhook: missing config returns 503 with billing_not_configured", async () => {
   setupEnv();
   Deno.env.delete("STRIPE_SECRET_KEY");
@@ -400,6 +414,9 @@ Deno.test("stripe-webhook: invoice.paid updates plan and paid_until by billing_c
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/charges/ch_test_1")) {
       return new Response(
         JSON.stringify({
@@ -495,6 +512,9 @@ Deno.test("stripe-webhook: invoice.paid resolves user via subscription metadata 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/charges/ch_test_meta")) {
       return new Response(
         JSON.stringify({
@@ -1428,6 +1448,9 @@ Deno.test("stripe-webhook: invoice.paid resolves plan from pricing.price_details
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/charges/ch_new_shape_1")) {
       return new Response(
         JSON.stringify({
@@ -1526,6 +1549,9 @@ Deno.test("stripe-webhook: invoice.paid resolves plan via subscription item fall
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/subscriptions/sub_item_fallback_1")) {
       return new Response(
         JSON.stringify({
@@ -1647,6 +1673,9 @@ Deno.test("stripe-webhook: invoice.paid with unresolvable plan leaves user uncha
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/rest/v1/billing_events")) {
       if (init?.method === "PATCH") {
         processedAtSet = true;
@@ -1732,6 +1761,9 @@ Deno.test("stripe-webhook: invoice.paid after a disputed charge skips grant", as
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/invoices/in_dispute_1")) {
       return new Response(
         JSON.stringify({
@@ -1861,6 +1893,9 @@ Deno.test("stripe-webhook: invoice.paid after a full refund skips grant", async 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/charges/ch_refunded_1")) {
       return new Response(
         JSON.stringify({
@@ -1965,6 +2000,9 @@ Deno.test("stripe-webhook: invoice.paid after a full refund with keep_access gra
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/charges/ch_keep_access_1")) {
       return new Response(
         JSON.stringify({
@@ -2948,6 +2986,9 @@ Deno.test("stripe-webhook: grandfathered user with active grant buying basic kee
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/charges/ch_gf_test_1")) {
       return new Response(
         JSON.stringify({
@@ -3044,6 +3085,9 @@ Deno.test("stripe-webhook: grandfathered user with expired grant buying basic up
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/charges/ch_gf_expired_1")) {
       return new Response(
         JSON.stringify({
@@ -3139,6 +3183,9 @@ Deno.test("stripe-webhook: non-grandfathered user buying basic overwrites plan a
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
     if (url.includes("/v1/charges/ch_nongf_1")) {
       return new Response(
         JSON.stringify({
@@ -4014,6 +4061,195 @@ Deno.test("stripe-webhook: price mode check rejects retrieved price with mismatc
     const res = await app.fetch(req);
     assertEquals(res.status, 200);
     assertEquals(userUpdated, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+Deno.test("stripe-webhook: invoice.paid price retrieve 500 error returns 502, removes billing_event, and does not update user", async () => {
+  setupEnv();
+
+  let userUpdated = false;
+  let billingEventDeleted = false;
+  const linePeriodEnd = 1794268800;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/prices/price_err_500")) {
+      return new Response(
+        JSON.stringify({ error: { message: "Simulated Stripe API price error" } }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      if (init?.method === "DELETE") {
+        billingEventDeleted = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([{ event_id: "evt_err_500" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdated = true;
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_err_500",
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: "in_err_500",
+          customer: CUSTOMER_ID,
+          lines: {
+            data: [
+              {
+                price: "price_err_500",
+                period: { end: linePeriodEnd },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 502);
+    assertEquals(billingEventDeleted, true);
+    assertEquals(userUpdated, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: invoice.paid price retrieve 404 falls through to fallback id grant", async () => {
+  setupEnv();
+
+  let userUpdatePayload: any = null;
+  const linePeriodEnd = 1794268800;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/charges/ch_fb_404")) {
+      return new Response(
+        JSON.stringify({
+          id: "ch_fb_404",
+          customer: CUSTOMER_ID,
+          amount: 2000,
+          amount_refunded: 0,
+          disputed: false,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/prices/price_basic_env_123")) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: "resource_missing",
+            message: "No such price: price_basic_env_123",
+            param: "id",
+            type: "invalid_request_error",
+          },
+        }),
+        { status: 404, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/rest/v1/billing_grandfather")) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_fb_404" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdatePayload = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          id: TEST_USER_ID,
+          plan: "free",
+          coach_tier: "free",
+          paid_until: null,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_fb_404",
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: "in_fb_404",
+          customer: CUSTOMER_ID,
+          charge: "ch_fb_404",
+          lines: {
+            data: [
+              {
+                price: { id: "price_basic_env_123" },
+                period: { end: linePeriodEnd },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    assertExists(userUpdatePayload);
+    assertEquals(userUpdatePayload.plan, "basic");
+    assertEquals(userUpdatePayload.coach_tier, "free");
   } finally {
     globalThis.fetch = originalFetch;
   }
