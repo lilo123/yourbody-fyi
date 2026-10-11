@@ -216,6 +216,19 @@ All edge functions are configured in `supabase/config.toml` and execute in the S
    - **Signature Verification**: Verifies incoming `Stripe-Signature` header against the raw body using `stripe.webhooks.constructEventAsync()` with `STRIPE_WEBHOOK_SECRET` and `Stripe.createSubtleCryptoProvider()`. Returns `400` (`{ "error": "Invalid signature" }`) on verification failure without leaking details.
    - **Endpoint Path**: `/functions/v1/stripe-webhook`
 
+4. **`sync-billing-email`** (`verify_jwt = true`):
+   - **Method**: `POST`
+   - **Auth**: Requires valid Supabase user JWT via `Authorization: Bearer <token>`. Caller authenticated via `userClient.auth.getUser()`. Always uses the confirmed email from Auth; any email in the request body is strictly ignored.
+   - **Why**: Keeps the Stripe customer's email in sync when a user updates their confirmed account email, ensuring payment receipts and invoices reach their current address without relying on external webhooks. Note that the Stripe Customer Portal (`create-portal-session`) also allows users to directly edit their billing email.
+   - **Behavior**:
+     - Inspects `users.billing_customer_id` via `service_role`. If the user has no customer ID, returns `200 { "synced": false, "reason": "no_customer" }`.
+     - Validates Stripe configuration via `resolveStripeConfig` (returns `503` if unconfigured or live keys are refused).
+     - Retrieves the customer from Stripe (`GET /v1/customers/{id}`). If the customer is deleted or returns 404, returns `200 { "synced": false, "reason": "no_customer" }`.
+     - If `customer.email` already equals the confirmed auth email, returns `200 { "synced": false, "reason": "unchanged" }`.
+     - Otherwise updates the customer email in Stripe (`POST /v1/customers/{id}`) and returns `200 { "synced": true }`.
+     - Stripe communication or API errors return `502 { "code": "stripe_error" }`.
+     - Operates strictly with a single retrieval and optional update per request with no retry loops.
+
 ### Secrets and Environment Configuration
 The following environment secrets must be configured in Supabase (values reside on staging only; production retains none):
 - `STRIPE_SECRET_KEY`: Stripe API secret key (test mode starting with `sk_test_`, or live mode starting with `sk_live_`/`rk_live_` when enabled).
@@ -256,6 +269,8 @@ When using a Stripe restricted API key (`rk_live_...` or `rk_test_...`), the key
 - `GET /v1/prices/{id}`: `Prices: Read` (retrieves price details for fallback price validation and webhook lookup resolution)
 - `POST /v1/checkout/sessions`: `Checkout Sessions: Write` (creates customer checkout sessions)
 - `POST /v1/billing_portal/sessions`: `Customer Portal: Write` (creates customer billing portal sessions)
+- `GET /v1/customers/{id}`: `Customers: Read` (retrieves customer to inspect existing email)
+- `POST /v1/customers/{id}`: `Customers: Write` (updates customer billing email in sync-billing-email)
 - `GET /v1/subscriptions`: `Subscriptions: Read` (lists customer subscriptions for cleanup and resolution)
 - `GET /v1/subscriptions/{id}`: `Subscriptions: Read` (retrieves subscription line details)
 - `DELETE /v1/subscriptions/{id}`: `Subscriptions: Write` (cancels subscriptions upon account deletion, full refunds, or charge disputes)

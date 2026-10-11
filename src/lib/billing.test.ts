@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { supabase } from './supabase';
-import { startCheckout, openBillingPortal, extractBillingErrorMessage, planLabel } from './billing';
+import {
+  startCheckout,
+  openBillingPortal,
+  extractBillingErrorMessage,
+  planLabel,
+  syncBillingEmail,
+} from './billing';
 
 vi.mock('./supabase', () => ({
   supabase: {
@@ -236,6 +242,85 @@ describe('billing client helpers', () => {
       expect(planLabel('pro', 'enterprise', false)).toBe('Free');
       expect(planLabel('basic', null, false)).toBe('Free');
       expect(planLabel('coach', null, false)).toBe('Free');
+    });
+  });
+
+  describe('syncBillingEmail', () => {
+    it('invokes sync-billing-email and returns synced: true on success', async () => {
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: { synced: true },
+        error: null,
+      });
+
+      const result = await syncBillingEmail();
+
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('sync-billing-email');
+      expect(result).toEqual({
+        ok: true,
+        synced: true,
+        reason: undefined,
+      });
+    });
+
+    it('returns synced: false with reason when email unchanged', async () => {
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: { synced: false, reason: 'unchanged' },
+        error: null,
+      });
+
+      const result = await syncBillingEmail();
+
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('sync-billing-email');
+      expect(result).toEqual({
+        ok: true,
+        synced: false,
+        reason: 'unchanged',
+      });
+    });
+
+    it('returns synced: false with reason when no customer', async () => {
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: { synced: false, reason: 'no_customer' },
+        error: null,
+      });
+
+      const result = await syncBillingEmail();
+
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('sync-billing-email');
+      expect(result).toEqual({
+        ok: true,
+        synced: false,
+        reason: 'no_customer',
+      });
+    });
+
+    it('handles function invocation error gracefully without throwing', async () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Edge function returned 502' } as any,
+      });
+
+      const result = await syncBillingEmail();
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe('Edge function returned 502');
+      expect(consoleWarnSpy).toHaveBeenCalled();
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('handles unexpected exceptions gracefully without throwing', async () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(supabase.functions, 'invoke').mockRejectedValueOnce(
+        new Error('Network failure')
+      );
+
+      const result = await syncBillingEmail();
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe('Network failure');
+      expect(consoleWarnSpy).toHaveBeenCalled();
+      consoleWarnSpy.mockRestore();
     });
   });
 });
