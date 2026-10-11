@@ -38,9 +38,10 @@ test.describe('PWA Offline Workout Acceptance Specs', () => {
     await waitForSwControl(page);
 
     // Warm history cache while online so offline navigation has base cache
-    await page.goto('/history');
+    await page.locator('nav a[href="/history"]').click();
     await expect(page.getByRole('heading', { name: 'Workout History' })).toBeVisible();
-    await page.goto('/workout');
+    await expect(page.locator('[data-civil-date="2026-09-28"]')).toBeVisible();
+    await page.locator('nav a[href="/workout"]').click();
     await expect(page.locator('[data-testid="exercise-card-0"]')).toBeVisible();
 
     // Verify initial prior session / PR chips loaded online

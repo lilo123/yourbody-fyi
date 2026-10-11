@@ -298,4 +298,79 @@ describe('WorkoutSessionHistory', () => {
     expect(screen.queryByTestId('delete-session-confirm-dialog')).toBeNull();
     expect(onDeleteSession).not.toHaveBeenCalled();
   });
+
+  it('shows pending offline session with pending-mark while sessions query is pending and offline', () => {
+    mockIsOnline = false;
+    const pendingSession: HistorySession & { pending?: boolean } = {
+      id: 'session-pending-offline',
+      date: '2026-10-10T00:00:00.000Z',
+      workout_date: '2026-10-10',
+      civil_date: '2026-10-10',
+      name: 'Offline Push Day',
+      set_count: 1,
+      total_volume: 1250,
+      pending: true,
+      sets: [
+        {
+          id: 'set-pending-offline-1',
+          workout_id: 'session-pending-offline',
+          exercise_id: 'ex-bench',
+          exercise_name: 'Bench Press',
+          weight: 125,
+          reps: 10,
+          set_index: 1,
+          workout_date: '2026-10-10',
+          workout_name: 'Offline Push Day',
+          set_type: 'working',
+          created_at: '2026-10-10T10:00:00Z',
+          pending: true,
+        } as any,
+      ],
+    };
+
+    render(
+      <MemoryRouter>
+        <WorkoutSessionHistory
+          displayedSessions={[pendingSession]}
+          totalCount={1}
+          isSessionsPending={true}
+          exercises={[{ id: 'ex-bench', name: 'Bench Press', body_parts: ['Chest'] }]}
+          timeRange="all"
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+          onLoadMore={vi.fn()}
+          expandedSessionIds={new Set(['session-pending-offline'])}
+        />
+      </MemoryRouter>
+    );
+
+    // Skeleton should NOT be shown
+    expect(screen.queryByTestId('history-sessions-skeleton')).toBeNull();
+    // Offline session name and pending marks should be visible
+    expect(screen.getByText('Offline Push Day')).toBeDefined();
+    const pendingMarks = screen.getAllByTestId('pending-mark');
+    expect(pendingMarks.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows skeleton when sessions query is pending and there are no sessions at all', () => {
+    mockIsOnline = false;
+    render(
+      <MemoryRouter>
+        <WorkoutSessionHistory
+          displayedSessions={[]}
+          totalCount={null}
+          isSessionsPending={true}
+          exercises={[]}
+          timeRange="all"
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+          onLoadMore={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('history-sessions-skeleton')).toBeDefined();
+    expect(screen.queryByTestId('pending-mark')).toBeNull();
+  });
 });
+
