@@ -207,8 +207,8 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
   const virtualItems = virtualizer.getVirtualItems();
   const isVirtual = virtualItems.length > 0;
 
-  // 3 Skeleton cards while initial fetch is pending or not yet settled
-  if (isSessionsPending || (totalCount === null && displayedSessions.length === 0)) {
+  // 3 Skeleton cards while initial fetch is pending or not yet settled (only when nothing to show)
+  if (displayedSessions.length === 0 && (isSessionsPending || totalCount === null)) {
     return (
       <div data-testid="history-sessions-skeleton" className="space-y-4">
         <Skeleton variant="card" count={3} />
