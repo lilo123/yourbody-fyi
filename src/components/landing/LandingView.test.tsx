@@ -42,6 +42,11 @@ describe('LandingView component', () => {
     expect(comingSoonBadges.length).toBeGreaterThanOrEqual(3);
   });
 
+  it('does not contain unbacked priority support claims', () => {
+    renderLanding();
+    expect(screen.queryByText(/Priority support/i)).toBeNull();
+  });
+
   it('toggles between monthly and yearly pricing discounts', () => {
     renderLanding();
 

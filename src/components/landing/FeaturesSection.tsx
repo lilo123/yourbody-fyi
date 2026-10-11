@@ -24,7 +24,7 @@ export const FeaturesSection: React.FC = () => {
               The Offline Gym Logger
             </h3>
             <p className="mt-3 text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              Fast set and rep logging with zero loading spinners and an automatic rest timer. Works seamlessly in basements and underground gyms with zero cellular service. Sets save instantly to your phone and sync automatically once you&apos;re back online.
+              Fast set and rep logging with zero loading spinners and an automatic rest timer. Works without signal when your gym has zero cellular reception. Sets save on your phone first and sync automatically once you&apos;re back online.
             </p>
           </div>
           <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center gap-2 text-xs font-semibold text-cyan-300">
@@ -60,7 +60,7 @@ export const FeaturesSection: React.FC = () => {
               Coach Mode (Optional Power)
             </h3>
             <p className="mt-3 text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              Built for personal trainers and strength coaches. Manage 3 to 25 athletes from one clean dashboard, check training adherence, and provide your athletes with AI meal logging directly from your coach plan.
+              Built for personal trainers and strength coaches. Manage 3 to 25 athletes from one dashboard, review athlete workout history and daily nutrition macros, and provide your athletes with AI meal logging directly from your coach plan.
             </p>
           </div>
           <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center gap-2 text-xs font-semibold text-cyan-300">
@@ -82,7 +82,7 @@ export const FeaturesSection: React.FC = () => {
             </p>
           </div>
           <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center gap-2 text-xs font-semibold text-cyan-300">
-            <span>Home screen install · Lightweight & instant</span>
+            <span>Home screen install · Saves on your phone first</span>
           </div>
         </div>
       </div>

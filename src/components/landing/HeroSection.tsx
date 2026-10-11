@@ -46,7 +46,7 @@ export const HeroSection: React.FC = () => {
         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 mb-4">
           <div>
             <div className="text-sm font-bold text-zinc-100">Bench Press & Arms</div>
-            <div className="text-xs text-zinc-400">Underground Gym · Offline Mode</div>
+            <div className="text-xs text-zinc-400">Works without signal · Saves on your phone first</div>
           </div>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
