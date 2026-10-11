@@ -10,7 +10,8 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:5173',
-    trace: 'on-first-retry',
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
+    screenshot: 'only-on-failure',
   },
   projects: [
     {

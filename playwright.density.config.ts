@@ -21,7 +21,8 @@ export default defineConfig({
     baseURL: baseUrl,
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 1,
-    trace: 'off',
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
+    screenshot: 'only-on-failure',
   },
   projects: [
     {
