@@ -18,6 +18,10 @@ export interface AuthContextType {
   resendConfirmation: (email: string) => Promise<{ success: boolean; error?: string }>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  changePassword?: (currentPassword: string, newPassword: string, nonce?: string) => Promise<{ success: boolean; error?: string; needsReauthentication?: boolean }>;
+  reauthenticate?: () => Promise<{ success: boolean; error?: string }>;
+  changeEmail?: (newEmail: string) => Promise<{ success: boolean; error?: string; user?: User }>;
+  refreshSession?: () => Promise<User | null>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

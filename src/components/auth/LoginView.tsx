@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Zap, AlertCircle, Eye, EyeOff, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
 import { isTermsConsentEnabled, CURRENT_TERMS_VERSION } from '../../config/features';
+import { MIN_PASSWORD_LENGTH } from '../../constants/auth';
 
 type AuthMode = 'signin' | 'register' | 'check_email' | 'forgot_password';
 
@@ -38,8 +39,8 @@ export const LoginView: React.FC = () => {
     setLoading(true);
 
     if (mode === 'register') {
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters');
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
         setLoading(false);
         return;
       }

@@ -583,6 +583,95 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string, nonce?: string) => {
+      try {
+        const currentUserEmail = user?.email;
+        if (!currentUserEmail) {
+          return { success: false, error: 'User is not logged in' };
+        }
+
+        if (!nonce) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: currentUserEmail,
+            password: currentPassword,
+          });
+          if (signInError) {
+            return { success: false, error: 'Current password is incorrect' };
+          }
+        }
+
+        const updatePayload: { password: string; nonce?: string } = {
+          password: newPassword,
+        };
+        if (nonce) {
+          updatePayload.nonce = nonce;
+        }
+
+        const { error: updateError } = await supabase.auth.updateUser(updatePayload);
+        if (updateError) {
+          const isReauthNeeded =
+            (updateError as any).code === 'reauthentication_needed' ||
+            updateError.message?.toLowerCase().includes('reauthentication');
+
+          if (isReauthNeeded) {
+            const { error: reauthErr } = await supabase.auth.reauthenticate();
+            if (reauthErr) {
+              return { success: false, error: reauthErr.message };
+            }
+            return { success: false, needsReauthentication: true };
+          }
+          return { success: false, error: updateError.message };
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Failed to change password' };
+      }
+    },
+    [user]
+  );
+
+  const reauthenticate = useCallback(async () => {
+    try {
+      const { error } = await supabase.auth.reauthenticate();
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to send reauthentication code' };
+    }
+  }, []);
+
+  const changeEmail = useCallback(async (newEmail: string) => {
+    try {
+      const { data, error } = await supabase.auth.updateUser(
+        { email: newEmail.trim().toLowerCase() },
+        { emailRedirectTo: `${window.location.origin}/settings?email=changed` }
+      );
+      if (error) return { success: false, error: error.message };
+      if (data?.user) {
+        setUser(data.user);
+      }
+      return { success: true, user: data?.user };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to update email' };
+    }
+  }, []);
+
+  const refreshSession = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (!error && data?.session?.user) {
+        setUser(data.session.user);
+        return data.session.user;
+      }
+      return null;
+    } catch (err) {
+      console.warn('[AuthContext] refreshSession error:', err);
+      return null;
+    }
+  }, []);
+
   const role: UserRole = profile?.role === 'coach' ? viewMode : 'athlete';
   const isCoachMode = Boolean(profile?.is_coach_mode || profile?.role === 'coach' || role === 'coach');
 
@@ -603,6 +692,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       resendConfirmation,
       requestPasswordReset,
       resetPassword,
+      changePassword,
+      reauthenticate,
+      changeEmail,
+      refreshSession,
     }),
     [
       user,
@@ -620,6 +713,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       resendConfirmation,
       requestPasswordReset,
       resetPassword,
+      changePassword,
+      reauthenticate,
+      changeEmail,
+      refreshSession,
     ]
   );
 

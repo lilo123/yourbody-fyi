@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
 import { useToast } from '../../hooks/useToast';
+import { MIN_PASSWORD_LENGTH } from '../../constants/auth';
 
 export const ResetPasswordView: React.FC = () => {
   const { resetPassword } = useAuth();
@@ -29,8 +30,8 @@ export const ResetPasswordView: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
       return;
     }
     if (password !== confirmPassword) {
