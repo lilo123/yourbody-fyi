@@ -5,6 +5,7 @@ import {
   getStripeConfig,
   LiveKeyRefusedError,
   createBillingErrorResponse,
+  validatePriceMode,
 } from "../_shared/stripeConfig.ts";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -306,6 +307,86 @@ async function resolveChargesForInvoice(
   }
 
   return resolvedCharges;
+}
+
+export type CoachTier = "free" | "pro" | "enterprise";
+
+export interface ResolvedPlanTier {
+  plan: "basic" | "pro";
+  coach_tier: CoachTier;
+}
+
+export function resolvePlanFromLookupKey(lookupKey?: string | null): ResolvedPlanTier | null {
+  if (!lookupKey) {
+    return null;
+  }
+  if (lookupKey.startsWith("coach_pro_") || lookupKey === "coach_pro") {
+    return { plan: "pro", coach_tier: "enterprise" };
+  }
+  if (lookupKey === "coach_monthly" || lookupKey === "coach_yearly" || lookupKey === "coach") {
+    return { plan: "pro", coach_tier: "pro" };
+  }
+  if (lookupKey.startsWith("personal_") || lookupKey === "personal") {
+    return { plan: "basic", coach_tier: "free" };
+  }
+  return null;
+}
+
+async function resolvePlanAndTierFromLine(
+  line: any,
+  config: { stripe: Stripe; isLive: boolean; stripePriceBasic: string | null; stripePricePro: string | null },
+): Promise<ResolvedPlanTier | null> {
+  if (!line || typeof line !== "object") {
+    return null;
+  }
+
+  // 1. Direct lookup key on line if present
+  const directLookupKey =
+    line.price?.lookup_key ||
+    line.pricing?.price_details?.price?.lookup_key ||
+    line.pricing?.price_details?.lookup_key;
+  if (directLookupKey) {
+    const fromDirect = resolvePlanFromLookupKey(directLookupKey);
+    if (fromDirect) {
+      if (line.price?.livemode !== undefined && !validatePriceMode(line.price, config.isLive)) {
+        return null;
+      }
+      return fromDirect;
+    }
+  }
+
+  const priceId = resolvePriceIdFromLine(line);
+  if (!priceId) {
+    return null;
+  }
+
+  // 2. If line has only a price id, retrieve price (GET /v1/prices/{id}) for its lookup_key
+  try {
+    const priceObj = await config.stripe.prices.retrieve(priceId);
+    if (priceObj) {
+      if (!validatePriceMode(priceObj, config.isLive)) {
+        return null;
+      }
+      if (priceObj.lookup_key) {
+        const fromRetrieved = resolvePlanFromLookupKey(priceObj.lookup_key);
+        if (fromRetrieved) {
+          return fromRetrieved;
+        }
+      }
+    }
+  } catch (_err) {
+    // If Stripe price retrieve fails (e.g. mock test environment or network error), proceed to fallback by ID
+  }
+
+  // 3. Fallback by ID: STRIPE_PRICE_BASIC -> (basic, free), STRIPE_PRICE_PRO -> (pro, pro)
+  if (config.stripePriceBasic && priceId === config.stripePriceBasic) {
+    return { plan: "basic", coach_tier: "free" };
+  }
+  if (config.stripePricePro && priceId === config.stripePricePro) {
+    return { plan: "pro", coach_tier: "pro" };
+  }
+
+  return null;
 }
 
 export interface EntitlementResolutionInput {
@@ -742,11 +823,11 @@ export async function handler(req: Request): Promise<Response> {
           typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
 
         let targetUserId: string | null = null;
-        let currentUserRow: { id: string; plan?: string | null; paid_until?: string | null } | null = null;
+        let currentUserRow: { id: string; plan?: string | null; paid_until?: string | null; coach_tier?: string | null } | null = null;
         if (invCustId) {
           const { data: userRow, error: selectError } = await serviceClient
             .from("users")
-            .select("id, plan, paid_until")
+            .select("id, plan, paid_until, coach_tier")
             .eq("billing_customer_id", invCustId)
             .maybeSingle();
           if (selectError) {
@@ -773,7 +854,7 @@ export async function handler(req: Request): Promise<Response> {
         if (targetUserId && !currentUserRow) {
           const { data: userRow, error: selectError } = await serviceClient
             .from("users")
-            .select("id, plan, paid_until")
+            .select("id, plan, paid_until, coach_tier")
             .eq("id", targetUserId)
             .maybeSingle();
           if (selectError) {
@@ -786,16 +867,14 @@ export async function handler(req: Request): Promise<Response> {
           }
         }
 
-        let plan: "basic" | "pro" | null = null;
+        let resolvedPlanTier: ResolvedPlanTier | null = null;
         let linePeriodEnd: number | null = null;
 
         const lines = invoice.lines?.data || [];
         for (const line of lines) {
-          const priceId = resolvePriceIdFromLine(line);
-          if (config.stripePriceBasic && priceId === config.stripePriceBasic) {
-            plan = "basic";
-          } else if (config.stripePricePro && priceId === config.stripePricePro) {
-            plan = "pro";
+          const resolved = await resolvePlanAndTierFromLine(line, config);
+          if (resolved) {
+            resolvedPlanTier = resolved;
           }
           if (line.period?.end != null) {
             linePeriodEnd = line.period.end;
@@ -803,18 +882,15 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         // If plan is still unknown, attempt subscription item price resolution
-        if (!plan) {
+        if (!resolvedPlanTier) {
           const subId = resolveSubscriptionId(invoice, lines);
           if (subId) {
             const subscription = await config.stripe.subscriptions.retrieve(subId);
             const subItems = subscription?.items?.data || [];
             for (const item of subItems) {
-              const itemPriceId = resolvePriceIdFromLine(item) || (item as any)?.plan?.id;
-              if (config.stripePriceBasic && itemPriceId === config.stripePriceBasic) {
-                plan = "basic";
-                break;
-              } else if (config.stripePricePro && itemPriceId === config.stripePricePro) {
-                plan = "pro";
+              const resolved = await resolvePlanAndTierFromLine(item, config);
+              if (resolved) {
+                resolvedPlanTier = resolved;
                 break;
               }
             }
@@ -826,7 +902,7 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         // If plan cannot be resolved, leave user unchanged and log warning
-        if (!plan) {
+        if (!resolvedPlanTier) {
           console.warn(
             `[stripe-webhook] invoice.paid could not resolve plan for invoice ${invoice.id}; leaving user unchanged`,
           );
@@ -899,9 +975,11 @@ export async function handler(req: Request): Promise<Response> {
 
           const effective = resolveGrandfatherAwareEntitlements({
             currentPlan: currentUserRow?.plan,
-            incomingPlan: plan,
+            incomingPlan: resolvedPlanTier.plan,
             currentPaidUntil: currentUserRow?.paid_until,
             incomingPaidUntil: incomingPaidUntilIso,
+            currentCoachTier: currentUserRow?.coach_tier,
+            incomingCoachTier: resolvedPlanTier.coach_tier,
             isGrandfatherActive,
           });
 

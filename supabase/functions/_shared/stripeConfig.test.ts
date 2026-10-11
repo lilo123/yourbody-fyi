@@ -216,4 +216,10 @@ Deno.test("stripeConfig: createBillingErrorResponse formats status and body corr
   const data2 = await res2.json();
   assertEquals(data2.code, "price_mode_mismatch");
   assertEquals(data2.error, "Price livemode does not match Stripe key mode.");
+
+  const res3 = createBillingErrorResponse("price_not_configured");
+  assertEquals(res3.status, 503);
+  const data3 = await res3.json();
+  assertEquals(data3.code, "price_not_configured");
+  assertEquals(data3.error, "Price is not configured.");
 });
