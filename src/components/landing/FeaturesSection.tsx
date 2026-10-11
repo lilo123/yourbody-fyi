@@ -24,7 +24,7 @@ export const FeaturesSection: React.FC = () => {
               The Offline Gym Logger
             </h3>
             <p className="mt-3 text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              Fast set and rep logging with an automatic rest timer. Sets save on your phone first, so logging doesn&apos;t wait for the network. Works without signal when your gym has zero cellular reception, and syncs automatically once you&apos;re back online.
+              Fast set and rep logging with an optional automatic rest timer. Sets save on your phone first, so logging doesn&apos;t wait for the network. Works without signal when your gym has zero cellular reception, and syncs automatically once you&apos;re back online.
             </p>
 
             {/* Stylized UI Pattern */}
