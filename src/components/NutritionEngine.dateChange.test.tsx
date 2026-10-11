@@ -120,7 +120,7 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     const input = screen.getByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await userEvent.type(input, 'avocado toast and poached egg');
+    fireEvent.change(input, { target: { value: 'avocado toast and poached egg' } });
     fireEvent.click(screen.getByText('Analyze Meal'));
 
     await waitFor(() => {
@@ -171,14 +171,15 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     expect((dateInput as HTMLInputElement).value).toBe(dateX);
 
     // 2. Open manual entry form
+    const user = userEvent.setup({ delay: null });
     fireEvent.click(screen.getByText('Manual Entry'));
 
-    await userEvent.type(screen.getByTestId('dish-name-input'), 'Protein Oats');
-    await userEvent.type(screen.getByTestId('calories-input'), '420');
-    await userEvent.type(screen.getByTestId('protein-input'), '32');
-    await userEvent.type(screen.getByTestId('carbs-input'), '55');
-    await userEvent.type(screen.getByTestId('fat-input'), '8');
-    await userEvent.type(screen.getByTestId('fiber-input'), '7');
+    await user.type(screen.getByTestId('dish-name-input'), 'Protein Oats');
+    await user.type(screen.getByTestId('calories-input'), '420');
+    await user.type(screen.getByTestId('protein-input'), '32');
+    await user.type(screen.getByTestId('carbs-input'), '55');
+    await user.type(screen.getByTestId('fat-input'), '8');
+    await user.type(screen.getByTestId('fiber-input'), '7');
 
     // Submit manual meal form to stage into StagedMealCard
     fireEvent.click(screen.getByText('Log Meal'));
@@ -283,23 +284,19 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     fireEvent.change(dateInput, { target: { value: dateX } });
 
     // 2. Stage meal of 600 kcal, 45g protein
+    const user = userEvent.setup({ delay: null });
     const input = screen.getByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await userEvent.type(input, 'salmon bowl');
+    await user.type(input, 'salmon bowl');
     fireEvent.click(screen.getByText('Analyze Meal'));
 
     await waitFor(() => {
       expect(screen.getByTestId('staged-meal-day-total')).toBeInTheDocument();
+      expect(screen.getByTestId('day-total-label')).toHaveTextContent('Day total');
+      expect(screen.getByTestId('day-total-val-calories')).toHaveTextContent('1100');
+      expect(screen.getByTestId('day-total-val-protein')).toHaveTextContent('80');
     });
-
-    // On date X:
-    // Intake on X = 500 kcal, 35g protein
-    // Staged meal = 600 kcal, 45g protein
-    // Day total = 500 + 600 = 1100 kcal, 35 + 45 = 80g protein
-    expect(screen.getByTestId('day-total-label')).toHaveTextContent('Day total');
-    expect(screen.getByTestId('day-total-val-calories')).toHaveTextContent('1100');
-    expect(screen.getByTestId('day-total-val-protein')).toHaveTextContent('80');
 
     // 3. Change date to Y
     fireEvent.change(dateInput, { target: { value: dateY } });
@@ -342,10 +339,11 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     fireEvent.change(dateInput, { target: { value: dateX } });
 
     // 2. Stage meal
+    const user = userEvent.setup({ delay: null });
     const input = screen.getByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await userEvent.type(input, 'greek yogurt bowl');
+    await user.type(input, 'greek yogurt bowl');
     fireEvent.click(screen.getByText('Analyze Meal'));
 
     await waitFor(() => {
