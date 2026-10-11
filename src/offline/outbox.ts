@@ -136,9 +136,7 @@ export function notifyOutboxChanged(userId?: string): void {
       const res: unknown = sub();
       if (res && typeof (res as Promise<unknown>).catch === 'function') {
         (res as Promise<unknown>).catch((e: unknown) => {
-          if (!isDbClosedError(e)) {
-            console.error('[outbox] subscriber error:', e);
-          }
+          console.error('[outbox] subscriber error:', e);
         });
       }
     } catch (e) {
@@ -153,9 +151,7 @@ export function notifyOutboxChanged(userId?: string): void {
           const res: unknown = sub();
           if (res && typeof (res as Promise<unknown>).catch === 'function') {
             (res as Promise<unknown>).catch((e: unknown) => {
-              if (!isDbClosedError(e)) {
-                console.error('[outbox] user subscriber error:', e);
-              }
+              console.error('[outbox] user subscriber error:', e);
             });
           }
         } catch (e) {
@@ -499,18 +495,11 @@ export async function enqueue<K extends OpKind>(input: {
 }
 
 async function readOpsFromDb(userId: string): Promise<OutboxOp[]> {
-  try {
-    const db = await getOfflineDb(userId);
-    const allOps = await db.getAll('outbox');
-    return allOps
-      .filter((op) => op.userId === userId)
-      .sort((a, b) => a.seq - b.seq);
-  } catch (err) {
-    if (isDbClosedError(err)) {
-      return userOpsCache.get(userId) || EMPTY_OPS;
-    }
-    throw err;
-  }
+  const db = await getOfflineDb(userId);
+  const allOps = await db.getAll('outbox');
+  return allOps
+    .filter((op) => op.userId === userId)
+    .sort((a, b) => a.seq - b.seq);
 }
 
 export async function getOutboxOps(userId: string): Promise<OutboxOp[]> {
@@ -572,28 +561,8 @@ export async function getOutboxSummary(userId: string): Promise<OutboxSummary> {
 }
 
 export async function updateOp(userId: string, op: OutboxOp): Promise<void> {
-  try {
-    const db = await getOfflineDb(userId);
-    await db.put('outbox', op);
-  } catch (err) {
-    if (isDbClosedError(err)) {
-      bumpMutationGen(userId);
-      const current = userOpsCache.get(userId);
-      if (current) {
-        const idx = current.findIndex((o) => o.opId === op.opId);
-        if (idx !== -1) {
-          const next = [...current];
-          next[idx] = op;
-          updateUserCache(userId, next);
-        } else {
-          updateUserCache(userId, [...current, op]);
-        }
-      }
-      notifyOutboxChanged(userId);
-      return;
-    }
-    throw err;
-  }
+  const db = await getOfflineDb(userId);
+  await db.put('outbox', op);
   bumpMutationGen(userId);
   const current = userOpsCache.get(userId);
   if (current) {
@@ -617,21 +586,8 @@ export async function updateOp(userId: string, op: OutboxOp): Promise<void> {
 }
 
 export async function deleteOp(userId: string, opId: string): Promise<void> {
-  try {
-    const db = await getOfflineDb(userId);
-    await db.delete('outbox', opId);
-  } catch (err) {
-    if (isDbClosedError(err)) {
-      bumpMutationGen(userId);
-      const current = userOpsCache.get(userId);
-      if (current) {
-        updateUserCache(userId, current.filter((op) => op.opId !== opId));
-      }
-      notifyOutboxChanged(userId);
-      return;
-    }
-    throw err;
-  }
+  const db = await getOfflineDb(userId);
+  await db.delete('outbox', opId);
   bumpMutationGen(userId);
   const current = userOpsCache.get(userId);
   if (current) {

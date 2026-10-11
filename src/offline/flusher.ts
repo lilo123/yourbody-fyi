@@ -380,32 +380,26 @@ export async function enqueueAndAwait<K extends OpKind>(
 
     const unsubscribe = subscribeToOutbox(async () => {
       if (resolved) return;
-      try {
-        const ops = await getOutboxOps(input.userId);
-        const currentOp = ops.find((o) => o.opId === enqueuedOp.opId);
+      const ops = await getOutboxOps(input.userId);
+      const currentOp = ops.find((o) => o.opId === enqueuedOp.opId);
 
-        if (!currentOp) {
-          // Op is no longer in outbox -> synced successfully!
-          resolved = true;
-          clearTimeout(cleanupTimer);
-          unsubscribe();
-          resolve({ status: 'synced', opId: enqueuedOp.opId });
-          return;
-        }
+      if (!currentOp) {
+        // Op is no longer in outbox -> synced successfully!
+        resolved = true;
+        clearTimeout(cleanupTimer);
+        unsubscribe();
+        resolve({ status: 'synced', opId: enqueuedOp.opId });
+        return;
+      }
 
-        if (currentOp.state === 'attention') {
-          resolved = true;
-          clearTimeout(cleanupTimer);
-          unsubscribe();
+      if (currentOp.state === 'attention') {
+        resolved = true;
+        clearTimeout(cleanupTimer);
+        unsubscribe();
 
-          // Remove op so existing inline error + kept input behave exactly as today
-          await deleteOp(input.userId, currentOp.opId);
-          reject(new Error(currentOp.error || 'Operation failed permanently'));
-        }
-      } catch (e) {
-        if (!isDbClosedError(e)) {
-          console.warn('[flusher] Outbox subscription check failed', e);
-        }
+        // Remove op so existing inline error + kept input behave exactly as today
+        await deleteOp(input.userId, currentOp.opId);
+        reject(new Error(currentOp.error || 'Operation failed permanently'));
       }
     });
   });
