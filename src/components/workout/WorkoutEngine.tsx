@@ -8,7 +8,8 @@ import {
   getDayOfWeekAbbr,
   getLocalDateStr,
 } from '../../utils/ghostSets';
-import { workoutSessionStore } from '../../utils/workoutSessionStore';
+import { workoutSessionStore, type SetDraftInput } from '../../utils/workoutSessionStore';
+import { toDisplayWeight } from '../../utils/weight';
 import { Layers, Plus, Check, AlertCircle, RotateCcw } from 'lucide-react';
 import { useWorkoutQueries } from './useWorkoutQueries';
 import { useWorkoutSession } from './useWorkoutSession';
@@ -213,6 +214,50 @@ export const WorkoutEngine: React.FC = () => {
     inputDraftsRef.current = inputDrafts;
     targetRepCountsRef.current = targetRepCounts;
   });
+
+  const handleUnlogSet = useCallback((exIndex: number, rowIdx: number) => {
+    const exName = activeExercises[exIndex];
+    if (!exName) return;
+    const rawSets = getSetsForExerciseToday(exName);
+    const exerciseSetsToday = rawSets.filter(
+      (s) => s.id !== pendingSetId && (!s.id || !pendingDeletedSetIds.has(s.id))
+    );
+    const targetSet = exerciseSetsToday[rowIdx];
+    if (!targetSet) return;
+
+    const setIndex = targetSet.set_index ?? (rowIdx + 1);
+    const draftKey = `${exName}_${setIndex}`;
+    const draftWeight = typeof targetSet.weight === 'number'
+      ? String(toDisplayWeight(targetSet.weight, unit))
+      : '';
+    const draftReps = targetSet.reps != null ? String(targetSet.reps) : '';
+
+    setInputDrafts((prev) => {
+      const updated: SetDraftInput = {
+        weight: draftWeight,
+        reps: draftReps,
+      };
+      workoutSessionStore.setDraftInput(targetUserId, workoutDate, exName, setIndex, updated);
+      return {
+        ...prev,
+        [draftKey]: updated,
+      };
+    });
+
+    if (targetSet.id) {
+      deleteSetMutation.mutate(targetSet.id);
+    }
+  }, [
+    activeExercises,
+    getSetsForExerciseToday,
+    pendingSetId,
+    pendingDeletedSetIds,
+    unit,
+    setInputDrafts,
+    targetUserId,
+    workoutDate,
+    deleteSetMutation,
+  ]);
 
   // 8. Set Commit & Batch Log
   const { handleCommitSet, handleBatchLogExercise } = useWorkoutSetCommit({
@@ -444,6 +489,7 @@ export const WorkoutEngine: React.FC = () => {
                     onUpdateDraft={updateDraft}
                     onCommitSet={handleCommitSet}
                     onEditSet={handleEditSet}
+                    onUnlogSet={handleUnlogSet}
                     onBatchLogExercise={handleBatchLogExercise}
                   />
                   </div>

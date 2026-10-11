@@ -3265,7 +3265,7 @@ describe('WorkoutEngine', () => {
     const workoutId = "w-edit-1";
     const exerciseUUID = "e1e1e1e1-0000-4000-8000-000000000001";
 
-    const setupLoggedSet = () => {
+    const setupLoggedSet = (getSets?: () => any[]) => {
       const setObj = {
         id: "set-edit-1",
         workout_id: workoutId,
@@ -3289,6 +3289,7 @@ describe('WorkoutEngine', () => {
       };
 
       (supabase.from as any).mockImplementation((table: string) => {
+        const currentSets = getSets ? getSets() : [setObj];
         if (table === "exercises") {
           return createSupabaseBuilder("exercises", {
             data: [{ id: exerciseUUID, name: "Barbell Bench Press", body_parts: ["Chest"], is_master: true }],
@@ -3315,7 +3316,7 @@ describe('WorkoutEngine', () => {
                 id: workoutId,
                 date: `${today}T10:00:00.000Z`,
                 name: "Chest Day",
-                sets: [setObj],
+                sets: currentSets,
               },
             ],
             error: null,
@@ -3323,12 +3324,13 @@ describe('WorkoutEngine', () => {
         }
         if (table === "sets") {
           return createSupabaseBuilder("sets", {
-            data: [setObj],
+            data: currentSets,
             error: null,
           });
         }
         return createSupabaseBuilder(table, { data: [], error: null });
       });
+      return setObj;
     };
 
     it("tapping a logged set row opens EditSetSheet", async () => {
@@ -3343,8 +3345,8 @@ describe('WorkoutEngine', () => {
       // Sheet is not open initially
       expect(screen.queryByTestId("edit-set-sheet")).toBeNull();
 
-      // Tap logged set row
-      fireEvent.click(screen.getByTestId("logged-set-row-0-0"));
+      // Tap logged set row edit button
+      fireEvent.click(screen.getByTestId("edit-set-btn-0-0"));
 
       // Sheet opens
       await waitFor(() => {
@@ -3363,8 +3365,8 @@ describe('WorkoutEngine', () => {
 
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
       try {
-        // Tap logged row to open sheet
-        fireEvent.click(screen.getByTestId("logged-set-row-0-0"));
+        // Tap logged row edit button to open sheet
+        fireEvent.click(screen.getByTestId("edit-set-btn-0-0"));
         expect(screen.getByTestId("edit-set-sheet")).toBeDefined();
 
         // Request delete from sheet
@@ -3408,8 +3410,8 @@ describe('WorkoutEngine', () => {
 
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
       try {
-        // Tap logged row and delete via sheet
-        fireEvent.click(screen.getByTestId("logged-set-row-0-0"));
+        // Tap logged row edit button and delete via sheet
+        fireEvent.click(screen.getByTestId("edit-set-btn-0-0"));
         fireEvent.click(screen.getByTestId("delete-set-btn"));
 
         // Set is hidden, toast shown
@@ -3433,6 +3435,48 @@ describe('WorkoutEngine', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it("tapping the tick mark on a logged set immediately unlogs it, restores draft with weight and reps prefilled, and does not open edit sheet", async () => {
+      let activeSets: any[] = [];
+      const setObj = setupLoggedSet(() => activeSets);
+      activeSets = [setObj];
+
+      const deleteSetSpy = vi.spyOn(setsLib, "deleteSet").mockImplementation(async () => {
+        activeSets = [];
+      });
+      renderComponent(true);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("logged-set-row-0-0")).toBeDefined();
+        expect(screen.getByTestId("unlog-set-btn-0-0")).toBeDefined();
+      });
+
+      // Edit sheet is not open
+      expect(screen.queryByTestId("edit-set-sheet")).toBeNull();
+
+      // Tap the tick mark on logged set
+      fireEvent.click(screen.getByTestId("unlog-set-btn-0-0"));
+
+      // Sheet must NOT open (stopPropagation)
+      expect(screen.queryByTestId("edit-set-sheet")).toBeNull();
+
+      // Deletes the set immediately via deleteSet
+      await waitFor(() => {
+        expect(deleteSetSpy).toHaveBeenCalledTimes(1);
+      });
+      expect(deleteSetSpy).toHaveBeenCalledWith(expect.anything(), "set-edit-1");
+
+      // The row reverts to unlogged draft state with weight and reps prefilled
+      await waitFor(() => {
+        expect(screen.queryByTestId("logged-set-row-0-0")).toBeNull();
+        expect(screen.getByTestId("commit-set-btn-0-0")).toBeDefined();
+      });
+
+      const weightInput = screen.getByTestId("ghost-weight-0-0") as HTMLInputElement;
+      const repsInput = screen.getByTestId("ghost-reps-0-0") as HTMLInputElement;
+      expect(weightInput.value).toBe("225");
+      expect(repsInput.value).toBe("8");
     });
   });
 });
