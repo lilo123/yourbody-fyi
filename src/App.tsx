@@ -16,6 +16,7 @@ import { AttentionBanner } from './components/sync/AttentionBanner';
 import { useOfflinePrefetch } from './offline-prefetch';
 import { registerOutboxUpdateBlocker, startAiQueueProcessor } from './offline';
 import { registerUpdateBlocker } from './pwa/updateSafety';
+import { shouldShowLanding } from './utils/routeDecision';
 import './App.css';
 
 registerOutboxUpdateBlocker(registerUpdateBlocker);
@@ -51,6 +52,7 @@ const PrivacyPage = React.lazy(() =>
 const RefundsPage = React.lazy(() =>
   import('./legal/RefundsPage').then((m) => ({ default: m.RefundsPage }))
 );
+const LandingView = React.lazy(() => import('./components/landing/LandingView'));
 
 const LazyFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-12 text-cyan-400 text-xs">
@@ -105,34 +107,23 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // Guard for Coach-only routes
 const CoachRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isCoachMode, loading } = useAuth();
-  if (user) {
-    if (!isCoachMode) {
-      return <Navigate to="/workout" replace />;
-    }
-    return <>{children}</>;
-  }
-  if (loading) return null;
-  return <Navigate to="/login" replace />;
+  if (user) return !isCoachMode ? <Navigate to="/workout" replace /> : <>{children}</>;
+  return loading ? null : <Navigate to="/login" replace />;
 };
 
 // Guard for Login route when already authenticated
 const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isCoachMode, loading } = useAuth();
-  if (user) {
-    return <Navigate to={isCoachMode ? '/coach' : '/workout'} replace />;
-  }
-  if (loading) return null;
-  return <>{children}</>;
+  if (user) return <Navigate to={isCoachMode ? '/coach' : '/workout'} replace />;
+  return loading ? null : <>{children}</>;
 };
 
 // Redirect '/' and '*' to user's last tab route (default /workout) per A12
-const LastRouteRedirect: React.FC = () => {
-  const { user, isCoachMode } = useAuth();
-  let destination = getLastRoute(user?.id);
-  if (destination === '/coach' && user && !isCoachMode) {
-    destination = '/workout';
-  }
-  return <Navigate to={destination} replace />;
+const LastRouteRedirect: React.FC<{ l?: boolean }> = ({ l }) => {
+  const { user, isCoachMode, loading } = useAuth();
+  if (l && loading && !user) return <ProtectedRoute>{null}</ProtectedRoute>;
+  const d = getLastRoute(user?.id);
+  return l && shouldShowLanding(user) ? <LandingView /> : <Navigate to={d === '/coach' && user && !isCoachMode ? '/workout' : d} replace />;
 };
 
 function AppLayout() {
@@ -180,14 +171,11 @@ function AppLayout() {
   const wasOnHistoryRef = useRef(false);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || (visitedUserId && visitedUserId !== user.id)) {
       setVisitedUserId(null);
       historyScrollYRef.current = 0;
     } else if (onHistory) {
       setVisitedUserId(user.id);
-    } else if (visitedUserId && visitedUserId !== user.id) {
-      setVisitedUserId(null);
-      historyScrollYRef.current = 0;
     }
   }, [user, onHistory, visitedUserId]);
 
@@ -195,7 +183,7 @@ function AppLayout() {
   useEffect(() => {
     if (!onHistory) return;
     const handleScroll = () => {
-      if (typeof window !== 'undefined' && window.location.pathname === '/history') {
+      if (window.location.pathname === '/history') {
         historyScrollYRef.current = window.scrollY;
       }
     };
@@ -211,16 +199,8 @@ function AppLayout() {
       if (!wasOnHistoryRef.current) {
         wasOnHistoryRef.current = true;
         const targetY = historyScrollYRef.current;
-        if (typeof requestAnimationFrame === 'function') {
-          const frameId = requestAnimationFrame(() => {
-            if (typeof window.scrollTo === 'function') {
-              window.scrollTo(0, targetY);
-            }
-          });
-          return () => cancelAnimationFrame(frameId);
-        } else if (typeof window.scrollTo === 'function') {
-          window.scrollTo(0, targetY);
-        }
+        const frameId = requestAnimationFrame(() => window.scrollTo?.(0, targetY));
+        return () => cancelAnimationFrame(frameId);
       }
     } else {
       wasOnHistoryRef.current = false;
@@ -236,7 +216,7 @@ function AppLayout() {
       <main className={`flex-1 max-w-xl w-full mx-auto p-4 ${user ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]' : 'pb-8'}`}>
         <React.Suspense fallback={<LazyFallback />}>
           <Routes>
-            <Route path="/" element={<LastRouteRedirect />} />
+            <Route path="/" element={<LastRouteRedirect l />} />
             <Route
               path="/workout"
               element={
