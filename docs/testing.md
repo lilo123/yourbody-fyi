@@ -20,6 +20,7 @@ The primary command to run before raising any major PR is `npm run test:all`. Th
 ### 4. End-to-End Testing (Playwright)
 - **Command**: `npm run test:e2e`
 - Focus: Full browser integration flows, simulating user interactions from auth to logging workouts.
+- **CI Traces & Failure Artifacts**: In CI (`process.env.CI`), Playwright records traces (`retain-on-failure`) and screenshots (`only-on-failure`). If an E2E or visual density job fails, artifacts are uploaded in GitHub Actions under `playwright-results-<job>` (retained for 7 days). Download the artifact and inspect the trace locally with `npx playwright show-trace <path-to-trace.zip>`.
 
 ## Guidelines for Authors
 - For new domains, establish Vitest cases for isolated logic.

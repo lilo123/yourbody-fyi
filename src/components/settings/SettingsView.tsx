@@ -22,6 +22,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 
 const SubscriptionCard = React.lazy(() => import('./SubscriptionCard'));
+const AccountCard = React.lazy(() => import('./AccountCard'));
 
 interface SettingsFormProps {
   profile: UserProfile | null;
@@ -272,6 +273,11 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
         status={status}
         onSave={handleSave}
       />
+
+      {/* Account Settings Card */}
+      <React.Suspense fallback={null}>
+        <AccountCard />
+      </React.Suspense>
 
       {/* Data Export / Backup Card */}
       <DataExportCard
