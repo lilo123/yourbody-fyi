@@ -411,6 +411,34 @@ function tryMatchModifierLine(line: string): string | null {
   if (/^two\s+of$/i.test(trimmed) || /^2\s+of$/i.test(trimmed)) return 'two of';
   if (/^three\s+of$/i.test(trimmed) || /^3\s+of$/i.test(trimmed)) return 'three of';
   if (/^double$/i.test(trimmed)) return 'two of';
+
+  const servingCountMatch = trimmed.match(/^servings?[:=\s—–]+(\d+)$/i);
+  if (servingCountMatch) {
+    return `Servings: ${servingCountMatch[1]}`;
+  }
+
+  const quantityCountMatch = trimmed.match(/^(?:quantity|qty)[:=\s—–]+(\d+)$/i);
+  if (quantityCountMatch) {
+    return `Quantity: ${quantityCountMatch[1]}`;
+  }
+
+  const servingsMultiplierMatch = trimmed.match(/^(?:(\d+)\s*x|x\s*(\d+))\s+servings?$/i);
+  if (servingsMultiplierMatch) {
+    const multiplier = servingsMultiplierMatch[1] || servingsMultiplierMatch[2];
+    return `${multiplier}x servings`;
+  }
+
+  const portionsMultiplierMatch = trimmed.match(/^(?:(\d+)\s*x|x\s*(\d+))\s+portions?$/i);
+  if (portionsMultiplierMatch) {
+    const multiplier = portionsMultiplierMatch[1] || portionsMultiplierMatch[2];
+    return `x${multiplier} portions`;
+  }
+
+  const makesServingsMatch = trimmed.match(/^makes[:=\s—–]+(\d+)\s+servings?$/i);
+  if (makesServingsMatch) {
+    return `Makes ${makesServingsMatch[1]} servings`;
+  }
+
   return null;
 }
 
@@ -592,6 +620,19 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
     return { kind: 'ignorable', value: 0 };
   }
 
+  // Percent macros (e.g. 'Protein: 40%', 'Carbs: 40% of calories', '40% protein', 'Fat: 20% DV')
+  // A macro value followed by '%' (incl. '% of calories', '%DV') is never grams; that macro is unread.
+  if (
+    /^(?:total\s+)?(?:protein|prot|protien|carbs?|carbohydrates?|total\s+carbohydrates?|fat|total\s+fat|dietary\s+fiber|total\s+fiber|fiber|fibre|p|c|f|fib)(?:[:=\s—–]+|\s+-\s+)?(-?\d+(?:[.,]\d+)*(?:\s*\+)?)\s*%(?:\s*(?:of\s+calories|of\s+daily\s+value|dv|daily\s+value))?$/i.test(
+      segment
+    ) ||
+    /^(-?\d+(?:[.,]\d+)*(?:\s*\+)?)\s*%(?:\s*(?:of\s+calories|of\s+daily\s+value|dv|daily\s+value))?\s*(?:of\s+)?(?:protein|prot|protien|carbs?|carbohydrates?|fat|dietary\s+fiber|fiber|fibre)\b/i.test(
+      segment
+    )
+  ) {
+    return null;
+  }
+
   // Label separator regex: handles colon, equals, whitespace, em-dash, en-dash, or spaced hyphen
   const sep = '(?:[:=\\s—–]+|\\s+-\\s+)';
   // Number or range regex: matches numbers with commas/dots or ranges like 600-700, or estimates like 800+
@@ -724,6 +765,9 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   if (proteinMatch) {
     const numRes = parseNumberOrRange(proteinMatch[1]);
     const unit = proteinMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
     if (numRes.value !== null) {
       return {
         kind: 'protein',
@@ -758,6 +802,9 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   if (pShorthandMatch) {
     const numRes = parseLocaleNumber(pShorthandMatch[1]);
     const unit = pShorthandMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
     if (numRes.value !== null) {
       return {
         kind: 'protein',
@@ -785,6 +832,9 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   if (carbsMatch) {
     const numRes = parseNumberOrRange(carbsMatch[1]);
     const unit = carbsMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
     if (numRes.value !== null) {
       return {
         kind: 'carbs',
@@ -819,6 +869,9 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   if (cShorthandMatch) {
     const numRes = parseLocaleNumber(cShorthandMatch[1]);
     const unit = cShorthandMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
     if (numRes.value !== null) {
       return {
         kind: 'carbs',
@@ -846,6 +899,9 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   if (fatMatch) {
     const numRes = parseNumberOrRange(fatMatch[1]);
     const unit = fatMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
     if (numRes.value !== null) {
       return {
         kind: 'fat',
@@ -880,6 +936,9 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   if (fShorthandMatch) {
     const numRes = parseLocaleNumber(fShorthandMatch[1]);
     const unit = fShorthandMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
     if (numRes.value !== null) {
       return {
         kind: 'fat',
@@ -907,6 +966,9 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   if (fiberMatch) {
     const numRes = parseNumberOrRange(fiberMatch[1]);
     const unit = fiberMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
     if (numRes.value !== null) {
       return {
         kind: 'fiber',
@@ -941,6 +1003,9 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   if (fibShorthandMatch) {
     const numRes = parseLocaleNumber(fibShorthandMatch[1]);
     const unit = fibShorthandMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
     if (numRes.value !== null) {
       return {
         kind: 'fiber',
