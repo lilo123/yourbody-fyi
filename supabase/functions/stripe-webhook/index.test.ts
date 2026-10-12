@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import Stripe from "npm:stripe@17.7.0";
 import app from "./index.ts";
 
@@ -3320,8 +3320,6 @@ Deno.test("stripe-webhook: auto-cancel unhandled 400 error returns 502 and remov
     globalThis.fetch = originalFetch;
   }
 });
-
-
 
 Deno.test("stripe-webhook: auto-cancel falls back to customer subscriptions when charge has no invoice", async () => {
   setupEnv();
