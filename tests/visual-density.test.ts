@@ -6171,12 +6171,22 @@ test.describe("Route-Wide Density & Tap Grid", () => {
           const testSetId = 'e8000000-0000-0000-0000-000000000096';
           const psqlCmd = getPsqlCommand();
 
+          const cleanWorkoutSql = `
+            DELETE FROM public.sets WHERE id = '${testSetId}';
+            DELETE FROM public.sets WHERE workout_id IN (
+              SELECT id FROM public.workouts
+              WHERE user_id = (SELECT id FROM public.users WHERE email = 'athlete@yourbody.fyi')
+                AND (workout_date = CURRENT_DATE OR date::date = CURRENT_DATE)
+            );
+            DELETE FROM public.workouts WHERE id = '${testWorkoutId}';
+            DELETE FROM public.workouts
+            WHERE user_id = (SELECT id FROM public.users WHERE email = 'athlete@yourbody.fyi')
+              AND (workout_date = CURRENT_DATE OR date::date = CURRENT_DATE);
+          `;
+
           // Fresh-seed hygiene: clean up any existing test row before test
           execSync(psqlCmd, {
-            input: `
-              DELETE FROM public.sets WHERE id = '${testSetId}';
-              DELETE FROM public.workouts WHERE id = '${testWorkoutId}';
-            `,
+            input: cleanWorkoutSql,
             encoding: 'utf8',
           });
 
@@ -6216,6 +6226,26 @@ test.describe("Route-Wide Density & Tap Grid", () => {
             `;
             execSync(psqlCmd, { input: seedSql, encoding: 'utf8' });
 
+            await page.evaluate(async () => {
+              const athleteId = 'a0000000-0000-0000-0000-000000000002';
+              await new Promise<void>((resolve) => {
+                const req = window.indexedDB.open(`yourbody-offline-${athleteId}`);
+                req.onsuccess = () => {
+                  const db = req.result;
+                  if (db.objectStoreNames.contains('rq')) {
+                    const tx = db.transaction('rq', 'readwrite');
+                    tx.objectStore('rq').clear();
+                    tx.oncomplete = () => { db.close(); resolve(); };
+                    tx.onerror = () => { db.close(); resolve(); };
+                  } else {
+                    db.close();
+                    resolve();
+                  }
+                };
+                req.onerror = () => resolve();
+              });
+            });
+
             await page.goto('/workout?routine=' + encodeURIComponent('Workout A (Push, Quads & Core)'));
             await page.waitForLoadState('domcontentloaded');
             await expect(page.locator('[data-testid="logged-set-row-0-0"]')).toBeVisible();
@@ -6227,11 +6257,7 @@ test.describe("Route-Wide Density & Tap Grid", () => {
             ).toHaveLength(0);
           } finally {
             try {
-              const cleanupSql = `
-                DELETE FROM public.sets WHERE id = '${testSetId}';
-                DELETE FROM public.workouts WHERE id = '${testWorkoutId}';
-              `;
-              execSync(psqlCmd, { input: cleanupSql, encoding: 'utf8' });
+              execSync(psqlCmd, { input: cleanWorkoutSql, encoding: 'utf8' });
             } catch (cleanupErr) {
               console.error('[visual-density workout cleanup error]:', cleanupErr);
               throw cleanupErr;
@@ -6805,7 +6831,13 @@ test.describe("Route-Wide Density & Tap Grid", () => {
 
     const cleanSql = `
       DELETE FROM public.sets WHERE id IN ('${testSetId1}', '${testSetId2}') OR exercise_id = '${testExerciseId}';
+      DELETE FROM public.sets WHERE workout_id IN (
+        SELECT id FROM public.workouts WHERE user_id = (SELECT id FROM public.users WHERE email = 'athlete@yourbody.fyi')
+          AND workout_date IN ((CURRENT_DATE - INTERVAL '14 days')::date, (CURRENT_DATE - INTERVAL '7 days')::date)
+      );
       DELETE FROM public.workouts WHERE id IN ('${testWorkoutId1}', '${testWorkoutId2}');
+      DELETE FROM public.workouts WHERE user_id = (SELECT id FROM public.users WHERE email = 'athlete@yourbody.fyi')
+        AND workout_date IN ((CURRENT_DATE - INTERVAL '14 days')::date, (CURRENT_DATE - INTERVAL '7 days')::date);
       DELETE FROM public.exercises WHERE id = '${testExerciseId}';
       UPDATE public.users SET pr_mode = 'weight' WHERE email = 'athlete@yourbody.fyi';
     `;
@@ -6814,6 +6846,10 @@ test.describe("Route-Wide Density & Tap Grid", () => {
       DO $$
       DECLARE
         v_athlete_id uuid;
+        v_date1 date := (CURRENT_DATE - INTERVAL '14 days')::date;
+        v_date2 date := (CURRENT_DATE - INTERVAL '7 days')::date;
+        v_w1 uuid;
+        v_w2 uuid;
       BEGIN
         SELECT id INTO v_athlete_id FROM public.users WHERE email = 'athlete@yourbody.fyi' LIMIT 1;
 
@@ -6822,23 +6858,25 @@ test.describe("Route-Wide Density & Tap Grid", () => {
         VALUES ('${testExerciseId}', '${testExerciseName}', '{"Chest"}', true)
         ON CONFLICT (id) DO UPDATE SET name = '${testExerciseName}';
 
-        -- Session 1: 100x3 (e1RM = 110) 4 days ago
+        -- Session 1: 100x3 (e1RM = 110) 14 days ago
         INSERT INTO public.workouts (id, user_id, name, workout_date, created_at)
-        VALUES ('${testWorkoutId1}', v_athlete_id, 'HF-C Past Session 1', (CURRENT_DATE - INTERVAL '4 days')::date, now() - INTERVAL '4 days')
-        ON CONFLICT (user_id, workout_date) DO UPDATE SET name = 'HF-C Past Session 1';
+        VALUES ('${testWorkoutId1}', v_athlete_id, 'HF-C Past Session 1', v_date1, v_date1::timestamptz + interval '10 hours')
+        ON CONFLICT (user_id, workout_date) DO UPDATE SET name = 'HF-C Past Session 1'
+        RETURNING id INTO v_w1;
 
         INSERT INTO public.sets (id, workout_id, exercise_id, weight, reps, set_index, set_type, created_at)
-        VALUES ('${testSetId1}', '${testWorkoutId1}', '${testExerciseId}', 100, 3, 1, 'working', now() - INTERVAL '4 days')
-        ON CONFLICT (id) DO UPDATE SET weight = 100, reps = 3;
+        VALUES ('${testSetId1}', v_w1, '${testExerciseId}', 100, 3, 1, 'working', v_date1::timestamptz + interval '10 hours 5 minutes')
+        ON CONFLICT (id) DO UPDATE SET workout_id = v_w1, weight = 100, reps = 3;
 
-        -- Session 2: 90x10 (e1RM = 120) 2 days ago
+        -- Session 2: 90x10 (e1RM = 120) 7 days ago
         INSERT INTO public.workouts (id, user_id, name, workout_date, created_at)
-        VALUES ('${testWorkoutId2}', v_athlete_id, 'HF-C Past Session 2', (CURRENT_DATE - INTERVAL '2 days')::date, now() - INTERVAL '2 days')
-        ON CONFLICT (user_id, workout_date) DO UPDATE SET name = 'HF-C Past Session 2';
+        VALUES ('${testWorkoutId2}', v_athlete_id, 'HF-C Past Session 2', v_date2, v_date2::timestamptz + interval '10 hours')
+        ON CONFLICT (user_id, workout_date) DO UPDATE SET name = 'HF-C Past Session 2'
+        RETURNING id INTO v_w2;
 
         INSERT INTO public.sets (id, workout_id, exercise_id, weight, reps, set_index, set_type, created_at)
-        VALUES ('${testSetId2}', '${testWorkoutId2}', '${testExerciseId}', 90, 10, 1, 'working', now() - INTERVAL '2 days')
-        ON CONFLICT (id) DO UPDATE SET weight = 90, reps = 10;
+        VALUES ('${testSetId2}', v_w2, '${testExerciseId}', 90, 10, 1, 'working', v_date2::timestamptz + interval '10 hours 5 minutes')
+        ON CONFLICT (id) DO UPDATE SET workout_id = v_w2, weight = 90, reps = 10;
 
         -- Set athlete pr_mode = 'e1rm'
         UPDATE public.users SET pr_mode = 'e1rm' WHERE id = v_athlete_id;
