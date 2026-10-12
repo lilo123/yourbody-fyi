@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useWorkoutMutations } from './useWorkoutMutations';
@@ -431,6 +431,57 @@ describe('useWorkoutMutations', () => {
       expect.anything(),
       'set-to-delete-123'
     );
+  });
+
+  it('optimistically removes set from query cache on deleteSet and rolls back on failure', async () => {
+    let rejectDelete: (err: any) => void;
+    const deletePromise = new Promise<any>((_, reject) => {
+      rejectDelete = reject;
+    });
+    vi.spyOn(setsLib, 'deleteSet').mockImplementation(() => deletePromise);
+
+    const { queryKeys } = await import('../../lib/queryKeys');
+    const dateKey = queryKeys.workoutSets.byDate(targetUserId, workoutDate);
+    queryClient.setQueryData(dateKey, [
+      { id: 'set-to-delete-123', weight: 135, reps: 10 },
+      { id: 'set-to-keep-456', weight: 145, reps: 8 },
+    ]);
+
+    const { result } = renderHook(
+      () =>
+        useWorkoutMutations({
+          targetUserId,
+          workoutDate,
+          activeRoutineName: 'Chest Day',
+          exercises: exercises as any,
+          autoRestTimer: false,
+        }),
+      { wrapper }
+    );
+
+    let mutatePromise: Promise<any>;
+    act(() => {
+      mutatePromise = result.current.deleteSetMutation.mutateAsync('set-to-delete-123');
+    });
+
+    // Optimistically removed
+    await waitFor(() => {
+      const cachedDuringMutate = queryClient.getQueryData<any[]>(dateKey);
+      expect(cachedDuringMutate?.map((s) => s.id)).toEqual(['set-to-keep-456']);
+    });
+
+    // Trigger failure and verify rollback
+    await act(async () => {
+      try {
+        rejectDelete!(new Error('Network error on delete'));
+        await mutatePromise;
+      } catch {
+        // Expected mutation failure
+      }
+    });
+
+    const cachedAfterRollback = queryClient.getQueryData<any[]>(dateKey);
+    expect(cachedAfterRollback?.map((s) => s.id)).toEqual(['set-to-delete-123', 'set-to-keep-456']);
   });
 
   it('Product Bug 1: with offline network and networkMode: "always", logSet mutation reaches enqueue', async () => {

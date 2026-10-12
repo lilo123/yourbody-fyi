@@ -354,7 +354,35 @@ export function useWorkoutMutations({
     mutationFn: async (setId: string) => {
       await deleteSet(supabase, setId);
     },
-    onError: (err: unknown) => {
+    onMutate: async (setId: string) => {
+      const effectiveUserId = targetUserId || "";
+      const dateKey = queryKeys.workoutSets.byDate(effectiveUserId, workoutDate);
+      const ninetyKey = queryKeys.workoutSets.recent90d(effectiveUserId);
+
+      await queryClient.cancelQueries({ queryKey: dateKey });
+      await queryClient.cancelQueries({ queryKey: ninetyKey });
+
+      const prevDateData = queryClient.getQueryData(dateKey);
+      const prevNinetyData = queryClient.getQueryData(ninetyKey);
+
+      queryClient.setQueryData(dateKey, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((s: any) => s.id !== setId);
+      });
+      queryClient.setQueryData(ninetyKey, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((s: any) => s.id !== setId);
+      });
+
+      return { prevDateData, prevNinetyData, dateKey, ninetyKey };
+    },
+    onError: (err: unknown, _setId, context) => {
+      if (context?.dateKey && context.prevDateData !== undefined) {
+        queryClient.setQueryData(context.dateKey, context.prevDateData);
+      }
+      if (context?.ninetyKey && context.prevNinetyData !== undefined) {
+        queryClient.setQueryData(context.ninetyKey, context.prevNinetyData);
+      }
       const message =
         err instanceof Error
           ? err.message

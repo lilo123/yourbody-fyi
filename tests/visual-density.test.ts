@@ -6735,7 +6735,11 @@ test.describe("Route-Wide Density & Tap Grid", () => {
               return { left: r.left, right: r.right, width: r.width, center: (r.left + r.right) / 2 };
             });
 
-            const lCells = Array.from(loggedRow.children).map((el) => {
+            const editBtn = loggedRow.querySelector('[data-testid^="edit-set-btn-"]') as HTMLElement;
+            const lCells = (editBtn
+              ? [...Array.from(editBtn.children), loggedRow.lastElementChild as HTMLElement]
+              : Array.from(loggedRow.children)
+            ).map((el) => {
               const r = el.getBoundingClientRect();
               return { left: r.left, right: r.right, width: r.width, center: (r.left + r.right) / 2 };
             });
@@ -7825,7 +7829,8 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         const headerGrid = document.querySelector('#exercise-card-body-0 .grid');
         const headerIndexCell = headerGrid?.firstElementChild;
         const firstRow = document.querySelector('[data-testid^="logged-set-row-"]');
-        const firstRowIndex = firstRow?.firstElementChild;
+        const editBtn = firstRow?.querySelector('[data-testid^="edit-set-btn-"]');
+        const firstRowIndex = editBtn ? editBtn.firstElementChild : firstRow?.firstElementChild;
         if (!headerIndexCell || !firstRowIndex) return null;
 
         const hRect = headerIndexCell.getBoundingClientRect();
