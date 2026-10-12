@@ -121,7 +121,7 @@ test.describe('Set Edit and Delete Workflows (p3a-set-edit)', () => {
     }
 
     // 1. Tapping logged row opens sheet and sends NO DELETE requests
-    await loggedRow.click();
+    await loggedRow.locator('[data-testid^="edit-set-btn-"]').click();
     const sheet = page.locator('[data-testid="edit-set-sheet"]');
     await expect(sheet).toBeVisible({ timeout: 5000 });
     expect(deleteUrls.length, 'Tapping a logged set must send NO DELETE requests').toBe(0);
@@ -145,7 +145,7 @@ test.describe('Set Edit and Delete Workflows (p3a-set-edit)', () => {
     await expect(loggedRow).toBeVisible({ timeout: 5000 });
 
     // 4. Delete again -> wait for 6s expiry -> exactly 1 DELETE request
-    await loggedRow.click();
+    await loggedRow.locator('[data-testid^="edit-set-btn-"]').click();
     await expect(sheet).toBeVisible({ timeout: 5000 });
     await deleteBtn.click();
     await expect(sheet).not.toBeVisible();
