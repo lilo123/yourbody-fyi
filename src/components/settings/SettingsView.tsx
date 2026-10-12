@@ -1,4 +1,4 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import type { UserProfile, UserRole } from '../../types/database';
@@ -10,6 +10,9 @@ import {
   Timer,
   FileText,
   Utensils,
+  ChevronDown,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { CoachSettingsCard } from './CoachSettingsCard';
 import { MyCoachCard } from './MyCoachCard';
@@ -20,6 +23,8 @@ import { useToast } from '../../hooks/useToast';
 import { WeightUnitCard } from './WeightUnitCard';
 import { PrModeCard } from './PrModeCard';
 import { SegmentedTabs, type TabItem } from '../common/SegmentedTabs';
+import { StatusBanner } from '../common/StatusBanner';
+import { EXTERNAL_CHAT_NUTRITION_PROMPT } from '../../lib/nutrition/externalPrompt';
 import {
   useNutritionParserMode,
   type NutritionParserMode,
@@ -33,12 +38,34 @@ const OwnerDashboardCard = React.lazy(() => import('./OwnerDashboardCard'));
 
 export const NutritionParserModeCard: React.FC = () => {
   const { mode, setMode } = useNutritionParserMode();
+  const { show: showToast } = useToast();
+  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const tabs: TabItem<NutritionParserMode>[] = [
     { id: 'auto', label: 'Auto', testId: 'nutrition-parser-mode-auto' },
     { id: 'always_ai', label: 'Always AI', testId: 'nutrition-parser-mode-always-ai' },
     { id: 'on_device', label: 'On-device only', testId: 'nutrition-parser-mode-on-device' },
   ];
+
+  const handleCopy = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(EXTERNAL_CHAT_NUTRITION_PROMPT);
+        setCopied(true);
+        setCopyError(null);
+        setTimeout(() => setCopied(false), 2000);
+        showToast({ message: 'Copied', kind: 'success' });
+      } else {
+        throw new Error('Clipboard API unavailable');
+      }
+    } catch {
+      textareaRef.current?.select();
+      setCopyError('Failed to copy. Text selected — copy manually.');
+    }
+  };
 
   return (
     <div
@@ -63,6 +90,71 @@ export const NutritionParserModeCard: React.FC = () => {
         onChange={(tabId) => setMode(tabId)}
         className="[&_button]:normal-case [&_button]:tracking-normal text-center [&_button]:leading-snug [&_button]:px-1.5"
       />
+
+      <div className="border-t border-zinc-800/80 pt-3">
+        <button
+          type="button"
+          data-testid="external-prompt-toggle"
+          aria-expanded={isPromptExpanded}
+          onClick={() => setIsPromptExpanded((prev) => !prev)}
+          className="flex items-center justify-between w-full py-2 min-h-[44px] text-xs font-semibold text-zinc-300 hover:text-white transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500 rounded-lg touch-manipulation"
+        >
+          <span>Prompt for other chat apps</span>
+          <ChevronDown
+            className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${
+              isPromptExpanded ? 'rotate-180 text-cyan-400' : ''
+            }`}
+            aria-hidden="true"
+          />
+        </button>
+
+        {isPromptExpanded && (
+          <div className="mt-3 space-y-3" data-testid="external-prompt-content">
+            <label htmlFor="external-chat-prompt-preview" className="sr-only">
+              Prompt for other chat apps
+            </label>
+            <textarea
+              id="external-chat-prompt-preview"
+              ref={textareaRef}
+              readOnly
+              rows={8}
+              value={EXTERNAL_CHAT_NUTRITION_PROMPT}
+              data-testid="external-prompt-preview"
+              style={{
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              }}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs leading-relaxed text-zinc-300 resize-none focus:outline-none focus:border-zinc-700"
+            />
+
+            {copyError && (
+              <StatusBanner
+                tone="error"
+                message={copyError}
+                testId="copy-prompt-error"
+              />
+            )}
+
+            <button
+              type="button"
+              data-testid="copy-external-prompt-button"
+              onClick={handleCopy}
+              className="flex items-center justify-center gap-2 w-full py-2.5 px-4 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-xs font-semibold text-white rounded-xl border border-zinc-700/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 touch-manipulation"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 text-zinc-400" aria-hidden="true" />
+                  <span>Copy prompt</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
