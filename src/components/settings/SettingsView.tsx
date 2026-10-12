@@ -9,6 +9,7 @@ import {
   Dumbbell,
   Timer,
   FileText,
+  Utensils,
 } from 'lucide-react';
 import { CoachSettingsCard } from './CoachSettingsCard';
 import { MyCoachCard } from './MyCoachCard';
@@ -18,12 +19,53 @@ import { DeleteAccountCard } from './DeleteAccountCard';
 import { useToast } from '../../hooks/useToast';
 import { WeightUnitCard } from './WeightUnitCard';
 import { PrModeCard } from './PrModeCard';
+import { SegmentedTabs, type TabItem } from '../common/SegmentedTabs';
+import {
+  useNutritionParserMode,
+  type NutritionParserMode,
+} from '../../hooks/useNutritionParserMode';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 
 const SubscriptionCard = React.lazy(() => import('./SubscriptionCard'));
 const AccountCard = React.lazy(() => import('./AccountCard'));
 const OwnerDashboardCard = React.lazy(() => import('./OwnerDashboardCard'));
+
+export const NutritionParserModeCard: React.FC = () => {
+  const { mode, setMode } = useNutritionParserMode();
+
+  const tabs: TabItem<NutritionParserMode>[] = [
+    { id: 'auto', label: 'Auto', testId: 'nutrition-parser-mode-auto' },
+    { id: 'always_ai', label: 'Always AI', testId: 'nutrition-parser-mode-always-ai' },
+    { id: 'on_device', label: 'On-device only', testId: 'nutrition-parser-mode-on-device' },
+  ];
+
+  return (
+    <div
+      data-testid="nutrition-parser-mode-card"
+      className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-4"
+    >
+      <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+        <Utensils className="w-4 h-4 text-cyan-400" aria-hidden="true" />
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+          Nutrition parsing
+        </h3>
+      </div>
+
+      <p className="text-xs text-zinc-400 leading-relaxed">
+        Choose how meals and foods are parsed from text.
+      </p>
+
+      <SegmentedTabs<NutritionParserMode>
+        ariaLabel="Nutrition parsing"
+        tabs={tabs}
+        activeTab={mode}
+        onChange={(tabId) => setMode(tabId)}
+        className="[&_button]:normal-case [&_button]:tracking-normal text-center [&_button]:leading-snug [&_button]:px-1.5"
+      />
+    </div>
+  );
+};
 
 interface SettingsFormProps {
   profile: UserProfile | null;
@@ -265,6 +307,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
       {/* Weight Unit Preference */}
       <WeightUnitCard />
       <PrModeCard />
+      <NutritionParserModeCard />
 
       {/* Target Macros Form */}
       <MacroGoalsCard
