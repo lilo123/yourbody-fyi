@@ -441,4 +441,20 @@ Fat: 21g`;
       }
     }
   });
+
+  it('Guard 4: multi-item blocks are exact in parseNutritionText but rejected by parseNutritionBlock on device', () => {
+    const multiItemInput = `Food: Grilled Chicken & Rice
+- 200g Chicken Breast | 330 kcal | 62g P | 0g C | 7g F
+- 1 cup White Rice | 205 kcal | 4g P | 45g C | 0.5g F`;
+
+    const sharedResult = parseNutritionText(multiItemInput);
+    expect(sharedResult.confidence).toBe('exact');
+    expect(sharedResult.meal?.items?.length).toBe(2);
+
+    const deviceResult = parseNutritionBlock(multiItemInput);
+    expect(deviceResult.ok).toBe(false);
+    if (!deviceResult.ok) {
+      expect(deviceResult.reason).toBe('MULTIPLE_FOODS');
+    }
+  });
 });

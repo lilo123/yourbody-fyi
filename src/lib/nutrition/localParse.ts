@@ -37,10 +37,16 @@ export {
  */
 export function parseNutritionBlock(text: string): LocalParseResult {
   const result = parseNutritionText(text);
-  if (result.confidence === 'exact' && result.meal) {
+  if (result.confidence === 'exact' && result.meal && (!result.meal.items || result.meal.items.length <= 1)) {
     return {
       ok: true,
       meal: result.meal,
+    };
+  }
+  if (result.meal?.items && result.meal.items.length > 1) {
+    return {
+      ok: false,
+      reason: 'MULTIPLE_FOODS',
     };
   }
   return {

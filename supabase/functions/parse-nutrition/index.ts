@@ -26,6 +26,11 @@ const HTTP_RETRY_OPTIONS = {
 
 import { isAllowedOrigin, getCorsHeaders as getBaseCorsHeaders } from "../_shared/cors.ts";
 import { captureException } from "../_shared/errorReporting.ts";
+import {
+  parseNutritionText,
+  type ParsedNutritionMeal,
+  type NutritionParseResult,
+} from "../_shared/nutritionParser.ts";
 
 export { isAllowedOrigin };
 
@@ -56,121 +61,67 @@ export interface StructuredNutritionResult {
     fat: number;
     fiber: number;
   }>;
+  source?: 'rules' | 'ai';
+  confidence?: 'exact' | 'lenient';
+  fallback_reason?: 'quota_exceeded' | 'ai_unavailable' | 'timeout';
 }
 
-export function parseStructuredNutritionText(input: string): StructuredNutritionResult | null {
-  const lines = input.split('\n');
-  const items: Array<{
-    name: string;
-    portion: string;
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    fiber: number;
-  }> = [];
+function mealToStructuredResult(
+  meal: ParsedNutritionMeal,
+  source: 'rules',
+  confidence: 'exact' | 'lenient',
+  fallbackReason?: 'quota_exceeded' | 'ai_unavailable' | 'timeout'
+): StructuredNutritionResult {
+  const portion =
+    meal.servingSize && meal.servingUnit
+      ? `${meal.servingSize} ${meal.servingUnit}`
+      : '1 serving';
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('===') || trimmed.startsWith('+++') || trimmed.startsWith('---')) continue;
-    if (/^(?:Component Breakdown|Breakdown|Ingredients|Totals?):/i.test(trimmed)) continue;
-    if (/^(?:Total\s+)?(?:Calories|Protein|Carbs|Fat|Fiber):/i.test(trimmed)) continue;
-    if (/^(?:Food Item|Meal Name|Dish Name|Meal|Dish|Title|Total Portion Size|Portion Size|Serving Size):/i.test(trimmed)) continue;
+  const items =
+    Array.isArray(meal.items) && meal.items.length > 0
+      ? meal.items.map((item) => ({
+          name: item.name,
+          portion: item.portion,
+          calories: item.calories,
+          protein: item.protein,
+          carbs: item.carbs,
+          fat: item.fat,
+          fiber: item.fiber ?? 0,
+        }))
+      : [
+          {
+            name: meal.name || 'Meal',
+            portion,
+            calories: meal.calories,
+            protein: meal.protein,
+            carbs: meal.carbs,
+            fat: meal.fat,
+            fiber: meal.fiber ?? 0,
+          },
+        ];
 
-    const bulletCleaned = trimmed.replace(/^(?:[*•\-+]|\d+[.)])\s*/, '');
-    const hasMacros = /(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b)/i.test(bulletCleaned);
-    if (!hasMacros) continue;
-
-    let nameAndPortion = '';
-    let macrosStr = '';
-
-    if (bulletCleaned.includes('|')) {
-      const parts = bulletCleaned.split('|');
-      if (/(?:kcal|cal|\bp\b|\bprotein\b)/i.test(parts[0])) continue;
-      if (parts.length > 2 && !/(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b)/i.test(parts[1])) {
-        nameAndPortion = parts[0] + ': ' + parts[1];
-        macrosStr = parts.slice(2).join(' | ');
-      } else {
-        nameAndPortion = parts[0];
-        macrosStr = parts.slice(1).join(' | ');
-      }
-    } else if (bulletCleaned.includes(':')) {
-      const colonIdx = bulletCleaned.indexOf(':');
-      nameAndPortion = bulletCleaned.slice(0, colonIdx);
-      macrosStr = bulletCleaned.slice(colonIdx + 1);
-    } else {
-      continue;
-    }
-
-    let name = nameAndPortion.trim();
-    let portion = '1 serving';
-
-    if (nameAndPortion.includes(':')) {
-      const subParts = nameAndPortion.split(':');
-      name = subParts[0].trim();
-      portion = subParts.slice(1).join(':').trim() || '1 serving';
-    } else if (nameAndPortion.includes(' - ')) {
-      const subParts = nameAndPortion.split(' - ');
-      name = subParts[0].trim();
-      portion = subParts.slice(1).join(' - ').trim() || '1 serving';
-    }
-
-    const calMatch = macrosStr.match(/([\d.]+)\s*(?:kcal|cal(?:ories)?)\b/i);
-    const pMatch = macrosStr.match(/([\d.]+)\s*g?\s*(?:P(?:rotein)?)\b/i);
-    const cMatch = macrosStr.match(/([\d.]+)\s*g?\s*(?:C(?:arbs?|arbohydrates?)?)\b/i);
-    const fMatch = macrosStr.match(/([\d.]+)\s*g?\s*(?:F(?:at)?)\b/i);
-    const fibMatch = macrosStr.match(/([\d.]+)\s*g?\s*(?:Fiber|Fib|Fibre)\b/i);
-
-    if (!calMatch && !pMatch && !cMatch && !fMatch) continue;
-
-    items.push({
-      name,
-      portion,
-      calories: calMatch ? parseFloat(calMatch[1]) : 0,
-      protein: pMatch ? parseFloat(pMatch[1]) : 0,
-      carbs: cMatch ? parseFloat(cMatch[1]) : 0,
-      fat: fMatch ? parseFloat(fMatch[1]) : 0,
-      fiber: fibMatch ? parseFloat(fibMatch[1]) : 0,
-    });
-  }
-
-  if (items.length === 0) return null;
-
-  const foodItemMatch = input.match(/(?:Food Item|Meal Name|Dish Name|Meal|Dish|Title|Food):\s*([^\n\r+]+)/i);
-  const mealTitle = foodItemMatch ? foodItemMatch[1].trim() : items.map((i) => i.name).join(', ');
-
-  const portionSizeMatch = input.match(/(?:Total\s+Portion\s+Size|Portion\s+Size|Serving\s+Size|Total\s+Size):\s*([\d.]+)\s*([a-zA-Z%]+)?/i);
-  const servingSize = portionSizeMatch ? parseFloat(portionSizeMatch[1]) : undefined;
-  const servingUnit = portionSizeMatch && portionSizeMatch[2] ? portionSizeMatch[2].trim() : undefined;
-
-  const totalCalMatch = input.match(/(?:Total\s+)?Calories:\s*([\d.]+)/i);
-  const totalPMatch = input.match(/(?:Total\s+)?Protein:\s*([\d.]+)/i);
-  const totalCMatch = input.match(/(?:Total\s+)?Carbs:\s*([\d.]+)/i);
-  const totalFMatch = input.match(/(?:Total\s+)?Fat:\s*([\d.]+)/i);
-  const totalFibMatch = input.match(/(?:Total\s+)?Fiber:\s*([\d.]+)/i);
-
-  const totalCal = totalCalMatch ? parseFloat(totalCalMatch[1]) : items.reduce((acc, i) => acc + i.calories, 0);
-  const totalP = totalPMatch ? parseFloat(totalPMatch[1]) : items.reduce((acc, i) => acc + i.protein, 0);
-  const totalC = totalCMatch ? parseFloat(totalCMatch[1]) : items.reduce((acc, i) => acc + i.carbs, 0);
-  const totalF = totalFMatch ? parseFloat(totalFMatch[1]) : items.reduce((acc, i) => acc + i.fat, 0);
-  const totalFib = totalFibMatch ? parseFloat(totalFibMatch[1]) : items.reduce((acc, i) => acc + i.fiber, 0);
-
-  const explanation = items
-    .map((i) => `${i.calories} kcal (${i.name})`)
-    .join(' + ') + ` = ${totalCal} kcal`;
+  const explanation =
+    meal.explanation ||
+    (items.length > 1
+      ? items.map((i) => `${i.calories} kcal (${i.name})`).join(' + ') +
+        ` = ${meal.calories} kcal`
+      : `${meal.calories} kcal (${meal.name || 'Meal'})`);
 
   return {
     is_food: true,
-    name: mealTitle,
-    calories: totalCal,
-    protein: totalP,
-    carbs: totalC,
-    fat: totalF,
-    fiber: totalFib,
-    serving_size: servingSize,
-    serving_unit: servingUnit,
+    name: meal.name || 'Meal',
+    calories: meal.calories,
+    protein: meal.protein,
+    carbs: meal.carbs,
+    fat: meal.fat,
+    fiber: meal.fiber ?? 0,
+    serving_size: meal.servingSize,
+    serving_unit: meal.servingUnit,
     explanation,
     items,
+    source,
+    confidence,
+    ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
   };
 }
 
@@ -322,6 +273,10 @@ export default {
       );
     }
 
+    let forceAi = false;
+    let localParseResult: NutritionParseResult | null = null;
+    let input = '';
+
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
       const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -384,7 +339,7 @@ export default {
       }
 
       const rawInput = body.input || body.prompt || body.text || "";
-      const input = typeof rawInput === 'string' ? rawInput.trim().slice(0, 2000) : "";
+      input = typeof rawInput === 'string' ? rawInput.trim().slice(0, 2000) : "";
       if (!input && !cleanBase64) {
         return new Response(
           JSON.stringify({ error: 'Input text or meal photo is required for nutrition parsing.' }),
@@ -392,10 +347,17 @@ export default {
         );
       }
 
+      forceAi = body.forceAi === true;
+
       // Fast-path: Pre-structured text-only input (< 1ms bypass without touching Google Gen AI)
-      if (!cleanBase64 && input) {
-        const fastPathResult = parseStructuredNutritionText(input);
-        if (fastPathResult) {
+      if (!cleanBase64 && input && !forceAi) {
+        localParseResult = parseNutritionText(input);
+        if (localParseResult.confidence === 'exact' && localParseResult.meal) {
+          const fastPathResult = mealToStructuredResult(
+            localParseResult.meal,
+            'rules',
+            'exact'
+          );
           return new Response(JSON.stringify(fastPathResult), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -446,6 +408,23 @@ export default {
           if (rpcError) {
             console.warn('[parse-nutrition] Failed to consume AI quota RPC (failing open):', rpcError.message);
           } else if (quotaResult && quotaResult.allowed === false) {
+            if (!forceAi && input) {
+              if (!localParseResult) {
+                localParseResult = parseNutritionText(input);
+              }
+              if (localParseResult?.meal && (localParseResult.confidence === 'exact' || localParseResult.confidence === 'lenient')) {
+                const fallbackResult = mealToStructuredResult(
+                  localParseResult.meal,
+                  'rules',
+                  localParseResult.confidence,
+                  localParseResult.confidence === 'lenient' ? 'quota_exceeded' : undefined
+                );
+                return new Response(JSON.stringify(fallbackResult), {
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+              }
+            }
+
             const periodStr = quotaResult.period === 'month' ? "this month's" : "today's";
             const friendlyText = quotaResult.limit === 0
               ? "AI parsing isn't included in the free plan. Quick log and on-device parsing stay free."
@@ -680,11 +659,20 @@ CORE RESPONSIBILITIES & GUIDELINES:
       }
 
       if (!responseText) {
-        // If all AI models failed, attempt server-side structured text parse before throwing
-        if (input) {
-          const localStructured = parseStructuredNutritionText(input);
-          if (localStructured) {
-            return new Response(JSON.stringify(localStructured), {
+        if (!forceAi && input) {
+          if (!localParseResult) {
+            localParseResult = parseNutritionText(input);
+          }
+          if (localParseResult?.meal && (localParseResult.confidence === 'exact' || localParseResult.confidence === 'lenient')) {
+            const fallbackReason =
+              isTimeoutError(lastAiError) || timeoutEncountered ? 'timeout' : 'ai_unavailable';
+            const fallbackResult = mealToStructuredResult(
+              localParseResult.meal,
+              'rules',
+              localParseResult.confidence,
+              localParseResult.confidence === 'lenient' ? fallbackReason : undefined
+            );
+            return new Response(JSON.stringify(fallbackResult), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
           }
@@ -755,12 +743,38 @@ CORE RESPONSIBILITIES & GUIDELINES:
       // with an opaque constraint error, so the invariant is established here,
       // at the only point where both halves are in hand.
       responseText = reconcileParentWithItems(responseText);
+      try {
+        const parsed = JSON.parse(responseText);
+        if (parsed && typeof parsed === 'object') {
+          parsed.source = 'ai';
+          responseText = JSON.stringify(parsed);
+        }
+      } catch {
+        // pass through unparseable
+      }
 
       return new Response(responseText, {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (error: any) {
       console.error("[parse-nutrition error]:", error?.message || error);
+      if (!forceAi && input) {
+        if (!localParseResult) {
+          localParseResult = parseNutritionText(input);
+        }
+        if (localParseResult?.meal && (localParseResult.confidence === 'exact' || localParseResult.confidence === 'lenient')) {
+          const fallbackReason = isTimeoutError(error) ? 'timeout' : 'ai_unavailable';
+          const fallbackResult = mealToStructuredResult(
+            localParseResult.meal,
+            'rules',
+            localParseResult.confidence,
+            localParseResult.confidence === 'lenient' ? fallbackReason : undefined
+          );
+          return new Response(JSON.stringify(fallbackResult), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
       if (isRateLimitError(error)) {
         return new Response(
           JSON.stringify({

@@ -269,24 +269,34 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
       </div>
 
       {/* Local Parse provenance banner */}
-      {stagedMeal.source === 'local' && (
-        <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-1.5 pt-0.5">
-          <span
-            data-testid="parsed-locally-badge"
-            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30"
-          >
-            Parsed locally
-          </span>
-          {isOnline && onAnalyzeWithAiInstead && (
-            <button
-              type="button"
-              data-testid="analyze-with-ai-instead-btn"
-              onClick={onAnalyzeWithAiInstead}
-              className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/50 transition min-h-[44px] touch-manipulation"
+      {(stagedMeal.source === 'local' || stagedMeal.source === 'rules') && (
+        <div className="flex flex-col gap-1 border-b border-zinc-800 pb-1.5 pt-0.5">
+          <div className="flex items-center justify-between gap-2">
+            <span
+              data-testid="parsed-locally-badge"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30"
             >
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Analyze with AI instead</span>
-            </button>
+              Parsed locally
+            </span>
+            {isOnline && onAnalyzeWithAiInstead && (
+              <button
+                type="button"
+                data-testid="analyze-with-ai-instead-btn"
+                onClick={onAnalyzeWithAiInstead}
+                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/50 transition min-h-[44px] touch-manipulation"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Analyze with AI instead</span>
+              </button>
+            )}
+          </div>
+          {stagedMeal.confidence === 'lenient' && (
+            <div
+              data-testid="lenient-fallback-banner"
+              className="flex items-center gap-1.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1"
+            >
+              <span>Please review macros before logging.</span>
+            </div>
           )}
         </div>
       )}

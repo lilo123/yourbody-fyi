@@ -61,7 +61,7 @@ export function useNutritionAi({
     // 1. Text-only local parse check (unless forceAi is requested)
     if (!options?.forceAi && !selectedPhoto && textToAnalyze.trim()) {
       const localResult = parseNutritionBlock(textToAnalyze.trim());
-      if (localResult.ok) {
+      if (localResult.ok && (!localResult.meal.items || localResult.meal.items.length <= 1)) {
         const parsed = localResult.meal;
         const stagedItem = buildStagedItem({
           name: parsed.name || 'Meal',
@@ -122,9 +122,10 @@ export function useNutritionAi({
         text: textToAnalyze,
         photo: selectedPhoto,
         customDishes,
+        forceAi: options?.forceAi,
       });
 
-      const meal: StagedMeal = {
+      const meal = {
         name: parsed.name || textToAnalyze || (selectedPhoto ? 'Meal Photo' : 'Meal'),
         mealType: 'Breakfast',
         explanation:
@@ -141,11 +142,13 @@ export function useNutritionAi({
         servingSize: parsed.servingSize,
         servingUnit: parsed.servingUnit,
         photoUrl: selectedPhoto?.dataUrl,
-        source: 'ai',
-      };
+        source: parsed.source === 'rules' ? 'rules' : 'ai',
+        confidence: parsed.confidence,
+        rawText: textToAnalyze.trim(),
+      } as StagedMeal;
 
       setIsRateLimited(false);
-      setStatus('Analyzed');
+      setStatus(parsed.source === 'rules' ? 'Parsed locally' : 'Analyzed');
       onParsedSuccess(meal);
       return;
     } catch (error: any) {
