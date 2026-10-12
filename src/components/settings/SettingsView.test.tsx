@@ -633,5 +633,71 @@ describe('SettingsView', () => {
       });
     });
   });
+
+  describe('NutritionParserModeCard', () => {
+    it('renders Nutrition parsing heading, helper text, and mode options', async () => {
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      expect(screen.getByRole('heading', { name: 'Nutrition parsing' })).toBeDefined();
+      expect(
+        screen.getByText('Choose how meals and foods are parsed from text.')
+      ).toBeDefined();
+
+      const autoTab = screen.getByTestId('nutrition-parser-mode-auto');
+      const alwaysAiTab = screen.getByTestId('nutrition-parser-mode-always-ai');
+      const onDeviceTab = screen.getByTestId('nutrition-parser-mode-on-device');
+
+      expect(autoTab).toBeDefined();
+      expect(alwaysAiTab).toBeDefined();
+      expect(onDeviceTab).toBeDefined();
+      expect(autoTab).toHaveAttribute('aria-selected', 'true');
+      expect(alwaysAiTab).toHaveAttribute('aria-selected', 'false');
+      expect(onDeviceTab).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('allows switching to Always AI and On-device only, persisting to localStorage', async () => {
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const autoTab = screen.getByTestId('nutrition-parser-mode-auto');
+      const alwaysAiTab = screen.getByTestId('nutrition-parser-mode-always-ai');
+      const onDeviceTab = screen.getByTestId('nutrition-parser-mode-on-device');
+
+      // Click Always AI
+      fireEvent.click(alwaysAiTab);
+      await waitFor(() => {
+        expect(alwaysAiTab).toHaveAttribute('aria-selected', 'true');
+        expect(autoTab).toHaveAttribute('aria-selected', 'false');
+        expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBe('always_ai');
+      });
+
+      // Click On-device only
+      fireEvent.click(onDeviceTab);
+      await waitFor(() => {
+        expect(onDeviceTab).toHaveAttribute('aria-selected', 'true');
+        expect(alwaysAiTab).toHaveAttribute('aria-selected', 'false');
+        expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBe('on_device');
+      });
+
+      // Click Auto
+      fireEvent.click(autoTab);
+      await waitFor(() => {
+        expect(autoTab).toHaveAttribute('aria-selected', 'true');
+        expect(onDeviceTab).toHaveAttribute('aria-selected', 'false');
+        expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBe('auto');
+      });
+    });
+
+    it('initializes active tab from pre-existing localStorage value', async () => {
+      localStorage.setItem('yourbody_nutrition_parser_mode', 'always_ai');
+
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const alwaysAiTab = screen.getByTestId('nutrition-parser-mode-always-ai');
+      expect(alwaysAiTab).toHaveAttribute('aria-selected', 'true');
+    });
+  });
 });
 
