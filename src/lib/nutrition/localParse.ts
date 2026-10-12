@@ -13,6 +13,7 @@ import {
   type ParsedNutritionMeal,
   type NutritionParseResult,
   type ParseConfidence,
+  type MacroKind,
 } from '../../../supabase/functions/_shared/nutritionParser.ts';
 
 export type LocalParseRejectReason = NutritionRejectReason;
@@ -29,6 +30,7 @@ export {
   type ParsedNutritionMeal,
   type NutritionParseResult,
   type ParseConfidence,
+  type MacroKind,
 };
 
 /**

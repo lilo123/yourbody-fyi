@@ -175,6 +175,53 @@ describe('NutritionAiInput live regions and accessibility', () => {
       expect(onAnalyze).toHaveBeenCalledTimes(1);
     });
 
+    it('offline: enables submit button for lenient nutrition blocks', () => {
+      const onAnalyze = vi.fn();
+      const lenientBlock = [
+        'Greek Yogurt',
+        'Calories: 130 kcal',
+        'Protein: 15g',
+        'Carbs: 9g',
+        'Fat: 2g',
+        'extra line to ignore',
+      ].join('\n');
+
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            isOnline: false,
+            nlInput: lenientBlock,
+            onAnalyze,
+          })}
+        />
+      );
+
+      const analyzeBtn = screen.getByTestId('analyze-meal-button');
+      expect(analyzeBtn).not.toBeDisabled();
+      analyzeBtn.click();
+      expect(onAnalyze).toHaveBeenCalledTimes(1);
+    });
+
+    it('offline: enables submit button for partial nutrition blocks', () => {
+      const onAnalyze = vi.fn();
+      const partialBlock = ['Protein Bar', 'Calories: 200 kcal', 'Protein: 20g'].join('\n');
+
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            isOnline: false,
+            nlInput: partialBlock,
+            onAnalyze,
+          })}
+        />
+      );
+
+      const analyzeBtn = screen.getByTestId('analyze-meal-button');
+      expect(analyzeBtn).not.toBeDisabled();
+      analyzeBtn.click();
+      expect(onAnalyze).toHaveBeenCalledTimes(1);
+    });
+
     it('online: enables AI submit and photo triggers, hides connection hint', () => {
       render(
         <NutritionAiInput

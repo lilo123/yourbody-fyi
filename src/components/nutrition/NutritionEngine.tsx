@@ -184,9 +184,11 @@ export const NutritionEngine: React.FC = () => {
       setShowManualForm(false);
       showToast({ message: 'Analyzed', verb: 'Analyzed', subject: meal.name, kind: 'info', testId: 'status-message' });
     },
-    onFallbackToManual: (dishName) => {
+    onFallbackToManual: (dishName, prefill) => {
       setShowManualForm(true);
-      if (!manualMealForm.manualDishName.trim()) {
+      if (prefill) {
+        manualMealForm.prefillForm({ name: prefill.name || dishName, ...prefill });
+      } else if (!manualMealForm.manualDishName.trim()) {
         manualMealForm.setManualDishName(dishName);
       }
       setStagedMeal(null);
