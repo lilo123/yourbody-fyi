@@ -137,4 +137,69 @@ describe('useNutritionAi quota exceeded handling', () => {
     expect(setIsError).toHaveBeenCalledWith(false);
     expect(setStatus).toHaveBeenCalledWith('');
   });
+
+  it('forwards forceAi: true to parseNutrition when handleForceAiAnalyze is called', async () => {
+    vi.spyOn(parseNutritionModule, 'parseNutrition').mockResolvedValueOnce({
+      name: 'Banana Smoothie',
+      items: [],
+      calories: 250,
+      protein: 10,
+      carbs: 45,
+      fat: 3,
+      fiber: 4,
+      servingSize: 1,
+      servingUnit: 'serving',
+      source: 'ai',
+    });
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.handleForceAiAnalyze('banana smoothie');
+    });
+
+    expect(parseNutritionModule.parseNutrition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'banana smoothie',
+        forceAi: true,
+      })
+    );
+    expect(onParsedSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Banana Smoothie',
+        source: 'ai',
+      })
+    );
+    expect(setStatus).toHaveBeenCalledWith('Analyzed');
+  });
+
+  it('sets status to "Parsed locally" and source to "rules" when server returns source rules', async () => {
+    vi.spyOn(parseNutritionModule, 'parseNutrition').mockResolvedValueOnce({
+      name: 'Protein Shake',
+      items: [],
+      calories: 300,
+      protein: 40,
+      carbs: 10,
+      fat: 5,
+      fiber: 0,
+      servingSize: 1,
+      servingUnit: 'serving',
+      source: 'rules',
+      confidence: 'exact',
+    });
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.handleAnalyze({ overrideText: 'Protein Shake' });
+    });
+
+    expect(onParsedSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Protein Shake',
+        source: 'rules',
+      })
+    );
+    expect(setStatus).toHaveBeenCalledWith('Parsed locally');
+  });
 });

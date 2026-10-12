@@ -23,6 +23,16 @@ export type NutritionRejectReason =
   | 'UNEXPLAINED_CONTENT'
   | 'MULTIPLE_FOODS';
 
+export interface ParsedNutritionItem {
+  name: string;
+  portion: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+}
+
 export interface ParsedNutritionMeal {
   name?: string;
   servingSize?: number;
@@ -32,6 +42,8 @@ export interface ParsedNutritionMeal {
   carbs: number;
   fat: number;
   fiber?: number;
+  items?: ParsedNutritionItem[];
+  explanation?: string;
 }
 
 export interface NutritionParseResult {
@@ -633,6 +645,267 @@ function splitLineIntoSegments(line: string): string[] {
   return [trimmed];
 }
 
+function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
+  const cleaned = cleanLine(rawLine);
+  if (!cleaned) return null;
+
+  // Must have macro indicators
+  const hasMacros = /(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b)/i.test(cleaned);
+  if (!hasMacros) return null;
+
+  let nameAndPortion = '';
+  let macroSegments: string[] = [];
+
+  if (cleaned.includes('|')) {
+    const parts = cleaned.split('|').map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 2) return null;
+    if (/(?:kcal|cal|\bp\b|\bprotein\b)/i.test(parts[0])) return null;
+
+    if (
+      parts.length > 2 &&
+      !/(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b)/i.test(parts[1])
+    ) {
+      nameAndPortion = parts[0] + ': ' + parts[1];
+      macroSegments = parts.slice(2);
+    } else {
+      nameAndPortion = parts[0];
+      macroSegments = parts.slice(1);
+    }
+  } else if (cleaned.includes(':')) {
+    const colonIndex = cleaned.indexOf(':');
+    nameAndPortion = cleaned.slice(0, colonIndex);
+    macroSegments = splitLineIntoSegments(cleaned.slice(colonIndex + 1));
+  } else {
+    return null;
+  }
+
+  let itemName = nameAndPortion.trim();
+  let portion = '1 serving';
+
+  if (nameAndPortion.includes(':')) {
+    const subParts = nameAndPortion.split(':');
+    itemName = subParts[0].trim();
+    portion = subParts.slice(1).join(':').trim() || '1 serving';
+  } else if (nameAndPortion.includes(' - ')) {
+    const subParts = nameAndPortion.split(' - ');
+    itemName = subParts[0].trim();
+    portion = subParts.slice(1).join(' - ').trim() || '1 serving';
+  }
+
+  // Reject if itemName is a header or macro total label
+  if (
+    /^(?:total\s+)?(?:calories?|cal|cals?|protein|prot|carbs?|carbohydrates?|fat|fiber|fib|fibre)$/i.test(
+      itemName
+    ) ||
+    /^(?:food(?:\s+item)?|meal(?:\s+name)?|dish(?:\s+name)?|component\s+breakdown|ingredients|totals?)$/i.test(
+      itemName
+    )
+  ) {
+    return null;
+  }
+
+  let itemCalories: number | undefined;
+  let itemProtein: number | undefined;
+  let itemCarbs: number | undefined;
+  let itemFat: number | undefined;
+  let itemFiber: number | undefined;
+
+  for (const segment of macroSegments) {
+    const token = tryMatchMacroToken(segment);
+    if (!token || token.kind === 'ignorable' || token.invalidUnit) continue;
+
+    if (token.kind === 'calories' && itemCalories === undefined) {
+      if (token.value >= 0 && token.value <= 5000) itemCalories = token.value;
+    } else if (token.kind === 'protein' && itemProtein === undefined) {
+      if (token.value >= 0 && token.value <= 500) itemProtein = token.value;
+    } else if (token.kind === 'carbs' && itemCarbs === undefined) {
+      if (token.value >= 0 && token.value <= 500) itemCarbs = token.value;
+    } else if (token.kind === 'fat' && itemFat === undefined) {
+      if (token.value >= 0 && token.value <= 500) itemFat = token.value;
+    } else if (token.kind === 'fiber' && itemFiber === undefined) {
+      if (token.value >= 0 && token.value <= 500) itemFiber = token.value;
+    }
+  }
+
+  // Strict: each item MUST have all 4 macros
+  if (
+    itemCalories === undefined ||
+    itemProtein === undefined ||
+    itemCarbs === undefined ||
+    itemFat === undefined
+  ) {
+    return null;
+  }
+
+  // Per-item consistency check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
+  const expectedKcal = 4 * itemProtein + 4 * itemCarbs + 9 * itemFat;
+  const maxDiscrepancy = Math.max(60, 0.25 * itemCalories);
+  if (Math.abs(expectedKcal - itemCalories) > maxDiscrepancy) {
+    return null;
+  }
+
+  return {
+    name: itemName,
+    portion,
+    calories: roundToOneDecimal(itemCalories),
+    protein: roundToOneDecimal(itemProtein),
+    carbs: roundToOneDecimal(itemCarbs),
+    fat: roundToOneDecimal(itemFat),
+    fiber: roundToOneDecimal(itemFiber ?? 0),
+  };
+}
+
+function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null {
+  let declaredTitle: string | undefined;
+  let declaredServingSize: number | undefined;
+  let declaredServingUnit: string | undefined;
+
+  let declaredCalories: number | undefined;
+  let hasBreakdownHeader = false;
+  let hadBulletedOrNumberedItem = false;
+
+  const items: ParsedNutritionItem[] = [];
+  const skippedLines: string[] = [];
+
+  for (const rawLine of rawLines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('===') || trimmed.startsWith('+++') || trimmed.startsWith('---')) continue;
+    if (/^(?:Component Breakdown|Breakdown|Ingredients|Totals?):?$/i.test(trimmed)) {
+      hasBreakdownHeader = true;
+      continue;
+    }
+
+    // Check title headers: Food Item:, Meal Name:, Dish Name:, Meal:, Dish:, Title:, Food:
+    const titleMatch = trimmed.match(
+      /^(?:Food\s+Item|Meal\s+Name|Dish\s+Name|Meal|Dish|Title|Food):\s*([^\n\r+]+)/i
+    );
+    if (titleMatch) {
+      declaredTitle = titleMatch[1].trim();
+      continue;
+    }
+
+    // Check portion size headers: Total Portion Size:, Portion Size:, Serving Size:, Total Size:
+    const portionMatch = trimmed.match(
+      /^(?:Total\s+Portion\s+Size|Portion\s+Size|Serving\s+Size|Total\s+Size):\s*([\d.]+)\s*([a-zA-Z%]+)?/i
+    );
+    if (portionMatch) {
+      const sizeVal = parseNumber(portionMatch[1]);
+      if (sizeVal !== null) {
+        declaredServingSize = sizeVal;
+        declaredServingUnit = portionMatch[2] ? normalizeUnit(portionMatch[2]) : undefined;
+      }
+      continue;
+    }
+
+    // Check parent totals: Total Calories:, Calories:, Total Protein:, Protein:, etc.
+    const calMatch = trimmed.match(/^(?:Total\s+)?(?:Calories?|cal|kcal):\s*([\d.]+)/i);
+    if (calMatch) {
+      const calVal = parseNumber(calMatch[1]);
+      if (calVal !== null) declaredCalories = calVal;
+      continue;
+    }
+    if (/^(?:Total\s+)?(?:Protein|prot):\s*[\d.]+/i.test(trimmed)) {
+      continue;
+    }
+    if (/^(?:Total\s+)?(?:Carbs?|carbohydrates?):\s*[\d.]+/i.test(trimmed)) {
+      continue;
+    }
+    if (/^(?:Total\s+)?(?:Fat|total\s+fat):\s*[\d.]+/i.test(trimmed)) {
+      continue;
+    }
+    if (/^(?:Total\s+)?(?:Fiber|fib|fibre):\s*[\d.]+/i.test(trimmed)) {
+      continue;
+    }
+
+    if (/^(?:[*•\-+]|\d+[.)])\s+/.test(rawLine.trim())) {
+      hadBulletedOrNumberedItem = true;
+    }
+
+    // Try parsing as multi-item line
+    const parsedItem = tryParseMultiItemLine(rawLine);
+    if (parsedItem) {
+      items.push(parsedItem);
+      continue;
+    }
+
+    skippedLines.push(rawLine);
+  }
+
+  const hasStructuredMarker = Boolean(
+    declaredTitle ||
+    declaredCalories !== undefined ||
+    declaredServingSize !== undefined ||
+    hasBreakdownHeader ||
+    hadBulletedOrNumberedItem
+  );
+
+  if (!hasStructuredMarker) {
+    return null;
+  }
+
+  // Multi-item requires:
+  // (a) >= 2 items, OR
+  // (b) 1 item with explicit declaredTitle / food header and portion/items syntax
+  if (items.length === 0) {
+    return null;
+  }
+  if (items.length === 1 && !declaredTitle) {
+    return null;
+  }
+
+  const sumCal = roundToOneDecimal(items.reduce((total, it) => total + it.calories, 0));
+  const sumP = roundToOneDecimal(items.reduce((total, it) => total + it.protein, 0));
+  const sumC = roundToOneDecimal(items.reduce((total, it) => total + it.carbs, 0));
+  const sumF = roundToOneDecimal(items.reduce((total, it) => total + it.fat, 0));
+  const sumFib = roundToOneDecimal(items.reduce((total, it) => total + it.fiber, 0));
+
+  // Reconciliation tolerance (same as reconcileParentWithItems tolerance: |parent - sum| within tolerance)
+  if (declaredCalories !== undefined) {
+    const diff = Math.abs(declaredCalories - sumCal);
+    const maxDiff = Math.max(5, 0.05 * sumCal);
+    if (diff > maxDiff) {
+      return {
+        confidence: 'none',
+        reason: 'KCAL_INCONSISTENT',
+        skippedLines,
+        modifiers: [],
+      };
+    }
+  }
+
+  const finalCal = sumCal;
+  const finalP = sumP;
+  const finalC = sumC;
+  const finalF = sumF;
+  const finalFib = sumFib;
+
+  const mealTitle = declaredTitle || items.map((it) => it.name).join(', ');
+  const explanation =
+    items.map((it) => `${it.calories} kcal (${it.name})`).join(' + ') + ` = ${finalCal} kcal`;
+
+  const meal: ParsedNutritionMeal = {
+    name: mealTitle,
+    servingSize: declaredServingSize,
+    servingUnit: declaredServingUnit,
+    calories: finalCal,
+    protein: finalP,
+    carbs: finalC,
+    fat: finalF,
+    fiber: finalFib,
+    items,
+    explanation,
+  };
+
+  return {
+    confidence: skippedLines.length > 0 ? 'lenient' : 'exact',
+    meal,
+    reason: skippedLines.length > 0 ? 'UNEXPLAINED_CONTENT' : undefined,
+    skippedLines,
+    modifiers: [],
+  };
+}
+
 export function parseNutritionText(text: string): NutritionParseResult {
   const trimmedInput = text.trim();
   if (!trimmedInput) {
@@ -658,12 +931,18 @@ export function parseNutritionText(text: string): NutritionParseResult {
     };
   }
 
+  // Try parsing as structured multi-item breakdown block
+  const multiItemResult = tryParseMultiItemBlock(rawLines);
+  if (multiItemResult) {
+    return multiItemResult;
+  }
+
   // Detect markdown table or multiple foods table
   const isTable = rawLines.some(
     (line) =>
-      /^\|?\s*food\b/i.test(line) ||
+      /^\s*\|\s*food\b/i.test(line) ||
       /\|\s*food\s*\|/i.test(line) ||
-      /^\|?\s*item\b/i.test(line) ||
+      /^\s*\|\s*item\b/i.test(line) ||
       /\|\s*item\s*\|/i.test(line)
   );
   if (isTable) {

@@ -9,6 +9,7 @@ export interface ParseNutritionArgs {
   text?: string;
   photo?: CompressedImage | null;
   customDishes?: CustomDish[];
+  forceAi?: boolean;
 }
 
 export interface ParseNutritionResult {
@@ -22,6 +23,9 @@ export interface ParseNutritionResult {
   fiber: number;
   servingSize: number;
   servingUnit: string;
+  source?: 'rules' | 'ai';
+  confidence?: 'exact' | 'lenient';
+  fallbackReason?: 'quota_exceeded' | 'ai_unavailable' | 'timeout';
 }
 
 export interface ParseNutritionError extends Error {
@@ -49,6 +53,7 @@ export async function parseNutrition({
   text = '',
   photo,
   customDishes = [],
+  forceAi = false,
 }: ParseNutritionArgs): Promise<ParseNutritionResult> {
   const trimmed = text.trim();
   if (!trimmed && !photo) {
@@ -91,6 +96,7 @@ export async function parseNutrition({
         fat: d.fat,
         fiber: d.fiber ?? 0,
       })),
+      forceAi: Boolean(forceAi),
     },
   });
 
@@ -287,6 +293,9 @@ export async function parseNutrition({
       fiber: totalFib,
       servingSize: Number(parsed.serving_size ?? parsed.servingSize) || 1,
       servingUnit: parsed.serving_unit || parsed.servingUnit || 'serving',
+      source: parsed.source,
+      confidence: parsed.confidence,
+      fallbackReason: parsed.fallback_reason ?? parsed.fallbackReason,
     };
   }
 
