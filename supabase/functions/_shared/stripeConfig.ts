@@ -1,6 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@17.7.0";
 
+/**
+ * Pinned Stripe API version across all edge functions.
+ * Must match the webhook endpoint version configured in Stripe Dashboard.
+ */
+export const STRIPE_API_VERSION = "2026-09-30.endive";
+
 export class LiveKeyRefusedError extends Error {
   readonly code = "live_keys_refused" as const;
   constructor(message = "Live Stripe keys are not allowed in this environment.") {
@@ -69,6 +75,9 @@ export function getStripeConfig(): StripeConfig | null {
 
   const stripe = new Stripe(secretKey, {
     httpClient: Stripe.createFetchHttpClient(),
+    // Narrow cast to Stripe.LatestApiVersion because stripe@17.7.0 types only declare
+    // '2025-02-24.acacia' as LatestApiVersion, but the runtime client supports newer versions.
+    apiVersion: STRIPE_API_VERSION as unknown as Stripe.LatestApiVersion,
   });
 
   return {

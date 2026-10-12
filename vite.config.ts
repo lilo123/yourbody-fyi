@@ -204,6 +204,7 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
+          globIgnores: ['**/Landing*'],
           navigateFallback: '/index.html',
           cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
