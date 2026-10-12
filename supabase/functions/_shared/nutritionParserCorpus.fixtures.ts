@@ -1883,5 +1883,167 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
       "reason": "MISSING_MACRO",
       "hint": null
     }
+  },
+  {
+    "id": 104,
+    "title": "[Coverage] Case-insensitive calorie unit CAL",
+    "input": "Turkey Wrap\nCalories: 420 CAL\nProtein: 35g\nCarbs: 45g\nFat: 10g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 420,
+      "protein": 35,
+      "carbs": 45,
+      "fat": 10,
+      "fiber": null,
+      "name": "Turkey Wrap",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 105,
+    "title": "[Coverage] Case-insensitive calorie unit kcals",
+    "input": "Protein Smoothie\nEnergy: 310 kcals\nProtein: 30g\nCarbs: 25g\nFat: 5g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 310,
+      "protein": 30,
+      "carbs": 25,
+      "fat": 5,
+      "fiber": null,
+      "name": "Protein Smoothie",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 106,
+    "title": "[Coverage] Approximate prefix ~ and approx.",
+    "input": "Greek Yogurt Bowl\nCalories: ~280 kcal\nProtein: approx. 24g\nCarbs: ~30g\nFat: approx. 4g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 280,
+      "protein": 24,
+      "carbs": 30,
+      "fat": 4,
+      "fiber": null,
+      "name": "Greek Yogurt Bowl",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 107,
+    "title": "[Coverage] Approximate prefix roughly, about, ≈",
+    "input": "Grilled Salmon\nCalories: ≈450 kcal\nProtein: roughly 42g\nCarbs: about 0g\nFat: roughly 22g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 450,
+      "protein": 42,
+      "carbs": 0,
+      "fat": 22,
+      "fiber": null,
+      "name": "Grilled Salmon",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 108,
+    "title": "[Coverage] Markdown table without separator row",
+    "input": "| Item | Calories | Protein | Carbs | Fat |\n| Grilled Chicken | 320 | 50 | 0 | 7 |\n| Steamed Rice | 230 | 4 | 60 | 3 |",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 550,
+      "protein": 54,
+      "carbs": 60,
+      "fat": 10,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 109,
+    "title": "[Coverage] Tab-separated columns table",
+    "input": "Item\tCalories\tProtein\tCarbs\tFat\nGrilled Chicken\t330\t48g\t0g\t8g\nJasmine Rice\t230\t4g\t64g\t2g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 560,
+      "protein": 52,
+      "carbs": 64,
+      "fat": 10,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 110,
+    "title": "[Coverage] Intermediate label row Components: after meal total",
+    "input": "Meal Total: 710 calories, 52g protein, 60g carbs, 26g fat\nComponents:\n- Sirloin Steak: 420 kcal, 48g protein, 0g carbs, 24g fat\n- Sweet Potato: 290 kcal, 4g protein, 60g carbs, 2g fat",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 710,
+      "protein": 52,
+      "carbs": 60,
+      "fat": 26,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 111,
+    "title": "[Coverage] Intermediate label row Items: after dish name",
+    "input": "Chicken & Rice Feast\nItems:\n- Chicken Breast: 320 kcal, 48g protein, 0g carbs, 6g fat\n- White Rice: 210 kcal, 4g protein, 45g carbs, 1g fat",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 530,
+      "protein": 52,
+      "carbs": 45,
+      "fat": 7,
+      "fiber": null,
+      "name": "Chicken & Rice Feast",
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 112,
+    "title": "[Coverage] Tab-separated table with Total row cross-check",
+    "input": "Component\tCalories\tProtein\tCarbs\tFat\nFlank Steak\t380\t46g\t0g\t19g\nRice and Beans\t330\t8g\t68g\t3g\nTotal\t710\t54g\t68g\t22g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 710,
+      "protein": 54,
+      "carbs": 68,
+      "fat": 22,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
   }
 ];
