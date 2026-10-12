@@ -556,7 +556,7 @@ Fat: 21g`;
 });
 
 describe('Golden Test Corpus & Sweep Fixtures', () => {
-  it('parses all 96 realistic golden fixtures matching expected results', () => {
+  it('parses all 103 realistic golden fixtures matching expected results', () => {
     for (const fixture of NUTRITION_CORPUS_FIXTURES) {
       const result = parseNutritionText(fixture.input);
       expect(
@@ -867,6 +867,68 @@ describe('Seeded Property Tests', () => {
     expect(resultWithoutLeadIn.meal?.name).toBe('Protein bar');
     expect(resultWithoutLeadIn.meal?.calories).toBe(220);
     expect(resultWithoutLeadIn.skippedLines).toEqual([]);
+  });
+
+  it('percent macros are unread and never exact', () => {
+    const percentInput = [
+      'Zone Balance Plate',
+      'Calories: 500 kcal',
+      'Protein: 40%',
+      'Carbs: 40%',
+      'Fat: 20%',
+    ].join('\n');
+    const result = parseNutritionText(percentInput);
+    expect(result.confidence).toBe('partial');
+    expect(result.reason).toBe('MISSING_MACRO');
+    expect(result.meal?.calories).toBe(500);
+    expect(result.meal?.protein).toBe(0);
+    expect(result.meal?.carbs).toBe(0);
+    expect(result.meal?.fat).toBe(0);
+
+    // Transcribed label that ALSO gives grams keeps grams
+    const labelWithGramsAndPercent = [
+      'Nutrition Facts',
+      'Calories 250',
+      'Total Fat 8g 10%',
+      'Total Carbohydrate 34g 12%',
+      'Protein 10g 20%',
+    ].join('\n');
+    const labelResult = parseNutritionText(labelWithGramsAndPercent);
+    expect(labelResult.confidence).toBe('exact');
+    expect(labelResult.meal?.calories).toBe(250);
+    expect(labelResult.meal?.fat).toBe(8);
+    expect(labelResult.meal?.carbs).toBe(34);
+    expect(labelResult.meal?.protein).toBe(10);
+  });
+
+  it('serving/quantity lines are modifiers and not dropped as noise', () => {
+    const quantityInput = [
+      'Cheeseburger Plate',
+      'Calories: 300 kcal',
+      'Protein: 15g',
+      'Carbs: 25g',
+      'Fat: 12g',
+      'Quantity: 2',
+    ].join('\n');
+    const quantityResult = parseNutritionText(quantityInput);
+    expect(quantityResult.confidence).toBe('lenient');
+    expect(quantityResult.modifiers).toEqual(['Quantity: 2']);
+    expect(quantityResult.skippedLines).toEqual([]);
+    expect(quantityResult.meal?.calories).toBe(300);
+
+    const batchInput = [
+      'Meal Prep Beef Stew',
+      'Servings: 4',
+      'Calories: 1600 kcal',
+      'Protein: 140g',
+      'Carbs: 180g',
+      'Fat: 32g',
+    ].join('\n');
+    const batchResult = parseNutritionText(batchInput);
+    expect(batchResult.confidence).toBe('lenient');
+    expect(batchResult.modifiers).toEqual(['Servings: 4']);
+    expect(batchResult.skippedLines).toEqual([]);
+    expect(batchResult.meal?.calories).toBe(1600);
   });
 });
 

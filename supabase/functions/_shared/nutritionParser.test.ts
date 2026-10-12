@@ -215,7 +215,7 @@ Deno.test("shared nutritionParser: extracts fenced yourbody and yourbody-v1 bloc
   );
 });
 
-Deno.test("shared nutritionParser: 96 golden corpus & sweep fixtures", () => {
+Deno.test("shared nutritionParser: 103 golden corpus & sweep fixtures", () => {
   for (const fixture of NUTRITION_CORPUS_FIXTURES) {
     const result = parseNutritionText(fixture.input);
     assertEquals(
@@ -523,5 +523,67 @@ Deno.test("shared nutritionParser: prefers closest non-macro line above macros f
   assertEquals(resultWithoutLeadIn.meal?.name, "Protein bar");
   assertEquals(resultWithoutLeadIn.meal?.calories, 220);
   assertEquals(resultWithoutLeadIn.skippedLines, []);
+});
+
+Deno.test("shared nutritionParser: percent macros are unread and never exact", () => {
+  const percentInput = [
+    "Zone Balance Plate",
+    "Calories: 500 kcal",
+    "Protein: 40%",
+    "Carbs: 40%",
+    "Fat: 20%",
+  ].join("\n");
+  const result = parseNutritionText(percentInput);
+  assertEquals(result.confidence, "partial");
+  assertEquals(result.reason, "MISSING_MACRO");
+  assertEquals(result.meal?.calories, 500);
+  assertEquals(result.meal?.protein, 0);
+  assertEquals(result.meal?.carbs, 0);
+  assertEquals(result.meal?.fat, 0);
+
+  // Transcribed label that ALSO gives grams keeps grams
+  const labelWithGramsAndPercent = [
+    "Nutrition Facts",
+    "Calories 250",
+    "Total Fat 8g 10%",
+    "Total Carbohydrate 34g 12%",
+    "Protein 10g 20%",
+  ].join("\n");
+  const labelResult = parseNutritionText(labelWithGramsAndPercent);
+  assertEquals(labelResult.confidence, "exact");
+  assertEquals(labelResult.meal?.calories, 250);
+  assertEquals(labelResult.meal?.fat, 8);
+  assertEquals(labelResult.meal?.carbs, 34);
+  assertEquals(labelResult.meal?.protein, 10);
+});
+
+Deno.test("shared nutritionParser: serving/quantity lines are modifiers and not dropped as noise", () => {
+  const quantityInput = [
+    "Cheeseburger Plate",
+    "Calories: 300 kcal",
+    "Protein: 15g",
+    "Carbs: 25g",
+    "Fat: 12g",
+    "Quantity: 2",
+  ].join("\n");
+  const quantityResult = parseNutritionText(quantityInput);
+  assertEquals(quantityResult.confidence, "lenient");
+  assertEquals(quantityResult.modifiers, ["Quantity: 2"]);
+  assertEquals(quantityResult.skippedLines, []);
+  assertEquals(quantityResult.meal?.calories, 300);
+
+  const batchInput = [
+    "Meal Prep Beef Stew",
+    "Servings: 4",
+    "Calories: 1600 kcal",
+    "Protein: 140g",
+    "Carbs: 180g",
+    "Fat: 32g",
+  ].join("\n");
+  const batchResult = parseNutritionText(batchInput);
+  assertEquals(batchResult.confidence, "lenient");
+  assertEquals(batchResult.modifiers, ["Servings: 4"]);
+  assertEquals(batchResult.skippedLines, []);
+  assertEquals(batchResult.meal?.calories, 1600);
 });
 
