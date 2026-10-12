@@ -7,6 +7,7 @@
  */
 
 export type ParseConfidence = 'exact' | 'lenient' | 'partial' | 'none';
+export type MacroKind = 'calories' | 'protein' | 'carbs' | 'fat' | 'fiber';
 
 export type NutritionRejectReason =
   | 'EMPTY_INPUT'
@@ -52,6 +53,7 @@ export interface NutritionParseResult {
   reason?: NutritionRejectReason;
   skippedLines: string[];
   modifiers: string[];
+  foundMacros?: MacroKind[];
 }
 
 export const LOCAL_PARSE_GRAMMAR_DOC = `### Local Nutrition Block Grammar (D-OFF-6 / N4)
@@ -910,12 +912,16 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
     explanation,
   };
 
+  const multiFoundMacros: MacroKind[] = ['calories', 'protein', 'carbs', 'fat'];
+  if (sumFib > 0) multiFoundMacros.push('fiber');
+
   return {
     confidence: skippedLines.length > 0 ? 'lenient' : 'exact',
     meal,
     reason: skippedLines.length > 0 ? 'UNEXPLAINED_CONTENT' : undefined,
     skippedLines,
     modifiers: [],
+    foundMacros: multiFoundMacros,
   };
 }
 
@@ -1406,6 +1412,13 @@ export function parseNutritionText(text: string): NutritionParseResult {
     fat !== undefined,
   ].filter(Boolean).length;
 
+  const foundMacros: MacroKind[] = [];
+  if (calories !== undefined) foundMacros.push('calories');
+  if (protein !== undefined) foundMacros.push('protein');
+  if (carbs !== undefined) foundMacros.push('carbs');
+  if (fat !== undefined) foundMacros.push('fat');
+  if (fiber !== undefined) foundMacros.push('fiber');
+
   if (coreMacrosCount < 4) {
     const partialMeal: ParsedNutritionMeal = {
       name: mealName,
@@ -1423,6 +1436,7 @@ export function parseNutritionText(text: string): NutritionParseResult {
       reason: 'MISSING_MACRO',
       skippedLines,
       modifiers,
+      foundMacros,
     };
   }
 
@@ -1436,6 +1450,7 @@ export function parseNutritionText(text: string): NutritionParseResult {
       reason: 'KCAL_INCONSISTENT',
       skippedLines,
       modifiers,
+      foundMacros,
     };
   }
 
@@ -1458,5 +1473,6 @@ export function parseNutritionText(text: string): NutritionParseResult {
     reason: skippedLines.length > 0 ? 'UNEXPLAINED_CONTENT' : undefined,
     skippedLines,
     modifiers,
+    foundMacros,
   };
 }

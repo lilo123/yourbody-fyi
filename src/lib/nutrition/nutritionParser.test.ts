@@ -313,6 +313,12 @@ Protein: 30g`;
     expect(partialResult.meal?.protein).toBe(30);
     expect(partialResult.meal?.carbs).toBe(0);
     expect(partialResult.meal?.fat).toBe(0);
+    expect(partialResult.foundMacros).toEqual(['calories', 'protein']);
+
+    const carbsAndFat = 'Avocado Toast\nCarbs: 25g\nFat: 15g';
+    const partial2 = parseNutritionText(carbsAndFat);
+    expect(partial2.confidence).toBe('partial');
+    expect(partial2.foundMacros).toEqual(['carbs', 'fat']);
 
     const blockResult = parseNutritionBlock(caloriesAndProtein);
     expect(blockResult.ok).toBe(false);

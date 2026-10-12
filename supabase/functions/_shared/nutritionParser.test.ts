@@ -108,6 +108,7 @@ Deno.test("shared nutritionParser: confidence levels and skippedLines / modifier
   assertEquals(partialRes.meal?.protein, 30);
   assertEquals(partialRes.meal?.carbs, 0);
   assertEquals(partialRes.meal?.fat, 0);
+  assertEquals(partialRes.foundMacros, ["calories", "protein"]);
 
   // 6. None
   const noneInput = "Just some text about running in the park";

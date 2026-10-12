@@ -1,19 +1,63 @@
 import { useState, useCallback } from 'react';
 import type { CustomDish } from '../../types/database';
 import { formatCalories } from '../../utils/nutrition';
-import { parseNutritionBlock } from '../../lib/nutrition/localParse';
+import { parseNutritionText } from '../../lib/nutrition/localParse';
 import { buildStagedItem, type StagedMeal } from './nutritionEngineHelpers';
 import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
+import type { ManualMealPrefill } from './useManualMealForm';
 
 export interface UseNutritionAiOptions {
   customDishes: CustomDish[];
   targetUserId?: string;
   timeZone?: string;
   onParsedSuccess: (meal: StagedMeal) => void;
-  onFallbackToManual: (dishName: string) => void;
+  onFallbackToManual: (dishName: string, prefill?: ManualMealPrefill) => void;
   setStatus: (msg: string) => void;
   setIsError: (err: boolean) => void;
+}
+
+function extractPrefill(
+  text: string,
+  localResult: {
+    meal?: {
+      name?: string;
+      calories?: number;
+      protein?: number;
+      carbs?: number;
+      fat?: number;
+      fiber?: number;
+      servingSize?: number;
+      servingUnit?: string;
+    };
+    foundMacros?: Array<'calories' | 'protein' | 'carbs' | 'fat' | 'fiber'>;
+  } | null
+): ManualMealPrefill {
+  const prefill: ManualMealPrefill = {
+    name: localResult?.meal?.name || text.trim(),
+  };
+  if (localResult?.foundMacros?.includes('calories') && localResult.meal?.calories !== undefined) {
+    prefill.calories = localResult.meal.calories;
+  }
+  if (localResult?.foundMacros?.includes('protein') && localResult.meal?.protein !== undefined) {
+    prefill.protein = localResult.meal.protein;
+  }
+  if (localResult?.foundMacros?.includes('carbs') && localResult.meal?.carbs !== undefined) {
+    prefill.carbs = localResult.meal.carbs;
+  }
+  if (localResult?.foundMacros?.includes('fat') && localResult.meal?.fat !== undefined) {
+    prefill.fat = localResult.meal.fat;
+  }
+  if (localResult?.foundMacros?.includes('fiber') && localResult.meal?.fiber !== undefined) {
+    prefill.fiber = localResult.meal.fiber;
+  }
+  if (localResult?.meal?.servingSize !== undefined) {
+    prefill.servingSize = localResult.meal.servingSize;
+  }
+  if (localResult?.meal?.servingUnit !== undefined) {
+    prefill.servingUnit = localResult.meal.servingUnit;
+  }
+  return prefill;
 }
 
 export function useNutritionAi({
@@ -58,10 +102,15 @@ export function useNutritionAi({
     setIsRateLimited(false);
     setIsQuotaExceeded(false);
 
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
     // 1. Text-only local parse check (unless forceAi is requested)
     if (!options?.forceAi && !selectedPhoto && textToAnalyze.trim()) {
-      const localResult = parseNutritionBlock(textToAnalyze.trim());
-      if (localResult.ok && (!localResult.meal.items || localResult.meal.items.length <= 1)) {
+      const localResult = parseNutritionText(textToAnalyze.trim());
+      const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
+
+      // Exact single item: stage locally, zero network (both online and offline)
+      if (localResult.confidence === 'exact' && isSingle && localResult.meal) {
         const parsed = localResult.meal;
         const stagedItem = buildStagedItem({
           name: parsed.name || 'Meal',
@@ -91,6 +140,7 @@ export function useNutritionAi({
           servingSize: parsed.servingSize ?? 1,
           servingUnit: parsed.servingUnit ?? 'serving',
           source: 'local',
+          confidence: 'exact',
           rawText: textToAnalyze.trim(),
         };
 
@@ -99,10 +149,68 @@ export function useNutritionAi({
         onParsedSuccess(meal);
         return;
       }
+
+      // Offline routing for non-exact text
+      if (!isOnline) {
+        setIsAnalyzing(false);
+
+        // Offline + lenient (single item): stage locally with confidence 'lenient'
+        if (localResult.confidence === 'lenient' && isSingle && localResult.meal) {
+          const parsed = localResult.meal;
+          const stagedItem = buildStagedItem({
+            name: parsed.name || 'Meal',
+            portion:
+              parsed.servingSize && parsed.servingUnit
+                ? `${parsed.servingSize} ${parsed.servingUnit}`
+                : '1 serving',
+            quantity: parsed.servingSize ?? 1,
+            unit: (parsed.servingUnit as any) ?? 'serving',
+            calories: parsed.calories,
+            protein: parsed.protein,
+            carbs: parsed.carbs,
+            fat: parsed.fat,
+            fiber: parsed.fiber ?? 0,
+          });
+
+          const meal: StagedMeal = {
+            name: parsed.name || 'Meal',
+            mealType: 'Breakfast',
+            explanation: `${formatCalories(parsed.calories)} kcal (${parsed.name || 'Meal'})`,
+            items: [stagedItem],
+            calories: parsed.calories,
+            protein: parsed.protein,
+            carbs: parsed.carbs,
+            fat: parsed.fat,
+            fiber: parsed.fiber ?? 0,
+            servingSize: parsed.servingSize ?? 1,
+            servingUnit: parsed.servingUnit ?? 'serving',
+            source: 'local',
+            confidence: 'lenient',
+            rawText: textToAnalyze.trim(),
+          };
+
+          setStatus('Parsed locally');
+          onParsedSuccess(meal);
+          return;
+        }
+
+        // Offline + partial: open Quick Log prefilled with the name and ONLY found macros
+        if (localResult.confidence === 'partial') {
+          const prefill = extractPrefill(textToAnalyze, localResult);
+          setIsError(true);
+          setStatus('AI needs a connection: use quick log');
+          onFallbackToManual(prefill.name || textToAnalyze.trim(), prefill);
+          return;
+        }
+
+        // Offline + none (or multi-item block): today's message unchanged
+        setIsError(true);
+        setStatus('AI needs a connection: use quick log');
+        return;
+      }
     }
 
-    // 2. Offline check: AI parsing is online-only. Do not enqueue new items while offline.
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    // 2. Offline check for photo / forceAi
     if (!isOnline) {
       setIsAnalyzing(false);
       setIsError(true);
@@ -165,7 +273,13 @@ export function useNutritionAi({
       if (isNetworkError) {
         setIsError(true);
         setStatus('AI needs a connection: use quick log');
-        onFallbackToManual(textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''));
+        const localResult =
+          textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
+        const prefill = extractPrefill(textToAnalyze, localResult);
+        onFallbackToManual(
+          prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+          prefill
+        );
         return;
       }
 
@@ -176,6 +290,13 @@ export function useNutritionAi({
           setIsQuotaExceeded(true);
           const quotaMsg = error?.message || formatQuotaExceededMessage(error?.limit, error?.period);
           setStatus(quotaMsg);
+          const localResult =
+            textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
+          const prefill = extractPrefill(textToAnalyze, localResult);
+          onFallbackToManual(
+            prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+            prefill
+          );
           return;
         }
 
