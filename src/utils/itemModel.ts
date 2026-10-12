@@ -13,6 +13,7 @@
  */
 
 import { convertPortion, parseQuantityInput, type CanonicalUnit } from './unitConverter';
+import { roundTo1Decimal } from './nutrition';
 import type { Json } from '../types/supabase';
 
 export interface NutritionItem {
@@ -300,3 +301,36 @@ export function parentMatchesItems(
   const epsilon = SUM_EPSILON_PER_ITEM * items.length;
   return MACRO_KEYS.every((key) => Math.abs(num(parent[key]) - totals[key]) <= epsilon);
 }
+
+/**
+ * Format serving portion for a single-item custom dish (e.g. "40 g").
+ * Returns null if the dish is a recipe, has no items/portion, or multiple items.
+ */
+export function getCustomDishPortion(dish: {
+  kind?: string;
+  serving_quantity?: number | null;
+  serving_unit?: string | null;
+  items?: NutritionItem[] | null;
+}): string | null {
+  if (dish.kind === 'recipe') return null;
+  if (dish.kind === 'food') {
+    if (dish.serving_quantity != null && Number(dish.serving_quantity) > 0 && dish.serving_unit) {
+      return `${roundTo1Decimal(Number(dish.serving_quantity))} ${dish.serving_unit}`;
+    }
+    if (dish.items && dish.items.length === 1) {
+      const item = dish.items[0];
+      if (item && item.quantity != null && item.quantity > 0 && item.unit) {
+        return `${roundTo1Decimal(item.quantity)} ${item.unit}`;
+      }
+    }
+    return null;
+  }
+  if (dish.items && dish.items.length === 1) {
+    const item = dish.items[0];
+    if (item && item.quantity != null && item.quantity > 0 && item.unit) {
+      return `${roundTo1Decimal(item.quantity)} ${item.unit}`;
+    }
+  }
+  return null;
+}
+
