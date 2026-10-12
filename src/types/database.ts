@@ -15,6 +15,7 @@ export interface UserProfile {
   target_fat: number;
   target_fiber?: number;
   auto_rest_timer?: boolean;
+  rest_timer_seconds?: number;
   timezone?: string | null;
   is_coach_mode?: boolean;
   coach_code?: string | null;
@@ -179,6 +180,12 @@ export interface CustomDishRow {
    * tightened in the next phase when query projections include it.
    */
   notes?: string | null;
+  /** Scalar serving quantity extracted via items->0->quantity */
+  serving_quantity?: number | null;
+  /** Scalar serving unit extracted via items->0->>unit */
+  serving_unit?: string | null;
+  /** See {@link NutritionLog.items}. */
+  items?: NutritionItem[] | null;
 }
 
 export type CustomDish = CustomDishRow;

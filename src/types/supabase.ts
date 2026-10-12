@@ -482,6 +482,7 @@ export type Database = {
       users: {
         Row: {
           auto_rest_timer: boolean
+          rest_timer_seconds: number
           billing_customer_id: string | null
           coach_code: string | null
           coach_tier: string | null
@@ -507,6 +508,7 @@ export type Database = {
         }
         Insert: {
           auto_rest_timer?: boolean
+          rest_timer_seconds?: number
           billing_customer_id?: string | null
           coach_code?: string | null
           coach_tier?: string | null
@@ -532,6 +534,7 @@ export type Database = {
         }
         Update: {
           auto_rest_timer?: boolean
+          rest_timer_seconds?: number
           billing_customer_id?: string | null
           coach_code?: string | null
           coach_tier?: string | null

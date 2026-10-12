@@ -116,8 +116,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return dedupeInFlight(`profile:${userId}`, async () => {
       try {
         const profileSelect = isTermsConsentEnabled()
-          ? 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode, terms_accepted_at'
-          : 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode';
+          ? 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode, terms_accepted_at'
+          : 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode';
 
         const { data, error } = await (supabase
           .from('users') as any)
@@ -165,6 +165,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (data.auto_rest_timer !== undefined && data.auto_rest_timer !== null) {
             localStorage.setItem('yourbody_auto_rest_timer', String(data.auto_rest_timer));
           }
+          if (data.rest_timer_seconds !== undefined && data.rest_timer_seconds !== null) {
+            localStorage.setItem('yourbody_rest_timer_seconds', String(data.rest_timer_seconds));
+          }
           if (data.role === 'coach') {
             const savedMode = localStorage.getItem('yourbody_view_mode') as UserRole;
             if (!savedMode) {
@@ -190,6 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             target_fat: 70,
             target_fiber: 30,
             auto_rest_timer: true,
+            rest_timer_seconds: 90,
             timezone: deviceZone || null,
             weight_unit: 'lb',
             pr_mode: 'weight',
@@ -523,6 +527,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('yourbody_user', JSON.stringify(updated));
     if (safeUpdates.auto_rest_timer !== undefined) {
       localStorage.setItem('yourbody_auto_rest_timer', String(safeUpdates.auto_rest_timer));
+    }
+    if (safeUpdates.rest_timer_seconds !== undefined) {
+      localStorage.setItem('yourbody_rest_timer_seconds', String(safeUpdates.rest_timer_seconds));
     }
 
     try {

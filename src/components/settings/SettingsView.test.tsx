@@ -105,7 +105,7 @@ describe('SettingsView', () => {
     expect(getRecordedTables()).toContain('users');
     expect(getRecordedSelects()).toContainEqual({
       table: 'users',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
     });
   });
 
@@ -187,6 +187,86 @@ describe('SettingsView', () => {
         })
       );
     });
+  });
+
+  it('renders rest timer length select with default 90 s and all 10 duration choices', async () => {
+    renderComponent();
+    await screen.findByDisplayValue('Coach Demo');
+
+    expect(screen.getByText('Rest timer length')).toBeDefined();
+    const select = screen.getByTestId('select-rest-duration') as HTMLSelectElement;
+    expect(select).toBeDefined();
+    expect(select.value).toBe('90');
+
+    const options = Array.from(select.options).map((opt) => ({
+      value: Number(opt.value),
+      label: opt.text,
+    }));
+    expect(options).toEqual([
+      { value: 30, label: '30 s' },
+      { value: 45, label: '45 s' },
+      { value: 60, label: '60 s' },
+      { value: 75, label: '75 s' },
+      { value: 90, label: '90 s' },
+      { value: 120, label: '2 min' },
+      { value: 150, label: '2 min 30 s' },
+      { value: 180, label: '3 min' },
+      { value: 240, label: '4 min' },
+      { value: 300, label: '5 min' },
+    ]);
+  });
+
+  it('allows changing rest timer length preference and persists to localStorage and profile', async () => {
+    renderComponent();
+    await screen.findByDisplayValue('Coach Demo');
+
+    const select = screen.getByTestId('select-rest-duration') as HTMLSelectElement;
+    expect(select.value).toBe('90');
+
+    // Change to 120 (2 min)
+    fireEvent.change(select, { target: { value: '120' } });
+
+    await waitFor(() => {
+      expect(select.value).toBe('120');
+      expect(localStorage.getItem('yourbody_rest_timer_seconds')).toBe('120');
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rest_timer_seconds: 120,
+        })
+      );
+    });
+  });
+
+  it('falls back to localStorage or default 90 when profile lacks rest_timer_seconds', async () => {
+    // 1. With localStorage value
+    localStorage.setItem('yourbody_rest_timer_seconds', '180');
+    const { unmount } = renderComponent();
+    await screen.findByDisplayValue('Coach Demo');
+
+    const selectWithStorage = screen.getByTestId('select-rest-duration') as HTMLSelectElement;
+    expect(selectWithStorage.value).toBe('180');
+
+    unmount();
+    localStorage.removeItem('yourbody_rest_timer_seconds');
+
+    // 2. Without localStorage value
+    renderComponent();
+    await screen.findByDisplayValue('Coach Demo');
+
+    const selectDefault = screen.getByTestId('select-rest-duration') as HTMLSelectElement;
+    expect(selectDefault.value).toBe('90');
+  });
+
+  it('disables rest timer length select when offline', async () => {
+    vi.mocked(useOnlineStatus).mockReturnValue(false);
+
+    renderComponent();
+    await screen.findByDisplayValue('Coach Demo');
+
+    const select = screen.getByTestId('select-rest-duration') as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(select.getAttribute('title')).toBe('Available when online');
+    expect(screen.getByTestId('offline-helper-text-rest-duration').textContent).toBe('Available when online');
   });
 
   it('renders error banner with alert styling when saving goals fails', async () => {
@@ -551,6 +631,72 @@ describe('SettingsView', () => {
       await waitFor(() => {
         expect(screen.queryByTestId('owner-dashboard-card')).toBeNull();
       });
+    });
+  });
+
+  describe('NutritionParserModeCard', () => {
+    it('renders Nutrition parsing heading, helper text, and mode options', async () => {
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      expect(screen.getByRole('heading', { name: 'Nutrition parsing' })).toBeDefined();
+      expect(
+        screen.getByText('Choose how meals and foods are parsed from text.')
+      ).toBeDefined();
+
+      const autoTab = screen.getByTestId('nutrition-parser-mode-auto');
+      const alwaysAiTab = screen.getByTestId('nutrition-parser-mode-always-ai');
+      const onDeviceTab = screen.getByTestId('nutrition-parser-mode-on-device');
+
+      expect(autoTab).toBeDefined();
+      expect(alwaysAiTab).toBeDefined();
+      expect(onDeviceTab).toBeDefined();
+      expect(autoTab).toHaveAttribute('aria-selected', 'true');
+      expect(alwaysAiTab).toHaveAttribute('aria-selected', 'false');
+      expect(onDeviceTab).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('allows switching to Always AI and On-device only, persisting to localStorage', async () => {
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const autoTab = screen.getByTestId('nutrition-parser-mode-auto');
+      const alwaysAiTab = screen.getByTestId('nutrition-parser-mode-always-ai');
+      const onDeviceTab = screen.getByTestId('nutrition-parser-mode-on-device');
+
+      // Click Always AI
+      fireEvent.click(alwaysAiTab);
+      await waitFor(() => {
+        expect(alwaysAiTab).toHaveAttribute('aria-selected', 'true');
+        expect(autoTab).toHaveAttribute('aria-selected', 'false');
+        expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBe('always_ai');
+      });
+
+      // Click On-device only
+      fireEvent.click(onDeviceTab);
+      await waitFor(() => {
+        expect(onDeviceTab).toHaveAttribute('aria-selected', 'true');
+        expect(alwaysAiTab).toHaveAttribute('aria-selected', 'false');
+        expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBe('on_device');
+      });
+
+      // Click Auto
+      fireEvent.click(autoTab);
+      await waitFor(() => {
+        expect(autoTab).toHaveAttribute('aria-selected', 'true');
+        expect(onDeviceTab).toHaveAttribute('aria-selected', 'false');
+        expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBe('auto');
+      });
+    });
+
+    it('initializes active tab from pre-existing localStorage value', async () => {
+      localStorage.setItem('yourbody_nutrition_parser_mode', 'always_ai');
+
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const alwaysAiTab = screen.getByTestId('nutrition-parser-mode-always-ai');
+      expect(alwaysAiTab).toHaveAttribute('aria-selected', 'true');
     });
   });
 });
