@@ -7630,9 +7630,11 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         return route.continue();
       });
 
-      // Reload and set context offline
+      // Reload and wait for route to render before going offline
       await page.reload();
       await page.waitForLoadState('domcontentloaded');
+      await expect(statusBadge).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="add-exercise-btn"]')).toBeVisible({ timeout: 10000 });
       await context.setOffline(true);
 
       // Assert exact text
