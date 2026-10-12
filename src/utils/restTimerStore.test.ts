@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { restTimerStore, SERVER_SNAPSHOT } from './restTimerStore';
+import { restTimerStore, RestTimerStore, SERVER_SNAPSHOT } from './restTimerStore';
 import * as soundModule from './sound';
 
 describe('restTimerStore', () => {
@@ -229,5 +229,58 @@ describe('restTimerStore', () => {
     // Visibility change or single tick aligns remaining time directly to epoch delta
     const snap = restTimerStore.getSnapshot();
     expect(snap.remainingSeconds).toBe(30);
+  });
+
+  it('13. toggleHeaderTimer() starts timer with duration configured in localStorage', () => {
+    localStorage.setItem('yourbody_rest_timer_seconds', '120');
+    restTimerStore.toggleHeaderTimer();
+    expect(restTimerStore.getSnapshot().isRunning).toBe(true);
+    expect(restTimerStore.getSnapshot().remainingSeconds).toBe(120);
+    expect(restTimerStore.getSnapshot().totalDuration).toBe(120);
+  });
+
+  it('14. toggleHeaderTimer() supports optional explicit duration override', () => {
+    restTimerStore.toggleHeaderTimer(45);
+    expect(restTimerStore.getSnapshot().isRunning).toBe(true);
+    expect(restTimerStore.getSnapshot().remainingSeconds).toBe(45);
+    expect(restTimerStore.getSnapshot().totalDuration).toBe(45);
+  });
+
+  it('15. getDefaultDuration() validates bounds (15..600) and falls back to 90', () => {
+    // Missing key -> 90
+    expect(restTimerStore.getDefaultDuration()).toBe(90);
+
+    // Below min bound (< 15) -> 90
+    localStorage.setItem('yourbody_rest_timer_seconds', '10');
+    expect(restTimerStore.getDefaultDuration()).toBe(90);
+
+    // Above max bound (> 600) -> 90
+    localStorage.setItem('yourbody_rest_timer_seconds', '601');
+    expect(restTimerStore.getDefaultDuration()).toBe(90);
+
+    // Invalid non-numeric -> 90
+    localStorage.setItem('yourbody_rest_timer_seconds', 'invalid');
+    expect(restTimerStore.getDefaultDuration()).toBe(90);
+
+    // Valid values
+    localStorage.setItem('yourbody_rest_timer_seconds', '30');
+    expect(restTimerStore.getDefaultDuration()).toBe(30);
+
+    localStorage.setItem('yourbody_rest_timer_seconds', '300');
+    expect(restTimerStore.getDefaultDuration()).toBe(300);
+  });
+
+  it('16. hydrateFromStorage() falls back to configured duration when total key is missing or corrupted', () => {
+    localStorage.setItem('yourbody_rest_timer_seconds', '150');
+    const futureEnd = Date.now() + 100000;
+    localStorage.setItem('yourbody_rest_timer_end', String(futureEnd));
+    localStorage.removeItem('yourbody_rest_timer_total');
+    localStorage.setItem('yourbody_rest_timer_paused', '0');
+
+    const freshStore = new RestTimerStore();
+    const snap = freshStore.getSnapshot();
+    expect(snap.isRunning).toBe(true);
+    expect(snap.totalDuration).toBe(150);
+    freshStore.resetForTesting();
   });
 });
