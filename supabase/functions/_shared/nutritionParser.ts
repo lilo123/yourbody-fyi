@@ -33,6 +33,7 @@ export interface ParsedNutritionItem {
   carbs: number;
   fat: number;
   fiber: number;
+  isRange?: boolean;
 }
 
 export interface ParsedNutritionMeal {
@@ -1082,10 +1083,15 @@ function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
   let itemCarbs: number | undefined;
   let itemFat: number | undefined;
   let itemFiber: number | undefined;
+  let hasRangeToken = false;
 
   for (const segment of macroSegments) {
     const token = tryMatchMacroToken(segment);
     if (!token || token.kind === 'ignorable' || token.invalidUnit) continue;
+
+    if (token.isRange) {
+      hasRangeToken = true;
+    }
 
     if (token.kind === 'calories' && itemCalories === undefined) {
       if (token.value >= 0 && token.value <= 5000) itemCalories = token.value;
@@ -1125,6 +1131,7 @@ function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
     carbs: roundToOneDecimal(itemCarbs),
     fat: roundToOneDecimal(itemFat),
     fiber: roundToOneDecimal(itemFiber ?? 0),
+    isRange: hasRangeToken,
   };
 }
 
@@ -1572,6 +1579,12 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
   let isLenient = false;
   let hintText: string | undefined;
 
+  const anyItemHasRange = items.some((it) => it.isRange);
+  if (anyItemHasRange) {
+    isLenient = true;
+    hintText = 'Range: used the middle';
+  }
+
   if (declaredCalories !== undefined) {
     const diff = Math.abs(declaredCalories - sumCal);
     const maxTolerance = Math.max(30, 0.05 * sumCal);
@@ -1849,6 +1862,15 @@ export function parseNutritionText(text: string): NutritionParseResult {
           };
         }
         const cleanFoodName = candidatePrefix.replace(/^(?:\d+(?:[.,]\d+)?\s*(?:oz|g|ml|lbs?|cups?|pieces?|slices?|servings?|scoops?)\s+)/i, '').trim();
+        if (isServingPrefix && standardServing === undefined) {
+          const portionMatch = candidatePrefix.match(/^(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)\s+/);
+          if (portionMatch) {
+            const sizeVal = parseLocaleNumber(portionMatch[1]).value;
+            if (sizeVal !== null) {
+              standardServing = { size: sizeVal, unit: normalizeUnit(portionMatch[2]) };
+            }
+          }
+        }
         if (mealName === undefined && lineIndex === 0) {
           mealName = cleanFoodName;
           lineToParse = restOfLine;

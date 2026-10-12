@@ -455,3 +455,19 @@ Deno.test("shared nutritionParser: '1,000' and '1.000' with 0 macros yield KCAL_
   assertEquals(periodResult.reason, "KCAL_INCONSISTENT");
 });
 
+Deno.test("shared nutritionParser: open-ended estimates ('800+', '50+') never yield exact grade", () => {
+  const input = "Steak\nCalories: 800+ kcal\nProtein: 50+g\nCarbs: 0g\nFat: 30g";
+  const result = parseNutritionText(input);
+  assertNotEquals(result.confidence, "exact");
+});
+
+Deno.test("shared nutritionParser: portion prefix on food line captures portion size and exact macros", () => {
+  const input = "8 oz Grilled Sirloin Steak: 48g protein, 0g carbs, 18g fat, 360 kcal";
+  const result = parseNutritionText(input);
+  assertEquals(result.confidence, "exact");
+  assertEquals(result.meal?.name, "Grilled Sirloin Steak");
+  assertEquals(result.meal?.servingSize, 8);
+  assertEquals(result.meal?.servingUnit, "oz");
+  assertEquals(result.meal?.calories, 360);
+});
+

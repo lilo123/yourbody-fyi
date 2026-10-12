@@ -798,5 +798,21 @@ describe('Seeded Property Tests (E2)', () => {
       expect(blockResultPeriod.reason).toBe('KCAL_INCONSISTENT');
     }
   });
+
+  it("open-ended estimates ('800+', '50+') never yield exact grade", () => {
+    const input = 'Steak\nCalories: 800+ kcal\nProtein: 50+g\nCarbs: 0g\nFat: 30g';
+    const result = parseNutritionText(input);
+    expect(result.confidence).not.toBe('exact');
+  });
+
+  it('portion prefix on food line captures portion size and exact macros', () => {
+    const input = '8 oz Grilled Sirloin Steak: 48g protein, 0g carbs, 18g fat, 360 kcal';
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal?.name).toBe('Grilled Sirloin Steak');
+    expect(result.meal?.servingSize).toBe(8);
+    expect(result.meal?.servingUnit).toBe('oz');
+    expect(result.meal?.calories).toBe(360);
+  });
 });
 
