@@ -160,3 +160,25 @@ Notes:
 - Edge functions accept preview origins through `supabase/functions/_shared/cors.ts`. Per-deployment preview hosts are matched by a pattern anchored on the hosting team suffix.
 - When a pull request changes `supabase/**`, the staging deploy workflow applies its migrations and functions to staging, so the preview runs against the matching backend.
 - To check that a preview uses staging, fetch the preview's main JavaScript bundle and confirm it references the staging project host and not production.
+
+---
+
+## 8. Scheduled Uptime & Billing Smoke Monitoring
+
+A lightweight automated monitor runs on GitHub Actions every 30 minutes via `.github/workflows/uptime.yml`:
+- **Checks:**
+  1. Frontend deployment health and commit SHA verification via `https://www.yourbody.fyi/version.json` (retries up to 3 times with 20-second pauses).
+  2. Edge function availability and CORS/auth guardrails by validating responses from `/functions/v1/stripe-webhook` (HTTP 400 with signature rejection), `/functions/v1/create-checkout` (HTTP 401), and `/functions/v1/create-portal-session` (HTTP 401). Origin and project reference identifiers are masked in workflow logs.
+- **Alerting & Incident Management:**
+  - On persistent failure, the check opens a GitHub issue titled `Uptime check failed` containing the failing check names, HTTP statuses, and run URL (deduplicating so only one issue remains open).
+  - Once all checks pass after a failure, the workflow comments with the recovery timestamp and automatically closes the issue.
+- **Silencing Alerts / Disabling the Check:**
+  - When planned maintenance or expected downtime requires silencing alerts, disable the workflow in GitHub under **Actions** → **Uptime Check** → **...** (menu) → **Disable workflow**, or run:
+    ```bash
+    gh workflow disable uptime.yml
+    ```
+  - Re-enable the workflow once maintenance concludes:
+    ```bash
+    gh workflow enable uptime.yml
+    ```
+
