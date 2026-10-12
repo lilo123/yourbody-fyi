@@ -74,12 +74,13 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
   const canParseLocally = useMemo(() => {
     if (!nlInput.trim() || selectedPhoto) return false;
     const result = parseNutritionText(nlInput.trim());
+    if (result.confidence === 'exact') {
+      return true;
+    }
     const isSingle = !result.meal?.items || result.meal.items.length <= 1;
     return (
       isSingle &&
-      (result.confidence === 'exact' ||
-        result.confidence === 'lenient' ||
-        result.confidence === 'partial')
+      (result.confidence === 'lenient' || result.confidence === 'partial')
     );
   }, [nlInput, selectedPhoto]);
 
