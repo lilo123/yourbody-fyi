@@ -413,6 +413,20 @@ export interface EntitlementResolutionResult {
   coach_tier?: string | null;
 }
 
+export function computeGreatestPaidUntil(
+  currentPaidUntil?: string | null,
+  incomingPaidUntil?: string | null,
+): string | null {
+  if (!currentPaidUntil) return incomingPaidUntil || null;
+  if (!incomingPaidUntil) return currentPaidUntil || null;
+  const currentTs = new Date(currentPaidUntil).getTime();
+  const incomingTs = new Date(incomingPaidUntil).getTime();
+  if (isNaN(currentTs) && isNaN(incomingTs)) return null;
+  if (isNaN(currentTs)) return incomingPaidUntil;
+  if (isNaN(incomingTs)) return currentPaidUntil;
+  return currentTs >= incomingTs ? currentPaidUntil : incomingPaidUntil;
+}
+
 export function resolveGrandfatherAwareEntitlements(
   input: EntitlementResolutionInput,
 ): EntitlementResolutionResult {
@@ -474,6 +488,7 @@ async function cancelSubscriptionForChargeOrCustomer(
   charge: Stripe.Charge | null,
   customerId: string | null,
   stripe: Stripe,
+  minimalPayload?: Record<string, unknown>,
 ): Promise<string | null> {
   let subscriptionId: string | null = null;
 
@@ -493,21 +508,54 @@ async function cancelSubscriptionForChargeOrCustomer(
 
     let invoiceId: string | null = null;
     if (paymentIntentId) {
-      try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-        if (typeof paymentIntent.invoice === "string" && paymentIntent.invoice.length > 0) {
-          invoiceId = paymentIntent.invoice;
-        } else if (paymentIntent.invoice && typeof paymentIntent.invoice === "object") {
-          invoiceId = (paymentIntent.invoice as any).id || null;
+      // 1. Pinned API version (2026-09-30.endive): query Invoice Payments API via client rawRequest
+      if (typeof (stripe as any).rawRequest === "function") {
+        try {
+          const res = await (stripe as any).rawRequest(
+            "GET",
+            `/v1/invoice_payments?payment[type]=payment_intent&payment[payment_intent]=${encodeURIComponent(paymentIntentId)}`,
+          ) as any;
+          const payments = Array.isArray(res?.data) ? res.data : [];
+          for (const item of payments) {
+            const inv = item?.invoice;
+            if (typeof inv === "string" && inv.length > 0) {
+              invoiceId = inv;
+              break;
+            } else if (inv && typeof inv === "object" && typeof inv.id === "string" && inv.id.length > 0) {
+              invoiceId = inv.id;
+              break;
+            }
+          }
+        } catch (err: any) {
+          const isMissing =
+            err?.code === "resource_missing" ||
+            err?.statusCode === 404 ||
+            err?.raw?.statusCode === 404 ||
+            err?.raw?.code === "resource_missing";
+          if (!isMissing) {
+            throw err;
+          }
         }
-      } catch (err: any) {
-        const isMissing =
-          err?.code === "resource_missing" ||
-          err?.statusCode === 404 ||
-          err?.raw?.statusCode === 404 ||
-          err?.raw?.code === "resource_missing";
-        if (!isMissing) {
-          throw err;
+      }
+
+      // 2. Old-shape fallback: retrieve PaymentIntent and inspect paymentIntent.invoice
+      if (!invoiceId) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          if (typeof paymentIntent.invoice === "string" && paymentIntent.invoice.length > 0) {
+            invoiceId = paymentIntent.invoice;
+          } else if (paymentIntent.invoice && typeof paymentIntent.invoice === "object") {
+            invoiceId = (paymentIntent.invoice as any).id || null;
+          }
+        } catch (err: any) {
+          const isMissing =
+            err?.code === "resource_missing" ||
+            err?.statusCode === 404 ||
+            err?.raw?.statusCode === 404 ||
+            err?.raw?.code === "resource_missing";
+          if (!isMissing) {
+            throw err;
+          }
         }
       }
     }
@@ -590,6 +638,24 @@ async function cancelSubscriptionForChargeOrCustomer(
       err?.raw?.message?.toLowerCase().includes("already canceled");
 
     if (isResourceMissing || isAlreadyCanceled) {
+      return subscriptionId;
+    }
+
+    const statusCode = err?.statusCode ?? err?.status ?? err?.raw?.statusCode;
+    const errorMessage = (err?.message ?? err?.raw?.message ?? "").toLowerCase();
+    const isApprovalRequired =
+      err?.code === "approval_required" ||
+      err?.raw?.code === "approval_required" ||
+      ((statusCode === 400 || statusCode === undefined) &&
+        errorMessage.includes("approval request"));
+
+    if (isApprovalRequired) {
+      console.error(
+        `[stripe-webhook] Stripe subscription cancellation held for approval for subscription ${subscriptionId}`,
+      );
+      if (minimalPayload) {
+        minimalPayload.cancel_pending_approval = true;
+      }
       return subscriptionId;
     }
 
@@ -880,12 +946,17 @@ export async function handler(req: Request): Promise<Response> {
 
         const lines = invoice.lines?.data || [];
         for (const line of lines) {
-          const resolved = await resolvePlanAndTierFromLine(line, config);
-          if (resolved) {
-            resolvedPlanTier = resolved;
+          const isCredit = typeof line.amount === "number" && line.amount < 0;
+          if (!isCredit || !resolvedPlanTier) {
+            const resolved = await resolvePlanAndTierFromLine(line, config);
+            if (resolved && (!isCredit || !resolvedPlanTier)) {
+              resolvedPlanTier = resolved;
+            }
           }
           if (line.period?.end != null) {
-            linePeriodEnd = line.period.end;
+            if (linePeriodEnd == null || line.period.end > linePeriodEnd) {
+              linePeriodEnd = line.period.end;
+            }
           }
         }
 
@@ -981,11 +1052,215 @@ export async function handler(req: Request): Promise<Response> {
           const incomingPaidUntilIso =
             linePeriodEnd != null ? new Date(linePeriodEnd * 1000).toISOString() : null;
 
+          // For proration invoices (billing_reason === 'subscription_update'), ensure paid_until is not shortened
+          const effectiveIncomingPaidUntilIso =
+            (invoice as any).billing_reason === "subscription_update"
+              ? computeGreatestPaidUntil(currentUserRow?.paid_until, incomingPaidUntilIso)
+              : incomingPaidUntilIso;
+
           const effective = resolveGrandfatherAwareEntitlements({
             currentPlan: currentUserRow?.plan,
             incomingPlan: resolvedPlanTier.plan,
             currentPaidUntil: currentUserRow?.paid_until,
-            incomingPaidUntil: incomingPaidUntilIso,
+            incomingPaidUntil: effectiveIncomingPaidUntilIso,
+            currentCoachTier: currentUserRow?.coach_tier,
+            incomingCoachTier: resolvedPlanTier.coach_tier,
+            isGrandfatherActive,
+          });
+
+          const updates: Record<string, unknown> = {
+            plan: effective.plan,
+          };
+          if (effective.paid_until != null) {
+            updates.paid_until = effective.paid_until;
+          }
+          if (effective.coach_tier !== undefined) {
+            updates.coach_tier = effective.coach_tier;
+          }
+
+          const { error: updateError } = await serviceClient
+            .from("users")
+            .update(updates)
+            .eq("id", targetUserId);
+          if (updateError) {
+            throw new Error(
+              `Failed to update plan and paid_until for user: ${updateError.message}`,
+            );
+          }
+          resolvedUserId = targetUserId;
+        }
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+        const subCustId =
+          typeof subscription.customer === "string"
+            ? subscription.customer
+            : (subscription.customer as any)?.id || null;
+
+        // Status handling: if status becomes canceled / incomplete_expired, do nothing (customer.subscription.deleted covers it).
+        // past_due / unpaid: no change (paid_until governs access).
+        if (
+          subscription.status === "canceled" ||
+          subscription.status === "incomplete_expired" ||
+          subscription.status === "past_due" ||
+          subscription.status === "unpaid"
+        ) {
+          break;
+        }
+
+        // Ignore updates where the price did not change (status-only changes; cancel_at_period_end toggles)
+        const prevAttrs = (event.data as any)?.previous_attributes;
+        if (prevAttrs && typeof prevAttrs === "object") {
+          const hasItemOrPriceChange =
+            "items" in prevAttrs || "price" in prevAttrs || "plan" in prevAttrs;
+          if (!hasItemOrPriceChange) {
+            break;
+          }
+        }
+
+        let targetUserId: string | null = null;
+        let currentUserRow: {
+          id: string;
+          plan?: string | null;
+          paid_until?: string | null;
+          coach_tier?: string | null;
+        } | null = null;
+
+        if (subCustId) {
+          const { data: userRow, error: selectError } = await serviceClient
+            .from("users")
+            .select("id, plan, paid_until, coach_tier")
+            .eq("billing_customer_id", subCustId)
+            .maybeSingle();
+
+          if (selectError) {
+            throw new Error(
+              `Failed to query user by billing_customer_id: ${selectError.message}`,
+            );
+          }
+          if (userRow?.id) {
+            targetUserId = userRow.id;
+            currentUserRow = userRow;
+          }
+        }
+
+        if (!targetUserId) {
+          const subUserId = (subscription.metadata as any)?.user_id;
+          if (subUserId && UUID_REGEX.test(subUserId)) {
+            targetUserId = subUserId;
+            const { data: userRow, error: selectError } = await serviceClient
+              .from("users")
+              .select("id, plan, paid_until, coach_tier")
+              .eq("id", targetUserId)
+              .maybeSingle();
+            if (selectError) {
+              throw new Error(
+                `Failed to query user by id: ${selectError.message}`,
+              );
+            }
+            if (userRow) {
+              currentUserRow = userRow;
+            }
+          }
+        }
+
+        let resolvedPlanTier: ResolvedPlanTier | null = null;
+        let currentPeriodEnd: number | null = null;
+
+        const subItems = subscription.items?.data || [];
+        for (const item of subItems) {
+          const resolved = await resolvePlanAndTierFromLine(item, config);
+          if (resolved) {
+            resolvedPlanTier = resolved;
+          }
+          if ((item as any).current_period_end != null) {
+            currentPeriodEnd = (item as any).current_period_end;
+          }
+        }
+
+        if (currentPeriodEnd == null && (subscription as any).current_period_end != null) {
+          currentPeriodEnd = (subscription as any).current_period_end;
+        }
+
+        // Unknown price -> no write
+        if (!resolvedPlanTier) {
+          console.warn(
+            `[stripe-webhook] customer.subscription.updated could not resolve plan for subscription ${subscription.id}; leaving user unchanged`,
+          );
+          if (targetUserId) {
+            resolvedUserId = targetUserId;
+          }
+          break;
+        }
+
+        // Check if price/plan actually changed if previous_attributes had items
+        if (prevAttrs && typeof prevAttrs === "object") {
+          const prevItemsData = Array.isArray(prevAttrs.items?.data)
+            ? prevAttrs.items.data
+            : Array.isArray(prevAttrs.items)
+            ? prevAttrs.items
+            : null;
+          if (prevItemsData && prevItemsData.length > 0) {
+            const prevPriceId =
+              prevItemsData[0]?.price?.id ||
+              (typeof prevItemsData[0]?.price === "string" ? prevItemsData[0].price : null) ||
+              prevItemsData[0]?.plan?.id ||
+              (typeof prevItemsData[0]?.plan === "string" ? prevItemsData[0].plan : null);
+            const currPriceId = resolvePriceIdFromLine(subItems[0]);
+            if (prevPriceId && currPriceId && prevPriceId === currPriceId) {
+              break;
+            }
+          }
+        }
+
+        // If no change in plan and tier and no previous_attributes indicating price change, ignore
+        if (
+          !prevAttrs &&
+          currentUserRow &&
+          currentUserRow.plan === resolvedPlanTier.plan &&
+          currentUserRow.coach_tier === resolvedPlanTier.coach_tier
+        ) {
+          break;
+        }
+
+        if (targetUserId) {
+          // Check grandfather status in public.billing_grandfather (granted_until > now())
+          let isGrandfatherActive = false;
+          const { data: gfRow, error: gfError } = await serviceClient
+            .from("billing_grandfather")
+            .select("granted_until")
+            .eq("user_id", targetUserId)
+            .maybeSingle();
+
+          if (gfError) {
+            throw new Error(
+              `Failed to query billing_grandfather: ${gfError.message}`,
+            );
+          }
+
+          if (gfRow?.granted_until) {
+            const grantedUntilTs = new Date(gfRow.granted_until).getTime();
+            if (!isNaN(grantedUntilTs) && grantedUntilTs > Date.now()) {
+              isGrandfatherActive = true;
+            }
+          }
+
+          const incomingPaidUntilIso =
+            currentPeriodEnd != null ? new Date(currentPeriodEnd * 1000).toISOString() : null;
+
+          // Keep max(current paid_until, the subscription item's current_period_end)
+          const greatestPaidUntilIso = computeGreatestPaidUntil(
+            currentUserRow?.paid_until,
+            incomingPaidUntilIso,
+          );
+
+          const effective = resolveGrandfatherAwareEntitlements({
+            currentPlan: currentUserRow?.plan,
+            incomingPlan: resolvedPlanTier.plan,
+            currentPaidUntil: currentUserRow?.paid_until,
+            incomingPaidUntil: greatestPaidUntilIso,
             currentCoachTier: currentUserRow?.coach_tier,
             incomingCoachTier: resolvedPlanTier.coach_tier,
             isGrandfatherActive,
@@ -1055,7 +1330,7 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         // Auto-cancel related subscription
-        await cancelSubscriptionForChargeOrCustomer(charge, refundCustId, config.stripe);
+        await cancelSubscriptionForChargeOrCustomer(charge, refundCustId, config.stripe, minimalPayload);
         break;
       }
 
@@ -1099,7 +1374,7 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         // Auto-cancel related subscription
-        await cancelSubscriptionForChargeOrCustomer(charge, disputeCustId, config.stripe);
+        await cancelSubscriptionForChargeOrCustomer(charge, disputeCustId, config.stripe, minimalPayload);
         break;
       }
 
@@ -1147,6 +1422,7 @@ export async function handler(req: Request): Promise<Response> {
       processed_at: new Date().toISOString(),
       ...(resolvedUserId ? { user_id: resolvedUserId } : {}),
       ...(customerId ? { customer_id: customerId } : {}),
+      payload: minimalPayload,
     })
     .eq("event_id", event.id);
 

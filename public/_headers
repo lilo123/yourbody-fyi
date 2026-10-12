@@ -49,6 +49,11 @@
   ! Cache-Control
   Cache-Control: no-cache
 
+/robots.txt
+  ! Cache-Control
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Content-Type: text/plain
+
 /version.json
   ! Cache-Control
   Cache-Control: no-cache

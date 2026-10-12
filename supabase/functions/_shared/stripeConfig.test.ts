@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { assertEquals, assertThrows } from "jsr:@std/assert@1.0.19";
 import {
   getStripeConfig,
   resolveStripeConfig,
@@ -7,6 +7,7 @@ import {
   createBillingErrorResponse,
   validatePriceMode,
   assertPriceMode,
+  STRIPE_API_VERSION,
 } from "./stripeConfig.ts";
 
 Deno.test("stripeConfig: getStripeConfig returns null when STRIPE_SECRET_KEY is unset", () => {
@@ -223,3 +224,18 @@ Deno.test("stripeConfig: createBillingErrorResponse formats status and body corr
   assertEquals(data3.code, "price_not_configured");
   assertEquals(data3.error, "Price is not configured.");
 });
+
+Deno.test("stripeConfig: getStripeConfig configures Stripe client with pinned apiVersion", () => {
+  Deno.env.set("STRIPE_SECRET_KEY", "sk_test_" + "1234567890abcdef");
+  try {
+    const config = getStripeConfig();
+    assertEquals(config !== null, true);
+    if (!config) {
+      throw new Error("config must not be null");
+    }
+    assertEquals((config.stripe as any).getApiField("version"), STRIPE_API_VERSION);
+  } finally {
+    Deno.env.delete("STRIPE_SECRET_KEY");
+  }
+});
+

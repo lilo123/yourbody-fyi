@@ -74,4 +74,31 @@ describe('useWorkoutEditSheet', () => {
     expect(result.current.editingSet).toBeNull();
     expect(scheduleDelete).toHaveBeenCalledWith(dummySet);
   });
+
+  it('preserves set_type on editingSet when opening sheet', () => {
+    const warmupSet = {
+      ...dummySet,
+      id: 's-warmup',
+      set_type: 'warmup',
+    };
+    const { result } = renderHook(() =>
+      useWorkoutEditSheet({
+        activeExercises: ['Bench Press'],
+        activeRoutineName: 'Chest Day',
+        workoutDate: '2026-09-27',
+        targetUserId: 'user-1',
+        getSetsForExerciseToday: () => [warmupSet],
+        pendingSetId: null,
+        pendingDeletedSetIds: new Set(),
+        scheduleDelete: vi.fn(),
+      })
+    );
+
+    act(() => {
+      result.current.handleEditSet(0, 0);
+    });
+
+    expect(result.current.isEditSheetOpen).toBe(true);
+    expect(result.current.editingSet?.set_type).toBe('warmup');
+  });
 });
