@@ -48,7 +48,7 @@ export interface UseCustomDishActionsOptions {
 
 export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | null): StagedItem[] {
   const stored =
-    normalizeItems(detail?.items) ?? itemsFromLegacyIngredients(dish.id, dish.name, detail?.ingredients);
+    normalizeItems(detail?.items ?? dish.items) ?? itemsFromLegacyIngredients(dish.id, dish.name, detail?.ingredients);
 
   let items: StagedItem[] = (stored ?? []).map((it) =>
     buildStagedItem({
@@ -312,6 +312,7 @@ export function useCustomDishActions({
       setBannerState(null);
       previousStagedMealRef.current = null;
       const clientLogId = newId();
+      const single = dish.items && dish.items.length === 1 ? dish.items[0] : null;
       const payload = {
         id: clientLogId,
         food_name: dish.name,
@@ -321,8 +322,8 @@ export function useCustomDishActions({
         fat: roundTo1Decimal(dish.fat),
         fiber: roundTo1Decimal(dish.fiber),
         meal_type: 'Breakfast',
-        serving_size: 1,
-        serving_unit: 'serving',
+        serving_size: single && single.quantity != null && single.quantity > 0 ? roundTo1Decimal(single.quantity) : 1,
+        serving_unit: single?.unit || 'serving',
         logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
         logged_date: selectedDate,
         notes: dish.notes ?? null,

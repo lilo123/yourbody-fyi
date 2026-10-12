@@ -150,7 +150,7 @@ describe('Snapshot Isolation: Custom Dish Notes', () => {
     expect(getRecordedTables()).toContain('nutrition_logs');
     expect(getRecordedSelects()).toContainEqual({
       table: 'custom_dishes',
-      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, items',
     });
     expect(getRecordedSelects()).toContainEqual({
       table: 'nutrition_logs',

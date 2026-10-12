@@ -179,6 +179,8 @@ export interface CustomDishRow {
    * tightened in the next phase when query projections include it.
    */
   notes?: string | null;
+  /** See {@link NutritionLog.items}. */
+  items?: NutritionItem[] | null;
 }
 
 export type CustomDish = CustomDishRow;

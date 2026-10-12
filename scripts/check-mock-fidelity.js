@@ -476,11 +476,18 @@ const SERVICED_QUERIES_REGISTRY = {
       description: 'Athlete active coach link query',
     },
   ],
+  'src/components/nutrition/customDishUnits.test.tsx': [
+    {
+      table: 'custom_dishes',
+      type: 'NO_PROJECTION_APPLIES',
+      description: 'Custom dish insert mutations only; no database select queries issued',
+    },
+  ],
   'src/components/nutrition/dishNotesSnapshot.test.tsx': [
     {
       table: 'custom_dishes',
       type: 'EXACT',
-      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, items',
       description: 'Custom dishes list query with notes',
     },
     {
@@ -549,7 +556,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'custom_dishes',
       type: 'EXACT',
-      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, items',
       description: 'Custom dishes list query with notes',
     },
     {

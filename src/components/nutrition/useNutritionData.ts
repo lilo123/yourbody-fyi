@@ -104,10 +104,11 @@ export function useNutritionData({
     queryKey: ['custom_dishes', targetUserId],
     queryFn: async () => {
       if (!targetUserId) return [];
+      // payload-gate: detail-fetch — custom dishes with items for serving quantity and unit display
       const { data, error } = await supabase
         .from('custom_dishes')
         .select(
-          'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes'
+          'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, items'
         )
         .eq('user_id', targetUserId)
         .order('created_at', { ascending: false })
