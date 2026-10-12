@@ -9012,12 +9012,13 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
 
           await page.reload();
           await page.waitForLoadState('domcontentloaded');
+          const statusPill = page.locator('[data-testid="connection-status"]');
+          await expect(statusPill).toBeVisible({ timeout: 10000 });
 
           await page.evaluate(() => {
             Object.defineProperty(navigator, 'onLine', { configurable: true, writable: true, value: false });
             window.dispatchEvent(new Event('offline'));
           });
-          const statusPill = page.locator('[data-testid="connection-status"]');
           await expect(statusPill).toHaveAttribute('title', /99 pending/, { timeout: 10000 });
 
           await verifyWordmarkGeometry(page, 'Offline · 99 pending');
@@ -9388,12 +9389,13 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
 
       await page.reload();
       await page.waitForLoadState('domcontentloaded');
+      const statusPill = page.locator('[data-testid="connection-status"]');
+      await expect(statusPill).toBeVisible({ timeout: 10000 });
 
       await page.evaluate(() => {
         Object.defineProperty(navigator, 'onLine', { configurable: true, writable: true, value: false });
         window.dispatchEvent(new Event('offline'));
       });
-      const statusPill = page.locator('[data-testid="connection-status"]');
       await expect(statusPill).toHaveAttribute('title', /99 pending/, { timeout: 10000 });
     };
 
