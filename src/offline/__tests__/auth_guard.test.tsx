@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../../context/AuthContext';
@@ -24,8 +24,15 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
-const TestConsumer: React.FC = () => {
+interface TestConsumerProps {
+  onSignOutReady?: (signOut: () => Promise<void>) => void;
+}
+
+const TestConsumer: React.FC<TestConsumerProps> = ({ onSignOutReady }) => {
   const { user, profile, loading, signOut } = useAuth();
+  React.useEffect(() => {
+    onSignOutReady?.(signOut);
+  }, [onSignOutReady, signOut]);
   return (
     <div>
       <div data-testid="auth-loading">{loading ? 'true' : 'false'}</div>
@@ -230,10 +237,12 @@ describe('auth_guard (A8 + A9 Offline Auth Guarantees)', () => {
     const opsBefore = await getOutboxOps(userId);
     expect(opsBefore).toHaveLength(1);
 
+    let signOutFn: () => Promise<void> = async () => {};
+
     render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TestConsumer />
+          <TestConsumer onSignOutReady={(fn) => { signOutFn = fn; }} />
         </AuthProvider>
       </QueryClientProvider>
     );
@@ -243,14 +252,11 @@ describe('auth_guard (A8 + A9 Offline Auth Guarantees)', () => {
     });
 
     // Trigger signOut
-    const signOutBtn = screen.getByTestId('auth-signout-btn');
     await act(async () => {
-      fireEvent.click(signOutBtn);
+      await signOutFn();
     });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('auth-user-id').textContent).toBe('none');
-    });
+    expect(screen.getByTestId('auth-user-id').textContent).toBe('none');
 
     // Verify IndexedDB: rq cleared, outbox and idmap preserved
     const rqAfter = await db.get('rq', 'persisted-query-cache');
@@ -286,10 +292,12 @@ describe('auth_guard (A8 + A9 Offline Auth Guarantees)', () => {
     const dbsBefore = await indexedDB.databases();
     expect(dbsBefore.some((d) => d.name === `yourbody-offline-${userId}`)).toBe(true);
 
+    let signOutFn: () => Promise<void> = async () => {};
+
     render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TestConsumer />
+          <TestConsumer onSignOutReady={(fn) => { signOutFn = fn; }} />
         </AuthProvider>
       </QueryClientProvider>
     );
@@ -301,14 +309,11 @@ describe('auth_guard (A8 + A9 Offline Auth Guarantees)', () => {
     // Account deletion flow: wipeUserData then signOut
     await wipeUserData(userId, { queryClient });
 
-    const signOutBtn = screen.getByTestId('auth-signout-btn');
     await act(async () => {
-      fireEvent.click(signOutBtn);
+      await signOutFn();
     });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('auth-user-id').textContent).toBe('none');
-    });
+    expect(screen.getByTestId('auth-user-id').textContent).toBe('none');
 
     // Verify no offline DB exists for this user in indexedDB.databases()
     const dbsAfter = await indexedDB.databases();

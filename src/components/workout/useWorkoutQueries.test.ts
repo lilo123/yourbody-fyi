@@ -513,4 +513,88 @@ describe('useWorkoutQueries', () => {
 
     expect((e1rmResult.current.benchmarks['ex-bench-uuid'].pr as any)?.e1rm).toBeGreaterThan(315);
   });
+
+  it('selects set_type and rpe in workouts query and preserves them in todaySets without defaulting to normal', async () => {
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue([]);
+    let workoutsSelect = '';
+    vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+      if (table === 'workouts') {
+        return {
+          select: vi.fn().mockImplementation((projection: string) => {
+            workoutsSelect = projection;
+            return {
+              eq: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockReturnThis(),
+              lte: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({
+                  data: [
+                    {
+                      id: 'w-1',
+                      date: '2026-09-27T10:00:00Z',
+                      name: 'Leg Day',
+                      sets: [
+                        {
+                          id: 's-warmup',
+                          exercise_id: 'ex-bench-uuid',
+                          weight: 135,
+                          reps: 10,
+                          set_index: 1,
+                          set_type: 'warmup',
+                          rpe: 8,
+                          created_at: '2026-09-27T10:05:00Z',
+                        },
+                        {
+                          id: 's-legacy',
+                          exercise_id: 'ex-bench-uuid',
+                          weight: 185,
+                          reps: 8,
+                          set_index: 2,
+                          set_type: null,
+                          rpe: null,
+                          created_at: '2026-09-27T10:10:00Z',
+                        },
+                      ],
+                    },
+                  ],
+                  error: null,
+                }),
+              }),
+            };
+          }),
+        } as any;
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        or: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      } as any;
+    });
+
+    const { result } = renderHook(
+      () => useWorkoutQueries(targetUserId, '2026-09-27'),
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(result.current.todaySets.length).toBe(2);
+    });
+
+    // WORKOUT_WITH_SETS_PROJECTION must include set_type and rpe
+    expect(workoutsSelect).toContain('set_type');
+    expect(workoutsSelect).toContain('rpe');
+
+    const warmupSet = result.current.todaySets.find((s) => s.id === 's-warmup');
+    expect(warmupSet?.set_type).toBe('warmup');
+    expect(warmupSet?.rpe).toBe(8);
+
+    const legacySet = result.current.todaySets.find((s) => s.id === 's-legacy');
+    expect(legacySet?.set_type).toBe('working');
+  });
 });

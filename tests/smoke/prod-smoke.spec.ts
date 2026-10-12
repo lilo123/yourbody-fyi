@@ -12,19 +12,32 @@ if (!smokeEmail || !smokePassword) {
 test.describe('Production Smoke Suite', () => {
   test('end-to-end smoke verification', async ({ page }) => {
     // -------------------------------------------------------------------------
-    // Step 1: Load the app and see the sign-in screen or the app shell
+    // Step 1: Load the app and see the landing page, the sign-in screen or the app shell
     // -------------------------------------------------------------------------
     await page.goto('/');
 
-    // Check for either the sign-in screen or the already-authenticated app shell
+    // Logged-out visitors get the landing page on '/'; its "Sign in" link opens
+    // the sign-in screen. Otherwise expect the sign-in screen or the app shell.
+    const landingSignInLink = page.locator('a[href="/login"]:visible').first();
     const emailInput = page.locator('input[type="email"]');
     const workoutEngine = page.locator('[data-testid="workout-engine"]');
     const routineSelectBtn = page.locator('[data-testid="routine-select-btn"]');
     const chooseRoutineBtn = page.locator('button:has-text("Choose Routine")');
 
     await expect(
-      emailInput.or(workoutEngine).or(routineSelectBtn).or(chooseRoutineBtn).first()
+      landingSignInLink
+        .or(emailInput)
+        .or(workoutEngine)
+        .or(routineSelectBtn)
+        .or(chooseRoutineBtn)
+        .first()
     ).toBeVisible({ timeout: 20000 });
+
+    if (await landingSignInLink.isVisible()) {
+      await landingSignInLink.click();
+      await page.waitForURL('**/login', { timeout: 20000 });
+      await expect(emailInput).toBeVisible({ timeout: 20000 });
+    }
 
     // -------------------------------------------------------------------------
     // Step 2: Sign in with SMOKE_EMAIL / SMOKE_PASSWORD through the real UI
