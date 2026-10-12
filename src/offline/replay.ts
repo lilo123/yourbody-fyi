@@ -18,10 +18,20 @@ function numbersEqual(a: any, b: any, tolerance = 1e-6): boolean {
   return Math.abs(numA - numB) < tolerance;
 }
 
+function normalizeSetType(val: unknown): string {
+  // Server treats NULL/undefined as 'working' via COALESCE; 'normal' is accepted as legacy alias for ops queued by the old client before upgrade
+  if (val == null || val === 'normal') return 'working';
+  return String(val);
+}
+
 function fieldsMatch(serverRow: Record<string, any>, fields: Record<string, any>): boolean {
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined) continue;
     const serverVal = serverRow[key];
+    if (key === 'set_type') {
+      if (normalizeSetType(serverVal) !== normalizeSetType(value)) return false;
+      continue;
+    }
     if (typeof value === 'number' || typeof serverVal === 'number') {
       if (!numbersEqual(serverVal, value)) return false;
     } else if (serverVal !== value) {
