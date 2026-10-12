@@ -244,7 +244,8 @@ export function getExpectedRouting(
   grade: 'exact' | 'lenient' | 'partial' | 'none',
   isSingle: boolean,
   mode: 'auto' | 'always_ai' | 'on_device',
-  isOnline: boolean
+  isOnline: boolean,
+  family?: string
 ): RoutingOutcome {
   if (mode === 'on_device') {
     // lines 201-229
@@ -268,6 +269,10 @@ export function getExpectedRouting(
     if (grade === 'lenient' && isSingle) return 'staged on device';
     if (grade === 'partial') return 'Quick Log prefill';
     return 'disabled with reason';
+  }
+  // B1: in auto mode online, noise-only lenient text (e.g. prose_wrap) is staged locally on device
+  if (family === 'prose_wrap' && grade === 'lenient' && isSingle) {
+    return 'staged on device';
   }
   return 'AI called (forceAi false)';
 }
@@ -643,7 +648,8 @@ describe('nutrition parser deterministic sweep', () => {
               testCase.expectedGrade,
               testCase.isSingle,
               mode,
-              isOnline
+              isOnline,
+              testCase.family
             );
             const actualRouting = await executeRouting(testCase.text, mode, isOnline);
             if (actualRouting !== expectedRouting) {

@@ -172,7 +172,7 @@ describe('HistoryView Filters & Range Integration', () => {
         expect(getRecordedSelects()).toContainEqual({
           table: 'nutrition_logs',
           projection:
-            'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+            'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
         });
       });
       await waitFor(() => {

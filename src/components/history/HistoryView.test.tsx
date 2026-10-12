@@ -337,7 +337,7 @@ describe('HistoryView', () => {
     expect(getRecordedTables()).toContain('nutrition_logs');
     expect(getRecordedSelects()).toContainEqual({
       table: 'nutrition_logs',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
     });
     expect(getRecordedTables()).toContain('users');
     expect(getRecordedSelects()).toContainEqual({
@@ -2420,9 +2420,8 @@ describe('HistoryView', () => {
       fireEvent.click(screen.getByText('By Exercise'));
 
       await waitFor(() => {
-        expect(screen.getByTestId('toggle-unlogged-exercises')).toBeDefined();
+        expect(screen.getByTestId('toggle-unlogged-exercises')).toHaveTextContent('Unlogged Exercises (1050)');
       });
-      expect(screen.getByTestId('toggle-unlogged-exercises')).toHaveTextContent('Unlogged Exercises (1050)');
 
       // Verify boundary exercises from first and last pages via search without mounting 1000+ DOM cards
       const searchInput = screen.getByPlaceholderText('Search exercise library...');

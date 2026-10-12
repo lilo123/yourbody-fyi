@@ -18,10 +18,26 @@ import { StatusBanner } from '../common/StatusBanner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { parseNutritionText } from '../../lib/nutrition/localParse';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag';
+import type { AiQuotaInfo } from './parseNutrition';
 import {
   useNutritionParserMode,
   type NutritionParserMode,
 } from '../../hooks/useNutritionParserMode';
+
+export function formatResetTime(isoStr?: string, tz?: string): string {
+  if (!isoStr) return '';
+  const date = new Date(isoStr);
+  if (isNaN(date.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      ...(tz ? { timeZone: tz } : {}),
+    }).format(date);
+  } catch {
+    return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+}
 
 const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
 
@@ -35,7 +51,7 @@ export interface NutritionAiInputProps {
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onPickPhoto: (source: CameraSource) => void;
   isAnalyzing: boolean;
-  onAnalyze: () => void;
+  onAnalyze: (options?: { forceAi?: boolean }) => void;
   showManualForm: boolean;
   onToggleManualForm: () => void;
   isRateLimited: boolean;
@@ -47,6 +63,8 @@ export interface NutritionAiInputProps {
   isOnline?: boolean;
   isQuotaExceeded?: boolean;
   parserMode?: NutritionParserMode;
+  quota?: AiQuotaInfo | null;
+  timeZone?: string;
 }
 
 export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
@@ -71,13 +89,17 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
   isOnline: isOnlineProp,
   isQuotaExceeded = false,
   parserMode: parserModeProp,
+  quota,
+  timeZone,
 }) => {
   const hookOnline = useOnlineStatus();
   const isOnline = isOnlineProp !== undefined ? isOnlineProp : hookOnline;
-  const { mode: hookParserMode } = useNutritionParserMode();
+  const { mode: hookParserMode, setMode: setHookParserMode } = useNutritionParserMode();
   const parserMode = parserModeProp !== undefined ? parserModeProp : hookParserMode;
+  const setParserMode = setHookParserMode;
   const paywallEnabled = useFeatureFlag('paywall_enabled');
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
 
   const canParseLocally = useMemo(() => {
     if (!nlInput.trim() || selectedPhoto) return false;
@@ -103,9 +125,70 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
             <Sparkles className="w-4 h-4 text-zinc-950" />
           </div>
           <div>
-            <h3 ref={headingRef} tabIndex={-1} className="text-xs font-bold text-white uppercase tracking-wider outline-none">
-              Log Food
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 ref={headingRef} tabIndex={-1} className="text-xs font-bold text-white uppercase tracking-wider outline-none">
+                Log Food
+              </h3>
+              <div className="relative">
+                <button
+                  type="button"
+                  data-testid="parser-mode-chip"
+                  aria-haspopup="menu"
+                  aria-expanded={isModeMenuOpen}
+                  onClick={() => setIsModeMenuOpen((prev) => !prev)}
+                  className="px-2 py-0.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-border-interactive transition touch-manipulation flex items-center gap-1"
+                >
+                  <span>{parserMode === 'on_device' ? 'On-device' : parserMode === 'always_ai' ? 'Always AI' : 'Auto'}</span>
+                  <ChevronDown className="w-3 h-3 text-zinc-400" aria-hidden="true" />
+                </button>
+                {isModeMenuOpen && (
+                  <div
+                    data-testid="parser-mode-menu"
+                    className="absolute left-0 top-full mt-1 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 py-1"
+                  >
+                    <button
+                      type="button"
+                      data-testid="parser-mode-option-auto"
+                      onClick={() => {
+                        setParserMode('auto');
+                        setIsModeMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition ${
+                        parserMode === 'auto' ? 'text-cyan-400 font-bold' : 'text-zinc-300'
+                      }`}
+                    >
+                      Auto
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="parser-mode-option-always_ai"
+                      onClick={() => {
+                        setParserMode('always_ai');
+                        setIsModeMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition ${
+                        parserMode === 'always_ai' ? 'text-cyan-400 font-bold' : 'text-zinc-300'
+                      }`}
+                    >
+                      Always AI
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="parser-mode-option-on_device"
+                      onClick={() => {
+                        setParserMode('on_device');
+                        setIsModeMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition ${
+                        parserMode === 'on_device' ? 'text-cyan-400 font-bold' : 'text-zinc-300'
+                      }`}
+                    >
+                      On-device
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
             <p className="text-xs text-zinc-400">
               Describe what you ate in natural language
             </p>
@@ -120,6 +203,21 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           {showManualForm ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
       </div>
+
+      {/* Persistent Low / Exhausted Quota Warning (C3: <= 5 left, or 0) */}
+      {quota && quota.remaining <= 5 && (
+        <StatusBanner
+          tone="info"
+          testId="ai-quota-warning"
+          message={
+            quota.remaining === 0
+              ? `AI resets at ${formatResetTime(quota.resetsAt, timeZone)}. Device reading still works`
+              : `${quota.remaining} of ${quota.limit} left ${quota.period === 'month' ? 'this month' : 'today'}`
+          }
+          className="space-y-1 shadow-lg"
+          icon={<AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />}
+        />
+      )}
 
       <div className="bg-zinc-950 border border-border-interactive rounded-2xl p-3 focus-within:border-cyan-500 focus-within:ring-2 focus-within:ring-cyan-500/50 transition space-y-2.5">
         {selectedPhoto && (
@@ -210,6 +308,40 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           </p>
         )}
 
+        {/* B5 Unparseable Feedback in on_device mode or offline */}
+        {Boolean(nlInput.trim() && !selectedPhoto && !canParseLocally && (parserMode === 'on_device' || !isOnline)) && (
+          <div data-testid="unparseable-feedback-container" className="pt-1.5 space-y-1.5">
+            <p
+              data-testid="unparseable-reason"
+              className="text-xs text-amber-300/90 font-medium"
+            >
+              Can't read this on your device. It needs calories, protein, carbs and fat.
+            </p>
+            <div className="flex items-center gap-2">
+              {isOnline && parserMode === 'on_device' && (
+                <button
+                  type="button"
+                  data-testid="use-ai-once-btn"
+                  onClick={() => onAnalyze({ forceAi: true })}
+                  disabled={isAnalyzing}
+                  className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold px-3 py-2 min-h-[44px] rounded-xl transition touch-manipulation disabled:opacity-50"
+                >
+                  Use AI once
+                </button>
+              )}
+              <button
+                type="button"
+                data-testid="quick-log-fallback-btn"
+                onClick={onSwitchToManual}
+                disabled={isAnalyzing}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-border-interactive text-xs font-bold px-3 py-2 min-h-[44px] rounded-xl transition touch-manipulation disabled:opacity-50"
+              >
+                Quick log
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center pt-2 border-t border-zinc-850">
           <div className="flex items-center gap-2">
             <button
@@ -252,7 +384,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           <button
             type="button"
             data-testid="analyze-meal-button"
-            onClick={onAnalyze}
+            onClick={() => onAnalyze()}
             disabled={isSubmitDisabled}
             aria-busy={isAnalyzing ? 'true' : undefined}
             aria-describedby={!isOnline && parserMode !== 'on_device' ? 'ai-offline-hint' : undefined}
@@ -320,7 +452,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
             <button
               type="button"
               data-testid="retry-analysis-button"
-              onClick={onAnalyze}
+              onClick={() => onAnalyze()}
               disabled={isAnalyzing}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 rounded-lg transition-all min-h-[44px] min-w-[44px] touch-manipulation cursor-pointer shrink-0 disabled:opacity-50"
             >

@@ -5,6 +5,7 @@ import type { CustomDish, CustomDishDetail } from '../../types/database';
 import { formatLocalTimestamp } from '../../utils/date';
 import { formatCalories, roundTo1Decimal } from '../../utils/nutrition';
 import { newId } from '../../offline';
+import { PARSER_VERSION } from '../../lib/nutrition/localParse';
 import {
   itemsFromLegacyIngredients,
   normalizeItems,
@@ -326,6 +327,8 @@ export function useCustomDishActions({
         logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
         logged_date: selectedDate,
         notes: dish.notes ?? null,
+        source: 'manual' as const,
+        parser_version: PARSER_VERSION,
         incrementDishId: dish.id,
       };
       mutation.mutate(payload, {

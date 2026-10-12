@@ -275,17 +275,21 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
         </div>
       </div>
 
-      {/* Local Parse provenance banner */}
-      {(stagedMeal.source === 'local' || stagedMeal.source === 'rules') && (
+      {/* Parse provenance banner */}
+      {(stagedMeal.source === 'local' || stagedMeal.source === 'rules' || stagedMeal.source === 'ai') && (
         <div className="flex flex-col gap-1 border-b border-zinc-800 pb-1.5 pt-0.5">
           <div className="flex items-center justify-between gap-2">
             <span
               data-testid="parsed-locally-badge"
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30"
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                stagedMeal.source === 'ai'
+                  ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+                  : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
+              }`}
             >
-              Parsed locally
+              {stagedMeal.source === 'ai' ? 'AI' : 'Device'}
             </span>
-            {isOnline && onAnalyzeWithAiInstead && (
+            {isOnline && onAnalyzeWithAiInstead && (stagedMeal.source === 'local' || stagedMeal.source === 'rules') && (
               <button
                 type="button"
                 data-testid="analyze-with-ai-instead-btn"

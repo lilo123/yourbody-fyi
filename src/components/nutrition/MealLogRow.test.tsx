@@ -377,4 +377,44 @@ describe('MealLogRow', () => {
     expect(screen.queryAllByTestId('meal-log-accordion-trigger')).toHaveLength(0);
     expect(screen.queryAllByTestId('meal-log-count-badge')).toHaveLength(0);
   });
+
+  describe('source badges (C4)', () => {
+    it('renders "Device" badge when log.source is "device"', () => {
+      const deviceLog: NutritionLog = {
+        ...log(null),
+        source: 'device',
+      };
+      render(<MealLogRow log={deviceLog} onEdit={noop} onDelete={noop} />);
+      const badge = screen.getByTestId('meal-log-source-badge');
+      expect(badge).toBeInTheDocument();
+      expect(badge).toHaveTextContent('Device');
+    });
+
+    it('renders "AI" badge when log.source is "ai"', () => {
+      const aiLog: NutritionLog = {
+        ...log(null),
+        source: 'ai',
+      };
+      render(<MealLogRow log={aiLog} onEdit={noop} onDelete={noop} />);
+      const badge = screen.getByTestId('meal-log-source-badge');
+      expect(badge).toBeInTheDocument();
+      expect(badge).toHaveTextContent('AI');
+    });
+
+    it('does not render source badge when log.source is "manual" or undefined', () => {
+      const manualLog: NutritionLog = {
+        ...log(null),
+        source: 'manual',
+      };
+      const { rerender } = render(<MealLogRow log={manualLog} onEdit={noop} onDelete={noop} />);
+      expect(screen.queryByTestId('meal-log-source-badge')).toBeNull();
+
+      const legacyLog: NutritionLog = {
+        ...log(null),
+        source: undefined,
+      };
+      rerender(<MealLogRow log={legacyLog} onEdit={noop} onDelete={noop} />);
+      expect(screen.queryByTestId('meal-log-source-badge')).toBeNull();
+    });
+  });
 });

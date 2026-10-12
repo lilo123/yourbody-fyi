@@ -434,4 +434,184 @@ describe('NutritionAiInput live regions and accessibility', () => {
       expect(screen.queryByText('AI needs a connection: use quick log')).toBeNull();
     });
   });
+
+  describe('mode chip and menu (C2)', () => {
+    it('renders mode chip and toggles dropdown menu', () => {
+      render(<NutritionAiInput {...defaultProps()} />);
+      const chip = screen.getByTestId('parser-mode-chip');
+      expect(chip).toBeInTheDocument();
+      expect(chip).toHaveTextContent('Auto');
+
+      // Menu is closed initially
+      expect(screen.queryByTestId('parser-mode-menu')).toBeNull();
+
+      // Click to open menu
+      fireEvent.click(chip);
+      expect(screen.getByTestId('parser-mode-menu')).toBeInTheDocument();
+      expect(screen.getByTestId('parser-mode-option-auto')).toBeInTheDocument();
+      expect(screen.getByTestId('parser-mode-option-always_ai')).toBeInTheDocument();
+      expect(screen.getByTestId('parser-mode-option-on_device')).toBeInTheDocument();
+
+      // Click an option to select it and close menu
+      fireEvent.click(screen.getByTestId('parser-mode-option-on_device'));
+      expect(screen.queryByTestId('parser-mode-menu')).toBeNull();
+    });
+  });
+
+  describe('B5 unparseable feedback container', () => {
+    it('shows unparseable reason line and both buttons when online in on_device mode', () => {
+      const onAnalyze = vi.fn();
+      const onSwitchToManual = vi.fn();
+
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: 'chicken and rice for dinner',
+            isOnline: true,
+            parserMode: 'on_device',
+            onAnalyze,
+            onSwitchToManual,
+          })}
+        />
+      );
+
+      const container = screen.getByTestId('unparseable-feedback-container');
+      expect(container).toBeInTheDocument();
+
+      const reason = screen.getByTestId('unparseable-reason');
+      expect(reason).toHaveTextContent(
+        "Can't read this on your device. It needs calories, protein, carbs and fat."
+      );
+
+      const aiOnceBtn = screen.getByTestId('use-ai-once-btn');
+      expect(aiOnceBtn).toBeInTheDocument();
+      expect(aiOnceBtn).toHaveTextContent('Use AI once');
+
+      const quickLogBtn = screen.getByTestId('quick-log-fallback-btn');
+      expect(quickLogBtn).toBeInTheDocument();
+      expect(quickLogBtn).toHaveTextContent('Quick log');
+
+      fireEvent.click(aiOnceBtn);
+      expect(onAnalyze).toHaveBeenCalledWith({ forceAi: true });
+
+      fireEvent.click(quickLogBtn);
+      expect(onSwitchToManual).toHaveBeenCalled();
+    });
+
+    it('shows reason and Quick log only (no Use AI once) when offline', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: 'chicken and rice for dinner',
+            isOnline: false,
+            parserMode: 'on_device',
+          })}
+        />
+      );
+
+      expect(screen.getByTestId('unparseable-feedback-container')).toBeInTheDocument();
+      expect(screen.getByTestId('unparseable-reason')).toHaveTextContent(
+        "Can't read this on your device. It needs calories, protein, carbs and fat."
+      );
+      expect(screen.queryByTestId('use-ai-once-btn')).toBeNull();
+      expect(screen.getByTestId('quick-log-fallback-btn')).toBeInTheDocument();
+    });
+
+    it('does not show unparseable container if text can be parsed locally', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: 'Chicken\nCalories: 200 kcal\nProtein: 25g\nCarbs: 0g\nFat: 5g',
+            isOnline: true,
+            parserMode: 'on_device',
+          })}
+        />
+      );
+
+      expect(screen.queryByTestId('unparseable-feedback-container')).toBeNull();
+    });
+  });
+
+  describe('C3 quota warning states', () => {
+    it('does not render quota warning when quota remaining > 5', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            quota: {
+              limit: 20,
+              used: 10,
+              remaining: 10,
+              period: 'day',
+              resetsAt: '2026-10-13T00:00:00Z',
+            },
+          })}
+        />
+      );
+
+      expect(screen.queryByTestId('ai-quota-warning')).toBeNull();
+    });
+
+    it('renders persistent quota warning banner when quota remaining <= 5 and > 0', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            quota: {
+              limit: 20,
+              used: 17,
+              remaining: 3,
+              period: 'day',
+              resetsAt: '2026-10-13T00:00:00Z',
+            },
+          })}
+        />
+      );
+
+      const banner = screen.getByTestId('ai-quota-warning');
+      expect(banner).toBeInTheDocument();
+      expect(banner).toHaveTextContent('3 of 20 left today');
+    });
+
+    it('renders persistent quota warning banner for monthly quota', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            quota: {
+              limit: 50,
+              used: 48,
+              remaining: 2,
+              period: 'month',
+              resetsAt: '2026-11-01T00:00:00Z',
+            },
+          })}
+        />
+      );
+
+      const banner = screen.getByTestId('ai-quota-warning');
+      expect(banner).toBeInTheDocument();
+      expect(banner).toHaveTextContent('2 of 50 left this month');
+    });
+
+    it('renders exhausted warning with reset time when remaining === 0', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            quota: {
+              limit: 20,
+              used: 20,
+              remaining: 0,
+              period: 'day',
+              resetsAt: '2026-10-13T04:00:00Z',
+            },
+            timeZone: 'UTC',
+          })}
+        />
+      );
+
+      const banner = screen.getByTestId('ai-quota-warning');
+      expect(banner).toBeInTheDocument();
+      expect(banner).toHaveTextContent(
+        'AI resets at 4:00 AM. Device reading still works'
+      );
+    });
+  });
 });

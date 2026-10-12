@@ -238,7 +238,7 @@ describe('reviewCaptureTime - O2 capture date and original timestamp preservatio
     expect(getRecordedSelects()).toContainEqual({
       table: 'nutrition_logs',
       projection:
-        'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+        'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
     });
 
     // 2. Locate Pending review item and click Review
@@ -328,7 +328,7 @@ describe('reviewCaptureTime - O2 capture date and original timestamp preservatio
     expect(getRecordedSelects()).toContainEqual({
       table: 'nutrition_logs',
       projection:
-        'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+        'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
     });
 
     const reviewBtn = await screen.findByTestId(`review-aiq-item-${seededItem.id}`);
@@ -395,7 +395,7 @@ describe('reviewCaptureTime - O2 capture date and original timestamp preservatio
     expect(getRecordedSelects()).toContainEqual({
       table: 'nutrition_logs',
       projection:
-        'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+        'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
     });
 
     const reviewBtn = await screen.findByTestId(`review-aiq-item-${seededItem.id}`);
