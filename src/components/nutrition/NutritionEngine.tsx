@@ -406,6 +406,7 @@ export const NutritionEngine: React.FC = () => {
             customDishes={displayedCustomDishes}
             onAddParsedItems={handleAddParsedItems}
             onAnalyzeWithAiInstead={() => ai.handleForceAiAnalyze(stagedMeal.rawText || stagedMeal.name)}
+            isAnalyzing={ai.isAnalyzing}
           />
         </div>
       ) : (
