@@ -566,7 +566,7 @@ function tryParseServingOrWeightLine(line: string): ParsedServingLine {
 
 /**
  * Checks whether a line or segment represents a summary row.
- * Scope (a) 2 & Addendum 1: Any label containing 'total', plus Sum / Overall / Combined.
+ * Summary row labels: any label containing 'total', plus Sum / Overall / Combined.
  */
 export function isSummaryRowLabel(text: string): boolean {
   const cleaned = cleanLine(text).trim();
@@ -642,7 +642,7 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
     }
   }
 
-  // Scope (b) A2: 'Total Calories', 'Energy: 650 Cal', '650 (kcal)', em dash 'Calories — 650'
+  // Calorie line variations: 'Total Calories', 'Energy: 650 Cal', '650 (kcal)', em dash 'Calories — 650'
   const caloriesMatch = segment.match(
     new RegExp(
       `^(?:total\\s+)?(?:calories?|cals?|cal|energy)${sep}${numOrRange}\\s*(?:\\((?:kcal|cals?|calories?|cal)\\)|kcal|cals?|calories?|cal)?(?:\\s+\\d+\\s*%)?$`,
@@ -714,7 +714,7 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
     }
   }
 
-  // 2. Protein (Scope (b) A2: 'Total Protein', 'Protein — 40g', '40 g of protein', ranges '30 to 35 g', alias 'Protien')
+  // 2. Protein ('Total Protein', 'Protein — 40g', '40 g of protein', ranges '30 to 35 g', alias 'Protien')
   const proteinMatch = segment.match(
     new RegExp(
       `^(?:total\\s+)?(?:protein|prot|protien)${sep}${numOrRange}\\s*([a-zA-Z%()]+)?(?:\\s+\\d+\\s*%)?$`,
@@ -775,7 +775,7 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
     }
   }
 
-  // 3. Carbohydrates (Scope (b) A2: 'Total Carbs', 'Carbs — 45g', '40 g of carbs', ranges '60-70g')
+  // 3. Carbohydrates ('Total Carbs', 'Carbs — 45g', '40 g of carbs', ranges '60-70g')
   const carbsMatch = segment.match(
     new RegExp(
       `^(?:total\\s+)?(?:carbohydrates?|carbs?|carb)${sep}${numOrRange}\\s*([a-zA-Z%()]+)?(?:\\s+\\d+\\s*%)?$`,
@@ -836,7 +836,7 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
     }
   }
 
-  // 4. Fat (Scope (b) A2: 'Total Fat', 'Fat — 25g', '8 g of fat', ranges '20-25g')
+  // 4. Fat ('Total Fat', 'Fat — 25g', '8 g of fat', ranges '20-25g')
   const fatMatch = segment.match(
     new RegExp(
       `^(?!.*(?:saturated|trans|polyunsaturated|monounsaturated|\\bsat\\b))(?:total\\s+)?fat${sep}${numOrRange}\\s*([a-zA-Z%()]+)?(?:\\s+\\d+\\s*%)?$`,
@@ -897,7 +897,7 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
     }
   }
 
-  // 5. Fiber (Scope (b) A2: 'Total Fiber', 'Dietary Fiber', 'Fiber — 5g', '5 g of fiber')
+  // 5. Fiber ('Total Fiber', 'Dietary Fiber', 'Fiber — 5g', '5 g of fiber')
   const fiberMatch = segment.match(
     new RegExp(
       `^(?:total\\s+)?(?:dietary\\s+)?(?:fibres?|fibers?|fib)${sep}${numOrRange}\\s*([a-zA-Z%()]+)?(?:\\s+\\d+\\s*%)?$`,
@@ -1136,7 +1136,7 @@ function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
 }
 
 /**
- * Detects whether lines contain 2 or more distinct meal labels (Scope (b) A8 & Addendum 3).
+ * Detects whether lines contain 2 or more distinct meal labels.
  * Categories: breakfast/morning, lunch/midday/afternoon, dinner/evening/supper, snack, meal 1/meal 2.
  */
 function hasMultipleMealLabels(lines: string[]): boolean {
@@ -1167,7 +1167,7 @@ function hasMultipleMealLabels(lines: string[]): boolean {
 }
 
 /**
- * Markdown Table Parser (Scope (b) A2 / A4).
+ * Markdown Table Parser.
  * Parses markdown tables: header + separator + item rows + Total row cross-check.
  */
 export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult | null {
@@ -1266,7 +1266,7 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     });
   }
 
-  // Scope (a) 3: Never drop an unreadable item line from a multi-item list
+  // Never drop an unreadable item line from a multi-item list
   if (unreadableLines.length > 0) {
     const firstLine = unreadableLines[0].trim();
     const prefix = 'Unreadable line: ';
@@ -1281,7 +1281,7 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     };
   }
 
-  // Structural post-condition (Scope 4b addendum Bug 1)
+  // Structural post-condition
   if (items.length >= 2) {
     let summaryItemIndex = -1;
     for (let k = 0; k < items.length; k++) {
@@ -1319,7 +1319,7 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     }
   }
 
-  // If table has no Total row, per A2 it cannot be cross-checked as a meal -> MULTIPLE_FOODS
+  // If table has no Total row, it cannot be cross-checked as a meal -> MULTIPLE_FOODS
   if (declaredCalories === undefined) {
     return {
       confidence: 'none',
@@ -1335,7 +1335,7 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
   const sumF = roundToOneDecimal(items.reduce((total, it) => total + it.fat, 0));
   const sumFib = roundToOneDecimal(items.reduce((total, it) => total + it.fiber, 0));
 
-  // A4: within 5% or 30 kcal (whichever is larger) items win silently; beyond that grade lenient
+  // Totals vs items: within 5% or 30 kcal (whichever is larger) items win silently; beyond that grade lenient
   const diff = Math.abs(declaredCalories - sumCal);
   const maxTolerance = Math.max(30, 0.05 * sumCal);
   let isLenient = false;
@@ -1375,7 +1375,7 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
 }
 
 function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null {
-  // Scope (b) A8 & Addendum 3: Reject multi-meal pastes
+  // Reject multi-meal pastes
   if (hasMultipleMealLabels(rawLines)) {
     return {
       confidence: 'none',
@@ -1433,7 +1433,7 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
       continue;
     }
 
-    // Scope (a) 2 & Addendum 1: Summary rows like 'Subtotal', 'Sub-total', 'Sub total', 'Sum', 'Overall', 'Meal total', 'Total', etc.
+    // Summary rows like 'Subtotal', 'Sub-total', 'Sub total', 'Sum', 'Overall', 'Meal total', 'Total', etc.
     const cleanedLine = cleanLine(trimmed);
     const prefixMatch = cleanedLine.match(/^([^:|—–]+)(?:[:|—–]|\s+-\s+)(.*)$/);
     const candidateLabel = prefixMatch ? prefixMatch[1].trim() : cleanedLine;
@@ -1486,9 +1486,9 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
     skippedLines.push(rawLine);
   }
 
-  // Structural post-condition (Scope 4b addendum Bug 1):
+  // Structural post-condition:
   // If one item row's kcal and macros equal the sum of all the other item rows
-  // (within the A4 tolerance), it is a summary row (cross-check only), whatever its label.
+  // (within the tolerance), it is a summary row (cross-check only), whatever its label.
   if (items.length >= 2) {
     let summaryItemIndex = -1;
     for (let k = 0; k < items.length; k++) {
@@ -1538,7 +1538,7 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
     return null;
   }
 
-  // Scope (a) 3: Never drop an unreadable item line from a multi-item list
+  // Never drop an unreadable item line from a multi-item list
   // If one item line in a list cannot be read, the result must not be staged on the device:
   // grade it so that routing sends the whole text to the AI (Auto) or to Quick Log,
   // and the reason names the line (truncate to fit the existing 60-char hint).
@@ -1573,7 +1573,7 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
   const sumF = roundToOneDecimal(items.reduce((total, it) => total + it.fat, 0));
   const sumFib = roundToOneDecimal(items.reduce((total, it) => total + it.fiber, 0));
 
-  // Scope (b) A4: items vs an explicit Total:
+  // Totals vs items:
   // within 5% or 30 kcal (whichever is larger) items win silently;
   // beyond that grade lenient with hint like 'Items add up to 850, total says 650'
   let isLenient = false;
@@ -1646,7 +1646,7 @@ export function extractYourbodyFencedBlock(text: string): string | null {
 }
 
 /**
- * Checks whether the input represents multiple distinct meals (Scope (b) A8).
+ * Checks whether the input represents multiple distinct meals.
  */
 function isMultiMealPaste(lines: string[]): boolean {
   if (hasMultipleMealLabels(lines)) return true;
@@ -1697,7 +1697,7 @@ export function parseNutritionText(text: string): NutritionParseResult {
     };
   }
 
-  // Scope (b) A8: Multi-meal pastes stay rejected with the reason
+  // Multi-meal pastes stay rejected with the reason
   // 'Looks like more than one meal: log them one at a time'
   if (isMultiMealPaste(rawLines)) {
     return {

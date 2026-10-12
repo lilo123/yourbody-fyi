@@ -32,7 +32,7 @@ export interface CorpusFixture {
 export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   {
     "id": 1,
-    "title": "[Chat-app] Markdown bold dish + bullets",
+    "title": "[Chat] Markdown bold dish + bullets",
     "input": "**Chipotle Chicken Bowl**\n* Calories: 650 kcal\n* Protein: 42g\n* Carbs: 55g\n* Fat: 22g",
     "expected": {
       "confidence": "exact",
@@ -50,7 +50,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 2,
-    "title": "[Chat-app] Owner case: dish + Total macros (colon)",
+    "title": "[Chat] Dish + Total macros (colon)",
     "input": "Grilled Salmon Bowl\nTotal Calories: 650 kcal\nTotal Protein: 40 g\nTotal Carbs: 45 g\nTotal Fat: 26 g\nTotal Fiber: 1 g",
     "expected": {
       "confidence": "exact",
@@ -68,7 +68,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 3,
-    "title": "[Chat-app] Owner case: dish + Total macros (no colon)",
+    "title": "[Chat] Dish + Total macros (no colon)",
     "input": "Grilled Salmon Bowl\nTotal Calories 650 kcal\nTotal Protein 40 g\nTotal Carbs 45 g\nTotal Fat 26 g\nTotal Fiber 1 g",
     "expected": {
       "confidence": "exact",
@@ -86,7 +86,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 4,
-    "title": "[Chat-app] Total macros without dish line",
+    "title": "[Chat] Total macros without dish line",
     "input": "Total Calories: 650 kcal\nTotal Protein: 40 g\nTotal Carbs: 45 g\nTotal Fat: 26 g\nTotal Fiber: 1 g",
     "expected": {
       "confidence": "exact",
@@ -104,7 +104,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 5,
-    "title": "[Chat-app] Item lines + Total block",
+    "title": "[Chat] Item lines + Total block",
     "input": "Food: Lunch Combo\n- 200g Chicken Breast | 330 kcal | 62g P | 0g C | 7g F\n- 1 cup White Rice | 205 kcal | 4g P | 45g C | 0.5g F\nTotal Calories: 535 kcal\nTotal Protein: 66 g\nTotal Carbs: 45 g\nTotal Fat: 7.5 g",
     "expected": {
       "confidence": "exact",
@@ -122,7 +122,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 6,
-    "title": "[Chat-app] Markdown table with Total row",
+    "title": "[Chat] Markdown table with Total row",
     "input": "| Item | Calories | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- |\n| Chicken Breast | 330 | 62 | 0 | 7 |\n| White Rice | 205 | 4 | 45 | 1 |\n| Total | 535 | 66 | 45 | 8 |",
     "expected": {
       "confidence": "exact",
@@ -140,7 +140,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 7,
-    "title": "[Chat-app] Numbered list",
+    "title": "[Chat] Numbered list",
     "input": "Turkey Sandwich\n1. Calories: 520 kcal\n2. Protein: 45g\n3. Carbs: 50g\n4. Fat: 15g",
     "expected": {
       "confidence": "exact",
@@ -158,7 +158,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 8,
-    "title": "[Chat-app] Emoji bullets (🔥 Calories: 650)",
+    "title": "[Chat] Emoji bullets (🔥 Calories: 650)",
     "input": "Turkey Sandwich\n🔥 Calories: 650\n💪 Protein: 35g\n🍞 Carbs: 60g\n🥑 Fat: 20g",
     "expected": {
       "confidence": "exact",
@@ -176,7 +176,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 9,
-    "title": "[Chat-app] Estimated / approx / ~ markers",
+    "title": "[Chat] Estimated / approx / ~ markers",
     "input": "Chicken Salad\n~650 kcal\napprox. 40g protein\n~50g carbs\napprox. 18g fat",
     "expected": {
       "confidence": "exact",
@@ -194,7 +194,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 10,
-    "title": "[Chat-app] Range with hyphen ('600-700 kcal')",
+    "title": "[Chat] Range with hyphen ('600-700 kcal')",
     "input": "Beef Burrito\nCalories: 600-700 kcal\nProtein: 35-40g\nCarbs: 60-70g\nFat: 20-25g",
     "expected": {
       "confidence": "lenient",
@@ -212,7 +212,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 11,
-    "title": "[Chat-app] Range with en-dash ('600–700 kcal')",
+    "title": "[Chat] Range with en-dash ('600–700 kcal')",
     "input": "Beef Burrito\nCalories: 600–700 kcal\nProtein: 35–40g\nCarbs: 60–70g\nFat: 20–25g",
     "expected": {
       "confidence": "lenient",
@@ -230,7 +230,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 12,
-    "title": "[Chat-app] Values with 'g of protein'",
+    "title": "[Chat] Values with 'g of protein'",
     "input": "Post Workout Shake\nCalories: 350 kcal\n30 g of protein\n40 g of carbs\n8 g of fat",
     "expected": {
       "confidence": "exact",
@@ -248,7 +248,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 13,
-    "title": "[Chat-app] Em dash ('Protein — 40g')",
+    "title": "[Chat] Em dash ('Protein — 40g')",
     "input": "Greek Yogurt Bowl\nCalories — 300 kcal\nProtein — 40g\nCarbs — 25g\nFat — 5g",
     "expected": {
       "confidence": "exact",
@@ -266,7 +266,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 14,
-    "title": "[Chat-app] Parenthesized unit 'Calories: 650 (kcal)'",
+    "title": "[Chat] Parenthesized unit 'Calories: 650 (kcal)'",
     "input": "Roast Beef\nCalories: 650 (kcal)\nProtein: 50g\nCarbs: 10g\nFat: 25g",
     "expected": {
       "confidence": "none",
@@ -284,7 +284,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
   },
   {
     "id": 15,
-    "title": "[Chat-app] Dual energy 'Energy: 2720 kJ / 650 kcal'",
+    "title": "[Chat] Dual energy 'Energy: 2720 kJ / 650 kcal'",
     "input": "Energy: 2720 kJ / 650 kcal\nProtein: 40g\nCarbohydrates: 55g\nFat: 22g",
     "expected": {
       "confidence": "exact",

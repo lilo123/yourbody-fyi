@@ -215,7 +215,7 @@ Deno.test("shared nutritionParser: extracts fenced yourbody and yourbody-v1 bloc
   );
 });
 
-Deno.test("shared nutritionParser: 93 golden corpus & sweep fixtures (E1)", () => {
+Deno.test("shared nutritionParser: 93 golden corpus & sweep fixtures", () => {
   for (const fixture of NUTRITION_CORPUS_FIXTURES) {
     const result = parseNutritionText(fixture.input);
     assertEquals(
@@ -283,7 +283,7 @@ Deno.test("shared nutritionParser: 93 golden corpus & sweep fixtures (E1)", () =
   }
 });
 
-Deno.test("shared nutritionParser: E2 property test 1 - exact kcal appears in text", () => {
+Deno.test("shared nutritionParser: property test 1 - exact kcal appears in text", () => {
   function appearsInText(value: number, text: string): boolean {
     return (
       text.includes(String(value)) ||
@@ -354,7 +354,7 @@ Deno.test("shared nutritionParser: E2 property test 1 - exact kcal appears in te
   }
 });
 
-Deno.test("shared nutritionParser: E2 property test 2 - noise, bullets, and formatting invariants", () => {
+Deno.test("shared nutritionParser: property test 2 - noise, bullets, and formatting invariants", () => {
   const bulletPrefixes = ["* ", "- ", "• ", "1. ", "  - "];
   const emojiPrefixes = ["🔥 ", "🥗 ", "🍽️ ", "✨ ", ""];
   const boldWrappers: Array<(text: string) => string> = [
@@ -407,7 +407,7 @@ Deno.test("shared nutritionParser: E2 property test 2 - noise, bullets, and form
   }
 });
 
-Deno.test("shared nutritionParser: E2 property test 3 - thousands separators never shrink numbers", () => {
+Deno.test("shared nutritionParser: property test 3 - thousands separators never shrink numbers", () => {
   // 1. Locale sweep: 1000..5000 in steps of 100 for en-US and de-DE
   for (let num = 1000; num <= 5000; num += 100) {
     const usStr = num.toLocaleString("en-US");
