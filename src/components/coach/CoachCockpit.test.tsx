@@ -153,7 +153,7 @@ describe('CoachCockpit', () => {
     expect(getRecordedTables()).toContain('users');
     expect(getRecordedSelects()).toContainEqual({
       table: 'users',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
     });
     expect(getRecordedTables()).toContain('coach_athlete_links');
     expect(getRecordedSelects()).toContainEqual({
@@ -168,7 +168,7 @@ describe('CoachCockpit', () => {
     expect(getRecordedTables()).toContain('workouts');
     expect(getRecordedSelects()).toContainEqual({
       table: 'workouts',
-      projection: 'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id)',
+      projection: 'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id, set_type, rpe)',
     });
     expect(getRecordedTables()).toContain('routine_templates');
     expect(getRecordedSelects()).toContainEqual({

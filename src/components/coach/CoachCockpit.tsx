@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useCoach } from '../../hooks/useCoach';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
-import type { Exercise, RoutineTemplate, UserProfile, NutritionLog } from '../../types/database';
+import type { Exercise, RoutineTemplate, UserProfile, NutritionLog, SetType } from '../../types/database';
 import { DEFAULT_EXERCISES_LIST, normalizeDateStr } from '../../utils/ghostSets';
 import { getDayBounds } from '../../utils/date';
 import { WORKOUT_WITH_SETS_PROJECTION, COACH_SETS_PER_WORKOUT_LIMIT, warnIfCoachSetsTruncated } from '../workout/useWorkoutQueries';
@@ -115,6 +115,7 @@ export const CoachCockpit: React.FC = () => {
           ...w,
           sets: (w.sets || []).map((s) => ({
             ...s,
+            set_type: ((s as any).set_type as SetType) || 'working',
             workout_id: w.id,
             workout_date: normalizeDateStr(w.date || s.created_at),
             workout_name: w.name || 'Workout Session',

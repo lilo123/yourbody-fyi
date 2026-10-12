@@ -13,6 +13,7 @@ export interface WorkoutHeaderProps {
   workoutDate: string;
   onDateChange: (date: string) => void;
   onClearWorkout: () => void;
+  restTimerSeconds?: number;
 }
 
 export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
@@ -23,6 +24,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
   workoutDate,
   onDateChange,
   onClearWorkout,
+  restTimerSeconds,
 }) => {
   return (
     <>
@@ -65,7 +67,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
 
             <button
               type="button"
-              onClick={() => restTimerStore.toggleHeaderTimer()}
+              onClick={() => restTimerStore.toggleHeaderTimer(restTimerSeconds)}
               className="bg-zinc-800/90 hover:bg-zinc-700/80 border border-border-interactive hover:border-cyan-500/50 text-cyan-300 text-xs font-bold px-3 h-11 min-h-[44px] min-w-[44px] rounded-xl flex items-center gap-1.5 transition-all shadow-sm touch-manipulation shrink-0 cursor-pointer"
               title="Rest Timer"
               data-testid="rest-timer-btn"
