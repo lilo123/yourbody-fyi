@@ -211,8 +211,12 @@ export interface StagedMeal {
    * themselves carry the scaled amounts.
    */
   scale?: number;
-  /** Provenance of the staged meal: 'ai', 'local', or 'manual' */
-  source?: 'ai' | 'local' | 'manual';
+  /** Provenance of the staged meal: 'ai', 'local', 'rules', or 'manual' */
+  source?: 'ai' | 'local' | 'rules' | 'manual';
+  /** Parser confidence if parsed via rules */
+  confidence?: 'exact' | 'lenient';
+  /** Fallback reason if downgraded */
+  fallbackReason?: 'quota_exceeded' | 'ai_unavailable' | 'timeout';
   /** Original unparsed raw text input if staged locally */
   rawText?: string;
   /** Original ISO capture timestamp from AI queue */

@@ -16,7 +16,7 @@ import { formatFileSize, type CompressedImage } from '../../utils/imageCompressi
 import { CameraSource } from '@capacitor/camera';
 import { StatusBanner } from '../common/StatusBanner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
-import { parseNutritionBlock } from '../../lib/nutrition/localParse';
+import { parseNutritionText } from '../../lib/nutrition/localParse';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 
 const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
@@ -73,7 +73,14 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
 
   const canParseLocally = useMemo(() => {
     if (!nlInput.trim() || selectedPhoto) return false;
-    return parseNutritionBlock(nlInput.trim()).ok;
+    const result = parseNutritionText(nlInput.trim());
+    const isSingle = !result.meal?.items || result.meal.items.length <= 1;
+    return (
+      isSingle &&
+      (result.confidence === 'exact' ||
+        result.confidence === 'lenient' ||
+        result.confidence === 'partial')
+    );
   }, [nlInput, selectedPhoto]);
 
   const isSubmitDisabled = isAnalyzing || (!isOnline ? !canParseLocally : (!nlInput.trim() && !selectedPhoto));

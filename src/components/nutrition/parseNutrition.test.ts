@@ -279,4 +279,58 @@ describe('parseNutrition', () => {
       'Invalid parsed response: missing nutrition data'
     );
   });
+
+  it('sends forceAi in invoke body and preserves source and confidence metadata', async () => {
+    (supabase.functions.invoke as any).mockResolvedValue({
+      data: {
+        name: 'Oatmeal',
+        calories: 150,
+        protein: 5,
+        carbs: 27,
+        fat: 3,
+        fiber: 4,
+        source: 'rules',
+        confidence: 'exact',
+      },
+      error: null,
+    });
+
+    const result = await parseNutrition({
+      text: 'Oatmeal',
+      forceAi: true,
+    });
+
+    expect(supabase.functions.invoke).toHaveBeenCalledWith('parse-nutrition', {
+      headers: { Authorization: 'Bearer mock-token' },
+      body: expect.objectContaining({
+        forceAi: true,
+      }),
+    });
+    expect(result.source).toBe('rules');
+    expect(result.confidence).toBe('exact');
+  });
+
+  it('unwraps lenient fallback response with fallbackReason', async () => {
+    (supabase.functions.invoke as any).mockResolvedValue({
+      data: {
+        name: 'Protein Shake',
+        calories: 300,
+        protein: 40,
+        carbs: 10,
+        fat: 5,
+        source: 'rules',
+        confidence: 'lenient',
+        fallback_reason: 'quota_exceeded',
+      },
+      error: null,
+    });
+
+    const result = await parseNutrition({
+      text: 'Protein Shake\nAte half',
+    });
+
+    expect(result.source).toBe('rules');
+    expect(result.confidence).toBe('lenient');
+    expect(result.fallbackReason).toBe('quota_exceeded');
+  });
 });

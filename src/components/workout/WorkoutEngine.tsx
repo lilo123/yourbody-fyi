@@ -8,7 +8,8 @@ import {
   getDayOfWeekAbbr,
   getLocalDateStr,
 } from '../../utils/ghostSets';
-import { workoutSessionStore } from '../../utils/workoutSessionStore';
+import { workoutSessionStore, type SetDraftInput } from '../../utils/workoutSessionStore';
+import { toDisplayWeight } from '../../utils/weight';
 import { Layers, Plus, Check, AlertCircle, RotateCcw } from 'lucide-react';
 import { useWorkoutQueries } from './useWorkoutQueries';
 import { useWorkoutSession } from './useWorkoutSession';
@@ -37,6 +38,11 @@ export const WorkoutEngine: React.FC = () => {
     try { return JSON.parse(localStorage.getItem('yourbody_user') || '{}')?.id || ''; } catch { return ''; }
   })();
   const autoRestTimer = profile?.auto_rest_timer ?? (localStorage.getItem('yourbody_auto_rest_timer') !== 'false');
+  const restTimerSeconds = profile?.rest_timer_seconds ?? (() => {
+    const localVal = typeof localStorage !== 'undefined' ? localStorage.getItem('yourbody_rest_timer_seconds') : null;
+    const parsed = localVal ? Number(localVal) : 90;
+    return Number.isFinite(parsed) && parsed >= 15 && parsed <= 600 ? parsed : 90;
+  })();
 
   const [showRoutineModal, setShowRoutineModal] = useState(false);
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
@@ -142,7 +148,7 @@ export const WorkoutEngine: React.FC = () => {
     setMutationError, setExerciseError,
   } = useWorkoutMutations({
     targetUserId, workoutDate, activeRoutineName, exercises,
-    customTemplates, autoRestTimer, onDraftSuccess: handleDraftSuccess,
+    customTemplates, autoRestTimer, restTimerSeconds, onDraftSuccess: handleDraftSuccess,
   });
 
   // 5. Deferred Set Deletion with Undo Toast
@@ -213,6 +219,50 @@ export const WorkoutEngine: React.FC = () => {
     inputDraftsRef.current = inputDrafts;
     targetRepCountsRef.current = targetRepCounts;
   });
+
+  const handleUnlogSet = useCallback((exIndex: number, rowIdx: number) => {
+    const exName = activeExercises[exIndex];
+    if (!exName) return;
+    const rawSets = getSetsForExerciseToday(exName);
+    const exerciseSetsToday = rawSets.filter(
+      (s) => s.id !== pendingSetId && (!s.id || !pendingDeletedSetIds.has(s.id))
+    );
+    const targetSet = exerciseSetsToday[rowIdx];
+    if (!targetSet) return;
+
+    const setIndex = targetSet.set_index ?? (rowIdx + 1);
+    const draftKey = `${exName}_${setIndex}`;
+    const draftWeight = typeof targetSet.weight === 'number'
+      ? String(toDisplayWeight(targetSet.weight, unit))
+      : '';
+    const draftReps = targetSet.reps != null ? String(targetSet.reps) : '';
+
+    setInputDrafts((prev) => {
+      const updated: SetDraftInput = {
+        weight: draftWeight,
+        reps: draftReps,
+      };
+      workoutSessionStore.setDraftInput(targetUserId, workoutDate, exName, setIndex, updated);
+      return {
+        ...prev,
+        [draftKey]: updated,
+      };
+    });
+
+    if (targetSet.id) {
+      deleteSetMutation.mutate(targetSet.id);
+    }
+  }, [
+    activeExercises,
+    getSetsForExerciseToday,
+    pendingSetId,
+    pendingDeletedSetIds,
+    unit,
+    setInputDrafts,
+    targetUserId,
+    workoutDate,
+    deleteSetMutation,
+  ]);
 
   // 8. Set Commit & Batch Log
   const { handleCommitSet, handleBatchLogExercise } = useWorkoutSetCommit({
@@ -322,6 +372,7 @@ export const WorkoutEngine: React.FC = () => {
         workoutDate={workoutDate}
         onDateChange={handleDateChange}
         onClearWorkout={() => setIsClearConfirmOpen(true)}
+        restTimerSeconds={restTimerSeconds}
       />
 
       {/* Logs Read Error Banner */}
@@ -444,6 +495,7 @@ export const WorkoutEngine: React.FC = () => {
                     onUpdateDraft={updateDraft}
                     onCommitSet={handleCommitSet}
                     onEditSet={handleEditSet}
+                    onUnlogSet={handleUnlogSet}
                     onBatchLogExercise={handleBatchLogExercise}
                   />
                   </div>

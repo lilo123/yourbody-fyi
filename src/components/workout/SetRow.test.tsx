@@ -52,9 +52,10 @@ describe('SetRow', () => {
   };
 
   describe('Logged Set', () => {
-    it('tapping a logged row calls onEditSet and does not delete', () => {
+    it('tapping the edit button on a logged row calls onEditSet and does not delete or commit', () => {
       const onEditSet = vi.fn();
       const onCommitSet = vi.fn();
+      const onUnlogSet = vi.fn();
       const onUpdateDraft = vi.fn();
 
       renderWithAuth(
@@ -71,6 +72,7 @@ describe('SetRow', () => {
           onUpdateDraft={onUpdateDraft}
           onCommitSet={onCommitSet}
           onEditSet={onEditSet}
+          onUnlogSet={onUnlogSet}
         />
       );
 
@@ -78,10 +80,113 @@ describe('SetRow', () => {
       expect(loggedRow).toBeInTheDocument();
       expect(screen.queryByTestId('delete-set-btn-0-0')).toBeNull();
 
-      fireEvent.click(loggedRow);
+      const editBtn = screen.getByTestId('edit-set-btn-0-0');
+      expect(editBtn).toBeInTheDocument();
+      fireEvent.click(editBtn);
       expect(onEditSet).toHaveBeenCalledTimes(1);
       expect(onEditSet).toHaveBeenCalledWith(0, 0);
       expect(onCommitSet).not.toHaveBeenCalled();
+      expect(onUnlogSet).not.toHaveBeenCalled();
+    });
+
+    it('tapping the tick mark on a logged row calls onUnlogSet and NOT onEditSet', () => {
+      const onEditSet = vi.fn();
+      const onCommitSet = vi.fn();
+      const onUnlogSet = vi.fn();
+
+      renderWithAuth(
+        <SetRow
+          exName="Bench Press"
+          exIndex={0}
+          rowIdx={0}
+          setIndex={1}
+          loggedSet={loggedSet}
+          ghost={defaultGhost}
+          draftWeight=""
+          draftReps=""
+          isMutating={false}
+          onUpdateDraft={vi.fn()}
+          onCommitSet={onCommitSet}
+          onEditSet={onEditSet}
+          onUnlogSet={onUnlogSet}
+        />
+      );
+
+      const unlogBtn = screen.getByTestId('unlog-set-btn-0-0');
+      expect(unlogBtn).toBeInTheDocument();
+      expect(unlogBtn).toHaveAttribute('aria-label', 'Unlog set 3 of Bench Press');
+      expect(unlogBtn).toHaveAttribute('aria-pressed', 'true');
+
+      fireEvent.click(unlogBtn);
+
+      expect(onUnlogSet).toHaveBeenCalledTimes(1);
+      expect(onUnlogSet).toHaveBeenCalledWith(0, 0);
+      expect(onEditSet).not.toHaveBeenCalled();
+      expect(onCommitSet).not.toHaveBeenCalled();
+    });
+
+    it('tapping the set badge, hint, weight box, or reps box triggers onEditSet', () => {
+      const onEditSet = vi.fn();
+
+      renderWithAuth(
+        <SetRow
+          exName="Bench Press"
+          exIndex={0}
+          rowIdx={0}
+          setIndex={1}
+          loggedSet={loggedSet}
+          ghost={defaultGhost}
+          draftWeight=""
+          draftReps=""
+          isMutating={false}
+          onUpdateDraft={vi.fn()}
+          onCommitSet={vi.fn()}
+          onEditSet={onEditSet}
+          onUnlogSet={vi.fn()}
+        />
+      );
+
+      // Tapping weight box inside edit button
+      fireEvent.click(screen.getByTestId('logged-weight-value-0-0'));
+      expect(onEditSet).toHaveBeenCalledTimes(1);
+
+      // Tapping reps box inside edit button
+      fireEvent.click(screen.getByTestId('logged-reps-value-0-0'));
+      expect(onEditSet).toHaveBeenCalledTimes(2);
+
+      // Tapping ghost hint inside edit button
+      fireEvent.click(screen.getByTestId('ghost-hint-0-0'));
+      expect(onEditSet).toHaveBeenCalledTimes(3);
+    });
+
+    it('keyboard: the tick button and the row edit button are separately focusable', () => {
+      renderWithAuth(
+        <SetRow
+          exName="Bench Press"
+          exIndex={0}
+          rowIdx={0}
+          setIndex={1}
+          loggedSet={loggedSet}
+          ghost={defaultGhost}
+          draftWeight=""
+          draftReps=""
+          isMutating={false}
+          onUpdateDraft={vi.fn()}
+          onCommitSet={vi.fn()}
+          onEditSet={vi.fn()}
+          onUnlogSet={vi.fn()}
+        />
+      );
+
+      const editBtn = screen.getByTestId('edit-set-btn-0-0');
+      const unlogBtn = screen.getByTestId('unlog-set-btn-0-0');
+
+      editBtn.focus();
+      expect(document.activeElement).toBe(editBtn);
+
+      unlogBtn.focus();
+      expect(document.activeElement).toBe(unlogBtn);
+      expect(document.activeElement).not.toBe(editBtn);
     });
 
     it('displays logged set index from loggedSet.set_index', () => {
