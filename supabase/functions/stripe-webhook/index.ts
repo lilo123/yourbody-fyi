@@ -488,6 +488,7 @@ async function cancelSubscriptionForChargeOrCustomer(
   charge: Stripe.Charge | null,
   customerId: string | null,
   stripe: Stripe,
+  minimalPayload?: Record<string, unknown>,
 ): Promise<string | null> {
   let subscriptionId: string | null = null;
 
@@ -507,21 +508,54 @@ async function cancelSubscriptionForChargeOrCustomer(
 
     let invoiceId: string | null = null;
     if (paymentIntentId) {
-      try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-        if (typeof paymentIntent.invoice === "string" && paymentIntent.invoice.length > 0) {
-          invoiceId = paymentIntent.invoice;
-        } else if (paymentIntent.invoice && typeof paymentIntent.invoice === "object") {
-          invoiceId = (paymentIntent.invoice as any).id || null;
+      // 1. Pinned API version (2026-09-30.endive): query Invoice Payments API via client rawRequest
+      if (typeof (stripe as any).rawRequest === "function") {
+        try {
+          const res = await (stripe as any).rawRequest(
+            "GET",
+            `/v1/invoice_payments?payment[type]=payment_intent&payment[payment_intent]=${encodeURIComponent(paymentIntentId)}`,
+          ) as any;
+          const payments = Array.isArray(res?.data) ? res.data : [];
+          for (const item of payments) {
+            const inv = item?.invoice;
+            if (typeof inv === "string" && inv.length > 0) {
+              invoiceId = inv;
+              break;
+            } else if (inv && typeof inv === "object" && typeof inv.id === "string" && inv.id.length > 0) {
+              invoiceId = inv.id;
+              break;
+            }
+          }
+        } catch (err: any) {
+          const isMissing =
+            err?.code === "resource_missing" ||
+            err?.statusCode === 404 ||
+            err?.raw?.statusCode === 404 ||
+            err?.raw?.code === "resource_missing";
+          if (!isMissing) {
+            throw err;
+          }
         }
-      } catch (err: any) {
-        const isMissing =
-          err?.code === "resource_missing" ||
-          err?.statusCode === 404 ||
-          err?.raw?.statusCode === 404 ||
-          err?.raw?.code === "resource_missing";
-        if (!isMissing) {
-          throw err;
+      }
+
+      // 2. Old-shape fallback: retrieve PaymentIntent and inspect paymentIntent.invoice
+      if (!invoiceId) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          if (typeof paymentIntent.invoice === "string" && paymentIntent.invoice.length > 0) {
+            invoiceId = paymentIntent.invoice;
+          } else if (paymentIntent.invoice && typeof paymentIntent.invoice === "object") {
+            invoiceId = (paymentIntent.invoice as any).id || null;
+          }
+        } catch (err: any) {
+          const isMissing =
+            err?.code === "resource_missing" ||
+            err?.statusCode === 404 ||
+            err?.raw?.statusCode === 404 ||
+            err?.raw?.code === "resource_missing";
+          if (!isMissing) {
+            throw err;
+          }
         }
       }
     }
@@ -604,6 +638,24 @@ async function cancelSubscriptionForChargeOrCustomer(
       err?.raw?.message?.toLowerCase().includes("already canceled");
 
     if (isResourceMissing || isAlreadyCanceled) {
+      return subscriptionId;
+    }
+
+    const statusCode = err?.statusCode ?? err?.status ?? err?.raw?.statusCode;
+    const errorMessage = (err?.message ?? err?.raw?.message ?? "").toLowerCase();
+    const isApprovalRequired =
+      err?.code === "approval_required" ||
+      err?.raw?.code === "approval_required" ||
+      ((statusCode === 400 || statusCode === undefined) &&
+        errorMessage.includes("approval request"));
+
+    if (isApprovalRequired) {
+      console.error(
+        `[stripe-webhook] Stripe subscription cancellation held for approval for subscription ${subscriptionId}`,
+      );
+      if (minimalPayload) {
+        minimalPayload.cancel_pending_approval = true;
+      }
       return subscriptionId;
     }
 
@@ -1278,7 +1330,7 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         // Auto-cancel related subscription
-        await cancelSubscriptionForChargeOrCustomer(charge, refundCustId, config.stripe);
+        await cancelSubscriptionForChargeOrCustomer(charge, refundCustId, config.stripe, minimalPayload);
         break;
       }
 
@@ -1322,7 +1374,7 @@ export async function handler(req: Request): Promise<Response> {
         }
 
         // Auto-cancel related subscription
-        await cancelSubscriptionForChargeOrCustomer(charge, disputeCustId, config.stripe);
+        await cancelSubscriptionForChargeOrCustomer(charge, disputeCustId, config.stripe, minimalPayload);
         break;
       }
 
@@ -1370,6 +1422,7 @@ export async function handler(req: Request): Promise<Response> {
       processed_at: new Date().toISOString(),
       ...(resolvedUserId ? { user_id: resolvedUserId } : {}),
       ...(customerId ? { customer_id: customerId } : {}),
+      payload: minimalPayload,
     })
     .eq("event_id", event.id);
 
