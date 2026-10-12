@@ -312,7 +312,22 @@ export function useCustomDishActions({
       setBannerState(null);
       previousStagedMealRef.current = null;
       const clientLogId = newId();
-      const single = dish.items && dish.items.length === 1 ? dish.items[0] : null;
+
+      let servingSize = 1;
+      let servingUnit = 'serving';
+      if (dish.kind === 'food') {
+        if (dish.serving_quantity != null && Number(dish.serving_quantity) > 0 && dish.serving_unit) {
+          servingSize = roundTo1Decimal(Number(dish.serving_quantity));
+          servingUnit = dish.serving_unit;
+        } else if (dish.items && dish.items.length === 1) {
+          const single = dish.items[0];
+          if (single && single.quantity != null && single.quantity > 0 && single.unit) {
+            servingSize = roundTo1Decimal(single.quantity);
+            servingUnit = single.unit;
+          }
+        }
+      }
+
       const payload = {
         id: clientLogId,
         food_name: dish.name,
@@ -322,8 +337,8 @@ export function useCustomDishActions({
         fat: roundTo1Decimal(dish.fat),
         fiber: roundTo1Decimal(dish.fiber),
         meal_type: 'Breakfast',
-        serving_size: single && single.quantity != null && single.quantity > 0 ? roundTo1Decimal(single.quantity) : 1,
-        serving_unit: single?.unit || 'serving',
+        serving_size: servingSize,
+        serving_unit: servingUnit,
         logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
         logged_date: selectedDate,
         notes: dish.notes ?? null,

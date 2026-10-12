@@ -487,7 +487,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'custom_dishes',
       type: 'EXACT',
-      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, items',
+      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit',
       description: 'Custom dishes list query with notes',
     },
     {
@@ -556,7 +556,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'custom_dishes',
       type: 'EXACT',
-      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, items',
+      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit',
       description: 'Custom dishes list query with notes',
     },
     {

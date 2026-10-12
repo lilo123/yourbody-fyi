@@ -258,20 +258,31 @@ export function useCustomDishModal({
     let parentFiber: number;
 
     if (dishModalKind === 'recipe') {
-      persistItems = itemsForPersist(dishModalItems);
-      const totals = persistItems ? sumItems(persistItems) : null;
-      parentCalories = clamp(totals ? totals.calories : Number(dishModalCalories) || 0);
-      parentProtein = clamp(totals ? totals.protein : Number(dishModalProtein) || 0);
-      parentCarbs = clamp(totals ? totals.carbs : Number(dishModalCarbs) || 0);
-      parentFat = clamp(totals ? totals.fat : Number(dishModalFat) || 0);
-      parentFiber = clamp(totals ? totals.fiber : Number(dishModalFiber) || 0);
+      const normalizedRecipeItems = (dishModalItems || []).map((it) => ({
+        ...it,
+        quantity: roundTo1Decimal(it.quantity),
+        calories: roundTo1Decimal(it.calories),
+        protein: roundTo1Decimal(it.protein),
+        carbs: roundTo1Decimal(it.carbs),
+        fat: roundTo1Decimal(it.fat),
+        fiber: roundTo1Decimal(it.fiber),
+      }));
+      persistItems = itemsForPersist(normalizedRecipeItems);
+      if (persistItems && persistItems.length === 1) {
+        parentCalories = persistItems[0].calories;
+        parentProtein = persistItems[0].protein;
+        parentCarbs = persistItems[0].carbs;
+        parentFat = persistItems[0].fat;
+        parentFiber = persistItems[0].fiber;
+      } else {
+        const totals = persistItems ? sumItems(persistItems) : null;
+        parentCalories = clamp(totals ? totals.calories : Number(dishModalCalories) || 0);
+        parentProtein = clamp(totals ? totals.protein : Number(dishModalProtein) || 0);
+        parentCarbs = clamp(totals ? totals.carbs : Number(dishModalCarbs) || 0);
+        parentFat = clamp(totals ? totals.fat : Number(dishModalFat) || 0);
+        parentFiber = clamp(totals ? totals.fiber : Number(dishModalFiber) || 0);
+      }
     } else {
-      parentCalories = clamp(Number(dishModalCalories) || 0);
-      parentProtein = clamp(Number(dishModalProtein) || 0);
-      parentCarbs = clamp(Number(dishModalCarbs) || 0);
-      parentFat = clamp(Number(dishModalFat) || 0);
-      parentFiber = clamp(Number(dishModalFiber) || 0);
-
       const parsedQty = typeof dishModalQuantity === 'number' && dishModalQuantity > 0
         ? dishModalQuantity
         : parseQuantityInput(dishModalQuantity);
@@ -286,14 +297,25 @@ export function useCustomDishModal({
           name: dishModalName.trim(),
           quantity: qty,
           unit: resolvedUnit as any,
-          calories: parentCalories,
-          protein: parentProtein,
-          carbs: parentCarbs,
-          fat: parentFat,
-          fiber: parentFiber,
+          calories: clamp(Number(dishModalCalories) || 0),
+          protein: clamp(Number(dishModalProtein) || 0),
+          carbs: clamp(Number(dishModalCarbs) || 0),
+          fat: clamp(Number(dishModalFat) || 0),
+          fiber: clamp(Number(dishModalFiber) || 0),
           displayPortion: `${qty} ${resolvedUnit}`,
         };
         persistItems = [foodItem];
+        parentCalories = foodItem.calories;
+        parentProtein = foodItem.protein;
+        parentCarbs = foodItem.carbs;
+        parentFat = foodItem.fat;
+        parentFiber = foodItem.fiber;
+      } else {
+        parentCalories = clamp(Number(dishModalCalories) || 0);
+        parentProtein = clamp(Number(dishModalProtein) || 0);
+        parentCarbs = clamp(Number(dishModalCarbs) || 0);
+        parentFat = clamp(Number(dishModalFat) || 0);
+        parentFiber = clamp(Number(dishModalFiber) || 0);
       }
     }
 

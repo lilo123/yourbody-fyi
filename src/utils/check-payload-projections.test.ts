@@ -187,4 +187,17 @@ describe("Supabase Payload Projection Check", () => {
     expect(result.violations[0].error).toContain("clean site matches no denylisted pattern");
     expect(result.escapes).toHaveLength(0);
   });
+
+  it("permits PostgREST JSON path aliases on items/ingredients without flagging as heavy columns", () => {
+    const code = [
+      "const { data } = await supabase",
+      "  .from('custom_dishes')",
+      "  .select('id, name, serving_quantity:items->0->quantity, serving_unit:items->0->>unit');",
+    ].join("\n");
+
+    const result = analyzeSource(code);
+    expect(result.ok).toBe(true);
+    expect(result.violations).toHaveLength(0);
+    expect(result.escapes).toHaveLength(0);
+  });
 });

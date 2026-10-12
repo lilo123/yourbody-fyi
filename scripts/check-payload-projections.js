@@ -33,8 +33,8 @@ export const DENYLIST_TOKENS = ["items", "ingredients", "sets(", "template_exerc
 export function matchDenylistedTokens(projection) {
   if (!projection || typeof projection !== "string") return [];
   const matched = [];
-  if (/\bitems\b/.test(projection)) matched.push("items");
-  if (/\bingredients\b/.test(projection)) matched.push("ingredients");
+  if (/\bitems\b(?!\s*->)/.test(projection)) matched.push("items");
+  if (/\bingredients\b(?!\s*->)/.test(projection)) matched.push("ingredients");
   if (projection.includes("sets(")) matched.push("sets(");
   if (projection.includes("template_exercises(")) matched.push("template_exercises(");
   return matched;
