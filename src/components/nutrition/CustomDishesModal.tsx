@@ -1,6 +1,6 @@
 import React, { memo, useId } from 'react';
 import type { CustomDish, CustomDishKind } from '../../types/database';
-import type { NutritionItem } from '../../utils/itemModel';
+import { getCustomDishPortion, type NutritionItem } from '../../utils/itemModel';
 import { roundTo1Decimal, formatCalories, formatMacro } from '../../utils/nutrition';
 import { getDishIcon } from '../../utils/dishIcons';
 import { Star, X, Trash2, Edit2 } from 'lucide-react';
@@ -17,6 +17,12 @@ export interface CustomDishesModalProps {
   setDishModalKind?: (val: CustomDishKind) => void;
   dishModalName: string;
   setDishModalName: (val: string) => void;
+  dishModalQuantity?: number | '';
+  setDishModalQuantity?: (val: number | '') => void;
+  dishModalUnit?: string;
+  setDishModalUnit?: (val: string) => void;
+  onQuantityChange?: (val: number | '') => void;
+  onUnitChange?: (val: string) => void;
   dishModalCalories: number | '';
   setDishModalCalories: (val: number | '') => void;
   dishModalProtein: number | '';
@@ -47,6 +53,12 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
   setDishModalKind = () => {},
   dishModalName,
   setDishModalName,
+  dishModalQuantity = '',
+  setDishModalQuantity = () => {},
+  dishModalUnit = 'g',
+  setDishModalUnit = () => {},
+  onQuantityChange,
+  onUnitChange,
   dishModalCalories,
   setDishModalCalories,
   dishModalProtein,
@@ -70,6 +82,8 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
 }) => {
   const baseId = useId();
   const nameId = `${baseId}-dish-name`;
+  const qtyId = `${baseId}-quantity`;
+  const unitId = `${baseId}-unit`;
   const calId = `${baseId}-calories`;
   const proteinId = `${baseId}-protein`;
   const carbsId = `${baseId}-carbs`;
@@ -196,7 +210,59 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
               showing editable parent macros would invite a value the DB
               sum constraint then rejects. */}
           {showDirectMacros && (
-            <div data-testid="parent-macros" className="grid grid-cols-6 sm:grid-cols-5 gap-2">
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label
+                    htmlFor={qtyId}
+                    className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1"
+                  >
+                    Qty
+                  </label>
+                  <input
+                    id={qtyId}
+                    type="number"
+                    step="any"
+                    min="0"
+                    inputMode="decimal"
+                    value={dishModalQuantity}
+                    onChange={(e) => {
+                      const next = e.target.value === '' ? '' : Number(e.target.value);
+                      if (onQuantityChange) {
+                        onQuantityChange(next);
+                      } else {
+                        setDishModalQuantity(next);
+                      }
+                    }}
+                    placeholder="e.g. 100"
+                    className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={unitId}
+                    className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1"
+                  >
+                    Unit
+                  </label>
+                  <input
+                    id={unitId}
+                    type="text"
+                    value={dishModalUnit}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (onUnitChange) {
+                        onUnitChange(next);
+                      } else {
+                        setDishModalUnit(next);
+                      }
+                    }}
+                    placeholder="e.g. g"
+                    className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
+                  />
+                </div>
+              </div>
+              <div data-testid="parent-macros" className="grid grid-cols-6 sm:grid-cols-5 gap-2">
               <div className="col-span-2 sm:col-span-1">
                 <label
                   htmlFor={calId}
@@ -302,6 +368,7 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                 />
               </div>
             </div>
+          </>
           )}
 
           {dishModalKind === 'recipe' && (
@@ -373,29 +440,37 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
               Saved Dishes ({customDishes.length})
             </span>
             <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-              {customDishes.map((dish) => (
-                <div
-                  key={dish.id}
-                  className="bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 flex items-center justify-between text-xs"
-                >
-                  <div className="min-w-0 pr-2">
-                    <div className="font-bold text-white truncate flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
-                        {getDishIcon(dish.name)}
+              {customDishes.map((dish) => {
+                const portion = getCustomDishPortion(dish);
+                return (
+                  <div
+                    key={dish.id}
+                    className="bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 flex items-center justify-between text-xs"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="font-bold text-white truncate flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                          {getDishIcon(dish.name)}
+                        </div>
+                        <span>{dish.name}</span>
                       </div>
-                      <span>{dish.name}</span>
-                    </div>
-                    <div className="text-xs tabular-nums text-zinc-400 mt-0.5">
-                      <span className="text-amber-400 font-bold">{formatCalories(dish.calories)} kcal</span>
-                      <span> • </span>
-                      <span className="text-cyan-400">P: {formatMacro(dish.protein)}g</span>
-                      <span> • </span>
-                      <span className="text-emerald-400">C: {formatMacro(dish.carbs)}g</span>
-                      <span> • </span>
-                      <span className="text-violet-400">F: {formatMacro(dish.fat)}g</span>
-                      <span> • </span>
-                      <span className="text-teal-400">Fib: {formatMacro(dish.fiber)}g</span>
-                    </div>
+                      <div className="text-xs tabular-nums text-zinc-400 mt-0.5">
+                        {portion && (
+                          <>
+                            <span className="text-zinc-300 font-medium">{portion}</span>
+                            <span> • </span>
+                          </>
+                        )}
+                        <span className="text-amber-400 font-bold">{formatCalories(dish.calories)} kcal</span>
+                        <span> • </span>
+                        <span className="text-cyan-400">P: {formatMacro(dish.protein)}g</span>
+                        <span> • </span>
+                        <span className="text-emerald-400">C: {formatMacro(dish.carbs)}g</span>
+                        <span> • </span>
+                        <span className="text-violet-400">F: {formatMacro(dish.fat)}g</span>
+                        <span> • </span>
+                        <span className="text-teal-400">Fib: {formatMacro(dish.fiber)}g</span>
+                      </div>
                     {dish.notes && dish.notes.trim().length > 0 && (
                       <p
                         className="text-xs text-zinc-400 italic line-clamp-1 mt-1"
@@ -432,7 +507,8 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                     </button>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
         )}

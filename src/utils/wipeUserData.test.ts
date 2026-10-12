@@ -43,6 +43,8 @@ describe('wipeUserData', () => {
     localStorage.setItem('yourbody_user', JSON.stringify({ id: targetUserId }));
     localStorage.setItem('yourbody_view_mode', 'athlete');
     localStorage.setItem('yourbody_auto_rest_timer', 'true');
+    localStorage.setItem('yourbody_nutrition_parser_mode', 'always_ai');
+    localStorage.setItem('yourbody_rest_timer_seconds', '90');
     localStorage.setItem(`yourbody_last_route_${targetUserId}`, '/workout');
     localStorage.setItem(`yourbody_outbox_pending_${targetUserId}`, '3');
 
@@ -61,6 +63,8 @@ describe('wipeUserData', () => {
     expect(localStorage.getItem('yourbody_user')).toBeNull();
     expect(localStorage.getItem('yourbody_view_mode')).toBeNull();
     expect(localStorage.getItem('yourbody_auto_rest_timer')).toBeNull();
+    expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBeNull();
+    expect(localStorage.getItem('yourbody_rest_timer_seconds')).toBeNull();
     expect(localStorage.getItem(`yourbody_last_route_${targetUserId}`)).toBeNull();
     expect(localStorage.getItem(`yourbody_outbox_pending_${targetUserId}`)).toBeNull();
 

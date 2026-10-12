@@ -137,4 +137,109 @@ describe('useNutritionAi quota exceeded handling', () => {
     expect(setIsError).toHaveBeenCalledWith(false);
     expect(setStatus).toHaveBeenCalledWith('');
   });
+
+  it('forwards forceAi: true to parseNutrition when handleForceAiAnalyze is called', async () => {
+    vi.spyOn(parseNutritionModule, 'parseNutrition').mockResolvedValueOnce({
+      name: 'Banana Smoothie',
+      items: [],
+      calories: 250,
+      protein: 10,
+      carbs: 45,
+      fat: 3,
+      fiber: 4,
+      servingSize: 1,
+      servingUnit: 'serving',
+      source: 'ai',
+    });
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.handleForceAiAnalyze('banana smoothie');
+    });
+
+    expect(parseNutritionModule.parseNutrition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'banana smoothie',
+        forceAi: true,
+      })
+    );
+    expect(onParsedSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Banana Smoothie',
+        source: 'ai',
+      })
+    );
+    expect(setStatus).toHaveBeenCalledWith('Analyzed');
+  });
+
+  it('sets status to "Parsed locally" and source to "rules" when server returns source rules', async () => {
+    vi.spyOn(parseNutritionModule, 'parseNutrition').mockResolvedValueOnce({
+      name: 'Protein Shake',
+      items: [],
+      calories: 300,
+      protein: 40,
+      carbs: 10,
+      fat: 5,
+      fiber: 0,
+      servingSize: 1,
+      servingUnit: 'serving',
+      source: 'rules',
+      confidence: 'exact',
+    });
+
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.handleAnalyze({ overrideText: 'Protein Shake' });
+    });
+
+    expect(onParsedSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Protein Shake',
+        source: 'rules',
+      })
+    );
+    expect(setStatus).toHaveBeenCalledWith('Parsed locally');
+  });
+
+  it('prefills Quick Log via onFallbackToManual on 429 quota_exceeded with only found macros', async () => {
+    const quotaErr: parseNutritionModule.ParseNutritionError = new Error(
+      "You've used today's AI parses. Quick log and on-device parsing still work."
+    );
+    quotaErr.is429 = true;
+    quotaErr.status = 429;
+    quotaErr.code = 'quota_exceeded';
+    quotaErr.limit = 30;
+    quotaErr.period = 'day';
+
+    vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(quotaErr);
+
+    const partialText = 'Protein Bar\nCalories: 200 kcal\nProtein: 20g';
+    const { result } = setupHook();
+
+    await act(async () => {
+      await result.current.handleAnalyze({ overrideText: partialText });
+    });
+
+    expect(result.current.isQuotaExceeded).toBe(true);
+    expect(setStatus).toHaveBeenCalledWith(
+      "You've used today's AI parses. Quick log and on-device parsing still work."
+    );
+    expect(onFallbackToManual).toHaveBeenCalledTimes(1);
+    expect(onFallbackToManual).toHaveBeenCalledWith(
+      'Protein Bar',
+      expect.objectContaining({
+        name: 'Protein Bar',
+        calories: 200,
+        protein: 20,
+      })
+    );
+    const prefill = onFallbackToManual.mock.calls[0][1];
+    expect(prefill?.calories).toBe(200);
+    expect(prefill?.protein).toBe(20);
+    expect(prefill?.carbs).toBeUndefined();
+    expect(prefill?.fat).toBeUndefined();
+    expect(prefill?.fiber).toBeUndefined();
+  });
 });
