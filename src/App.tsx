@@ -17,9 +17,15 @@ import { useOfflinePrefetch } from './offline-prefetch';
 import { registerOutboxUpdateBlocker, startAiQueueProcessor } from './offline';
 import { registerUpdateBlocker } from './pwa/updateSafety';
 import { shouldShowLanding } from './utils/routeDecision';
+import { useQueryClient } from '@tanstack/react-query';
+import { useFirstLogSync, useInstallPrompt } from './pwa/installPromptStore';
 import './App.css';
 
 registerOutboxUpdateBlocker(registerUpdateBlocker);
+
+const InstallPromptCard = React.lazy(() =>
+  import('./pwa/InstallPromptCard').then((m) => ({ default: m.InstallPromptCard }))
+);
 
 const ResetPasswordView = React.lazy(() =>
   import('./components/auth/ResetPasswordView').then((m) => ({ default: m.ResetPasswordView }))
@@ -160,6 +166,9 @@ const RootRoute: React.FC = () => {
 
 function AppLayout() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  useFirstLogSync(queryClient);
+  const { shouldShowPrompt } = useInstallPrompt();
   useOfflinePrefetch(user?.id);
 
   // Start/stop AI queue processor for signed-in user
@@ -264,6 +273,11 @@ function AppLayout() {
     <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
       <Header />
       <UpdateBanner />
+      {user && shouldShowPrompt && (
+        <React.Suspense fallback={null}>
+          <InstallPromptCard />
+        </React.Suspense>
+      )}
       <main className={`flex-1 max-w-xl w-full mx-auto p-4 ${user ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]' : 'pb-8'}`}>
         <React.Suspense fallback={<LazyFallback />}>
           <Routes>

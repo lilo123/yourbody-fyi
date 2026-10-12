@@ -10,6 +10,7 @@ import {
   setFlusherSessionUser,
   type NutritionLogPayload,
 } from '../../offline';
+import { markFirstLogCompleted } from '../../pwa/installPromptStore';
 
 export async function fetchDishDetail(dishId: string): Promise<CustomDishDetail | null> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -297,6 +298,7 @@ export function useNutritionData({
       if (created?.incrementDishId) {
         queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
       }
+      markFirstLogCompleted();
       onMutationSuccessReset();
     },
     onError: (error: Error) => {

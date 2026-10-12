@@ -14,6 +14,7 @@ import {
 } from "../../lib/sets";
 import { newId } from "../../offline";
 import { isUUID } from "./workoutEngineHelpers";
+import { markFirstLogCompleted } from "../../pwa/installPromptStore";
 
 export interface ExerciseCardError {
   message: string;
@@ -254,6 +255,7 @@ export function useWorkoutMutations({
       if (autoRestTimer) {
         restTimerStore.start(90);
       }
+      markFirstLogCompleted();
     },
     onSettled: async () => {
       await invalidateWorkoutDerived(queryClient, targetUserId);
@@ -330,6 +332,7 @@ export function useWorkoutMutations({
       if (autoRestTimer) {
         restTimerStore.start(90);
       }
+      markFirstLogCompleted();
     },
     onError: (err: unknown, variables) => {
       const message =
