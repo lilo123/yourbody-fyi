@@ -6348,6 +6348,35 @@ test.describe("Route-Wide Density & Tap Grid", () => {
     }
   });
 
+  for (const width of [320, 390] as const) {
+    test(`Meal demo section visual density at ${width}px`, async ({ browser }) => {
+      const page = await browser.newPage({
+        viewport: { width, height: 844 },
+        deviceScaleFactor: 1,
+      });
+      try {
+        await page.goto("/");
+        await page.waitForLoadState("domcontentloaded");
+        await page.waitForTimeout(500);
+
+        const section = page.locator('[data-testid="meal-demo-section"]');
+        await expect(section).toBeVisible();
+
+        const violations = await checkTypeScale(section, {
+          includeHeaderAndNav: true,
+          allowSizes16Plus: true,
+        });
+
+        expect(
+          violations,
+          `D43 type scale violations on meal demo section at ${width}px:\n${JSON.stringify(violations, null, 2)}`
+        ).toHaveLength(0);
+      } finally {
+        await page.close();
+      }
+    });
+  }
+
   test("Standalone mode at / renders app redirect, not landing at 320px", async ({ browser }) => {
     const page = await browser.newPage({
       viewport: { width: 320, height: 844 },
