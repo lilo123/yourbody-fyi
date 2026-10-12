@@ -269,7 +269,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
       </div>
 
       {/* Local Parse provenance banner */}
-      {(stagedMeal.source === 'local' || (stagedMeal as { source?: string }).source === 'rules') && (
+      {(stagedMeal.source === 'local' || stagedMeal.source === 'rules') && (
         <div className="flex flex-col gap-1 border-b border-zinc-800 pb-1.5 pt-0.5">
           <div className="flex items-center justify-between gap-2">
             <span
@@ -290,7 +290,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
               </button>
             )}
           </div>
-          {(stagedMeal as { confidence?: string }).confidence === 'lenient' && (
+          {stagedMeal.confidence === 'lenient' && (
             <div
               data-testid="lenient-fallback-banner"
               className="flex items-center gap-1.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1"

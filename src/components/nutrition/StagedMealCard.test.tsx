@@ -1836,7 +1836,7 @@ describe('Scale chip on the staged card', () => {
   it('renders "Parsed locally" badge when staged meal has source rules', () => {
     const meal = {
       ...makeStagedMeal(),
-      source: 'rules' as any,
+      source: 'rules' as const,
     };
     render(<StagedMealCard {...baseProps} stagedMeal={meal} onUpdateStagedMeal={vi.fn()} />);
     expect(screen.getByTestId('parsed-locally-badge')).toBeInTheDocument();
@@ -1846,8 +1846,8 @@ describe('Scale chip on the staged card', () => {
   it('renders lenient fallback review banner when confidence is lenient', () => {
     const meal = {
       ...makeStagedMeal(),
-      source: 'rules' as any,
-      confidence: 'lenient' as any,
+      source: 'rules' as const,
+      confidence: 'lenient' as const,
     };
     render(<StagedMealCard {...baseProps} stagedMeal={meal} onUpdateStagedMeal={vi.fn()} />);
     expect(screen.getByTestId('parsed-locally-badge')).toBeInTheDocument();

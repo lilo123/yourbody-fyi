@@ -659,17 +659,30 @@ function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
   if (cleaned.includes('|')) {
     const parts = cleaned.split('|').map((part) => part.trim()).filter(Boolean);
     if (parts.length < 2) return null;
-    if (/(?:kcal|cal|\bp\b|\bprotein\b)/i.test(parts[0])) return null;
 
-    if (
-      parts.length > 2 &&
-      !/(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b)/i.test(parts[1])
-    ) {
-      nameAndPortion = parts[0] + ': ' + parts[1];
-      macroSegments = parts.slice(2);
-    } else {
-      nameAndPortion = parts[0];
-      macroSegments = parts.slice(1);
+    if (parts[0].includes(':')) {
+      const colonIdx = parts[0].indexOf(':');
+      const preColon = parts[0].slice(0, colonIdx).trim();
+      const postColon = parts[0].slice(colonIdx + 1).trim();
+      if (/(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b)/i.test(postColon)) {
+        nameAndPortion = preColon;
+        macroSegments = [postColon, ...parts.slice(1)];
+      }
+    }
+
+    if (!nameAndPortion) {
+      if (/(?:kcal|cal|\bp\b|\bprotein\b)/i.test(parts[0])) return null;
+
+      if (
+        parts.length > 2 &&
+        !/(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b)/i.test(parts[1])
+      ) {
+        nameAndPortion = parts[0] + ': ' + parts[1];
+        macroSegments = parts.slice(2);
+      } else {
+        nameAndPortion = parts[0];
+        macroSegments = parts.slice(1);
+      }
     }
   } else if (cleaned.includes(':')) {
     const colonIndex = cleaned.indexOf(':');

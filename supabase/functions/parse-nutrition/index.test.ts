@@ -1563,7 +1563,7 @@ Deno.test("parse-nutrition pre-structured fast-path returns HTTP 200 without cal
     globalThis.fetch = mockFetch;
 
     try {
-        const structuredText = "Grilled Chicken Breast\nCalories: 330\nProtein: 62g\nCarbs: 0g\nFat: 7g";
+        const structuredText = "Food: Grilled Chicken & Rice\n- 200g Chicken Breast | 330 kcal | 62g P | 0g C | 7g F\n- 1 cup White Rice | 205 kcal | 4g P | 45g C | 0.5g F";
         const req = new Request("http://localhost/parse-nutrition", {
             method: "POST",
             headers: { "Authorization": "Bearer valid-jwt-token" },
@@ -1576,11 +1576,11 @@ Deno.test("parse-nutrition pre-structured fast-path returns HTTP 200 without cal
         assertEquals(googleGenAiCalled, false);
         assertEquals(quotaRpcCalled, false);
         const data = await res.json();
-        assertEquals(data.name, "Grilled Chicken Breast");
-        assertEquals(data.calories, 330);
+        assertEquals(data.name, "Grilled Chicken & Rice");
+        assertEquals(data.calories, 535);
         assertEquals(data.source, "rules");
         assertEquals(data.confidence, "exact");
-        assertEquals(data.items.length, 1);
+        assertEquals(data.items.length, 2);
     } finally {
         globalThis.fetch = originalFetch;
         if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
@@ -1824,6 +1824,65 @@ Deno.test("parse-nutrition: partial text with exceeded quota preserves 429 quota
         const data = await res.json();
         assertEquals(data.code, "quota_exceeded");
         assertEquals(data.plan, "free");
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition: lenient text falls back to 200 with source 'rules' and fallback_reason 'ai_unavailable' on AI failure", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    let googleGenAiCalled = false;
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: false }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            googleGenAiCalled = true;
+            return new Response(JSON.stringify({ error: { message: "Internal error", code: 500 } }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const lenientText = "Protein Shake\nAte half\nCalories: 300 kcal\nProtein: 40g\nCarbs: 10g\nFat: 5g";
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: lenientText })
+        });
+
+        const res = await app.fetch(req);
+
+        assertEquals(res.status, 200);
+        assertEquals(googleGenAiCalled, true);
+        const data = await res.json();
+        assertEquals(data.source, "rules");
+        assertEquals(data.confidence, "lenient");
+        assertEquals(data.fallback_reason, "ai_unavailable");
+        assertEquals(data.calories, 300);
+        assertEquals(data.protein, 40);
+        assertEquals(data.carbs, 10);
+        assertEquals(data.fat, 5);
     } finally {
         globalThis.fetch = originalFetch;
         if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
