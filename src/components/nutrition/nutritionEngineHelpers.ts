@@ -695,10 +695,15 @@ export function formatLenientHint(
   }
   const firstModifier = modifiers?.find((modifier) => modifier.trim().length > 0)?.trim();
   if (firstModifier) {
-    const prefix = 'Modifier: ';
     const maxLen = 60;
-    const available = maxLen - prefix.length;
     const singleLine = firstModifier.replace(/\r?\n/g, ' ');
+    if (singleLine.startsWith('Range:') || singleLine.startsWith('Items add up to')) {
+      const truncated =
+        singleLine.length > maxLen ? `${singleLine.slice(0, maxLen - 3)}...` : singleLine;
+      return truncated;
+    }
+    const prefix = 'Modifier: ';
+    const available = maxLen - prefix.length;
     const truncated =
       singleLine.length > available ? `${singleLine.slice(0, available - 3)}...` : singleLine;
     return `${prefix}${truncated}`;

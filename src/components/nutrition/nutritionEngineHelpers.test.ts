@@ -1285,5 +1285,15 @@ describe('formatLenientHint', () => {
     expect(hint).toBe('Skipped: First part Second part');
     expect(hint!.includes('\n')).toBe(false);
   });
+
+  it('formats "Range: used the middle" without "Modifier: " prefix', () => {
+    const hint = formatLenientHint([], ['Range: used the middle']);
+    expect(hint).toBe('Range: used the middle');
+  });
+
+  it('formats "Items add up to" without "Modifier: " prefix', () => {
+    const hint = formatLenientHint([], ['Items add up to 850, total says 650']);
+    expect(hint).toBe('Items add up to 850, total says 650');
+  });
 });
 

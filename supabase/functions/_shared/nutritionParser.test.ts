@@ -1,9 +1,11 @@
 import { assertEquals, assertNotEquals } from "jsr:@std/assert@1.0.19";
 import {
   parseNutritionText,
+  parseLocaleNumber,
   extractYourbodyFencedBlock,
   type NutritionParseResult,
 } from "./nutritionParser.ts";
+import { NUTRITION_CORPUS_FIXTURES } from "./nutritionParserCorpus.fixtures.ts";
 
 Deno.test("shared nutritionParser: cleanup cases (bullets, bold, approx, tilde)", () => {
   const bulletAsterisk = [
@@ -211,5 +213,245 @@ Deno.test("shared nutritionParser: extracts fenced yourbody and yourbody-v1 bloc
     extractYourbodyFencedBlock("```yourbody\ntest content\n```"),
     "test content"
   );
+});
+
+Deno.test("shared nutritionParser: 93 golden corpus & sweep fixtures (E1)", () => {
+  for (const fixture of NUTRITION_CORPUS_FIXTURES) {
+    const result = parseNutritionText(fixture.input);
+    assertEquals(
+      result.confidence,
+      fixture.expected.confidence,
+      `Fixture #${fixture.id} [${fixture.title}] confidence mismatch: expected "${fixture.expected.confidence}", got "${result.confidence}"`
+    );
+
+    if (fixture.expected.calories !== undefined && fixture.expected.calories !== null) {
+      assertEquals(
+        result.meal?.calories,
+        fixture.expected.calories,
+        `Fixture #${fixture.id} [${fixture.title}] calories mismatch: expected ${fixture.expected.calories}, got ${result.meal?.calories}`
+      );
+    }
+    if (fixture.expected.protein !== undefined && fixture.expected.protein !== null) {
+      assertEquals(
+        result.meal?.protein,
+        fixture.expected.protein,
+        `Fixture #${fixture.id} [${fixture.title}] protein mismatch: expected ${fixture.expected.protein}, got ${result.meal?.protein}`
+      );
+    }
+    if (fixture.expected.carbs !== undefined && fixture.expected.carbs !== null) {
+      assertEquals(
+        result.meal?.carbs,
+        fixture.expected.carbs,
+        `Fixture #${fixture.id} [${fixture.title}] carbs mismatch: expected ${fixture.expected.carbs}, got ${result.meal?.carbs}`
+      );
+    }
+    if (fixture.expected.fat !== undefined && fixture.expected.fat !== null) {
+      assertEquals(
+        result.meal?.fat,
+        fixture.expected.fat,
+        `Fixture #${fixture.id} [${fixture.title}] fat mismatch: expected ${fixture.expected.fat}, got ${result.meal?.fat}`
+      );
+    }
+    if (fixture.expected.fiber !== undefined && fixture.expected.fiber !== null) {
+      assertEquals(
+        result.meal?.fiber,
+        fixture.expected.fiber,
+        `Fixture #${fixture.id} [${fixture.title}] fiber mismatch: expected ${fixture.expected.fiber}, got ${result.meal?.fiber}`
+      );
+    }
+    if (fixture.expected.itemsCount !== undefined && fixture.expected.itemsCount !== null) {
+      assertEquals(
+        result.meal?.items?.length ?? 0,
+        fixture.expected.itemsCount,
+        `Fixture #${fixture.id} [${fixture.title}] itemsCount mismatch: expected ${fixture.expected.itemsCount}, got ${result.meal?.items?.length ?? 0}`
+      );
+    }
+    if (fixture.expected.reason !== undefined && fixture.expected.reason !== null) {
+      assertEquals(
+        result.reason,
+        fixture.expected.reason,
+        `Fixture #${fixture.id} [${fixture.title}] reason mismatch: expected "${fixture.expected.reason}", got "${result.reason}"`
+      );
+    }
+    if (fixture.expected.hint !== undefined && fixture.expected.hint !== null) {
+      assertEquals(
+        result.hint,
+        fixture.expected.hint,
+        `Fixture #${fixture.id} [${fixture.title}] hint mismatch: expected "${fixture.expected.hint}", got "${result.hint}"`
+      );
+    }
+  }
+});
+
+Deno.test("shared nutritionParser: E2 property test 1 - exact kcal appears in text", () => {
+  function appearsInText(value: number, text: string): boolean {
+    return (
+      text.includes(String(value)) ||
+      text.includes(value.toLocaleString("en-US")) ||
+      text.includes(value.toLocaleString("de-DE"))
+    );
+  }
+
+  // 1. Invariant across all corpus fixtures that parsed with exact confidence:
+  for (const fixture of NUTRITION_CORPUS_FIXTURES) {
+    const result = parseNutritionText(fixture.input);
+    if (result.confidence === "exact" && result.meal?.calories !== undefined) {
+      const kcalNumber = result.meal.calories;
+      const rawInput = fixture.input;
+      if (result.meal.items && result.meal.items.length > 1) {
+        // In multi-item meals, every item's kcal appears in input, or the total appears
+        const itemsAppear = result.meal.items.every((item) =>
+          appearsInText(item.calories, rawInput)
+        );
+        const totalAppears = appearsInText(kcalNumber, rawInput);
+        assertEquals(
+          itemsAppear || totalAppears,
+          true,
+          `Fixture #${fixture.id} items kcal must appear in input text: "${rawInput}"`
+        );
+      } else {
+        // In single-food meals, the exact kcal appears in input
+        const appears = appearsInText(kcalNumber, rawInput);
+        assertEquals(
+          appears,
+          true,
+          `Fixture #${fixture.id} exact kcal ${kcalNumber} must appear in input text: "${rawInput}"`
+        );
+      }
+    }
+  }
+
+  // 2. Deterministic seeded sweep generating 50 diverse exact meals:
+  let seedState = 42;
+  function nextSeededRandom(): number {
+    seedState = (Math.imul(1664525, seedState) + 1013904223) >>> 0;
+    return seedState / 4294967296;
+  }
+
+  const sampleFoodNames = [
+    "Roasted Salmon",
+    "Grilled Turkey Cutlet",
+    "Beef Tenderloin",
+    "Tofu Scramble",
+    "Greek Yogurt Bowl",
+    "Chicken Breast",
+    "Egg White Omelet",
+  ];
+
+  for (let i = 0; i < 50; i++) {
+    const nameIndex = Math.floor(nextSeededRandom() * sampleFoodNames.length);
+    const foodName = sampleFoodNames[nameIndex];
+    const proteinVal = Math.floor(nextSeededRandom() * 50) + 10;
+    const carbsVal = Math.floor(nextSeededRandom() * 60);
+    const fatVal = Math.floor(nextSeededRandom() * 30) + 1;
+    const exactKcal = 4 * proteinVal + 4 * carbsVal + 9 * fatVal;
+
+    const testInput = `${foodName}\nCalories: ${exactKcal} kcal\nProtein: ${proteinVal}g\nCarbs: ${carbsVal}g\nFat: ${fatVal}g`;
+    const result = parseNutritionText(testInput);
+    assertEquals(result.confidence, "exact");
+    assertEquals(result.meal?.calories, exactKcal);
+    assertEquals(testInput.includes(String(exactKcal)), true);
+  }
+});
+
+Deno.test("shared nutritionParser: E2 property test 2 - noise, bullets, and formatting invariants", () => {
+  const bulletPrefixes = ["* ", "- ", "• ", "1. ", "  - "];
+  const emojiPrefixes = ["🔥 ", "🥗 ", "🍽️ ", "✨ ", ""];
+  const boldWrappers: Array<(text: string) => string> = [
+    (text: string) => `**${text}**`,
+    (text: string) => `__${text}__`,
+    (text: string) => text,
+  ];
+
+  let seedState = 1337;
+  function nextSeededRandom(): number {
+    seedState = (Math.imul(1664525, seedState) + 1013904223) >>> 0;
+    return seedState / 4294967296;
+  }
+
+  for (let i = 0; i < 30; i++) {
+    const proteinVal = Math.floor(nextSeededRandom() * 40) + 15;
+    const carbsVal = Math.floor(nextSeededRandom() * 50) + 5;
+    const fatVal = Math.floor(nextSeededRandom() * 20) + 2;
+    const calVal = 4 * proteinVal + 4 * carbsVal + 9 * fatVal;
+
+    const cleanLines = [
+      "Protein Bowl",
+      `Calories: ${calVal} kcal`,
+      `Protein: ${proteinVal}g`,
+      `Carbs: ${carbsVal}g`,
+      `Fat: ${fatVal}g`,
+    ];
+    const cleanInput = cleanLines.join("\n");
+    const cleanResult = parseNutritionText(cleanInput);
+    assertEquals(cleanResult.confidence, "exact");
+
+    const noisyLines = cleanLines.map((line, lineIndex) => {
+      const bullet = bulletPrefixes[Math.floor(nextSeededRandom() * bulletPrefixes.length)];
+      const emoji = emojiPrefixes[Math.floor(nextSeededRandom() * emojiPrefixes.length)];
+      const wrapper = boldWrappers[Math.floor(nextSeededRandom() * boldWrappers.length)];
+      if (lineIndex === 0) {
+        return `${bullet}${emoji}${wrapper(line)}`;
+      }
+      return `${bullet}${wrapper(line)}`;
+    });
+
+    const noisyInput = `\n${noisyLines.join("\n\n")}\n`;
+    const noisyResult = parseNutritionText(noisyInput);
+
+    assertEquals(noisyResult.confidence, "exact");
+    assertEquals(noisyResult.meal?.calories, cleanResult.meal?.calories);
+    assertEquals(noisyResult.meal?.protein, cleanResult.meal?.protein);
+    assertEquals(noisyResult.meal?.carbs, cleanResult.meal?.carbs);
+    assertEquals(noisyResult.meal?.fat, cleanResult.meal?.fat);
+  }
+});
+
+Deno.test("shared nutritionParser: E2 property test 3 - thousands separators never shrink numbers", () => {
+  // 1. Locale sweep: 1000..5000 in steps of 100 for en-US and de-DE
+  for (let num = 1000; num <= 5000; num += 100) {
+    const usStr = num.toLocaleString("en-US");
+    const deStr = num.toLocaleString("de-DE");
+
+    const usParsed = parseLocaleNumber(usStr);
+    const deParsed = parseLocaleNumber(deStr);
+
+    assertEquals(usParsed.value, num);
+    assertEquals(deParsed.value, num);
+    assertEquals((usParsed.value ?? 0) >= 1000, true);
+    assertEquals((deParsed.value ?? 0) >= 1000, true);
+  }
+
+  // 2. Decimal thousands:
+  assertEquals(parseLocaleNumber("1,234.5").value, 1234.5);
+  assertEquals(parseLocaleNumber("1.234,5").value, 1234.5);
+  assertEquals(parseLocaleNumber("2,5 g").value, 2.5);
+  assertEquals(parseLocaleNumber("2.5 g").value, 2.5);
+
+  // 3. Full meal parse preserves thousands without shrinking:
+  const usMeal = "Steak\nCalories: 1,000 kcal\nProtein: 100g\nCarbs: 50g\nFat: 44.4g";
+  const usResult = parseNutritionText(usMeal);
+  assertEquals(usResult.meal?.calories, 1000);
+  assertNotEquals(usResult.meal?.calories, 1);
+
+  const deMeal = "Steak\nCalories: 1.000 kcal\nProtein: 100g\nCarbs: 50g\nFat: 44.4g";
+  const deResult = parseNutritionText(deMeal);
+  assertEquals(deResult.meal?.calories, 1000);
+  assertNotEquals(deResult.meal?.calories, 1);
+});
+
+Deno.test("shared nutritionParser: '1,000' and '1.000' with 0 macros yield KCAL_INCONSISTENT (never 1 kcal)", () => {
+  // If '1,000' were mistakenly parsed as 1 kcal, 0 macros would be consistent (|0 - 1| <= 60),
+  // but correctly parsed as 1000 kcal, |0 - 1000| > 250 triggers KCAL_INCONSISTENT.
+  const commaInput = "Protein Shake\nCalories: 1,000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g";
+  const commaResult = parseNutritionText(commaInput);
+  assertEquals(commaResult.confidence, "none");
+  assertEquals(commaResult.reason, "KCAL_INCONSISTENT");
+
+  // Same for European period separator '1.000'
+  const periodInput = "Protein Shake\nCalories: 1.000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g";
+  const periodResult = parseNutritionText(periodInput);
+  assertEquals(periodResult.confidence, "none");
+  assertEquals(periodResult.reason, "KCAL_INCONSISTENT");
 });
 

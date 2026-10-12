@@ -8,6 +8,7 @@
 
 import {
   parseNutritionText,
+  parseLocaleNumber,
   LOCAL_PARSE_GRAMMAR_DOC,
   type NutritionRejectReason,
   type ParsedNutritionMeal,
@@ -26,6 +27,7 @@ export type LocalParseResult =
 export {
   LOCAL_PARSE_GRAMMAR_DOC,
   parseNutritionText,
+  parseLocaleNumber,
   type NutritionRejectReason,
   type ParsedNutritionMeal,
   type NutritionParseResult,
