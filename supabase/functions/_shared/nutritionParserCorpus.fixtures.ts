@@ -1757,5 +1757,131 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
       "reason": null,
       "hint": null
     }
+  },
+  {
+    "id": 97,
+    "title": "[Sweep paste2-010] Cheeseburger Plate (Quantity: 2)",
+    "input": "Cheeseburger Plate\nCalories: 300 kcal\nProtein: 15g\nCarbs: 25g\nFat: 12g\nQuantity: 2",
+    "expected": {
+      "confidence": "lenient",
+      "ok": true,
+      "calories": 300,
+      "protein": 15,
+      "carbs": 25,
+      "fat": 12,
+      "fiber": null,
+      "name": "Cheeseburger Plate",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 98,
+    "title": "[Sweep paste2-011] Chicken Rice Bowl (Servings: 2)",
+    "input": "Chicken Rice Bowl\nCalories: 400 kcal\nProtein: 40g\nCarbs: 45g\nFat: 7g\nServings: 2",
+    "expected": {
+      "confidence": "lenient",
+      "ok": true,
+      "calories": 400,
+      "protein": 40,
+      "carbs": 45,
+      "fat": 7,
+      "fiber": null,
+      "name": "Chicken Rice Bowl",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 99,
+    "title": "[Sweep paste2-012] Meal Prep Beef Stew (Servings: 4)",
+    "input": "Meal Prep Beef Stew\nServings: 4\nCalories: 1600 kcal\nProtein: 140g\nCarbs: 180g\nFat: 32g",
+    "expected": {
+      "confidence": "lenient",
+      "ok": true,
+      "calories": 1600,
+      "protein": 140,
+      "carbs": 180,
+      "fat": 32,
+      "fiber": null,
+      "name": "Meal Prep Beef Stew",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 100,
+    "title": "[Sweep paste2-013] Turkey Wrap (2x servings)",
+    "input": "Turkey Wrap\nCalories: 450 kcal\nProtein: 38g\nCarbs: 46g\nFat: 12g\n2x servings",
+    "expected": {
+      "confidence": "lenient",
+      "ok": true,
+      "calories": 450,
+      "protein": 38,
+      "carbs": 46,
+      "fat": 12,
+      "fiber": null,
+      "name": "Turkey Wrap",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 101,
+    "title": "[Sweep paste2-015] Zone Balance Plate (Percent macros)",
+    "input": "Zone Balance Plate\nCalories: 500 kcal\nProtein: 40%\nCarbs: 40%\nFat: 20%",
+    "expected": {
+      "confidence": "partial",
+      "ok": false,
+      "calories": 500,
+      "protein": 0,
+      "carbs": 0,
+      "fat": 0,
+      "fiber": null,
+      "name": "Zone Balance Plate",
+      "itemsCount": null,
+      "reason": "MISSING_MACRO",
+      "hint": null
+    }
+  },
+  {
+    "id": 102,
+    "title": "[Sweep paste2-016] Power Macro Bowl (Percent macros)",
+    "input": "Power Macro Bowl\nCalories: 550 kcal\nProtein: 30%\nCarbs: 40%\nFat: 30%",
+    "expected": {
+      "confidence": "partial",
+      "ok": false,
+      "calories": 550,
+      "protein": 0,
+      "carbs": 0,
+      "fat": 0,
+      "fiber": null,
+      "name": "Power Macro Bowl",
+      "itemsCount": null,
+      "reason": "MISSING_MACRO",
+      "hint": null
+    }
+  },
+  {
+    "id": 103,
+    "title": "[Sweep paste2-017] Keto Salmon Bowl (Percent macros)",
+    "input": "Keto Salmon Bowl\nCalories: 600 kcal\nProtein: 20%\nCarbs: 40%\nFat: 40%",
+    "expected": {
+      "confidence": "partial",
+      "ok": false,
+      "calories": 600,
+      "protein": 0,
+      "carbs": 0,
+      "fat": 0,
+      "fiber": null,
+      "name": "Keto Salmon Bowl",
+      "itemsCount": null,
+      "reason": "MISSING_MACRO",
+      "hint": null
+    }
   }
 ];
