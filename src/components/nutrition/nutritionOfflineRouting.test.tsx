@@ -321,6 +321,181 @@ Dietary Fiber 0g`;
       expect(setIsError).toHaveBeenCalledWith(true);
       expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
     });
+
+    it('offline + lenient: stages locally with source "local" and confidence "lenient" and renders review banner', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true, writable: true });
+
+      const onParsedSuccess = vi.fn();
+      const onFallbackToManual = vi.fn();
+      const setStatus = vi.fn();
+      const setIsError = vi.fn();
+
+      const { result } = renderHook(
+        () =>
+          useNutritionAi({
+            customDishes: [],
+            targetUserId: mockUserId,
+            onParsedSuccess,
+            onFallbackToManual,
+            setStatus,
+            setIsError,
+          }),
+        { wrapper }
+      );
+
+      const lenientBlock = [
+        'Greek Yogurt',
+        'Calories: 130 kcal',
+        'Protein: 15g',
+        'Carbs: 9g',
+        'Fat: 2g',
+        'extra ignored line',
+      ].join('\n');
+
+      act(() => {
+        result.current.setNlInput(lenientBlock);
+      });
+
+      await act(async () => {
+        await result.current.handleAnalyze();
+      });
+
+      expect(parseNutrition).not.toHaveBeenCalled();
+      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
+      expect(setStatus).toHaveBeenCalledWith('Parsed locally');
+      expect(onParsedSuccess).toHaveBeenCalledTimes(1);
+
+      const staged: StagedMeal = onParsedSuccess.mock.calls[0][0];
+      expect(staged.name).toBe('Greek Yogurt');
+      expect(staged.calories).toBe(130);
+      expect(staged.protein).toBe(15);
+      expect(staged.carbs).toBe(9);
+      expect(staged.fat).toBe(2);
+      expect(staged.source).toBe('local');
+      expect(staged.confidence).toBe('lenient');
+
+      // Verify StagedMealCard renders both the Parsed locally badge and the review banner
+      render(
+        <StagedMealCard
+          stagedMeal={staged}
+          onUpdateStagedMeal={vi.fn()}
+          onApplyStagedItemChange={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onSaveItemAsCustomDish={vi.fn()}
+          onLogStagedMeal={vi.fn()}
+          onSaveStagedAsCustomDish={vi.fn()}
+          onDiscardStagedMeal={vi.fn()}
+          isPending={false}
+        />
+      );
+
+      expect(screen.getByTestId('parsed-locally-badge')).toBeDefined();
+      expect(screen.getByTestId('lenient-fallback-banner')).toBeDefined();
+      expect(screen.getByText('Please review macros before logging.')).toBeDefined();
+    });
+
+    it('offline + partial: opens Quick Log prefilled with ONLY found macros; missing macros stay empty/undefined (never 0)', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true, writable: true });
+
+      const onParsedSuccess = vi.fn();
+      const onFallbackToManual = vi.fn();
+      const setStatus = vi.fn();
+      const setIsError = vi.fn();
+
+      const { result } = renderHook(
+        () =>
+          useNutritionAi({
+            customDishes: [],
+            targetUserId: mockUserId,
+            onParsedSuccess,
+            onFallbackToManual,
+            setStatus,
+            setIsError,
+          }),
+        { wrapper }
+      );
+
+      const partialBlock = ['Protein Bar', 'Calories: 200 kcal', 'Protein: 20g'].join('\n');
+
+      act(() => {
+        result.current.setNlInput(partialBlock);
+      });
+
+      await act(async () => {
+        await result.current.handleAnalyze();
+      });
+
+      expect(parseNutrition).not.toHaveBeenCalled();
+      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
+      expect(onParsedSuccess).not.toHaveBeenCalled();
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
+      expect(onFallbackToManual).toHaveBeenCalledTimes(1);
+
+      const [dishName, prefill] = onFallbackToManual.mock.calls[0];
+      expect(dishName).toBe('Protein Bar');
+      expect(prefill).toBeDefined();
+      expect(prefill?.name).toBe('Protein Bar');
+      expect(prefill?.calories).toBe(200);
+      expect(prefill?.protein).toBe(20);
+      expect(prefill?.carbs).toBeUndefined();
+      expect(prefill?.fat).toBeUndefined();
+      expect(prefill?.fiber).toBeUndefined();
+    });
+
+    it('429 quota_exceeded for partial text: opens Quick Log prefilled with only found macros and keeps quota banner', async () => {
+      const onParsedSuccess = vi.fn();
+      const onFallbackToManual = vi.fn();
+      const setStatus = vi.fn();
+      const setIsError = vi.fn();
+
+      const quotaErr: any = new Error(
+        "You've used today's AI parses. Quick log and on-device parsing still work."
+      );
+      quotaErr.is429 = true;
+      quotaErr.status = 429;
+      quotaErr.code = 'quota_exceeded';
+      quotaErr.limit = 30;
+      quotaErr.period = 'day';
+
+      vi.mocked(parseNutrition).mockRejectedValueOnce(quotaErr);
+
+      const { result } = renderHook(
+        () =>
+          useNutritionAi({
+            customDishes: [],
+            targetUserId: mockUserId,
+            onParsedSuccess,
+            onFallbackToManual,
+            setStatus,
+            setIsError,
+          }),
+        { wrapper }
+      );
+
+      const partialBlock = ['Protein Bar', 'Calories: 200 kcal', 'Protein: 20g'].join('\n');
+
+      act(() => {
+        result.current.setNlInput(partialBlock);
+      });
+
+      await act(async () => {
+        await result.current.handleAnalyze();
+      });
+
+      expect(result.current.isQuotaExceeded).toBe(true);
+      expect(setStatus).toHaveBeenCalledWith(
+        "You've used today's AI parses. Quick log and on-device parsing still work."
+      );
+      expect(onFallbackToManual).toHaveBeenCalledTimes(1);
+
+      const [dishName, prefill] = onFallbackToManual.mock.calls[0];
+      expect(dishName).toBe('Protein Bar');
+      expect(prefill?.calories).toBe(200);
+      expect(prefill?.protein).toBe(20);
+      expect(prefill?.carbs).toBeUndefined();
+      expect(prefill?.fat).toBeUndefined();
+    });
   });
 
   describe('2. Review from AI Queue & Lifecycle (D-OFF-7, D-O2-2)', () => {

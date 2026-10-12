@@ -1832,5 +1832,27 @@ describe('Scale chip on the staged card', () => {
 
     expect(onApply).not.toHaveBeenCalled();
   });
+
+  it('renders "Parsed locally" badge when staged meal has source rules', () => {
+    const meal = {
+      ...makeStagedMeal(),
+      source: 'rules' as const,
+    };
+    render(<StagedMealCard {...baseProps} stagedMeal={meal} onUpdateStagedMeal={vi.fn()} />);
+    expect(screen.getByTestId('parsed-locally-badge')).toBeInTheDocument();
+    expect(screen.getByText('Parsed locally')).toBeInTheDocument();
+  });
+
+  it('renders lenient fallback review banner when confidence is lenient', () => {
+    const meal = {
+      ...makeStagedMeal(),
+      source: 'rules' as const,
+      confidence: 'lenient' as const,
+    };
+    render(<StagedMealCard {...baseProps} stagedMeal={meal} onUpdateStagedMeal={vi.fn()} />);
+    expect(screen.getByTestId('parsed-locally-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('lenient-fallback-banner')).toBeInTheDocument();
+    expect(screen.getByText('Please review macros before logging.')).toBeInTheDocument();
+  });
 });
 

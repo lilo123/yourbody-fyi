@@ -34,7 +34,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'Profile hydration query',
     },
   ],
@@ -93,7 +93,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'Coach user profile query',
     },
     {
@@ -107,7 +107,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'User profile header badge query',
     },
     {
@@ -133,7 +133,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'Profile permissions query',
     },
     {
@@ -172,7 +172,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'User profile query',
     },
   ],
@@ -198,7 +198,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'User profile query',
     },
     {
@@ -279,7 +279,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'Settings profile & macro goals query',
     },
   ],
@@ -300,7 +300,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'User profile query',
     },
     {
@@ -346,7 +346,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'Auth profile fetch query',
     },
   ],
@@ -354,7 +354,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'users',
       type: 'EXACT',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
       description: 'Deduplicated profile fetch query',
     },
     {
@@ -476,11 +476,18 @@ const SERVICED_QUERIES_REGISTRY = {
       description: 'Athlete active coach link query',
     },
   ],
+  'src/components/nutrition/customDishUnits.test.tsx': [
+    {
+      table: 'custom_dishes',
+      type: 'NO_PROJECTION_APPLIES',
+      description: 'Custom dish insert mutations only; no database select queries issued',
+    },
+  ],
   'src/components/nutrition/dishNotesSnapshot.test.tsx': [
     {
       table: 'custom_dishes',
       type: 'EXACT',
-      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit',
       description: 'Custom dishes list query with notes',
     },
     {
@@ -549,7 +556,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'custom_dishes',
       type: 'EXACT',
-      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit',
       description: 'Custom dishes list query with notes',
     },
     {

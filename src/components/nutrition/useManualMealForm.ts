@@ -13,6 +13,17 @@ export interface ManualMealStagedData {
   serving_unit: string;
 }
 
+export interface ManualMealPrefill {
+  name?: string;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  fiber?: number;
+  servingSize?: number;
+  servingUnit?: string;
+}
+
 export interface UseManualMealFormOptions {
   onStageMeal: (meal: ManualMealStagedData) => void;
 }
@@ -36,6 +47,23 @@ export function useManualMealForm({ onStageMeal }: UseManualMealFormOptions) {
     setManualCarbs('');
     setManualFat('');
     setManualFiber('');
+  };
+
+  const prefillForm = (prefill: ManualMealPrefill) => {
+    if (prefill.name !== undefined) {
+      setManualDishName(prefill.name);
+    }
+    setManualCalories(prefill.calories !== undefined ? prefill.calories : '');
+    setManualProtein(prefill.protein !== undefined ? prefill.protein : '');
+    setManualCarbs(prefill.carbs !== undefined ? prefill.carbs : '');
+    setManualFat(prefill.fat !== undefined ? prefill.fat : '');
+    setManualFiber(prefill.fiber !== undefined ? prefill.fiber : '');
+    if (prefill.servingSize !== undefined) {
+      setManualServingSize(prefill.servingSize);
+    }
+    if (prefill.servingUnit !== undefined) {
+      setManualServingUnit(prefill.servingUnit);
+    }
   };
 
   const handleManualSubmit = (e: FormEvent) => {
@@ -83,6 +111,7 @@ export function useManualMealForm({ onStageMeal }: UseManualMealFormOptions) {
     manualServingUnit,
     setManualServingUnit,
     resetManualForm,
+    prefillForm,
     handleManualSubmit,
   };
 }

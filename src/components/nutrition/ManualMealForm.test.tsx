@@ -417,4 +417,26 @@ describe('ManualMealForm', () => {
       expect(hint.textContent).toBe('');
     });
   });
+
+  describe('useManualMealForm prefillForm', () => {
+    it('prefills found macros and leaves missing macros empty (never 0)', () => {
+      const onStageMeal = vi.fn();
+      const { result } = renderHook(() => useManualMealForm({ onStageMeal }));
+
+      act(() => {
+        result.current.prefillForm({
+          name: 'Protein Shake',
+          calories: 180,
+          protein: 30,
+        });
+      });
+
+      expect(result.current.manualDishName).toBe('Protein Shake');
+      expect(result.current.manualCalories).toBe(180);
+      expect(result.current.manualProtein).toBe(30);
+      expect(result.current.manualCarbs).toBe('');
+      expect(result.current.manualFat).toBe('');
+      expect(result.current.manualFiber).toBe('');
+    });
+  });
 });
