@@ -378,7 +378,7 @@ describe('MealLogRow', () => {
     expect(screen.queryAllByTestId('meal-log-count-badge')).toHaveLength(0);
   });
 
-  describe('source badges (C4)', () => {
+  describe('source badges', () => {
     it('renders "Device" badge when log.source is "device"', () => {
       const deviceLog: NutritionLog = {
         ...log(null),

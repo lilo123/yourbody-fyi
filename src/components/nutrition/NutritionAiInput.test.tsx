@@ -435,7 +435,7 @@ describe('NutritionAiInput live regions and accessibility', () => {
     });
   });
 
-  describe('mode chip and menu (C2)', () => {
+  describe('mode chip and menu', () => {
     it('renders mode chip and toggles dropdown menu', () => {
       render(<NutritionAiInput {...defaultProps()} />);
       const chip = screen.getByTestId('parser-mode-chip');
@@ -458,7 +458,7 @@ describe('NutritionAiInput live regions and accessibility', () => {
     });
   });
 
-  describe('B5 unparseable feedback container', () => {
+  describe('unparseable feedback container', () => {
     it('shows unparseable reason line and both buttons when online in on_device mode', () => {
       const onAnalyze = vi.fn();
       const onSwitchToManual = vi.fn();
@@ -532,7 +532,7 @@ describe('NutritionAiInput live regions and accessibility', () => {
     });
   });
 
-  describe('C3 quota warning states', () => {
+  describe('quota warning states', () => {
     it('does not render quota warning when quota remaining > 5', () => {
       render(
         <NutritionAiInput

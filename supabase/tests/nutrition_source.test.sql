@@ -45,7 +45,7 @@ END;
 $$;
 SELECT pass('chk_nutrition_logs_source accepts device/ai/manual/null and rejects invalid values');
 
--- 3. Owner insert and select under authenticated role with RLS
+-- 3. Authenticated user insert and select with RLS
 DO $$
 DECLARE
   v_user_id uuid := gen_random_uuid();
@@ -53,7 +53,7 @@ DECLARE
   v_fetched_source text;
   v_fetched_version text;
 BEGIN
-  INSERT INTO auth.users (id, email) VALUES (v_user_id, 'owner_auth@test.com');
+  INSERT INTO auth.users (id, email) VALUES (v_user_id, 'user_auth@test.com');
 
   PERFORM set_config('role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', '{"role":"authenticated","sub":"' || v_user_id || '"}', true);
@@ -66,7 +66,7 @@ BEGIN
   WHERE id = v_log_id;
 
   IF v_fetched_source <> 'device' OR v_fetched_version <> '2026.10' THEN
-    RAISE EXCEPTION 'Owner select mismatch: expected device/2026.10, got %/%', v_fetched_source, v_fetched_version;
+    RAISE EXCEPTION 'User select mismatch: expected device/2026.10, got %/%', v_fetched_source, v_fetched_version;
   END IF;
 
   PERFORM set_config('role', 'postgres', true);
@@ -75,7 +75,7 @@ BEGIN
   DELETE FROM auth.users WHERE id = v_user_id;
 END;
 $$;
-SELECT pass('Authenticated owner can insert and select nutrition_logs with source and parser_version');
+SELECT pass('Authenticated user can insert and select nutrition_logs with source and parser_version');
 
 -- 4. Cross-user isolation under RLS
 DO $$

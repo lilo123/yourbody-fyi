@@ -281,7 +281,7 @@ export function useNutritionAi({
           }
         }
 
-        // B1: Auto mode, online: a lenient result whose only reason is ignored noise lines
+        // Auto mode, online: a lenient result whose only reason is ignored noise lines
         // is staged on device with the review banner. Modifier / range / conflict continues to AI.
         const isNoiseOnlyLenient =
           localResult.confidence === 'lenient' &&

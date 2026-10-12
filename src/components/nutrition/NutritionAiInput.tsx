@@ -204,7 +204,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
         </button>
       </div>
 
-      {/* Persistent Low / Exhausted Quota Warning (C3: <= 5 left, or 0) */}
+      {/* Persistent Low / Exhausted Quota Warning (<= 5 left, or 0) */}
       {quota && quota.remaining <= 5 && (
         <StatusBanner
           tone="info"
@@ -308,7 +308,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
           </p>
         )}
 
-        {/* B5 Unparseable Feedback in on_device mode or offline */}
+        {/* Unparseable Feedback in on_device mode or offline */}
         {Boolean(nlInput.trim() && !selectedPhoto && !canParseLocally && (parserMode === 'on_device' || !isOnline)) && (
           <div data-testid="unparseable-feedback-container" className="pt-1.5 space-y-1.5">
             <p

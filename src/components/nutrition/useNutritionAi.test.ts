@@ -378,7 +378,7 @@ describe('useNutritionAi quota exceeded handling', () => {
     expect(parseNutritionModule.parseNutrition).toHaveBeenCalledTimes(1);
   });
 
-  describe('B1 auto mode online routing for lenient text', () => {
+  describe('auto mode online routing for lenient text', () => {
     it('stages noise-only lenient text locally without calling AI', async () => {
       const mockParse = vi.spyOn(parseNutritionModule, 'parseNutrition');
 
