@@ -6150,6 +6150,30 @@ test.describe("Route-Wide Density & Tap Grid", () => {
         await page.close();
       }
     });
+
+    test(`type scale on / (logged-out landing) at ${width}px`, async ({ browser }) => {
+      const page = await browser.newPage({
+        viewport: { width, height: 844 },
+        deviceScaleFactor: 1,
+      });
+      try {
+        await page.goto("/");
+        await page.waitForLoadState("domcontentloaded");
+        await page.waitForTimeout(500);
+
+        const violations = await checkTypeScale(page.locator("body"), {
+          includeHeaderAndNav: true,
+          allowSizes16Plus: true,
+        });
+
+        expect(
+          violations,
+          `D43 type scale violations on / (landing) at ${width}px:\n${JSON.stringify(violations, null, 2)}`
+        ).toHaveLength(0);
+      } finally {
+        await page.close();
+      }
+    });
   }
 
   // 2. Tap Grid on every route at 320px
@@ -6299,6 +6323,75 @@ test.describe("Route-Wide Density & Tap Grid", () => {
         offenders,
         `Tap grid offenders on /coach at 320px:\n${JSON.stringify(offenders, null, 2)}`
       ).toHaveLength(0);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("Tap grid on / (logged-out landing) at 320px", async ({ browser }) => {
+    const page = await browser.newPage({
+      viewport: { width: 320, height: 844 },
+      deviceScaleFactor: 1,
+    });
+    try {
+      await page.goto("/");
+      await page.waitForLoadState("domcontentloaded");
+      await page.waitForTimeout(500);
+
+      const offenders = await checkRouteTapGrid(page, "/");
+      expect(
+        offenders,
+        `Tap grid offenders on / at 320px:\n${JSON.stringify(offenders, null, 2)}`
+      ).toHaveLength(0);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("Standalone mode at / renders app redirect, not landing at 320px", async ({ browser }) => {
+    const page = await browser.newPage({
+      viewport: { width: 320, height: 844 },
+      deviceScaleFactor: 1,
+    });
+    try {
+      await page.addInitScript(() => {
+        const originalMatchMedia = window.matchMedia;
+        window.matchMedia = (query: string) => {
+          if (query === "(display-mode: standalone)") {
+            return {
+              matches: true,
+              media: query,
+              onchange: null,
+              addListener: () => {},
+              removeListener: () => {},
+              addEventListener: () => {},
+              removeEventListener: () => {},
+              dispatchEvent: () => false,
+            } as unknown as MediaQueryList;
+          }
+          return originalMatchMedia ? originalMatchMedia.call(window, query) : ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addListener: () => {},
+            removeListener: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false,
+          } as unknown as MediaQueryList);
+        };
+      });
+
+      await page.goto("/");
+      await page.waitForURL("**/login");
+      await page.waitForLoadState("domcontentloaded");
+
+      const headline = page.getByRole("heading", {
+        level: 1,
+        name: /You know your workout\. We just help you track it\./i,
+      });
+      await expect(headline).not.toBeVisible();
+      await expect(page.locator('input[type="email"]')).toBeVisible();
     } finally {
       await page.close();
     }
