@@ -373,7 +373,10 @@ describe('WorkoutSessionHistory', () => {
     expect(screen.queryByTestId('pending-mark')).toBeNull();
   });
 
-  it('renders a share icon button on expanded workout session card', () => {
+  it('renders a "Share workout" item in the session overflow menu and triggers sharing on select', async () => {
+    const shareStoryModule = await import('../../utils/workoutStoryShare');
+    const shareSpy = vi.spyOn(shareStoryModule, 'shareWorkoutStory').mockResolvedValue(undefined);
+
     render(
       <MemoryRouter>
         <WorkoutSessionHistory
@@ -387,15 +390,23 @@ describe('WorkoutSessionHistory', () => {
       </MemoryRouter>
     );
 
-    // Collapsed at rest: share button not rendered to preserve virtualization DOM node budget
-    expect(screen.queryByTestId('share-session-btn-session-1')).toBeNull();
+    // Open overflow menu for Leg Day
+    const overflowTrigger = screen.getByRole('button', { name: /Session actions for Leg Day/i });
+    fireEvent.click(overflowTrigger);
 
-    // Expand session 1
-    fireEvent.click(screen.getByTestId('expand-session-btn-session-1'));
+    const shareBtn = screen.getByTestId('share-session-session-1');
+    expect(shareBtn).toBeDefined();
+    expect(shareBtn.textContent).toContain('Share workout');
 
-    const shareBtn1 = screen.getByTestId('share-session-btn-session-1');
-    expect(shareBtn1).toBeDefined();
-    expect(shareBtn1.getAttribute('aria-label')).toBe('Share workout');
+    fireEvent.click(shareBtn);
+    expect(shareSpy).toHaveBeenCalledWith(
+      mockSessions[0],
+      [],
+      'lb',
+      expect.any(Function)
+    );
+
+    shareSpy.mockRestore();
   });
 });
 

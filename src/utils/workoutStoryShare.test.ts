@@ -1,16 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { WorkoutSessionShareButton } from './WorkoutSessionShareButton';
-import type { HistorySession } from './useWorkoutHistory';
+import { shareWorkoutStory } from './workoutStoryShare';
+import type { HistorySession } from '../components/history/useWorkoutHistory';
 
-const mockShowToast = vi.fn();
-vi.mock('../../hooks/useToast', () => ({
-  useToast: () => ({
-    show: mockShowToast,
-  }),
-}));
-
-describe('WorkoutSessionShareButton component', () => {
+describe('shareWorkoutStory utility', () => {
   const sampleSession: HistorySession = {
     id: 'test-session-123',
     name: 'Upper Body Blast',
@@ -38,6 +30,7 @@ describe('WorkoutSessionShareButton component', () => {
 
   const mockBlob = new Blob(['mock-png-binary'], { type: 'image/png' });
   const mockRenderToBlob = vi.fn().mockResolvedValue(mockBlob);
+  const mockShowToast = vi.fn();
 
   let originalNavigatorShare: typeof navigator.share;
   let originalNavigatorCanShare: typeof navigator.canShare;
@@ -61,21 +54,6 @@ describe('WorkoutSessionShareButton component', () => {
     });
   });
 
-  it('renders a 44px touch target icon button with "Share workout" aria-label', () => {
-    render(
-      <WorkoutSessionShareButton
-        session={sampleSession}
-        deps={{ renderToBlob: mockRenderToBlob }}
-      />
-    );
-
-    const button = screen.getByTestId('share-session-btn-test-session-123');
-    expect(button).toBeDefined();
-    expect(button.getAttribute('aria-label')).toBe('Share workout');
-    expect(button.className).toContain('min-w-[44px]');
-    expect(button.className).toContain('min-h-[44px]');
-  });
-
   it('calls navigator.share with a File of type image/png when canShare is true', async () => {
     const mockShare = vi.fn().mockResolvedValue(undefined);
     const mockCanShare = vi.fn().mockReturnValue(true);
@@ -91,25 +69,17 @@ describe('WorkoutSessionShareButton component', () => {
       writable: true,
     });
 
-    render(
-      <WorkoutSessionShareButton
-        session={sampleSession}
-        unit="lb"
-        deps={{ renderToBlob: mockRenderToBlob }}
-      />
+    await shareWorkoutStory(
+      sampleSession,
+      [],
+      'lb',
+      mockShowToast,
+      { renderToBlob: mockRenderToBlob }
     );
 
-    const button = screen.getByTestId('share-session-btn-test-session-123');
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(mockRenderToBlob).toHaveBeenCalledTimes(1);
-    });
-
-    await waitFor(() => {
-      expect(mockCanShare).toHaveBeenCalledTimes(1);
-      expect(mockShare).toHaveBeenCalledTimes(1);
-    });
+    expect(mockRenderToBlob).toHaveBeenCalledTimes(1);
+    expect(mockCanShare).toHaveBeenCalledTimes(1);
+    expect(mockShare).toHaveBeenCalledTimes(1);
 
     const shareCallArgs = mockShare.mock.calls[0][0];
     expect(shareCallArgs.title).toBe('Upper Body Blast');
@@ -143,28 +113,20 @@ describe('WorkoutSessionShareButton component', () => {
 
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-    render(
-      <WorkoutSessionShareButton
-        session={sampleSession}
-        unit="lb"
-        deps={{ renderToBlob: mockRenderToBlob }}
-      />
+    await shareWorkoutStory(
+      sampleSession,
+      [],
+      'lb',
+      mockShowToast,
+      { renderToBlob: mockRenderToBlob }
     );
 
-    const button = screen.getByTestId('share-session-btn-test-session-123');
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(mockRenderToBlob).toHaveBeenCalledTimes(1);
-    });
-
-    await waitFor(() => {
-      expect(mockCanShare).toHaveBeenCalledTimes(1);
-      expect(mockShare).not.toHaveBeenCalled();
-      expect(clickSpy).toHaveBeenCalledTimes(1);
-      expect(mockCreateObjectURL).toHaveBeenCalledWith(mockBlob);
-      expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/test-uuid');
-    });
+    expect(mockRenderToBlob).toHaveBeenCalledTimes(1);
+    expect(mockCanShare).toHaveBeenCalledTimes(1);
+    expect(mockShare).not.toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(mockCreateObjectURL).toHaveBeenCalledWith(mockBlob);
+    expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/test-uuid');
 
     clickSpy.mockRestore();
   });
@@ -187,41 +149,32 @@ describe('WorkoutSessionShareButton component', () => {
       writable: true,
     });
 
-    render(
-      <WorkoutSessionShareButton
-        session={sampleSession}
-        deps={{ renderToBlob: mockRenderToBlob }}
-      />
+    await shareWorkoutStory(
+      sampleSession,
+      [],
+      'lb',
+      mockShowToast,
+      { renderToBlob: mockRenderToBlob }
     );
 
-    const button = screen.getByTestId('share-session-btn-test-session-123');
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(mockShare).toHaveBeenCalledTimes(1);
-    });
-
+    expect(mockShare).toHaveBeenCalledTimes(1);
     expect(mockShowToast).not.toHaveBeenCalled();
   });
 
   it('shows error toast when rendering or sharing fails with an unexpected error', async () => {
     const errorRenderer = vi.fn().mockRejectedValue(new Error('Canvas render failure'));
 
-    render(
-      <WorkoutSessionShareButton
-        session={sampleSession}
-        deps={{ renderToBlob: errorRenderer }}
-      />
+    await shareWorkoutStory(
+      sampleSession,
+      [],
+      'lb',
+      mockShowToast,
+      { renderToBlob: errorRenderer }
     );
 
-    const button = screen.getByTestId('share-session-btn-test-session-123');
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(mockShowToast).toHaveBeenCalledWith({
-        message: 'Failed to share workout',
-        kind: 'info',
-      });
+    expect(mockShowToast).toHaveBeenCalledWith({
+      message: 'Failed to share workout',
+      kind: 'info',
     });
   });
 });
