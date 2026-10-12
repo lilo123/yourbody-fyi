@@ -327,6 +327,7 @@ export const WorkoutEngine: React.FC = () => {
         workoutDate={workoutDate}
         onDateChange={handleDateChange}
         onClearWorkout={() => setIsClearConfirmOpen(true)}
+        restTimerSeconds={restTimerSeconds}
       />
 
       {/* Logs Read Error Banner */}

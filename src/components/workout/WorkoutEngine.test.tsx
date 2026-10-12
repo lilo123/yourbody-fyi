@@ -898,6 +898,44 @@ describe('WorkoutEngine', () => {
     expect(screen.getByTestId('rest-timer-display').textContent).toBe('1:30');
   });
 
+  it('header rest timer uses profile rest_timer_seconds (120) over local copy (60)', async () => {
+    localStorage.setItem('yourbody_rest_timer_seconds', '60');
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'users') {
+        return createSupabaseBuilder('users', {
+          data: {
+            id: '00000000-0000-4000-8000-000000000001',
+            email: 'athlete@example.com',
+            username: 'athlete',
+            role: 'athlete',
+            rest_timer_seconds: 120,
+          },
+          error: null,
+        });
+      }
+      if (table === 'workouts') {
+        return createSupabaseBuilder('workouts', { data: [{ id: 'workout-1' }], error: null });
+      }
+      return createSupabaseBuilder(table, { data: [], error: null });
+    });
+
+    renderComponent();
+    await selectWorkoutA();
+
+    // Verify floating rest timer is initially NOT visible
+    expect(screen.queryByTestId('rest-timer-pill')).toBeNull();
+
+    // Clicking manual rest timer in header launches timer
+    const manualRestBtn = screen.getByTestId('rest-timer-btn');
+    fireEvent.click(manualRestBtn);
+
+    // Timer is now active and pill displayed with 2:00 (120s)
+    expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
+    expect(screen.getByTestId('rest-timer-display').textContent).toBe('2:00');
+    expect(restTimerStore.getSnapshot().remainingSeconds).toBe(120);
+  });
+
   it('switches to custom routine with empty exercises and correctly clears active exercises without stale state', async () => {
     (supabase.from as any).mockImplementation((table: string) => {
       if (table === 'routine_templates') {
