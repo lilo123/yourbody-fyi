@@ -15,6 +15,7 @@ import {
   scaleStagedMeal,
   getScrollBehavior,
   useNavHeight,
+  formatLenientHint,
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
@@ -211,6 +212,10 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
 
   const isMultiItem = stagedMeal.items && stagedMeal.items.length > 1;
   const macroColumns = computeVisibleMacroColumns(stagedMeal.items);
+  const lenientHint =
+    stagedMeal.confidence === 'lenient'
+      ? formatLenientHint(stagedMeal.skippedLines, stagedMeal.modifiers)
+      : null;
 
   return (
     <div
@@ -293,9 +298,14 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
           {stagedMeal.confidence === 'lenient' && (
             <div
               data-testid="lenient-fallback-banner"
-              className="flex items-center gap-1.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1"
+              className="flex flex-col gap-0.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1"
             >
               <span>Please review macros before logging.</span>
+              {lenientHint && (
+                <span data-testid="lenient-hint" className="text-amber-300/80 truncate">
+                  {lenientHint}
+                </span>
+              )}
             </div>
           )}
         </div>

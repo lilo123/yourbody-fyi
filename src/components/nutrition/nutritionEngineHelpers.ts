@@ -225,6 +225,10 @@ export interface StagedMeal {
   captureDate?: string;
   /** AI queue item ID if staged from AI queue */
   aiqItemId?: string;
+  /** Lines skipped during rule-based parsing */
+  skippedLines?: string[];
+  /** Modifiers detected during rule-based parsing */
+  modifiers?: string[];
 }
 
 let itemSequence = 0;
@@ -670,3 +674,35 @@ export function useStagedCardFocus(isStaged: boolean) {
     },
   };
 }
+
+/**
+ * Format a short one-line hint (max ~60 chars) explaining why a parse result
+ * is lenient, based on skipped lines or detected modifiers.
+ */
+export function formatLenientHint(
+  skippedLines?: string[],
+  modifiers?: string[]
+): string | null {
+  const firstSkipped = skippedLines?.find((line) => line.trim().length > 0)?.trim();
+  if (firstSkipped) {
+    const prefix = 'Skipped: ';
+    const maxLen = 60;
+    const available = maxLen - prefix.length;
+    const singleLine = firstSkipped.replace(/\r?\n/g, ' ');
+    const truncated =
+      singleLine.length > available ? `${singleLine.slice(0, available - 3)}...` : singleLine;
+    return `${prefix}${truncated}`;
+  }
+  const firstModifier = modifiers?.find((modifier) => modifier.trim().length > 0)?.trim();
+  if (firstModifier) {
+    const prefix = 'Modifier: ';
+    const maxLen = 60;
+    const available = maxLen - prefix.length;
+    const singleLine = firstModifier.replace(/\r?\n/g, ' ');
+    const truncated =
+      singleLine.length > available ? `${singleLine.slice(0, available - 3)}...` : singleLine;
+    return `${prefix}${truncated}`;
+  }
+  return null;
+}
+

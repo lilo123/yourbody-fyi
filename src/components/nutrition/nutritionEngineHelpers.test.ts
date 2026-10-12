@@ -9,6 +9,7 @@ import {
   useStagedCardFocus,
   isIdenticalItem,
   mergeOrAppendStagedItems,
+  formatLenientHint,
   type StagedItem,
 } from './nutritionEngineHelpers';
 import { scaleItemToQuantity } from '../../utils/itemModel';
@@ -1245,3 +1246,44 @@ describe('isIdenticalItem and mergeOrAppendStagedItems', () => {
     });
   });
 });
+
+describe('formatLenientHint', () => {
+  it('returns null when skippedLines and modifiers are empty or undefined', () => {
+    expect(formatLenientHint(undefined, undefined)).toBeNull();
+    expect(formatLenientHint([], [])).toBeNull();
+    expect(formatLenientHint(['   '], ['   '])).toBeNull();
+  });
+
+  it('formats skipped line with "Skipped: " prefix', () => {
+    const hint = formatLenientHint(['Dressing on the side']);
+    expect(hint).toBe('Skipped: Dressing on the side');
+    expect(hint!.length).toBeLessThanOrEqual(60);
+  });
+
+  it('truncates a long skipped line so the total hint does not exceed 60 characters', () => {
+    const longLine = 'This is an exceedingly long unrecognized line describing arbitrary details about the recipe and preparation method';
+    const hint = formatLenientHint([longLine]);
+    expect(hint).toBeDefined();
+    expect(hint!.startsWith('Skipped: ')).toBe(true);
+    expect(hint!.endsWith('...')).toBe(true);
+    expect(hint!.length).toBeLessThanOrEqual(60);
+  });
+
+  it('formats modifier with "Modifier: " prefix when no skipped line is present', () => {
+    const hint = formatLenientHint([], ['ate half']);
+    expect(hint).toBe('Modifier: ate half');
+    expect(hint!.length).toBeLessThanOrEqual(60);
+  });
+
+  it('prioritizes skipped line over modifier when both are present', () => {
+    const hint = formatLenientHint(['Extra croutons'], ['ate half']);
+    expect(hint).toBe('Skipped: Extra croutons');
+  });
+
+  it('flattens multiline text to a single line', () => {
+    const hint = formatLenientHint(['First part\nSecond part']);
+    expect(hint).toBe('Skipped: First part Second part');
+    expect(hint!.includes('\n')).toBe(false);
+  });
+});
+

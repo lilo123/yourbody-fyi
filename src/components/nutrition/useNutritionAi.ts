@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { CustomDish } from '../../types/database';
 import { formatCalories } from '../../utils/nutrition';
 import { parseNutritionText } from '../../lib/nutrition/localParse';
-import { buildStagedItem, type StagedMeal } from './nutritionEngineHelpers';
+import { buildStagedItem, recomputeStagedTotals, type StagedMeal } from './nutritionEngineHelpers';
 import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
 import type { ManualMealPrefill } from './useManualMealForm';
@@ -29,6 +29,41 @@ function buildStagedMealFromLocal(
 ): StagedMeal | null {
   const parsed = localResult.meal;
   if (!parsed) return null;
+
+  if (parsed.items && parsed.items.length > 1) {
+    const stagedItems = parsed.items.map((item) =>
+      buildStagedItem({
+        name: item.name,
+        portion: item.portion || '1 serving',
+        calories: item.calories,
+        protein: item.protein,
+        carbs: item.carbs,
+        fat: item.fat,
+        fiber: item.fiber,
+      })
+    );
+    const totals = recomputeStagedTotals(stagedItems);
+    const macroSummary = `Total: ${totals.calories} kcal | ${totals.protein}g P | ${totals.carbs}g C | ${totals.fat}g F | ${totals.fiber}g Fiber`;
+    return {
+      name: parsed.name || 'Meal',
+      mealType: 'Breakfast',
+      explanation: totals.explanation ? `${totals.explanation} | ${macroSummary}` : macroSummary,
+      items: stagedItems,
+      calories: totals.calories,
+      protein: totals.protein,
+      carbs: totals.carbs,
+      fat: totals.fat,
+      fiber: totals.fiber,
+      servingSize: parsed.servingSize ?? 1,
+      servingUnit: parsed.servingUnit ?? 'serving',
+      source: 'local',
+      confidence,
+      rawText: text.trim(),
+      skippedLines: localResult.skippedLines,
+      modifiers: localResult.modifiers,
+    };
+  }
+
   const stagedItem = buildStagedItem({
     name: parsed.name || 'Meal',
     portion:
@@ -59,6 +94,8 @@ function buildStagedMealFromLocal(
     source: 'local',
     confidence,
     rawText: text.trim(),
+    skippedLines: localResult.skippedLines,
+    modifiers: localResult.modifiers,
   };
 }
 
@@ -158,7 +195,7 @@ export function useNutritionAi({
         const localResult = parseNutritionText(textToAnalyze.trim());
         const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
 
-        if (localResult.confidence === 'exact' && isSingle && localResult.meal) {
+        if (localResult.confidence === 'exact' && localResult.meal) {
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
           if (meal) {
             setStatus('Parsed locally');
@@ -195,7 +232,7 @@ export function useNutritionAi({
           const localResult = parseNutritionText(textToAnalyze.trim());
           const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
 
-          if (localResult.confidence === 'exact' && isSingle && localResult.meal) {
+          if (localResult.confidence === 'exact' && localResult.meal) {
             const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
             if (meal) {
               setStatus('Parsed locally');
@@ -231,8 +268,8 @@ export function useNutritionAi({
         const localResult = parseNutritionText(textToAnalyze.trim());
         const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
 
-        // Exact single item: stage locally, zero network (both online and offline)
-        if (localResult.confidence === 'exact' && isSingle && localResult.meal) {
+        // Exact breakdown (single or multi-item): stage locally, zero network (both online and offline)
+        if (localResult.confidence === 'exact' && localResult.meal) {
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
           if (meal) {
             setIsAnalyzing(false);
@@ -297,6 +334,14 @@ export function useNutritionAi({
         forceAi: effectiveForceAi,
       });
 
+      let localSkippedLines: string[] | undefined;
+      let localModifiers: string[] | undefined;
+      if (parsed.confidence === 'lenient' && textToAnalyze.trim() && !selectedPhoto) {
+        const local = parseNutritionText(textToAnalyze.trim());
+        localSkippedLines = local.skippedLines;
+        localModifiers = local.modifiers;
+      }
+
       const meal = {
         name: parsed.name || textToAnalyze || (selectedPhoto ? 'Meal Photo' : 'Meal'),
         mealType: 'Breakfast',
@@ -317,6 +362,8 @@ export function useNutritionAi({
         source: parsed.source === 'rules' ? 'rules' : 'ai',
         confidence: parsed.confidence,
         rawText: textToAnalyze.trim(),
+        skippedLines: localSkippedLines,
+        modifiers: localModifiers,
       } as StagedMeal;
 
       setIsRateLimited(false);
