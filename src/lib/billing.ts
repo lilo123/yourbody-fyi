@@ -151,3 +151,31 @@ export async function openBillingPortal(): Promise<BillingResult> {
     return { ok: false, success: false, error: message };
   }
 }
+
+export interface SyncBillingEmailResult {
+  ok: boolean;
+  synced?: boolean;
+  reason?: string;
+  error?: string;
+}
+
+export async function syncBillingEmail(): Promise<SyncBillingEmailResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke('sync-billing-email');
+
+    if (error) {
+      console.warn('[billing] Failed to sync billing email:', error);
+      return { ok: false, error: error.message || 'Failed to sync billing email' };
+    }
+
+    return {
+      ok: true,
+      synced: data?.synced,
+      reason: data?.reason,
+    };
+  } catch (err: any) {
+    console.warn('[billing] Error invoking sync-billing-email:', err);
+    return { ok: false, error: err?.message || 'Error syncing billing email' };
+  }
+}
+

@@ -35,10 +35,15 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
 }) => {
   const baseId = useId();
   const caloriesId = `${baseId}-calories`;
+  const caloriesUnitId = `${baseId}-calories-unit`;
   const proteinId = `${baseId}-protein`;
+  const proteinUnitId = `${baseId}-protein-unit`;
   const carbsId = `${baseId}-carbs`;
+  const carbsUnitId = `${baseId}-carbs-unit`;
   const fatId = `${baseId}-fat`;
+  const fatUnitId = `${baseId}-fat-unit`;
   const fiberId = `${baseId}-fiber`;
+  const fiberUnitId = `${baseId}-fiber-unit`;
 
   return (
     <form
@@ -55,7 +60,7 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="col-span-2 sm:col-span-1">
           <label htmlFor={caloriesId} className="block text-xs font-bold text-amber-400 uppercase tracking-wider mb-1">
-            Calories (kcal)
+            Calories
           </label>
           <input
             id={caloriesId}
@@ -63,13 +68,17 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
             inputMode="numeric"
             value={targetCalories}
             onChange={(e) => setTargetCalories(Number(e.target.value))}
-            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
+            aria-describedby={caloriesUnitId}
+            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
           />
+          <span id={caloriesUnitId} className="block text-xs text-zinc-400 italic text-center mt-1">
+            kcal
+          </span>
         </div>
         <div className="col-span-1 sm:col-span-1">
           <label htmlFor={proteinId} className="block text-xs font-bold text-cyan-400 uppercase tracking-wider mb-1">
-            Protein (g)
+            Protein
           </label>
           <input
             id={proteinId}
@@ -77,13 +86,17 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
             inputMode="decimal"
             value={targetProtein}
             onChange={(e) => setTargetProtein(Number(e.target.value))}
-            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
+            aria-describedby={proteinUnitId}
+            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
           />
+          <span id={proteinUnitId} className="block text-xs text-zinc-400 italic text-center mt-1">
+            g
+          </span>
         </div>
         <div className="col-span-1 sm:col-span-1">
           <label htmlFor={carbsId} className="block text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
-            Carbs (g)
+            Carbs
           </label>
           <input
             id={carbsId}
@@ -91,13 +104,17 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
             inputMode="decimal"
             value={targetCarbs}
             onChange={(e) => setTargetCarbs(Number(e.target.value))}
-            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
+            aria-describedby={carbsUnitId}
+            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
           />
+          <span id={carbsUnitId} className="block text-xs text-zinc-400 italic text-center mt-1">
+            g
+          </span>
         </div>
         <div className="col-span-1 sm:col-span-1">
           <label htmlFor={fatId} className="block text-xs font-bold text-violet-400 uppercase tracking-wider mb-1">
-            Fat (g)
+            Fat
           </label>
           <input
             id={fatId}
@@ -105,13 +122,17 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
             inputMode="decimal"
             value={targetFat}
             onChange={(e) => setTargetFat(Number(e.target.value))}
-            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
+            aria-describedby={fatUnitId}
+            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
           />
+          <span id={fatUnitId} className="block text-xs text-zinc-400 italic text-center mt-1">
+            g
+          </span>
         </div>
         <div className="col-span-1 sm:col-span-1">
           <label htmlFor={fiberId} className="block text-xs font-bold text-teal-400 uppercase tracking-wider mb-1">
-            Fiber (g)
+            Fiber
           </label>
           <input
             id={fiberId}
@@ -119,9 +140,13 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
             inputMode="decimal"
             value={targetFiber}
             onChange={(e) => setTargetFiber(Number(e.target.value))}
-            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
+            aria-describedby={fiberUnitId}
+            className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
           />
+          <span id={fiberUnitId} className="block text-xs text-zinc-400 italic text-center mt-1">
+            g
+          </span>
         </div>
       </div>
 

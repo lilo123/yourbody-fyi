@@ -5,6 +5,7 @@ import { useToast } from '../../hooks/useToast';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { StatusBanner } from '../common/StatusBanner';
 import { MIN_PASSWORD_LENGTH } from '../../constants/auth';
+import { syncBillingEmail } from '../../lib/billing';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -83,6 +84,11 @@ export const AccountCard: React.FC = () => {
             message: 'Email updated',
             kind: 'success',
           });
+          if (isOnline) {
+            void syncBillingEmail().catch((err) => {
+              console.warn('[AccountCard] Failed to sync billing email:', err);
+            });
+          }
         }
       };
       void handleReturn();
@@ -93,7 +99,7 @@ export const AccountCard: React.FC = () => {
     const newUrl =
       window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
     window.history.replaceState({}, '', newUrl);
-  }, [refreshSession, refreshProfile, showToast, user]);
+  }, [refreshSession, refreshProfile, showToast, user, isOnline]);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

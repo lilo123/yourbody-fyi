@@ -176,6 +176,17 @@ To support early adopters during the introduction of subscription plans, migrati
 ### Overview
 Stripe integration provides serverless edge functions for checkout session generation, customer portal navigation, and subscription webhook processing. This implementation operates in test mode on staging environments. Live keys are strictly refused by design unless `STRIPE_LIVE_ENABLED=true` is set.
 
+### API Versioning & Configuration
+Edge functions are pinned to Stripe API version **`2026-09-30.endive`**, ensuring API call responses and webhook event payloads operate on the identical schema:
+- **Shared SDK Configuration**: `supabase/functions/_shared/stripeConfig.ts` exports `STRIPE_API_VERSION = "2026-09-30.endive"` and passes it as `apiVersion` when constructing `Stripe` client instances.
+- **Direct HTTP Requests**: `supabase/functions/delete-account/index.ts` explicitly includes the `Stripe-Version: 2026-09-30.endive` header on all direct `fetch` calls to Stripe subscription endpoints.
+- **Webhook Endpoint**: Staging and production webhook endpoints in the Stripe Dashboard are configured to `2026-09-30.endive`.
+
+#### How to Bump the Stripe API Version
+1. Update `STRIPE_API_VERSION` in `supabase/functions/_shared/stripeConfig.ts` and `supabase/functions/delete-account/index.ts` together.
+2. In the Stripe Dashboard (**Developers > Webhooks**), update the webhook endpoint API version to match the new version.
+3. Run the automated test suites (`npm run test:deno`, `npx vitest run`) and execute the staging end-to-end billing tests before deploying functions.
+
 ### Subscription Tiers and Pricing Architecture
 
 The application supports three subscription tiers mapped to database `plan` and `coach_tier` values:
@@ -215,6 +226,19 @@ All edge functions are configured in `supabase/config.toml` and execute in the S
    - **Method**: `POST`
    - **Signature Verification**: Verifies incoming `Stripe-Signature` header against the raw body using `stripe.webhooks.constructEventAsync()` with `STRIPE_WEBHOOK_SECRET` and `Stripe.createSubtleCryptoProvider()`. Returns `400` (`{ "error": "Invalid signature" }`) on verification failure without leaking details.
    - **Endpoint Path**: `/functions/v1/stripe-webhook`
+
+4. **`sync-billing-email`** (`verify_jwt = true`):
+   - **Method**: `POST`
+   - **Auth**: Requires valid Supabase user JWT via `Authorization: Bearer <token>`. Caller authenticated via `userClient.auth.getUser()`. Always uses the confirmed email from Auth; any email in the request body is strictly ignored.
+   - **Why**: Keeps the Stripe customer's email in sync when a user updates their confirmed account email, ensuring payment receipts and invoices reach their current address without relying on external webhooks. Note that the Stripe Customer Portal (`create-portal-session`) also allows users to directly edit their billing email.
+   - **Behavior**:
+     - Inspects `users.billing_customer_id` via `service_role`. If the user has no customer ID, returns `200 { "synced": false, "reason": "no_customer" }`.
+     - Validates Stripe configuration via `resolveStripeConfig` (returns `503` if unconfigured or live keys are refused).
+     - Retrieves the customer from Stripe (`GET /v1/customers/{id}`). If the customer is deleted or returns 404, returns `200 { "synced": false, "reason": "no_customer" }`.
+     - If `customer.email` already equals the confirmed auth email, returns `200 { "synced": false, "reason": "unchanged" }`.
+     - Otherwise updates the customer email in Stripe (`POST /v1/customers/{id}`) and returns `200 { "synced": true }`.
+     - Stripe communication or API errors return `502 { "code": "stripe_error" }`.
+     - Operates strictly with a single retrieval and optional update per request with no retry loops.
 
 ### Secrets and Environment Configuration
 The following environment secrets must be configured in Supabase (values reside on staging only; production retains none):
@@ -256,10 +280,13 @@ When using a Stripe restricted API key (`rk_live_...` or `rk_test_...`), the key
 - `GET /v1/prices/{id}`: `Prices: Read` (retrieves price details for fallback price validation and webhook lookup resolution)
 - `POST /v1/checkout/sessions`: `Checkout Sessions: Write` (creates customer checkout sessions)
 - `POST /v1/billing_portal/sessions`: `Customer Portal: Write` (creates customer billing portal sessions)
+- `GET /v1/customers/{id}`: `Customers: Read` (retrieves customer to inspect existing email)
+- `POST /v1/customers/{id}`: `Customers: Write` (updates customer billing email in sync-billing-email)
 - `GET /v1/subscriptions`: `Subscriptions: Read` (lists customer subscriptions for cleanup and resolution)
 - `GET /v1/subscriptions/{id}`: `Subscriptions: Read` (retrieves subscription line details)
 - `DELETE /v1/subscriptions/{id}`: `Subscriptions: Write` (cancels subscriptions upon account deletion, full refunds, or charge disputes)
 - `GET /v1/invoices/{id}`: `Invoices: Read` (retrieves invoice payment targets)
+- `GET /v1/invoice_payments`: `Invoices: Read` (resolves invoice from PaymentIntent on API version 2026-09-30.endive during refund/dispute auto-cancellation)
 - `GET /v1/charges/{id}`: `Charges: Read` (resolves charge dispute targets and refund states)
 - `GET /v1/payment_intents/{id}`: `PaymentIntents: Read` (inspects payment intent charges and keep_access metadata)
 - `GET /v1/refunds`: `Refunds: Read` (lists charge refunds to check keep_access metadata)
@@ -274,10 +301,41 @@ The webhook listener at `/functions/v1/stripe-webhook` handles the following eve
   - Unknown price: Leaves user records unchanged (never writes `paid_until` without a plan).
   - Mode validation: Enforces price `livemode === config.isLive` on retrieved prices.
   - Updates `public.users` with `plan`, `coach_tier`, and `paid_until` to the period end timestamp (`line.period.end` or `period_end`). Before writing entitlement grants, inspects the invoice payment (via `invoice.payments`, `charge`, or `payment_intent`) and skips the grant if the payment is disputed (`charge.disputed === true`) or fully refunded (`amount_refunded === amount` without `keep_access`), recording the processed event in `billing_events` without re-granting access. If the user has an active grant in `public.billing_grandfather` (`granted_until > now()`), preserves the higher tier (`pro` > `basic`), higher coach_tier (`enterprise` > `pro` > `free`), and extends `paid_until = greatest(current paid_until, period end)`. A Personal purchase by a non-grandfathered Coach writes `plan = 'basic'` and `coach_tier = 'free'`.
+- `customer.subscription.updated`: Handles plan switching between Personal, Coach, and Coach Pro. When a subscription item price changes, resolves `(plan, coach_tier)` from the new price and updates `public.users` immediately. Preserves `paid_until = greatest(current paid_until, subscription.current_period_end)` so upgrades grant immediate tier access and downgrades preserve prepaid time. Grandfathered users retain their higher tier and grandfather expiration via the grandfather entitlement helper. Status-only updates (e.g. `cancel_at_period_end` toggles) and unknown prices perform no writes to `public.users`. Terminal statuses (`canceled`, `incomplete_expired`) and delinquency statuses (`past_due`, `unpaid`) make no access modifications here.
 - `customer.subscription.deleted`: Leaves `paid_until` as-is, granting the user access through the end of the prepaid period with no plan modification.
 - `charge.refunded`: Revokes access on full refunds (`amount_refunded === amount`) unless `keep_access` metadata is present; immediately cancels the related Stripe subscription without proration (`prorate=false`, `invoice_now=false`). Partial refunds leave access and subscription unchanged.
 - `charge.dispute.created`: Resolves the customer via the dispute's charge, revokes access, immediately cancels the related Stripe subscription without proration, and records the event in `billing_events` with the resolved `user_id`. The staging webhook endpoint must subscribe to `charge.dispute.created`.
 - Unhandled/unknown event types: Recorded in `billing_events`, marked as processed, and acknowledged with `200` (`{ "ignored": true }`). Note that `charge.dispute.closed` is not subscribed.
+
+### Plan Switching
+
+#### Overview
+Subscribers can upgrade or downgrade between tiers (Personal <-> Coach <-> Coach Pro) via the Stripe Customer Portal or Checkout. Plan switches trigger two webhook events in Stripe:
+1. `customer.subscription.updated`: Arrives immediately when the subscription's item price is updated.
+2. `invoice.paid`: Arrives when Stripe issues and collects the prorated invoice (`billing_reason = 'subscription_update'`).
+
+#### Immediate Access and Prepaid Time Preservation
+- **Immediate Tier Activation**: When `customer.subscription.updated` arrives with a new price, the webhook maps the price to `(plan, coach_tier)` and writes them immediately to `public.users`. An upgrading user gains immediate access to higher athlete capacities and AI quotas without waiting for invoice finalization.
+- **Non-destructive Period Retention**: `paid_until` is updated as `greatest(current paid_until, subscription.current_period_end)`. Mid-period upgrades extend access to the new period end; mid-period downgrades keep prepaid time intact, never shortening access the user has already paid for.
+- **Grandfather Protection**: For users with an active grant in `public.billing_grandfather` (`granted_until > now()`), plan switching retains the higher plan (`pro` > `basic`), higher coach tier (`enterprise` > `pro` > `free`), and greatest expiration timestamp (`2035-10-10T00:00:00Z`).
+- **Status & Non-price Updates**: If status is `canceled` or `incomplete_expired`, processing is deferred to `customer.subscription.deleted`. If status is `past_due` or `unpaid`, user records remain unchanged (entitlement is governed by `paid_until`). Status-only toggles (such as `cancel_at_period_end`) and unknown price IDs do not mutate `public.users`.
+- **Fault Tolerance**: Database or Stripe API errors return `502` and remove the uncompleted row from `public.billing_events`, allowing Stripe webhook retries to reprocess the event.
+
+#### Proration Invoicing (`invoice.paid`)
+When switching plans mid-cycle, Stripe calculates prorated credits and charges, generating an invoice with `billing_reason = 'subscription_update'`:
+- **Line Resolution**: The webhook resolves `(plan, coach_tier)` from the positive proration line (or subscription item fallback) and skips negative credit adjustments from overriding the new plan.
+- **Proration Period End**: To prevent prorated line intervals from shortening existing access periods, `invoice.paid` applies `greatest(current paid_until, line.period.end)` whenever `invoice.billing_reason === 'subscription_update'`.
+
+#### Owner Configuration: Enabling "Switch Plans" in Live Customer Portal
+By owner decision, the staging/sandbox Customer Portal currently keeps "Switch plans" disabled. When enabling plan switching in the production Stripe Customer Portal:
+1. Navigate to **Stripe Dashboard > Settings > Billing > Customer portal**.
+2. Under **Subscriptions**, check **Switch plans**.
+3. Under **Products**, add the three subscription products and their monthly/yearly prices:
+   - **Personal** (`personal_monthly`, `personal_yearly`)
+   - **Coach** (`coach_monthly`, `coach_yearly`)
+   - **Coach Pro** (`coach_pro_monthly`, `coach_pro_yearly`)
+4. Under **Proration behavior**:
+   - **Recommendation**: Select **"Always invoice immediately"**. Immediate invoicing automatically charges or credits the customer's payment method on file upon plan change, fires `invoice.paid`, and avoids carrying unbilled balances into future billing cycles.
 
 ### Refunds, Disputes, Auto-Cancellation and Won Disputes
 - **Full refund**: A full refund (`amount_refunded === amount` where `amount > 0`) revokes access by updating `paid_until = least(paid_until, now())` for the customer and immediately cancels the related Stripe subscription (`DELETE /v1/subscriptions/{id}` with `prorate=false` and `invoice_now=false`). Subscription resolution inspects charge -> payment intent -> invoice -> `parent.subscription_details.subscription`, falling back to the customer's active/trialing/past_due/unpaid subscriptions. If no subscription exists (e.g. one-off payment), cancellation is safely skipped.
@@ -298,6 +356,7 @@ The webhook listener at `/functions/v1/stripe-webhook` handles the following eve
   ```
 - **Grandfather-aware entitlement grants (`invoice.paid`)**: When processing `invoice.paid`, the webhook checks `public.billing_grandfather` for the target user. If an active grant exists (`granted_until > now()`), the update retains the higher plan tier (`pro` > `basic`), higher coach tier (`enterprise` > `pro` > `free`), and updates `paid_until = greatest(current paid_until, period_end)`. Users whose grant has expired (`granted_until <= now()`) or non-grandfathered users follow the standard plan and paid_until overwrite.
 - **Restricted API Key Permissions**: In addition to read permissions on Charges, Invoices, PaymentIntents, and Customers, the Stripe restricted key requires `Subscriptions: write` (specifically `DELETE /v1/subscriptions/{id}`) to enable automated subscription cancellation upon full refunds and disputes.
+- **Stripe Account Approvals Rules**: In the Stripe Dashboard (**Settings > Approvals**), rules on "Subscription canceled" and "Refund created" must be deactivated for this integration's key. If an active approval rule holds an automated cancellation for manual review (`err.code === 'approval_required'` or 400 "already an approval request"), the webhook logs the pending approval with the subscription ID (no PII), preserves the user access revocation, records the event as processed in `public.billing_events` (storing `cancel_pending_approval: true`), and returns `200` so Stripe terminates retries while awaiting review in the Dashboard.
 
 ### Idempotency and State Mutations
 Incoming webhook events are recorded in `public.billing_events`:
@@ -374,3 +433,55 @@ Configured in `supabase/config.toml` under `[functions.delete-account]` with `ve
 
 ### Staging-Only Testing Note
 Account deletion permanently and irreversibly destroys user records and offline data. The `account_deletion_enabled` flag must remain `false` in production environments until formally verified in staging with synthetic test accounts.
+
+## Owner Dashboard
+
+### Overview
+The Owner Dashboard provides administrative visibility into subscription distributions and AI usage metrics for authorized project owners. It operates via a read-only serverless edge function (`owner-stats`) querying a SECURITY DEFINER database function (`public.get_owner_stats()`). The dashboard exposes aggregated counts only; it never returns or displays personal identifiable information (PII) such as email addresses, user names, or user IDs.
+
+### Configuration & Access Control
+Access to the dashboard is double-gated behind an environment secret and a database feature flag:
+- **Secret (`OWNER_USER_IDS`)**: A comma-separated list of authorized Supabase auth user UUIDs (e.g. `OWNER_USER_IDS="<uuid1>,<uuid2>"`). If unset, empty, or if the authenticated caller's user ID is not in this list, the edge function immediately returns `403 { "error": "Forbidden: Not an owner", "code": "forbidden" }`.
+- **Feature Flag (`owner_dashboard_enabled`)**: A boolean key in `public.app_config`. Both the client card and edge function verify this flag; if missing or `false`, the client does not render the card and the edge function returns `403 { "error": "Feature disabled", "code": "feature_disabled" }`.
+- Both the secret and feature flag are unset/disabled by default.
+
+### Edge Function (`owner-stats`)
+- **Path**: `/functions/v1/owner-stats` (`verify_jwt = true` in `supabase/config.toml`).
+- **HTTP Methods**: `GET` and `POST` (plus `OPTIONS` for CORS preflight).
+- **Authentication**: Validates caller Bearer JWT with the anon client (`auth.getUser()`).
+- **Authorization**: Enforces caller user ID presence in `OWNER_USER_IDS` and checks `app_config.owner_dashboard_enabled = true`.
+- **Database Access**: Uses `service_role` to invoke `public.get_owner_stats()`. Execution permissions are revoked from `PUBLIC`, `anon`, and `authenticated`.
+- **Response Shape**:
+  ```json
+  {
+    "generated_at": "2026-10-11T12:00:00Z",
+    "tiers": {
+      "personal": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "coach": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "coach_pro": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "trial": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "free": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 }
+    },
+    "ai_today": {
+      "total_uses": 0,
+      "distinct_users": 0,
+      "by_plan": [
+        { "plan": "pro", "uses": 0 }
+      ]
+    }
+  }
+  ```
+
+### How to Enable
+To activate the Owner Dashboard for specific project owners:
+1. Configure the `OWNER_USER_IDS` secret in Supabase:
+   ```bash
+   supabase secrets set OWNER_USER_IDS="<user_uuid_1>,<user_uuid_2>"
+   ```
+2. Enable the feature flag in `public.app_config` using a `service_role` database client:
+   ```sql
+   INSERT INTO public.app_config (key, value, description)
+   VALUES ('owner_dashboard_enabled', 'true'::jsonb, 'Enables owner dashboard card in Settings')
+   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+   ```
+3. To disable, set the flag to `false` or unset `OWNER_USER_IDS`.

@@ -23,6 +23,7 @@ vi.mock('../../lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
     rpc: vi.fn().mockResolvedValue({ data: { success: true }, error: null }),
+    functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: { status: 403 } }) },
     auth: {
       signInWithPassword: vi.fn().mockResolvedValue({ data: { user: { id: 'test-coach-id' } }, error: null }),
       signUp: vi.fn().mockResolvedValue({ data: { user: { id: 'test-coach-id' } }, error: null }),
@@ -92,11 +93,13 @@ describe('SettingsView', () => {
     renderComponent();
     await screen.findByDisplayValue('Coach Demo');
     expect(screen.getByText('Daily Macro Goals')).toBeDefined();
-    expect(screen.getByText('Calories (kcal)')).toBeDefined();
-    expect(screen.getByText('Protein (g)')).toBeDefined();
-    expect(screen.getByText('Carbs (g)')).toBeDefined();
-    expect(screen.getByText('Fat (g)')).toBeDefined();
-    expect(screen.getByText('Fiber (g)')).toBeDefined();
+    expect(screen.getByText('Calories')).toBeDefined();
+    expect(screen.getByText('Protein')).toBeDefined();
+    expect(screen.getByText('Carbs')).toBeDefined();
+    expect(screen.getByText('Fat')).toBeDefined();
+    expect(screen.getByText('Fiber')).toBeDefined();
+    expect(screen.getByText('kcal')).toBeDefined();
+    expect(screen.getAllByText('g')).toHaveLength(4);
     expect(screen.getByRole('button', { name: /Save Goals/i })).toBeDefined();
 
     expect(getRecordedTables()).toContain('users');
@@ -490,6 +493,64 @@ describe('SettingsView', () => {
 
       const card = await screen.findByTestId('subscription-card');
       expect(card).toBeDefined();
+    });
+  });
+
+  describe('owner_dashboard_enabled feature flag gating', () => {
+    it('flag off: does not render Owner Dashboard card', async () => {
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      expect(screen.queryByTestId('owner-dashboard-card')).toBeNull();
+    });
+
+    it('flag on: renders Owner Dashboard card', async () => {
+      (supabase.functions.invoke as any).mockResolvedValueOnce({
+        data: {
+          generated_at: '2026-10-11T12:00:00Z',
+          tiers: {
+            personal: { paying: 1, grandfathered: 0, unpaid: 0, total: 1 },
+            coach: { paying: 1, grandfathered: 0, unpaid: 0, total: 1 },
+            coach_pro: { paying: 1, grandfathered: 0, unpaid: 0, total: 1 },
+            trial: { paying: 0, grandfathered: 0, unpaid: 1, total: 1 },
+            free: { paying: 0, grandfathered: 0, unpaid: 1, total: 1 },
+          },
+          ai_today: { total_uses: 5, distinct_users: 2, by_plan: [] },
+        },
+        error: null,
+      });
+
+      const useFeatureFlagModule = await import('../../hooks/useFeatureFlag');
+      vi.spyOn(useFeatureFlagModule, 'useFeatureFlag').mockImplementation((key) => {
+        if (key === 'owner_dashboard_enabled') return true;
+        return false;
+      });
+
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const card = await screen.findByTestId('owner-dashboard-card');
+      expect(card).toBeDefined();
+    });
+
+    it('flag on but 403 non-owner: Owner Dashboard card renders nothing', async () => {
+      (supabase.functions.invoke as any).mockResolvedValueOnce({
+        data: null,
+        error: { status: 403, message: 'Forbidden' },
+      });
+
+      const useFeatureFlagModule = await import('../../hooks/useFeatureFlag');
+      vi.spyOn(useFeatureFlagModule, 'useFeatureFlag').mockImplementation((key) => {
+        if (key === 'owner_dashboard_enabled') return true;
+        return false;
+      });
+
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('owner-dashboard-card')).toBeNull();
+      });
     });
   });
 });

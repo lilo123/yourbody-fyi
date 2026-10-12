@@ -2,6 +2,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { isAllowedOrigin, getCorsHeaders as getBaseCorsHeaders } from "../_shared/cors.ts";
 
+// Pinned Stripe API version. Kept as a local constant to avoid importing
+// npm:stripe@17.7.0 from _shared/stripeConfig.ts in this lightweight function.
+// Must match STRIPE_API_VERSION in supabase/functions/_shared/stripeConfig.ts.
+export const STRIPE_API_VERSION = '2026-09-30.endive';
+
 export { isAllowedOrigin };
 
 export function getCorsHeaders(origin: string | null | undefined): Record<string, string> {
@@ -122,7 +127,10 @@ export default {
               const listRes = await fetch(
                 `https://api.stripe.com/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all`,
                 {
-                  headers: { Authorization: `Bearer ${stripeSecretKey}` },
+                  headers: {
+                    Authorization: `Bearer ${stripeSecretKey}`,
+                    'Stripe-Version': STRIPE_API_VERSION,
+                  },
                 }
               );
               if (listRes.ok) {
@@ -134,7 +142,10 @@ export default {
                       `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(sub.id)}`,
                       {
                         method: 'DELETE',
-                        headers: { Authorization: `Bearer ${stripeSecretKey}` },
+                        headers: {
+                          Authorization: `Bearer ${stripeSecretKey}`,
+                          'Stripe-Version': STRIPE_API_VERSION,
+                        },
                       }
                     );
                   }
