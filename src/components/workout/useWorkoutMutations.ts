@@ -27,6 +27,7 @@ export interface UseWorkoutMutationsOptions {
   exercises: Exercise[];
   customTemplates?: RoutineTemplate[];
   autoRestTimer: boolean;
+  restTimerSeconds?: number;
   setMutationError?: (err: string | null) => void;
   onDraftSuccess?: (variables: {
     exerciseName?: string;
@@ -42,6 +43,7 @@ export function useWorkoutMutations({
   exercises,
   customTemplates,
   autoRestTimer,
+  restTimerSeconds = 90,
   setMutationError: externalSetMutationError,
   onDraftSuccess,
 }: UseWorkoutMutationsOptions) {
@@ -252,7 +254,7 @@ export function useWorkoutMutations({
         onDraftSuccess(variables);
       }
       if (autoRestTimer) {
-        restTimerStore.start(90);
+        restTimerStore.start(restTimerSeconds);
       }
     },
     onSettled: async () => {
@@ -328,7 +330,7 @@ export function useWorkoutMutations({
         }
       }
       if (autoRestTimer) {
-        restTimerStore.start(90);
+        restTimerStore.start(restTimerSeconds);
       }
     },
     onError: (err: unknown, variables) => {

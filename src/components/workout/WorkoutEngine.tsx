@@ -37,6 +37,11 @@ export const WorkoutEngine: React.FC = () => {
     try { return JSON.parse(localStorage.getItem('yourbody_user') || '{}')?.id || ''; } catch { return ''; }
   })();
   const autoRestTimer = profile?.auto_rest_timer ?? (localStorage.getItem('yourbody_auto_rest_timer') !== 'false');
+  const restTimerSeconds = profile?.rest_timer_seconds ?? (() => {
+    const localVal = typeof localStorage !== 'undefined' ? localStorage.getItem('yourbody_rest_timer_seconds') : null;
+    const parsed = localVal ? Number(localVal) : 90;
+    return Number.isFinite(parsed) && parsed >= 15 && parsed <= 600 ? parsed : 90;
+  })();
 
   const [showRoutineModal, setShowRoutineModal] = useState(false);
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
@@ -142,7 +147,7 @@ export const WorkoutEngine: React.FC = () => {
     setMutationError, setExerciseError,
   } = useWorkoutMutations({
     targetUserId, workoutDate, activeRoutineName, exercises,
-    customTemplates, autoRestTimer, onDraftSuccess: handleDraftSuccess,
+    customTemplates, autoRestTimer, restTimerSeconds, onDraftSuccess: handleDraftSuccess,
   });
 
   // 5. Deferred Set Deletion with Undo Toast
