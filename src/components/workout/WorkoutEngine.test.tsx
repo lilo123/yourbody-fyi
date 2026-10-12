@@ -160,7 +160,7 @@ describe('WorkoutEngine', () => {
     expect(getRecordedTables()).toContain('workouts');
     expect(getRecordedSelects()).toContainEqual({
       table: 'workouts',
-      projection: 'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id)',
+      projection: 'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id, set_type, rpe)',
     });
   });
 

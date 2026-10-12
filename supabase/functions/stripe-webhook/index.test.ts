@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import Stripe from "npm:stripe@17.7.0";
 import app from "./index.ts";
 
@@ -2309,11 +2309,18 @@ Deno.test("stripe-webhook: full refund cancels related subscription immediately 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_full_refund_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_full_refund_1", invoice: "in_full_refund_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (url.includes("/v1/payment_intents/pi_full_refund_1")) {
       return new Response(
         JSON.stringify({
           id: "pi_full_refund_1",
-          invoice: "in_full_refund_1",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -2418,11 +2425,18 @@ Deno.test("stripe-webhook: dispute cancels related subscription immediately with
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_dispute_cancel_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_dispute_cancel_1", invoice: "in_dispute_cancel_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (url.includes("/v1/payment_intents/pi_dispute_cancel_1")) {
       return new Response(
         JSON.stringify({
           id: "pi_dispute_cancel_1",
-          invoice: "in_dispute_cancel_1",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -2644,11 +2658,18 @@ Deno.test("stripe-webhook: already-canceled or resource_missing 404 returns 200 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_missing_sub_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_missing_sub_1", invoice: "in_missing_sub_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (url.includes("/v1/payment_intents/pi_missing_sub_1")) {
       return new Response(
         JSON.stringify({
           id: "pi_missing_sub_1",
-          invoice: "in_missing_sub_1",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -2740,11 +2761,18 @@ Deno.test("stripe-webhook: auto-cancel Stripe 500 error returns 502 and removes 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
     const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_stripe_err_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_stripe_err_1", invoice: "in_stripe_err_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
     if (url.includes("/v1/payment_intents/pi_stripe_err_1")) {
       return new Response(
         JSON.stringify({
           id: "pi_stripe_err_1",
-          invoice: "in_stripe_err_1",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -2806,6 +2834,468 @@ Deno.test("stripe-webhook: auto-cancel Stripe 500 error returns 502 and removes 
           id: "ch_stripe_err_1",
           customer: CUSTOMER_ID,
           payment_intent: "pi_stripe_err_1",
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: { data: [] },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 502);
+    assertEquals(billingEventDeleted, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: auto-cancel resolves invoice via legacy PaymentIntent.invoice when invoice_payments returns 404", async () => {
+  setupEnv();
+
+  let cancelCalled = false;
+  let cancelUrl = "";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_legacy_sub_1")) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: "resource_missing",
+            message: "No such endpoint or invoice_payment",
+            type: "invalid_request_error",
+          },
+        }),
+        { status: 404, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/payment_intents/pi_legacy_sub_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "pi_legacy_sub_1",
+          invoice: "in_legacy_sub_1",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/invoices/in_legacy_sub_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "in_legacy_sub_1",
+          parent: {
+            subscription_details: {
+              subscription: "sub_legacy_1",
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/subscriptions/sub_legacy_1")) {
+      if (init?.method === "DELETE") {
+        cancelCalled = true;
+        cancelUrl = url;
+        return new Response(
+          JSON.stringify({ id: "sub_legacy_1", status: "canceled" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_legacy_cancel_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_legacy_cancel_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_legacy_cancel_1",
+          customer: CUSTOMER_ID,
+          payment_intent: "pi_legacy_sub_1",
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: { data: [] },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(cancelCalled, true);
+    assertEquals(cancelUrl.includes("sub_legacy_1"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: auto-cancel approval_required returns 200, keeps revoke, records event, and attempts cancel once", async () => {
+  setupEnv();
+
+  let cancelCallCount = 0;
+  let userUpdated = false;
+  let billingEventsUpdated = false;
+  let recordedPayload: Record<string, unknown> | null = null;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_approval_req_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_approval_req_1", invoice: "in_approval_req_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/payment_intents/pi_approval_req_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "pi_approval_req_1",
+          invoice: "in_approval_req_1",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/invoices/in_approval_req_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "in_approval_req_1",
+          parent: {
+            subscription_details: {
+              subscription: "sub_approval_req_1",
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/subscriptions/sub_approval_req_1")) {
+      if (init?.method === "DELETE") {
+        cancelCallCount++;
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "approval_required",
+              message: "This cancellation requires manual review approval.",
+              type: "invalid_request_error",
+            },
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      if (init?.method === "PATCH") {
+        billingEventsUpdated = true;
+        try {
+          const body = JSON.parse(init.body as string);
+          if (body?.payload) {
+            recordedPayload = body.payload;
+          }
+        } catch {
+          // ignore parsing error in test mock
+        }
+      }
+      return new Response(JSON.stringify([{ event_id: "evt_approval_req_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdated = true;
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_approval_req_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_approval_req_1",
+          customer: CUSTOMER_ID,
+          payment_intent: "pi_approval_req_1",
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: { data: [] },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(cancelCallCount, 1);
+    assertEquals(userUpdated, true);
+    assertEquals(billingEventsUpdated, true);
+    assertExists(recordedPayload);
+    assertEquals((recordedPayload as any).cancel_pending_approval, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: auto-cancel already-an-approval-request returns 200, keeps revoke, records event, and attempts cancel once", async () => {
+  setupEnv();
+
+  let cancelCallCount = 0;
+  let userUpdated = false;
+  let billingEventsUpdated = false;
+  let recordedPayload: Record<string, unknown> | null = null;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_approval_req_2")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_approval_req_2", invoice: "in_approval_req_2" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/payment_intents/pi_approval_req_2")) {
+      return new Response(
+        JSON.stringify({
+          id: "pi_approval_req_2",
+          invoice: "in_approval_req_2",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/invoices/in_approval_req_2")) {
+      return new Response(
+        JSON.stringify({
+          id: "in_approval_req_2",
+          parent: {
+            subscription_details: {
+              subscription: "sub_approval_req_2",
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/subscriptions/sub_approval_req_2")) {
+      if (init?.method === "DELETE") {
+        cancelCallCount++;
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "There is already an approval request waiting to be reviewed for this subscription.",
+              type: "invalid_request_error",
+            },
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      if (init?.method === "PATCH") {
+        billingEventsUpdated = true;
+        try {
+          const body = JSON.parse(init.body as string);
+          if (body?.payload) {
+            recordedPayload = body.payload;
+          }
+        } catch {
+          // ignore parsing error in test mock
+        }
+      }
+      return new Response(JSON.stringify([{ event_id: "evt_approval_req_2" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdated = true;
+      }
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_approval_req_2",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_approval_req_2",
+          customer: CUSTOMER_ID,
+          payment_intent: "pi_approval_req_2",
+          amount: 5000,
+          amount_refunded: 5000,
+          refunds: { data: [] },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertEquals(cancelCallCount, 1);
+    assertEquals(userUpdated, true);
+    assertEquals(billingEventsUpdated, true);
+    assertExists(recordedPayload);
+    assertEquals((recordedPayload as any).cancel_pending_approval, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: auto-cancel unhandled 400 error returns 502 and removes event row", async () => {
+  setupEnv();
+
+  let billingEventDeleted = false;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/invoice_payments") && url.includes("pi_unhandled_400_1")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "inpa_unhandled_400_1", invoice: "in_unhandled_400_1" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/payment_intents/pi_unhandled_400_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "pi_unhandled_400_1",
+          invoice: "in_unhandled_400_1",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/invoices/in_unhandled_400_1")) {
+      return new Response(
+        JSON.stringify({
+          id: "in_unhandled_400_1",
+          parent: {
+            subscription_details: {
+              subscription: "sub_unhandled_400_1",
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (url.includes("/v1/subscriptions/sub_unhandled_400_1")) {
+      if (init?.method === "DELETE") {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "parameter_invalid_empty",
+              message: "Cannot cancel subscription due to invalid parameter",
+              type: "invalid_request_error",
+            },
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      if (init?.method === "DELETE") {
+        billingEventDeleted = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([{ event_id: "evt_unhandled_400_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      return new Response(
+        JSON.stringify({ id: TEST_USER_ID, paid_until: "2030-01-01T00:00:00.000Z" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_unhandled_400_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_unhandled_400_1",
+          customer: CUSTOMER_ID,
+          payment_intent: "pi_unhandled_400_1",
           amount: 5000,
           amount_refunded: 5000,
           refunds: { data: [] },
