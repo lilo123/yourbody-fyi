@@ -15,6 +15,7 @@ import { useWeightUnit } from '../../hooks/useWeightUnit';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { PendingMark } from '../sync/PendingMark';
 import { formatVolume, formatWeight, weightUnitLabel } from '../../utils/weight';
+import { WorkoutSessionShareButton } from './WorkoutSessionShareButton';
 import type { HistorySession } from './useWorkoutHistory';
 
 export type { HistorySession };
@@ -304,13 +305,13 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
         data-civil-date={civilDate}
         tabIndex={-1}
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-3 gap-2">
+        <div className="flex flex-wrap items-center justify-between border-b border-zinc-800 pb-3 gap-y-2 gap-x-2">
           {/* min-w-0 flex-1 truncate session title at 320px */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <h3 className="text-sm font-bold text-white truncate">{session.name || 'Workout Session'}</h3>
-              {isSessionPending && <PendingMark size="sm" className="shrink-0" />}
-            </div>
+            <h3 className="text-sm font-bold text-white truncate">
+              {session.name || 'Workout Session'}
+              {isSessionPending && <PendingMark size="sm" className="shrink-0 ml-1.5 align-middle inline-flex" />}
+            </h3>
             <div className="text-xs text-cyan-400 tabular-nums mt-0.5">
               {formatShortDate(civilDate)}
             </div>
@@ -331,6 +332,15 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
                 ariaLabel={`Session actions for ${session.name || 'workout'}`}
                 items={overflowItems}
                 testId={`session-actions-${session.id}`}
+              />
+            )}
+
+            {/* Share workout button (rendered on expanded card to preserve collapsed virtualization DOM node budget) */}
+            {isExpanded && (
+              <WorkoutSessionShareButton
+                session={session}
+                exercises={exercises}
+                unit={unit}
               />
             )}
 
@@ -412,7 +422,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
                             className="bg-zinc-900/90 border border-zinc-800/60 rounded-xl px-2.5 py-1.5 flex items-center justify-between text-xs"
                           >
                             <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-bold tabular-nums">
-                              <span>SET {setNumber}</span>
+                              SET {setNumber}
                               {(set as any).pending && <PendingMark size="sm" className="shrink-0" />}
                             </div>
                             <div className="flex items-center gap-2">

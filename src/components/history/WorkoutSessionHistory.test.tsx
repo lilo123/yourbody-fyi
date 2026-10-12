@@ -372,5 +372,30 @@ describe('WorkoutSessionHistory', () => {
     expect(screen.getByTestId('history-sessions-skeleton')).toBeDefined();
     expect(screen.queryByTestId('pending-mark')).toBeNull();
   });
+
+  it('renders a share icon button on expanded workout session card', () => {
+    render(
+      <MemoryRouter>
+        <WorkoutSessionHistory
+          displayedSessions={mockSessions}
+          exercises={[]}
+          timeRange="all"
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+          onLoadMore={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    // Collapsed at rest: share button not rendered to preserve virtualization DOM node budget
+    expect(screen.queryByTestId('share-session-btn-session-1')).toBeNull();
+
+    // Expand session 1
+    fireEvent.click(screen.getByTestId('expand-session-btn-session-1'));
+
+    const shareBtn1 = screen.getByTestId('share-session-btn-session-1');
+    expect(shareBtn1).toBeDefined();
+    expect(shareBtn1.getAttribute('aria-label')).toBe('Share workout');
+  });
 });
 
