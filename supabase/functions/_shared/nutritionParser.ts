@@ -1669,6 +1669,67 @@ function isMultiMealPaste(lines: string[]): boolean {
   return mealCountWithCals >= 2;
 }
 
+function isLeadInLine(rawLine: string, cleaned: string): boolean {
+  const stripped = rawLine.trim().replace(/[*_~`]+$/, '').trim();
+  const endsWithColon = stripped.endsWith(':');
+  if (!endsWithColon) {
+    return false;
+  }
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 5) {
+    return true;
+  }
+  if (
+    /\b(?:breakdown|estimate|estimates|estimated|nutrition(?:al)?(?:\s+(?:info|facts|breakdown|values?))?|here\s+is|here's|sure|details)\b/i.test(
+      cleaned
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isMacroOrServingLine(rawLine: string): boolean {
+  const cleaned = cleanLine(rawLine);
+  if (!cleaned) {
+    return false;
+  }
+  if (isHeaderNoise(cleaned) || isIgnorableSubRow(cleaned)) {
+    return false;
+  }
+  if (tryParseServingOrWeightLine(cleaned).matched) {
+    return true;
+  }
+
+  let lineToParse = cleaned;
+  const foodPrefixMatch = cleaned.match(
+    /^((?:(?:\d+(?:[.,]\d+)?)\s*(?:oz|g|ml|lbs?|cups?|pieces?|slices?|servings?|scoops?)\s+)?[a-zA-Z\s&+,;/]{2,40}):\s*(.+)$/i
+  );
+  if (foodPrefixMatch) {
+    const candidatePrefix = foodPrefixMatch[1].trim();
+    const isServingPrefix = /^(?:\d+(?:[.,]\d+)?\s*(?:oz|g|ml|lbs?|cups?|pieces?|slices?|servings?|scoops?)\s+)[a-zA-Z]/i.test(candidatePrefix);
+    if (
+      !/^(?:total\s+)?(?:calories?|cal|cals?|energy|protein|prot|fat|total\s+fat|carbs?|carbohydrates?|total\s+carbs?|total\s+carbohydrates?|serving|servings|per|fib|fiber|fibre|dietary\s+fiber|total\s+fiber|consumed\s+weight|net\s+weight|weight|subtotal|sum|overall|meal\s+total)$/i.test(
+        candidatePrefix
+      ) &&
+      (!/\d/.test(candidatePrefix) || isServingPrefix)
+    ) {
+      lineToParse = foodPrefixMatch[2].trim();
+    }
+  }
+
+  const segments = splitLineIntoSegments(lineToParse);
+  if (segments.length === 0) {
+    return false;
+  }
+  for (const segment of segments) {
+    if (!tryMatchMacroToken(segment)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function parseNutritionText(text: string): NutritionParseResult {
   const fencedBlock = extractYourbodyFencedBlock(text);
   const effectiveText = fencedBlock !== null ? fencedBlock : text;
@@ -1784,6 +1845,50 @@ export function parseNutritionText(text: string): NutritionParseResult {
   const skippedLines: string[] = [];
   const modifiers: string[] = [];
 
+  let firstMacroLineIndex = -1;
+  for (let i = 0; i < rawLines.length; i++) {
+    if (isMacroOrServingLine(rawLines[i])) {
+      firstMacroLineIndex = i;
+      break;
+    }
+  }
+
+  let candidateMealNameIndex = -1;
+  if (firstMacroLineIndex === 1) {
+    candidateMealNameIndex = 0;
+  } else if (firstMacroLineIndex > 1) {
+    for (let i = firstMacroLineIndex - 1; i >= 0; i--) {
+      const rawCandidate = rawLines[i];
+      const cleanCandidate = cleanLine(rawCandidate);
+      if (!cleanCandidate) {
+        continue;
+      }
+      if (isHeaderNoise(cleanCandidate) || isIgnorableSubRow(cleanCandidate)) {
+        continue;
+      }
+      if (tryMatchModifierLine(cleanCandidate) !== null) {
+        continue;
+      }
+      if (tryParseServingOrWeightLine(cleanCandidate).matched) {
+        continue;
+      }
+      if (isLeadInLine(rawCandidate, cleanCandidate)) {
+        continue;
+      }
+      if (/\d/.test(cleanCandidate)) {
+        continue;
+      }
+      if (cleanCandidate.length > 60) {
+        continue;
+      }
+
+      candidateMealNameIndex = i;
+      break;
+    }
+  } else if (firstMacroLineIndex === -1) {
+    candidateMealNameIndex = 0;
+  }
+
   for (let lineIndex = 0; lineIndex < rawLines.length; lineIndex++) {
     const originalLine = rawLines[lineIndex];
     let cleaned = cleanLine(originalLine);
@@ -1871,7 +1976,7 @@ export function parseNutritionText(text: string): NutritionParseResult {
             }
           }
         }
-        if (mealName === undefined && lineIndex === 0) {
+        if (mealName === undefined) {
           mealName = cleanFoodName;
           lineToParse = restOfLine;
         } else if (mealName !== undefined && mealName !== cleanFoodName && mealName !== candidatePrefix) {
@@ -2034,8 +2139,8 @@ export function parseNutritionText(text: string): NutritionParseResult {
       continue;
     }
 
-    // Check if line 0 can be a NAME line
-    if (lineIndex === 0) {
+    // Check if this line is the candidate meal NAME line
+    if (lineIndex === candidateMealNameIndex) {
       if (
         /\b(?:i\s+ran|i\s+walked|i\s+worked\s+out|burned\s+\d+|for\s+dinner\s+i|today\s+i\s+ate)\b/i.test(
           cleaned
@@ -2064,9 +2169,9 @@ export function parseNutritionText(text: string): NutritionParseResult {
       }
 
       const subsequentLinesHaveMacros = rawLines
-        .slice(1)
-        .some((l) =>
-          /(?:calories?|cal|kcal|energy|protein|prot|fat|carbs?|carbohydrates?)\b/i.test(l)
+        .slice(lineIndex + 1)
+        .some((subsequentLine) =>
+          /(?:calories?|cal|kcal|energy|protein|prot|fat|carbs?|carbohydrates?)\b/i.test(subsequentLine)
         );
 
       if (/\d/.test(cleaned)) {

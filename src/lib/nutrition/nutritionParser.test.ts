@@ -556,7 +556,7 @@ Fat: 21g`;
 });
 
 describe('Golden Test Corpus & Sweep Fixtures', () => {
-  it('parses all 93 realistic golden fixtures matching expected results', () => {
+  it('parses all 96 realistic golden fixtures matching expected results', () => {
     for (const fixture of NUTRITION_CORPUS_FIXTURES) {
       const result = parseNutritionText(fixture.input);
       expect(
@@ -813,6 +813,60 @@ describe('Seeded Property Tests', () => {
     expect(result.meal?.servingSize).toBe(8);
     expect(result.meal?.servingUnit).toBe('oz');
     expect(result.meal?.calories).toBe(360);
+  });
+
+  it('prefers closest non-macro line above macros for single meal name', () => {
+    const inputWithLeadIn = [
+      'Here is my snack breakdown:',
+      'Protein bar',
+      'Calories: 220 kcal',
+      'Protein: 20g',
+      'Carbs: 22g',
+      'Fat: 6g',
+      'Hope this helps!',
+    ].join('\n');
+    const resultWithLeadIn = parseNutritionText(inputWithLeadIn);
+    expect(resultWithLeadIn.confidence).toBe('lenient');
+    expect(resultWithLeadIn.meal?.name).toBe('Protein bar');
+    expect(resultWithLeadIn.meal?.calories).toBe(220);
+    expect(resultWithLeadIn.meal?.protein).toBe(20);
+    expect(resultWithLeadIn.meal?.carbs).toBe(22);
+    expect(resultWithLeadIn.meal?.fat).toBe(6);
+    expect(resultWithLeadIn.skippedLines).toEqual([
+      'Here is my snack breakdown:',
+      'Hope this helps!',
+    ]);
+
+    const inputWithLunchLeadIn = [
+      "Sure! Here's the breakdown for your lunch:",
+      'Chicken Rice Bowl',
+      'Calories: 520 kcal',
+      'Protein: 46g',
+      'Carbs: 58g',
+      'Fat: 12g',
+      'Hope that helps!',
+    ].join('\n');
+    const resultWithLunch = parseNutritionText(inputWithLunchLeadIn);
+    expect(resultWithLunch.confidence).toBe('lenient');
+    expect(resultWithLunch.meal?.name).toBe('Chicken Rice Bowl');
+    expect(resultWithLunch.meal?.calories).toBe(520);
+    expect(resultWithLunch.skippedLines).toEqual([
+      "Sure! Here's the breakdown for your lunch:",
+      'Hope that helps!',
+    ]);
+
+    const inputWithoutLeadIn = [
+      'Protein bar',
+      'Calories: 220 kcal',
+      'Protein: 20g',
+      'Carbs: 22g',
+      'Fat: 6g',
+    ].join('\n');
+    const resultWithoutLeadIn = parseNutritionText(inputWithoutLeadIn);
+    expect(resultWithoutLeadIn.confidence).toBe('exact');
+    expect(resultWithoutLeadIn.meal?.name).toBe('Protein bar');
+    expect(resultWithoutLeadIn.meal?.calories).toBe(220);
+    expect(resultWithoutLeadIn.skippedLines).toEqual([]);
   });
 });
 
