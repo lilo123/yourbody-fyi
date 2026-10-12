@@ -44,12 +44,26 @@ export class RestTimerStore {
     }
   }
 
+  getDefaultDuration(): number {
+    if (this.isStorageAvailable()) {
+      try {
+        const val = Number(localStorage.getItem('yourbody_rest_timer_seconds'));
+        if (Number.isFinite(val) && val >= 15 && val <= 600) {
+          return val;
+        }
+      } catch {
+        // fallback
+      }
+    }
+    return 90;
+  }
+
   private hydrateFromStorage(): void {
     if (!this.isStorageAvailable()) return;
     try {
       const endStr = localStorage.getItem(KEY_END);
       const isPaused = localStorage.getItem(KEY_PAUSED) === '1';
-      const total = Number(localStorage.getItem(KEY_TOTAL)) || 90;
+      const total = Number(localStorage.getItem(KEY_TOTAL)) || this.getDefaultDuration();
 
       if (isPaused) {
         if (this.tickerId) {
@@ -295,13 +309,13 @@ export class RestTimerStore {
     this.emitChange();
   }
 
-  toggleHeaderTimer(): void {
+  toggleHeaderTimer(defaultDuration?: number): void {
     if (this.cachedSnapshot.isRunning) {
       this.pause();
     } else if (this.cachedSnapshot.isPaused) {
       this.resume();
     } else {
-      this.start(90);
+      this.start(defaultDuration ?? this.getDefaultDuration());
     }
   }
 
