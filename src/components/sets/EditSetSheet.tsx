@@ -9,6 +9,7 @@ import { Button } from "../common/Button";
 import { StatusBanner } from "../common/StatusBanner";
 import { invalidateWorkoutDerived } from "../../lib/invalidate";
 import { updateSet } from "../../lib/sets";
+import { fetchSetById } from "../../lib/fetchSet";
 import { weightUnitLabel, toDisplayWeight, resolveWeightInput } from "../../utils/weight";
 import { useWeightUnit } from "../../hooks/useWeightUnit";
 
@@ -51,19 +52,22 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
   const queryClient = useQueryClient();
   const unit = useWeightUnit();
 
-  const initialExerciseId = (() => {
-    const directMatch = exercises.find((e) => e.id === set.exercise_id);
+  const [currentSet, setCurrentSet] = useState(set);
+
+  const resolveExId = (target: { exercise_id?: string; exercise_name?: string }) => {
+    const directMatch = exercises.find((e) => e.id === target.exercise_id);
     if (directMatch) return directMatch.id;
     const nameMatch = exercises.find(
-      (e) => e.name.toLowerCase() === (set.exercise_name || set.exercise_id).toLowerCase()
+      (e) => e.name.toLowerCase() === (target.exercise_name || target.exercise_id || "").toLowerCase()
     );
-    return nameMatch ? nameMatch.id : set.exercise_id || (exercises[0]?.id ?? "");
-  })();
+    return nameMatch ? nameMatch.id : target.exercise_id || (exercises[0]?.id ?? "");
+  };
 
-  const initialWeight = set.weight !== undefined && set.weight !== null ? String(toDisplayWeight(set.weight, unit)) : "";
-  const initialReps = set.reps !== undefined && set.reps !== null ? String(set.reps) : "";
-  const initialRpe = set.rpe !== undefined && set.rpe !== null ? String(set.rpe) : "";
-  const initialSetType: SetType = set.set_type || "working";
+  const initialExerciseId = resolveExId(currentSet);
+  const initialWeight = currentSet.weight !== undefined && currentSet.weight !== null ? String(toDisplayWeight(currentSet.weight, unit)) : "";
+  const initialReps = currentSet.reps !== undefined && currentSet.reps !== null ? String(currentSet.reps) : "";
+  const initialRpe = currentSet.rpe !== undefined && currentSet.rpe !== null ? String(currentSet.rpe) : "";
+  const initialSetType: SetType = ((currentSet.set_type as unknown as string) === "normal" || !currentSet.set_type) ? "working" : (currentSet.set_type as SetType);
 
   const [selectedExerciseId, setSelectedExerciseId] = useState(initialExerciseId);
   const [weight, setWeight] = useState(initialWeight);
@@ -71,6 +75,8 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
   const [rpe, setRpe] = useState(initialRpe);
   const [setType, setSetType] = useState<SetType>(initialSetType);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [conflictType, setConflictType] = useState<'changed' | 'deleted' | null>(null);
+  const [isReloading, setIsReloading] = useState(false);
 
   const isDirty =
     selectedExerciseId !== initialExerciseId ||
@@ -89,18 +95,20 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
       set_type: SetType;
     }) => {
       const { id, ...updates } = payload;
-      const expected = {
-        exercise_id: set.exercise_id,
-        weight: set.weight,
-        reps: set.reps,
-        set_type: (set.set_type as any) || "working",
-        rpe: set.rpe ?? null,
+      const expected: Record<string, any> = {
+        exercise_id: initialExerciseId || currentSet.exercise_id,
+        weight: currentSet.weight,
+        reps: currentSet.reps,
+        set_type: initialSetType,
       };
+      if (currentSet.rpe !== undefined) {
+        expected.rpe = currentSet.rpe;
+      }
       return await updateSet(
         supabase,
         id,
         {
-          workoutId: set.workout_id,
+          workoutId: currentSet.workout_id,
           exerciseId: updates.exercise_id,
           weight: updates.weight,
           reps: updates.reps,
@@ -115,17 +123,66 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
       await invalidateWorkoutDerived(queryClient, targetUserId);
       const updatedRow = (Array.isArray(data) ? data[0] : data) as WorkoutSet | undefined;
       const savedRow: WorkoutSet = {
-        ...set,
+        ...currentSet,
         ...variables,
         ...(updatedRow || {}),
-        workout_id: updatedRow?.workout_id || set.workout_id,
+        workout_id: updatedRow?.workout_id || currentSet.workout_id,
       };
       onSaved(savedRow);
     },
     onError: (err: any) => {
-      setErrorMessage(err?.message || "Failed to update set. Please try again.");
+      const rawMsg = err?.message || "";
+      // Tone/style matches routine editor conflict handling in src/components/exercises/EditTemplateSheet.tsx#L187-L207
+      if (rawMsg === "changed elsewhere" || rawMsg === "deleted elsewhere") {
+        setConflictType(rawMsg === "deleted elsewhere" ? "deleted" : "changed");
+        setErrorMessage(
+          rawMsg === "deleted elsewhere"
+            ? "This set was deleted on another device."
+            : "This set was changed on another device."
+        );
+      } else {
+        setConflictType(null);
+        setErrorMessage(err?.message || "Failed to update set. Please try again.");
+      }
     },
   });
+
+  const handleReload = async () => {
+    if (!currentSet.id) return;
+    setIsReloading(true);
+    try {
+      const fresh = await fetchSetById(supabase, currentSet.id);
+      if (!fresh) {
+        // Deleted elsewhere on server: close the sheet per specification
+        onClose();
+        return;
+      }
+      const freshNormalizedSetType: SetType =
+        (fresh.set_type as unknown as string) === "normal" || !fresh.set_type ? "working" : (fresh.set_type as SetType);
+      const freshExId = resolveExId(fresh);
+      const freshWeight = fresh.weight !== undefined && fresh.weight !== null ? String(toDisplayWeight(fresh.weight, unit)) : "";
+      const freshReps = fresh.reps !== undefined && fresh.reps !== null ? String(fresh.reps) : "";
+      const freshRpe = fresh.rpe !== undefined && fresh.rpe !== null ? String(fresh.rpe) : "";
+
+      setCurrentSet({
+        ...currentSet,
+        ...fresh,
+        exercise_id: freshExId,
+        set_type: freshNormalizedSetType,
+      });
+      setSelectedExerciseId(freshExId);
+      setWeight(freshWeight);
+      setReps(freshReps);
+      setRpe(freshRpe);
+      setSetType(freshNormalizedSetType);
+      setErrorMessage(null);
+      setConflictType(null);
+    } catch (reloadErr: any) {
+      setErrorMessage(reloadErr?.message || "Failed to reload set.");
+    } finally {
+      setIsReloading(false);
+    }
+  };
 
   const handleWeightChange = (val: string) => {
     const sanitized = val.replace(",", ".");
@@ -150,6 +207,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setConflictType(null);
 
     if (!selectedExerciseId) {
       setErrorMessage("Please select an exercise.");
@@ -161,7 +219,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
       return;
     }
 
-    const resolvedWeight = resolveWeightInput(weight, unit, set.weight);
+    const resolvedWeight = resolveWeightInput(weight, unit, currentSet.weight);
     if (resolvedWeight === null || !Number.isFinite(resolvedWeight) || resolvedWeight < 0) {
       setErrorMessage("Weight must be 0 or greater (0 for bodyweight).");
       return;
@@ -188,13 +246,13 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
       rpeVal = parsedRpe;
     }
 
-    if (!set.id) {
+    if (!currentSet.id) {
       setErrorMessage("Cannot update set: missing set ID.");
       return;
     }
 
     updateMutation.mutate({
-      id: set.id,
+      id: currentSet.id,
       exercise_id: selectedExerciseId,
       weight: resolvedWeight,
       reps: repsVal,
@@ -204,11 +262,12 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
   };
 
   const handleDelete = () => {
-    if (!set.id) return;
-    onDeleteRequested(set);
+    if (!currentSet.id) return;
+    onDeleteRequested(currentSet);
   };
 
   const isPending = updateMutation.isPending;
+  const isBusy = isPending || isReloading;
 
   return (
     <Sheet
@@ -216,12 +275,28 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
       onClose={onClose}
       title="Edit Workout Set"
       testId={testId}
-      dismissible={!isPending}
+      dismissible={!isBusy}
     >
       <StatusBanner
         message={errorMessage}
         tone="error"
         icon={<AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />}
+        action={
+          conflictType ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleReload}
+              disabled={isBusy}
+              isLoading={isReloading}
+              testId="reload-set-btn"
+              className="min-h-[44px]"
+            >
+              Reload
+            </Button>
+          ) : undefined
+        }
       />
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -238,12 +313,12 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
             data-testid="edit-set-exercise-select"
             value={selectedExerciseId}
             onChange={(e) => setSelectedExerciseId(e.target.value)}
-            disabled={isPending}
+            disabled={isBusy}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl px-3 py-2.5 min-h-[44px] text-base font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none truncate"
           >
             {!exercises.some((ex) => ex.id === selectedExerciseId) && selectedExerciseId && (
               <option value={selectedExerciseId}>
-                {resolveExerciseLabel(set.exercise_name || set.exercise_id)}
+                {resolveExerciseLabel(currentSet.exercise_name || currentSet.exercise_id)}
               </option>
             )}
             {exercises.map((ex) => (
@@ -267,7 +342,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
             data-testid="edit-set-type-select"
             value={setType}
             onChange={(e) => setSetType(e.target.value as SetType)}
-            disabled={isPending}
+            disabled={isBusy}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl px-3 py-2.5 min-h-[44px] text-base font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none"
           >
             {SET_TYPES.map((t) => (
@@ -296,7 +371,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
               value={weight}
               onChange={(e) => handleWeightChange(e.target.value)}
               placeholder="0 for BW"
-              disabled={isPending}
+              disabled={isBusy}
               className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl px-3 py-2.5 min-h-[44px] text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             />
             <span className="text-xs text-zinc-400 mt-1 block">0 = Bodyweight</span>
@@ -319,7 +394,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
               value={reps}
               onChange={(e) => handleRepsChange(e.target.value)}
               placeholder="Reps"
-              disabled={isPending}
+              disabled={isBusy}
               className="w-full bg-zinc-950 border border-border-interactive text-cyan-300 rounded-xl px-3 py-2.5 min-h-[44px] text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             />
             <span className="text-xs text-zinc-400 mt-1 block">Min: 1</span>
@@ -342,7 +417,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
             value={rpe}
             onChange={(e) => handleRpeChange(e.target.value)}
             placeholder="e.g. 8.5"
-            disabled={isPending}
+            disabled={isBusy}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl px-3 py-2.5 min-h-[44px] h-11 text-base tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none"
           />
         </div>
@@ -354,7 +429,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
             variant="destructive"
             size="md"
             onClick={handleDelete}
-            disabled={isPending || !set.id}
+            disabled={isBusy || !currentSet.id}
             testId="delete-set-btn"
             leftIcon={<Trash2 className="w-4 h-4 text-rose-400" aria-hidden="true" />}
             className="flex-1"
@@ -367,7 +442,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
             variant="primary"
             size="md"
             isLoading={isPending}
-            disabled={!isDirty || isPending}
+            disabled={!isDirty || isBusy}
             testId="save-set-btn"
             className="flex-1"
           >
