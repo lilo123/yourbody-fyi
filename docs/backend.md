@@ -176,6 +176,17 @@ To support early adopters during the introduction of subscription plans, migrati
 ### Overview
 Stripe integration provides serverless edge functions for checkout session generation, customer portal navigation, and subscription webhook processing. This implementation operates in test mode on staging environments. Live keys are strictly refused by design unless `STRIPE_LIVE_ENABLED=true` is set.
 
+### API Versioning & Configuration
+Edge functions are pinned to Stripe API version **`2026-09-30.endive`**, ensuring API call responses and webhook event payloads operate on the identical schema:
+- **Shared SDK Configuration**: `supabase/functions/_shared/stripeConfig.ts` exports `STRIPE_API_VERSION = "2026-09-30.endive"` and passes it as `apiVersion` when constructing `Stripe` client instances.
+- **Direct HTTP Requests**: `supabase/functions/delete-account/index.ts` explicitly includes the `Stripe-Version: 2026-09-30.endive` header on all direct `fetch` calls to Stripe subscription endpoints.
+- **Webhook Endpoint**: Staging and production webhook endpoints in the Stripe Dashboard are configured to `2026-09-30.endive`.
+
+#### How to Bump the Stripe API Version
+1. Update `STRIPE_API_VERSION` in `supabase/functions/_shared/stripeConfig.ts` and `supabase/functions/delete-account/index.ts` together.
+2. In the Stripe Dashboard (**Developers > Webhooks**), update the webhook endpoint API version to match the new version.
+3. Run the automated test suites (`npm run test:deno`, `npx vitest run`) and execute the staging end-to-end billing tests before deploying functions.
+
 ### Subscription Tiers and Pricing Architecture
 
 The application supports three subscription tiers mapped to database `plan` and `coach_tier` values:
@@ -275,6 +286,7 @@ When using a Stripe restricted API key (`rk_live_...` or `rk_test_...`), the key
 - `GET /v1/subscriptions/{id}`: `Subscriptions: Read` (retrieves subscription line details)
 - `DELETE /v1/subscriptions/{id}`: `Subscriptions: Write` (cancels subscriptions upon account deletion, full refunds, or charge disputes)
 - `GET /v1/invoices/{id}`: `Invoices: Read` (retrieves invoice payment targets)
+- `GET /v1/invoice_payments`: `Invoices: Read` (resolves invoice from PaymentIntent on API version 2026-09-30.endive during refund/dispute auto-cancellation)
 - `GET /v1/charges/{id}`: `Charges: Read` (resolves charge dispute targets and refund states)
 - `GET /v1/payment_intents/{id}`: `PaymentIntents: Read` (inspects payment intent charges and keep_access metadata)
 - `GET /v1/refunds`: `Refunds: Read` (lists charge refunds to check keep_access metadata)
@@ -344,6 +356,7 @@ By owner decision, the staging/sandbox Customer Portal currently keeps "Switch p
   ```
 - **Grandfather-aware entitlement grants (`invoice.paid`)**: When processing `invoice.paid`, the webhook checks `public.billing_grandfather` for the target user. If an active grant exists (`granted_until > now()`), the update retains the higher plan tier (`pro` > `basic`), higher coach tier (`enterprise` > `pro` > `free`), and updates `paid_until = greatest(current paid_until, period_end)`. Users whose grant has expired (`granted_until <= now()`) or non-grandfathered users follow the standard plan and paid_until overwrite.
 - **Restricted API Key Permissions**: In addition to read permissions on Charges, Invoices, PaymentIntents, and Customers, the Stripe restricted key requires `Subscriptions: write` (specifically `DELETE /v1/subscriptions/{id}`) to enable automated subscription cancellation upon full refunds and disputes.
+- **Stripe Account Approvals Rules**: In the Stripe Dashboard (**Settings > Approvals**), rules on "Subscription canceled" and "Refund created" must be deactivated for this integration's key. If an active approval rule holds an automated cancellation for manual review (`err.code === 'approval_required'` or 400 "already an approval request"), the webhook logs the pending approval with the subscription ID (no PII), preserves the user access revocation, records the event as processed in `public.billing_events` (storing `cancel_pending_approval: true`), and returns `200` so Stripe terminates retries while awaiting review in the Dashboard.
 
 ### Idempotency and State Mutations
 Incoming webhook events are recorded in `public.billing_events`:
@@ -420,3 +433,55 @@ Configured in `supabase/config.toml` under `[functions.delete-account]` with `ve
 
 ### Staging-Only Testing Note
 Account deletion permanently and irreversibly destroys user records and offline data. The `account_deletion_enabled` flag must remain `false` in production environments until formally verified in staging with synthetic test accounts.
+
+## Owner Dashboard
+
+### Overview
+The Owner Dashboard provides administrative visibility into subscription distributions and AI usage metrics for authorized project owners. It operates via a read-only serverless edge function (`owner-stats`) querying a SECURITY DEFINER database function (`public.get_owner_stats()`). The dashboard exposes aggregated counts only; it never returns or displays personal identifiable information (PII) such as email addresses, user names, or user IDs.
+
+### Configuration & Access Control
+Access to the dashboard is double-gated behind an environment secret and a database feature flag:
+- **Secret (`OWNER_USER_IDS`)**: A comma-separated list of authorized Supabase auth user UUIDs (e.g. `OWNER_USER_IDS="<uuid1>,<uuid2>"`). If unset, empty, or if the authenticated caller's user ID is not in this list, the edge function immediately returns `403 { "error": "Forbidden: Not an owner", "code": "forbidden" }`.
+- **Feature Flag (`owner_dashboard_enabled`)**: A boolean key in `public.app_config`. Both the client card and edge function verify this flag; if missing or `false`, the client does not render the card and the edge function returns `403 { "error": "Feature disabled", "code": "feature_disabled" }`.
+- Both the secret and feature flag are unset/disabled by default.
+
+### Edge Function (`owner-stats`)
+- **Path**: `/functions/v1/owner-stats` (`verify_jwt = true` in `supabase/config.toml`).
+- **HTTP Methods**: `GET` and `POST` (plus `OPTIONS` for CORS preflight).
+- **Authentication**: Validates caller Bearer JWT with the anon client (`auth.getUser()`).
+- **Authorization**: Enforces caller user ID presence in `OWNER_USER_IDS` and checks `app_config.owner_dashboard_enabled = true`.
+- **Database Access**: Uses `service_role` to invoke `public.get_owner_stats()`. Execution permissions are revoked from `PUBLIC`, `anon`, and `authenticated`.
+- **Response Shape**:
+  ```json
+  {
+    "generated_at": "2026-10-11T12:00:00Z",
+    "tiers": {
+      "personal": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "coach": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "coach_pro": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "trial": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 },
+      "free": { "paying": 0, "grandfathered": 0, "unpaid": 0, "total": 0 }
+    },
+    "ai_today": {
+      "total_uses": 0,
+      "distinct_users": 0,
+      "by_plan": [
+        { "plan": "pro", "uses": 0 }
+      ]
+    }
+  }
+  ```
+
+### How to Enable
+To activate the Owner Dashboard for specific project owners:
+1. Configure the `OWNER_USER_IDS` secret in Supabase:
+   ```bash
+   supabase secrets set OWNER_USER_IDS="<user_uuid_1>,<user_uuid_2>"
+   ```
+2. Enable the feature flag in `public.app_config` using a `service_role` database client:
+   ```sql
+   INSERT INTO public.app_config (key, value, description)
+   VALUES ('owner_dashboard_enabled', 'true'::jsonb, 'Enables owner dashboard card in Settings')
+   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+   ```
+3. To disable, set the flag to `false` or unset `OWNER_USER_IDS`.

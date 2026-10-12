@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MacroGoalsCard } from './MacroGoalsCard';
 import { expectNoA11yViolations } from '../../test/a11y';
 
@@ -28,6 +28,53 @@ describe('MacroGoalsCard accessibility', () => {
     expect(screen.getByLabelText(/carbs/i)).toBeDefined();
     expect(screen.getByLabelText(/^fat/i)).toBeDefined();
     expect(screen.getByLabelText(/fiber/i)).toBeDefined();
+  });
+
+  it('renders single-line labels without units and unit captions below each input', () => {
+    render(<MacroGoalsCard {...defaultProps} />);
+
+    // Labels do not contain inline units
+    expect(screen.getByText('Calories')).toBeDefined();
+    expect(screen.getByText('Protein')).toBeDefined();
+    expect(screen.getByText('Carbs')).toBeDefined();
+    expect(screen.getByText('Fat')).toBeDefined();
+    expect(screen.getByText('Fiber')).toBeDefined();
+
+    expect(screen.queryByText(/Calories \(kcal\)/i)).toBeNull();
+    expect(screen.queryByText(/Protein \(g\)/i)).toBeNull();
+    expect(screen.queryByText(/Carbs \(g\)/i)).toBeNull();
+    expect(screen.queryByText(/Fat \(g\)/i)).toBeNull();
+    expect(screen.queryByText(/Fiber \(g\)/i)).toBeNull();
+
+    // Unit captions rendered below
+    expect(screen.getByText('kcal')).toBeDefined();
+    expect(screen.getAllByText('g')).toHaveLength(4);
+  });
+
+  it('exposes accessible descriptions via aria-describedby for each input', () => {
+    render(<MacroGoalsCard {...defaultProps} />);
+
+    const calInput = screen.getByLabelText(/calories/i);
+    const proteinInput = screen.getByLabelText(/protein/i);
+    const carbsInput = screen.getByLabelText(/carbs/i);
+    const fatInput = screen.getByLabelText(/^fat/i);
+    const fiberInput = screen.getByLabelText(/fiber/i);
+
+    expect(calInput).toHaveAccessibleDescription('kcal');
+    expect(proteinInput).toHaveAccessibleDescription('g');
+    expect(carbsInput).toHaveAccessibleDescription('g');
+    expect(fatInput).toHaveAccessibleDescription('g');
+    expect(fiberInput).toHaveAccessibleDescription('g');
+  });
+
+  it('handles save button submission', () => {
+    const onSave = vi.fn((e: React.FormEvent) => e.preventDefault());
+    render(<MacroGoalsCard {...defaultProps} onSave={onSave} />);
+
+    const saveButton = screen.getByRole('button', { name: /save goals/i });
+    fireEvent.click(saveButton);
+
+    expect(onSave).toHaveBeenCalledTimes(1);
   });
 
   it('passes axe accessibility audits with no violations', async () => {
