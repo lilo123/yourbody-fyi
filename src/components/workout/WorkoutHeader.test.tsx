@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WorkoutHeader } from './WorkoutHeader';
 import { expectNoA11yViolations } from '../../test/a11y';
+import { restTimerStore } from '../../utils/restTimerStore';
 
 describe('WorkoutHeader', () => {
   const defaultProps = {
@@ -116,5 +117,14 @@ describe('WorkoutHeader', () => {
       />
     );
     await expectNoA11yViolations(container);
+  });
+
+  it('calls restTimerStore.toggleHeaderTimer with restTimerSeconds when clicked', () => {
+    const toggleSpy = vi.spyOn(restTimerStore, 'toggleHeaderTimer');
+    render(<WorkoutHeader {...defaultProps} restTimerSeconds={120} />);
+    const timerBtn = screen.getByTestId('rest-timer-btn');
+    fireEvent.click(timerBtn);
+    expect(toggleSpy).toHaveBeenCalledWith(120);
+    toggleSpy.mockRestore();
   });
 });

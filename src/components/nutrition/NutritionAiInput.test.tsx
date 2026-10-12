@@ -380,6 +380,7 @@ describe('NutritionAiInput live regions and accessibility', () => {
       expect(upgradeBtn.className).toContain('min-h-[44px]');
       expect(screen.queryByTestId('retry-analysis-button')).toBeNull();
 
+      await import('../billing/UpgradeSheet');
       fireEvent.click(upgradeBtn);
       expect(await screen.findByTestId('upgrade-sheet')).toBeDefined();
     });

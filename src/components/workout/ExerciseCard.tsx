@@ -34,6 +34,7 @@ export interface ExerciseCardProps {
   onUpdateDraft: (exName: string, setIndex: number, field: 'weight' | 'reps', val: string) => void;
   onCommitSet: (exName: string, setIndex: number, ghost: any) => void;
   onEditSet?: (exIndex: number, rowIdx: number) => void;
+  onUnlogSet?: (exIndex: number, rowIdx: number) => void;
   onBatchLogExercise: (exName: string, targetCount: number, ghostValues: any[], setsToday: WorkoutSet[]) => void;
 }
 
@@ -103,6 +104,7 @@ function areExerciseCardPropsEqual(prev: ExerciseCardProps, next: ExerciseCardPr
     prev.onUpdateDraft !== next.onUpdateDraft ||
     prev.onCommitSet !== next.onCommitSet ||
     prev.onEditSet !== next.onEditSet ||
+    prev.onUnlogSet !== next.onUnlogSet ||
     prev.onBatchLogExercise !== next.onBatchLogExercise
   ) {
     return false;
@@ -161,6 +163,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = memo((props) => {
     onUpdateDraft,
     onCommitSet,
     onEditSet,
+    onUnlogSet,
     onBatchLogExercise,
   } = props;
 
@@ -392,6 +395,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = memo((props) => {
                 onUpdateDraft={onUpdateDraft}
                 onCommitSet={onCommitSet}
                 onEditSet={onEditSet}
+                onUnlogSet={onUnlogSet}
               />
             );
           })}

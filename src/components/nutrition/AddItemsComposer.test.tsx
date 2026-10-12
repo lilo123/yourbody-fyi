@@ -352,6 +352,7 @@ describe('AddItemsComposer', () => {
     expect(upgradeBtn).toBeDefined();
     expect(upgradeBtn.className).toContain('min-h-[44px]');
 
+    await import('../billing/UpgradeSheet');
     fireEvent.click(upgradeBtn);
 
     expect(await screen.findByTestId('upgrade-sheet')).toBeDefined();
