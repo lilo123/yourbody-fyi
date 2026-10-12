@@ -215,7 +215,7 @@ Deno.test("shared nutritionParser: extracts fenced yourbody and yourbody-v1 bloc
   );
 });
 
-Deno.test("shared nutritionParser: 93 golden corpus & sweep fixtures", () => {
+Deno.test("shared nutritionParser: 96 golden corpus & sweep fixtures", () => {
   for (const fixture of NUTRITION_CORPUS_FIXTURES) {
     const result = parseNutritionText(fixture.input);
     assertEquals(
@@ -469,5 +469,59 @@ Deno.test("shared nutritionParser: portion prefix on food line captures portion 
   assertEquals(result.meal?.servingSize, 8);
   assertEquals(result.meal?.servingUnit, "oz");
   assertEquals(result.meal?.calories, 360);
+});
+
+Deno.test("shared nutritionParser: prefers closest non-macro line above macros for single meal name", () => {
+  const inputWithLeadIn = [
+    "Here is my snack breakdown:",
+    "Protein bar",
+    "Calories: 220 kcal",
+    "Protein: 20g",
+    "Carbs: 22g",
+    "Fat: 6g",
+    "Hope this helps!",
+  ].join("\n");
+  const resultWithLeadIn = parseNutritionText(inputWithLeadIn);
+  assertEquals(resultWithLeadIn.confidence, "lenient");
+  assertEquals(resultWithLeadIn.meal?.name, "Protein bar");
+  assertEquals(resultWithLeadIn.meal?.calories, 220);
+  assertEquals(resultWithLeadIn.meal?.protein, 20);
+  assertEquals(resultWithLeadIn.meal?.carbs, 22);
+  assertEquals(resultWithLeadIn.meal?.fat, 6);
+  assertEquals(resultWithLeadIn.skippedLines, [
+    "Here is my snack breakdown:",
+    "Hope this helps!",
+  ]);
+
+  const inputWithLunchLeadIn = [
+    "Sure! Here's the breakdown for your lunch:",
+    "Chicken Rice Bowl",
+    "Calories: 520 kcal",
+    "Protein: 46g",
+    "Carbs: 58g",
+    "Fat: 12g",
+    "Hope that helps!",
+  ].join("\n");
+  const resultWithLunch = parseNutritionText(inputWithLunchLeadIn);
+  assertEquals(resultWithLunch.confidence, "lenient");
+  assertEquals(resultWithLunch.meal?.name, "Chicken Rice Bowl");
+  assertEquals(resultWithLunch.meal?.calories, 520);
+  assertEquals(resultWithLunch.skippedLines, [
+    "Sure! Here's the breakdown for your lunch:",
+    "Hope that helps!",
+  ]);
+
+  const inputWithoutLeadIn = [
+    "Protein bar",
+    "Calories: 220 kcal",
+    "Protein: 20g",
+    "Carbs: 22g",
+    "Fat: 6g",
+  ].join("\n");
+  const resultWithoutLeadIn = parseNutritionText(inputWithoutLeadIn);
+  assertEquals(resultWithoutLeadIn.confidence, "exact");
+  assertEquals(resultWithoutLeadIn.meal?.name, "Protein bar");
+  assertEquals(resultWithoutLeadIn.meal?.calories, 220);
+  assertEquals(resultWithoutLeadIn.skippedLines, []);
 });
 
