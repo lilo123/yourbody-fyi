@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './AuthContext';
@@ -22,8 +22,22 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-const TestConsumer: React.FC = () => {
+interface TestConsumerProps {
+  onSignOutReady?: (signOut: () => Promise<void>) => void;
+  onRefreshProfileReady?: (refreshProfile: () => Promise<void>) => void;
+}
+
+const TestConsumer: React.FC<TestConsumerProps> = ({
+  onSignOutReady,
+  onRefreshProfileReady,
+}) => {
   const { user, profile, loading, signOut, refreshProfile } = useAuth();
+  React.useEffect(() => {
+    onSignOutReady?.(signOut);
+  }, [onSignOutReady, signOut]);
+  React.useEffect(() => {
+    onRefreshProfileReady?.(refreshProfile);
+  }, [onRefreshProfileReady, refreshProfile]);
   return (
     <div>
       <div data-testid="auth-loading">{loading ? 'true' : 'false'}</div>
@@ -104,7 +118,7 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
   });
 
   it('2. resolves via 3000ms timeout race when getSession hangs and clears loading', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     // Simulate stalled network socket: getSession never resolves
     (supabase.auth.getSession as any).mockImplementation(() => new Promise(() => {}));
 
@@ -205,10 +219,12 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
     localStorage.setItem('yourbody_extra_custom_key', 'some_val');
     localStorage.setItem('unrelated_app_key', 'preserve_me');
 
+    let signOutFn: () => Promise<void> = async () => {};
+
     render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TestConsumer />
+          <TestConsumer onSignOutReady={(fn) => { signOutFn = fn; }} />
         </AuthProvider>
       </QueryClientProvider>
     );
@@ -217,9 +233,8 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
       expect(screen.getByTestId('auth-user-id').textContent).toBe(mockProfile.id);
     });
 
-    const signOutBtn = screen.getByTestId('auth-signout-btn');
     await act(async () => {
-      fireEvent.click(signOutBtn);
+      await signOutFn();
     });
 
     expect(localStorage.getItem('yourbody_user')).toBeNull();
@@ -243,29 +258,28 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
       return createSupabaseBuilder(table, updatedProfile);
     });
 
+    let refreshProfileFn: () => Promise<void> = async () => {};
+
     render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TestConsumer />
+          <TestConsumer onRefreshProfileReady={(fn) => { refreshProfileFn = fn; }} />
         </AuthProvider>
       </QueryClientProvider>
     );
 
     expect(screen.getByTestId('auth-profile-username').textContent).toBe(mockProfile.username);
 
-    const refreshBtn = screen.getByTestId('auth-refresh-btn');
     await act(async () => {
-      fireEvent.click(refreshBtn);
+      await refreshProfileFn();
     });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('auth-profile-username').textContent).toBe('UpdatedCyberWarrior');
-    });
+    expect(screen.getByTestId('auth-profile-username').textContent).toBe('UpdatedCyberWarrior');
 
     expect(getRecordedTables()).toContain('users');
     expect(getRecordedSelects()).toContainEqual({
       table: 'users',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
     });
   });
 
@@ -278,10 +292,12 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
       return { data: { subscription: { unsubscribe: vi.fn() } } };
     });
 
+    let signOutFn: () => Promise<void> = async () => {};
+
     render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TestConsumer />
+          <TestConsumer onSignOutReady={(fn) => { signOutFn = fn; }} />
         </AuthProvider>
       </QueryClientProvider>
     );
@@ -291,9 +307,8 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
     });
 
     // Sign out
-    const signOutBtn = screen.getByTestId('auth-signout-btn');
     await act(async () => {
-      fireEvent.click(signOutBtn);
+      await signOutFn();
     });
 
     expect(screen.getByTestId('auth-user-id').textContent).toBe('none');
@@ -776,10 +791,12 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
         },
       });
 
+      let refreshProfileFn: () => Promise<void> = async () => {};
+
       render(
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <TestConsumer />
+            <TestConsumer onRefreshProfileReady={(fn) => { refreshProfileFn = fn; }} />
           </AuthProvider>
         </QueryClientProvider>
       );
@@ -789,14 +806,11 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
       });
 
       // Trigger refreshProfile
-      const refreshBtn = screen.getByTestId('auth-refresh-btn');
       await act(async () => {
-        fireEvent.click(refreshBtn);
+        await refreshProfileFn();
       });
 
-      await waitFor(() => {
-        expect(screen.getByTestId('auth-profile-username').textContent).toBe(mockProfile.username);
-      });
+      expect(screen.getByTestId('auth-profile-username').textContent).toBe(mockProfile.username);
 
       // RPC still called only once
       expect(supabase.rpc).toHaveBeenCalledTimes(1);

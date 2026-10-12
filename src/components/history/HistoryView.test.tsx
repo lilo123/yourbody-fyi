@@ -342,7 +342,7 @@ describe('HistoryView', () => {
     expect(getRecordedTables()).toContain('users');
     expect(getRecordedSelects()).toContainEqual({
       table: 'users',
-      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
+      projection: 'id, email, username, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, rest_timer_seconds, is_coach_mode, coach_code, coach_tier, max_athletes, created_at, timezone, weight_unit, pr_mode',
     });
   });
 
