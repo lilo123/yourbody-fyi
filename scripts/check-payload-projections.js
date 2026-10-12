@@ -30,11 +30,16 @@ const srcDir = path.resolve(rootDir, "src");
 
 export const DENYLIST_TOKENS = ["items", "ingredients", "sets(", "template_exercises("];
 
+// Scalar JSON path drilldown: e.g. items->0->quantity or items->0->>unit (index/key then property).
+// Bare array/object extracts such as items->0 or items->>0 return whole objects and remain denylisted.
+const SCALAR_JSON_PATH_RE = /\b(items|ingredients)\s*->\s*(?:\d+|'[^']+'|"[^"]+")\s*(?:->|->>)\s*[\w]+/g;
+
 export function matchDenylistedTokens(projection) {
   if (!projection || typeof projection !== "string") return [];
+  const stripped = projection.replace(SCALAR_JSON_PATH_RE, "");
   const matched = [];
-  if (/\bitems\b(?!\s*->)/.test(projection)) matched.push("items");
-  if (/\bingredients\b(?!\s*->)/.test(projection)) matched.push("ingredients");
+  if (/\bitems\b/.test(stripped)) matched.push("items");
+  if (/\bingredients\b/.test(stripped)) matched.push("ingredients");
   if (projection.includes("sets(")) matched.push("sets(");
   if (projection.includes("template_exercises(")) matched.push("template_exercises(");
   return matched;

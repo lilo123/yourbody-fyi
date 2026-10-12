@@ -200,4 +200,34 @@ describe("Supabase Payload Projection Check", () => {
     expect(result.violations).toHaveLength(0);
     expect(result.escapes).toHaveLength(0);
   });
+
+  it("flags non-scalar bare JSON object drilldown items->0 as heavy projection", () => {
+    const code = [
+      "const { data } = await supabase",
+      "  .from('custom_dishes')",
+      "  .select('id, name, first_item:items->0');",
+    ].join("\n");
+
+    const result = analyzeSource(code);
+    expect(result.ok).toBe(false);
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0].table).toBe("custom_dishes");
+    expect(result.violations[0].matchedTokens).toContain("items");
+    expect(result.escapes).toHaveLength(0);
+  });
+
+  it("flags non-scalar bare JSON text extract items->>0 as heavy projection", () => {
+    const code = [
+      "const { data } = await supabase",
+      "  .from('custom_dishes')",
+      "  .select('id, name, first_item_txt:items->>0');",
+    ].join("\n");
+
+    const result = analyzeSource(code);
+    expect(result.ok).toBe(false);
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0].table).toBe("custom_dishes");
+    expect(result.violations[0].matchedTokens).toContain("items");
+    expect(result.escapes).toHaveLength(0);
+  });
 });
