@@ -1703,5 +1703,59 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
       "reason": "Looks like more than one meal: log them one at a time",
       "hint": null
     }
+  },
+  {
+    "id": 94,
+    "title": "[Lead-in Paste] Snack breakdown with lead-in and sign-off",
+    "input": "Here is my snack breakdown:\nProtein bar\nCalories: 220 kcal\nProtein: 20g\nCarbs: 22g\nFat: 6g\nHope this helps!",
+    "expected": {
+      "confidence": "lenient",
+      "ok": true,
+      "calories": 220,
+      "protein": 20,
+      "carbs": 22,
+      "fat": 6,
+      "fiber": null,
+      "name": "Protein bar",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 95,
+    "title": "[Lead-in Paste] Lunch breakdown with conversational lead-in and sign-off",
+    "input": "Sure! Here's the breakdown for your lunch:\nChicken Rice Bowl\nCalories: 520 kcal\nProtein: 46g\nCarbs: 58g\nFat: 12g\nHope that helps!",
+    "expected": {
+      "confidence": "lenient",
+      "ok": true,
+      "calories": 520,
+      "protein": 46,
+      "carbs": 58,
+      "fat": 12,
+      "fiber": null,
+      "name": "Chicken Rice Bowl",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 96,
+    "title": "[Lead-in Paste] Protein bar without lead-in",
+    "input": "Protein bar\nCalories: 220 kcal\nProtein: 20g\nCarbs: 22g\nFat: 6g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 220,
+      "protein": 20,
+      "carbs": 22,
+      "fat": 6,
+      "fiber": null,
+      "name": "Protein bar",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
   }
 ];
