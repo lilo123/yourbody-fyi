@@ -6348,6 +6348,53 @@ test.describe("Route-Wide Density & Tap Grid", () => {
     }
   });
 
+  for (const width of [320, 390] as const) {
+    test(`In-app browser banner on / (Instagram UA) at ${width}px`, async ({ browser }) => {
+      const instagramUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21E236 Instagram 324.0.0.18.109';
+      const page = await browser.newPage({
+        viewport: { width, height: 844 },
+        deviceScaleFactor: 1,
+        userAgent: instagramUa,
+      });
+      try {
+        await page.goto('/');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
+
+        const banner = page.locator('[data-testid="in-app-browser-banner"]');
+        await expect(banner).toBeVisible();
+
+        const bannerBox = await banner.boundingBox();
+        const headerBox = await page.locator('[data-testid="landing-header"]').boundingBox();
+        expect(bannerBox && headerBox && bannerBox.y < headerBox.y, 'Banner renders above landing header').toBe(true);
+
+        const hasPageHOverflow = await page.evaluate(
+          () => document.documentElement.scrollWidth > document.documentElement.clientWidth
+        );
+        expect(
+          hasPageHOverflow,
+          `Viewport ${width}px must not have horizontal overflow with in-app banner`
+        ).toBe(false);
+
+        const violations = await checkTypeScale(banner, {
+          includeHeaderAndNav: true,
+          allowSizes16Plus: true,
+        });
+        expect(
+          violations,
+          `Type scale violations on in-app banner at ${width}px:\n${JSON.stringify(violations, null, 2)}`
+        ).toHaveLength(0);
+
+        const dismissBtn = page.locator('[data-testid="in-app-browser-dismiss"]');
+        await dismissBtn.click();
+        await expect(banner).not.toBeVisible();
+      } finally {
+        await page.close();
+      }
+    });
+  }
+
   test("Standalone mode at / renders app redirect, not landing at 320px", async ({ browser }) => {
     const page = await browser.newPage({
       viewport: { width: 320, height: 844 },
