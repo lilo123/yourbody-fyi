@@ -6,6 +6,7 @@ import { useWorkoutMutations } from './useWorkoutMutations';
 import * as setsLib from '../../lib/sets';
 import * as invalidateLib from '../../lib/invalidate';
 import { workoutSessionStore } from '../../utils/workoutSessionStore';
+import { restTimerStore } from '../../utils/restTimerStore';
 import { supabase } from '../../lib/supabase';
 
 describe('useWorkoutMutations', () => {
@@ -564,5 +565,130 @@ describe('useWorkoutMutations', () => {
     } finally {
       onlineManager.setOnline(true);
     }
+  });
+
+  describe('rest timer duration configuration', () => {
+    it('starts rest timer with configured restTimerSeconds on single set log', async () => {
+      const timerSpy = vi.spyOn(restTimerStore, 'start');
+      vi.spyOn(setsLib, 'getOrCreateWorkout').mockResolvedValue('w-123');
+      vi.spyOn(setsLib, 'insertSet').mockResolvedValue({
+        id: 'set-1',
+        workout_id: 'w-123',
+        exercise_id: exerciseId,
+        weight: 135,
+        reps: 10,
+        set_index: 1,
+        set_type: 'working',
+        rpe: null,
+        created_at: new Date().toISOString(),
+      });
+
+      const { result } = renderHook(
+        () =>
+          useWorkoutMutations({
+            targetUserId,
+            workoutDate,
+            activeRoutineName: 'Chest Day',
+            exercises: exercises as any,
+            autoRestTimer: true,
+            restTimerSeconds: 120,
+          }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.logSetMutation.mutateAsync({
+          exerciseName: 'Bench Press',
+          weight: 135,
+          reps: 10,
+          setIndex: 1,
+        });
+      });
+
+      expect(timerSpy).toHaveBeenCalledWith(120);
+    });
+
+    it('starts rest timer with configured restTimerSeconds on batch log sets', async () => {
+      const timerSpy = vi.spyOn(restTimerStore, 'start');
+      vi.spyOn(setsLib, 'getOrCreateWorkout').mockResolvedValue('w-123');
+      vi.spyOn(setsLib, 'batchInsertSets').mockResolvedValue([
+        {
+          id: 'set-b1',
+          workout_id: 'w-123',
+          exercise_id: exerciseId,
+          weight: 135,
+          reps: 10,
+          set_index: 1,
+          set_type: 'working',
+          rpe: null,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      const { result } = renderHook(
+        () =>
+          useWorkoutMutations({
+            targetUserId,
+            workoutDate,
+            activeRoutineName: 'Chest Day',
+            exercises: exercises as any,
+            autoRestTimer: true,
+            restTimerSeconds: 150,
+          }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.batchLogSetsMutation.mutateAsync([
+          {
+            exerciseName: 'Bench Press',
+            weight: 135,
+            reps: 10,
+            setIndex: 1,
+          },
+        ]);
+      });
+
+      expect(timerSpy).toHaveBeenCalledWith(150);
+    });
+
+    it('defaults rest timer to 90 seconds if restTimerSeconds is omitted', async () => {
+      const timerSpy = vi.spyOn(restTimerStore, 'start');
+      vi.spyOn(setsLib, 'getOrCreateWorkout').mockResolvedValue('w-123');
+      vi.spyOn(setsLib, 'insertSet').mockResolvedValue({
+        id: 'set-1',
+        workout_id: 'w-123',
+        exercise_id: exerciseId,
+        weight: 135,
+        reps: 10,
+        set_index: 1,
+        set_type: 'working',
+        rpe: null,
+        created_at: new Date().toISOString(),
+      });
+
+      const { result } = renderHook(
+        () =>
+          useWorkoutMutations({
+            targetUserId,
+            workoutDate,
+            activeRoutineName: 'Chest Day',
+            exercises: exercises as any,
+            autoRestTimer: true,
+          }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.logSetMutation.mutateAsync({
+          exerciseName: 'Bench Press',
+          weight: 135,
+          reps: 10,
+          setIndex: 1,
+        });
+      });
+
+      expect(timerSpy).toHaveBeenCalledWith(90);
+    });
   });
 });

@@ -3,6 +3,7 @@ import type { CustomDish } from '../../types/database';
 import { Plus, Edit2, FileText } from 'lucide-react';
 import { getDishIcon } from '../../utils/dishIcons';
 import { formatCalories, formatMacro } from '../../utils/nutrition';
+import { getCustomDishPortion } from '../../utils/itemModel';
 
 export interface QuickLogDishCardProps {
   dish: CustomDish & { notes?: string | null };
@@ -24,6 +25,7 @@ export const QuickLogDishCard: React.FC<QuickLogDishCardProps> = memo(({
   onAddCustomDishToStaged,
 }) => {
   const hasNote = Boolean(dish.notes && dish.notes.trim().length > 0);
+  const portion = getCustomDishPortion(dish);
 
   const handlePrimaryClick = () => {
     if (isStaged && onAddCustomDishToStaged) {
@@ -84,6 +86,12 @@ export const QuickLogDishCard: React.FC<QuickLogDishCardProps> = memo(({
           </div>
 
           <div className="text-xs text-zinc-400 tabular-nums whitespace-nowrap mt-0.5 leading-tight flex items-center gap-1.5">
+            {portion && (
+              <>
+                <span>{portion}</span>
+                <span className="text-zinc-600 font-normal">•</span>
+              </>
+            )}
             <span className="text-amber-400 font-bold">{formatCalories(dish.calories)} kcal</span>
             <span className="text-zinc-600 font-normal">•</span>
             <span className="text-cyan-400 font-semibold">{formatMacro(dish.protein)}g P</span>

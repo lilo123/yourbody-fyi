@@ -184,9 +184,11 @@ export const NutritionEngine: React.FC = () => {
       setShowManualForm(false);
       showToast({ message: 'Analyzed', verb: 'Analyzed', subject: meal.name, kind: 'info', testId: 'status-message' });
     },
-    onFallbackToManual: (dishName) => {
+    onFallbackToManual: (dishName, prefill) => {
       setShowManualForm(true);
-      if (!manualMealForm.manualDishName.trim()) {
+      if (prefill) {
+        manualMealForm.prefillForm({ name: prefill.name || dishName, ...prefill });
+      } else if (!manualMealForm.manualDishName.trim()) {
         manualMealForm.setManualDishName(dishName);
       }
       setStagedMeal(null);
@@ -550,6 +552,8 @@ export const NutritionEngine: React.FC = () => {
         editingDish={dishModal.editingDish} customDishes={displayedCustomDishes}
         dishModalKind={dishModal.dishModalKind} setDishModalKind={dishModal.setDishModalKind}
         dishModalName={dishModal.dishModalName} setDishModalName={dishModal.setDishModalName}
+        dishModalQuantity={dishModal.dishModalQuantity} setDishModalQuantity={dishModal.setDishModalQuantity} dishModalUnit={dishModal.dishModalUnit} setDishModalUnit={dishModal.setDishModalUnit}
+        onQuantityChange={dishModal.handleQuantityChange} onUnitChange={dishModal.handleUnitChange}
         dishModalCalories={dishModal.dishModalCalories} setDishModalCalories={dishModal.setDishModalCalories}
         dishModalProtein={dishModal.dishModalProtein} setDishModalProtein={dishModal.setDishModalProtein}
         dishModalCarbs={dishModal.dishModalCarbs} setDishModalCarbs={dishModal.setDishModalCarbs}
