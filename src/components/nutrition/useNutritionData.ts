@@ -10,7 +10,7 @@ import {
   setFlusherSessionUser,
   type NutritionLogPayload,
 } from '../../offline';
-import { markFirstLogCompleted } from '../../pwa/installPromptStore';
+import { markFirstLogCompleted } from '../../pwa/installPromptEarly';
 
 export async function fetchDishDetail(dishId: string): Promise<CustomDishDetail | null> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {

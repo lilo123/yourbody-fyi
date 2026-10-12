@@ -14,7 +14,7 @@ import {
 } from "../../lib/sets";
 import { newId } from "../../offline";
 import { isUUID } from "./workoutEngineHelpers";
-import { markFirstLogCompleted } from "../../pwa/installPromptStore";
+import { markFirstLogCompleted } from "../../pwa/installPromptEarly";
 
 export interface ExerciseCardError {
   message: string;

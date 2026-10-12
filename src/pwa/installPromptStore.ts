@@ -1,16 +1,31 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
+import {
+  FIRST_LOG_KEY,
+  INSTALLED_KEY,
+  getStashedPrompt,
+  setStashedPrompt,
+  isAppInstalledStashed,
+  setAppInstalledStashed,
+  hasLoggedFirstActivity,
+  markFirstLogCompleted,
+  onFirstLogRecorded,
+  onPromptStashChanged,
+  type BeforeInstallPromptChoice,
+  type BeforeInstallPromptEvent,
+} from './installPromptEarly';
 
-export interface BeforeInstallPromptChoice {
-  outcome: 'accepted' | 'dismissed';
-  platform: string;
-}
-
-export interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: string[];
-  readonly userChoice: Promise<BeforeInstallPromptChoice>;
-  prompt(): Promise<void>;
-}
+export {
+  FIRST_LOG_KEY,
+  INSTALLED_KEY,
+  getStashedPrompt,
+  setStashedPrompt,
+  hasLoggedFirstActivity,
+  markFirstLogCompleted,
+  onFirstLogRecorded,
+  type BeforeInstallPromptChoice,
+  type BeforeInstallPromptEvent,
+};
 
 export interface InstallPromptState {
   shouldShowPrompt: boolean;
@@ -24,14 +39,9 @@ export interface InstallPromptState {
 
 export const INSTALL_DISMISSED_AT_KEY = 'yourbody_install_prompt_dismissed_at';
 export const INSTALL_DISMISS_COUNT_KEY = 'yourbody_install_prompt_dismiss_count';
-export const FIRST_LOG_KEY = 'yourbody_install_prompt_first_log';
-export const INSTALLED_KEY = 'yourbody_install_prompt_installed';
 
 export const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-let deferredPrompt: BeforeInstallPromptEvent | null = null;
-let isInstalledState = false;
-let isListenerAttached = false;
 const listeners = new Set<() => void>();
 
 // Test overrides
@@ -133,46 +143,19 @@ export function recordDismissal(now?: number): void {
   updateState();
 }
 
-export function hasLoggedFirstActivity(): boolean {
-  if (typeof localStorage === 'undefined') return false;
-  try {
-    return localStorage.getItem(FIRST_LOG_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-export function markFirstLogCompleted(): void {
-  if (typeof localStorage !== 'undefined') {
-    try {
-      localStorage.setItem(FIRST_LOG_KEY, 'true');
-    } catch {
-      // Ignore localStorage errors
-    }
-  }
-  updateState();
-}
-
 export function markInstalled(): void {
-  isInstalledState = true;
-  deferredPrompt = null;
-  if (typeof localStorage !== 'undefined') {
-    try {
-      localStorage.setItem(INSTALLED_KEY, 'true');
-    } catch {
-      // Ignore localStorage errors
-    }
-  }
+  setAppInstalledStashed(true);
   updateState();
 }
 
 export async function promptToInstall(): Promise<'accepted' | 'dismissed' | null> {
-  if (!deferredPrompt) {
+  const deferred = getStashedPrompt();
+  if (!deferred) {
     return null;
   }
   try {
-    await deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
+    await deferred.prompt();
+    const choice = await deferred.userChoice;
     if (choice?.outcome === 'accepted') {
       markInstalled();
     }
@@ -207,7 +190,7 @@ export function syncFirstLogFromQueryClient(queryClient: QueryClient): void {
 function computeSnapshot(): InstallPromptState {
   const standalone = isStandalone();
   const installed =
-    isInstalledState ||
+    isAppInstalledStashed() ||
     (typeof localStorage !== 'undefined' && localStorage.getItem(INSTALLED_KEY) === 'true');
   const dismissed = isDismissed();
   const logged = hasLoggedFirstActivity();
@@ -215,7 +198,7 @@ function computeSnapshot(): InstallPromptState {
   const plat = getPlatformInfo();
   // On iOS: only iOS Safari can prompt/show instructions; CriOS/FxiOS cannot
   // On non-iOS: requires captured beforeinstallprompt event
-  const canPrompt = plat.isIOS ? plat.isIOSSafari : Boolean(deferredPrompt);
+  const canPrompt = plat.isIOS ? plat.isIOSSafari : Boolean(getStashedPrompt());
 
   const shouldShowPrompt = !standalone && !installed && !dismissed && logged && canPrompt;
 
@@ -255,6 +238,10 @@ export function updateInstallPromptState(force = false): void {
   updateState(force);
 }
 
+// Subscribe to early events and first-log flips
+onPromptStashChanged(() => updateState());
+onFirstLogRecorded(() => updateState());
+
 export function subscribeInstallPrompt(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
@@ -278,39 +265,6 @@ export function getServerInstallPromptSnapshot(): InstallPromptState {
   };
 }
 
-export function initInstallPromptListener(): () => void {
-  if (typeof window === 'undefined' || isListenerAttached) {
-    return () => {};
-  }
-  isListenerAttached = true;
-
-  const handleBeforeInstallPrompt = (e: Event) => {
-    e.preventDefault();
-    deferredPrompt = e as BeforeInstallPromptEvent;
-    updateState();
-  };
-
-  const handleAppInstalled = () => {
-    markInstalled();
-  };
-
-  window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-  window.addEventListener('appinstalled', handleAppInstalled);
-
-  updateState();
-
-  return () => {
-    window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.removeEventListener('appinstalled', handleAppInstalled);
-    isListenerAttached = false;
-  };
-}
-
-// Attach listener immediately upon module load if in browser
-if (typeof window !== 'undefined') {
-  initInstallPromptListener();
-}
-
 export function useInstallPrompt(): InstallPromptState & {
   promptToInstall: () => Promise<'accepted' | 'dismissed' | null>;
   dismissPrompt: () => void;
@@ -330,30 +284,14 @@ export function useInstallPrompt(): InstallPromptState & {
 
 export function useFirstLogSync(queryClient: QueryClient): void {
   useEffect(() => {
-    if (hasLoggedFirstActivity()) return;
-
     syncFirstLogFromQueryClient(queryClient);
-
-    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
-      if (event?.type === 'updated' && event.query.state.status === 'success') {
-        const key = event.query.queryKey;
-        if (key && (key[0] === 'workout_sets' || key[0] === 'nutrition_logs')) {
-          const data = event.query.state.data;
-          if (Array.isArray(data) && data.length > 0) {
-            markFirstLogCompleted();
-          }
-        }
-      }
-    });
-
-    return unsubscribe;
   }, [queryClient]);
 }
 
 // Test helpers
 export function resetInstallPromptStoreForTesting(): void {
-  deferredPrompt = null;
-  isInstalledState = false;
+  setStashedPrompt(null);
+  setAppInstalledStashed(false);
   platformOverride = null;
   standaloneOverride = null;
   timeOverride = null;
@@ -361,7 +299,7 @@ export function resetInstallPromptStoreForTesting(): void {
 }
 
 export function setDeferredPromptForTesting(prompt: BeforeInstallPromptEvent | null): void {
-  deferredPrompt = prompt;
+  setStashedPrompt(prompt);
   updateState();
 }
 
