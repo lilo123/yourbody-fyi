@@ -177,26 +177,30 @@ describe('App Shell & Navigation', () => {
   });
 
   it('renders Cyberpunk pulse spinner and retry button in ProtectedRoute when loading exceeds 2s', async () => {
+    window.history.pushState({}, '', '/workout');
     vi.useFakeTimers();
-    (supabase.auth.getSession as any).mockImplementation(() => new Promise(() => {}));
-    localStorage.clear();
+    try {
+      (supabase.auth.getSession as any).mockImplementation(() => new Promise(() => {}));
+      localStorage.clear();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    );
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
 
-    expect(screen.getByText('Connecting to Yourbody...')).toBeDefined();
-    expect(screen.queryByTestId('auth-retry-button')).toBeNull();
+      expect(screen.getByText('Connecting to Yourbody...')).toBeDefined();
+      expect(screen.queryByTestId('auth-retry-button')).toBeNull();
 
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
 
-    expect(screen.getByTestId('auth-retry-button')).toBeDefined();
-    expect(screen.getByText('Connecting to Yourbody... Tap to Retry')).toBeDefined();
-    vi.useRealTimers();
+      expect(screen.getByTestId('auth-retry-button')).toBeDefined();
+      expect(screen.getByText('Connecting to Yourbody... Tap to Retry')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders protected content immediately without showing loading spinner when cached user exists in localStorage', () => {
@@ -278,6 +282,113 @@ describe('App Shell & Navigation', () => {
       expect(roleButton.getAttribute('aria-label')).toContain(roleButton.textContent?.trim() || '');
       expect(screen.queryByText('Coach Dashboard')).toBeNull();
     }, { timeout: 10000 });
+  });
+
+  it('renders landing headline for a logged-out browser visitor at /', async () => {
+    (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
+    (supabase.auth.getSession as any).mockResolvedValue({ data: { session: null } });
+    localStorage.clear();
+    window.history.pushState({}, '', '/');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /You know your workout\. We just help you track it\./i })
+      ).toBeDefined();
+    });
+    expect(screen.getAllByText('Start free').length).toBeGreaterThanOrEqual(1);
+    // App header (connection status) must NOT be present on logged-out landing
+    expect(screen.queryByTestId('connection-status')).toBeNull();
+  });
+
+  it('redirects and does not render landing headline for a standalone-mode visitor at /', async () => {
+    (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
+    (supabase.auth.getSession as any).mockResolvedValue({ data: { session: null } });
+    localStorage.clear();
+    window.history.pushState({}, '', '/');
+
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(display-mode: standalone)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
+
+      // In standalone mode, root redirect kicks in: does NOT display landing headline
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('heading', { name: /You know your workout\. We just help you track it\./i })
+        ).toBeNull();
+      });
+
+      // Instead, it redirected to /workout where unauthenticated user eventually hits login
+      await waitFor(() => {
+        expect(screen.getAllByText('Sign In').length).toBeGreaterThanOrEqual(1);
+      });
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it('renders auth loading fallback at / while loading without cached user (no landing rendered, no redirect)', () => {
+    (supabase.auth.getSession as any).mockImplementation(() => new Promise(() => {}));
+    localStorage.clear();
+    window.history.pushState({}, '', '/');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    // Auth loading fallback is rendered
+    expect(screen.getByText('Connecting to Yourbody...')).toBeDefined();
+
+    // No landing headline is rendered
+    expect(
+      screen.queryByRole('heading', { name: /You know your workout\. We just help you track it\./i })
+    ).toBeNull();
+    expect(screen.queryByText('Start free')).toBeNull();
+
+    // No redirect occurred: stays at '/' and neither login nor workout engine is mounted
+    expect(window.location.pathname).toBe('/');
+    expect(screen.queryByPlaceholderText('you@example.com')).toBeNull();
+  });
+
+  it('redirects to last route and does not render landing for a logged-in visitor at /', async () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Yourbody.fyi')).toBeDefined();
+      expect(screen.getByTestId('nav-workout')).toBeDefined();
+    });
+
+    expect(
+      screen.queryByRole('heading', { name: /You know your workout\. We just help you track it\./i })
+    ).toBeNull();
+    // App header IS present on authenticated app view
+    expect(screen.getByTestId('connection-status')).toBeDefined();
   });
 });
 

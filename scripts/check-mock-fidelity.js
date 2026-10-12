@@ -68,7 +68,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'workouts',
       type: 'EXACT',
-      projection: 'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id)',
+      projection: 'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id, set_type, rpe)',
       projectionVar: 'WORKOUT_WITH_SETS_PROJECTION',
       description: 'Athlete workout logs query',
     },
@@ -332,7 +332,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'workouts',
       type: 'EXACT',
-      projection: 'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id)',
+      projection: 'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id, set_type, rpe)',
       projectionVar: 'WORKOUT_WITH_SETS_PROJECTION',
       description: 'Current session workouts query',
     },

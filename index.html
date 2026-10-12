@@ -10,24 +10,16 @@
     <meta name="apple-mobile-web-app-title" content="Yourbody.fyi" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Yourbody.fyi | Fitness & Nutrition</title>
+    <meta name="description" content="A no-frills workout and meal tracker. Free forever, with coach mode built in. Your data stays yours." />
+    <link rel="canonical" href="https://www.yourbody.fyi/" />
+    <meta property="og:title" content="Yourbody.fyi | Fitness & Nutrition" />
+    <meta property="og:description" content="A no-frills workout and meal tracker. Free forever, with coach mode built in. Your data stays yours." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Yourbody" />
+    <meta property="og:url" content="https://www.yourbody.fyi/" />
+    <meta property="og:image" content="https://www.yourbody.fyi/pwa-512x512.png" />
+    <meta name="twitter:card" content="summary" />
 
-    <!-- Supabase Origin Resource Hints (Environment-Aware) -->
-    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
-    <link rel="dns-prefetch" href="%VITE_SUPABASE_URL%" />
-    <script>
-      (function () {
-        var preconnect = document.querySelector('link[rel="preconnect"]');
-        var dnsPrefetch = document.querySelector('link[rel="dns-prefetch"]');
-        [preconnect, dnsPrefetch].forEach(function (el) {
-          if (el) {
-            var href = el.getAttribute('href');
-            if (!href || href.startsWith('%') || href === 'undefined' || href === 'null') {
-              el.remove();
-            }
-          }
-        });
-      })();
-    </script>
   </head>
   <body class="bg-zinc-950 text-zinc-100 antialiased selection:bg-cyan-500/20 selection:text-cyan-300">
     <div id="root"></div>
