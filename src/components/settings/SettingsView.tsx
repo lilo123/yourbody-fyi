@@ -21,6 +21,19 @@ import { PrModeCard } from './PrModeCard';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 
+const REST_TIMER_OPTIONS: readonly { readonly value: number; readonly label: string }[] = [
+  { value: 30, label: '30 s' },
+  { value: 45, label: '45 s' },
+  { value: 60, label: '60 s' },
+  { value: 75, label: '75 s' },
+  { value: 90, label: '90 s' },
+  { value: 120, label: '2 min' },
+  { value: 150, label: '2 min 30 s' },
+  { value: 180, label: '3 min' },
+  { value: 240, label: '4 min' },
+  { value: 300, label: '5 min' },
+] as const;
+
 const SubscriptionCard = React.lazy(() => import('./SubscriptionCard'));
 const AccountCard = React.lazy(() => import('./AccountCard'));
 const OwnerDashboardCard = React.lazy(() => import('./OwnerDashboardCard'));
@@ -57,10 +70,24 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
     const localVal = localStorage.getItem('yourbody_auto_rest_timer');
     return localVal !== null ? localVal !== 'false' : true;
   });
+  const [restTimerSeconds, setRestTimerSeconds] = useState<number>(() => {
+    if (profile?.rest_timer_seconds !== undefined && profile.rest_timer_seconds !== null) {
+      return profile.rest_timer_seconds;
+    }
+    const localVal = typeof localStorage !== 'undefined' ? localStorage.getItem('yourbody_rest_timer_seconds') : null;
+    if (localVal !== null) {
+      const parsed = Number(localVal);
+      if (Number.isFinite(parsed) && parsed >= 15 && parsed <= 600) {
+        return parsed;
+      }
+    }
+    return 90;
+  });
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const displayNameId = useId();
   const restTimerLabelId = useId();
+  const restDurationSelectId = useId();
 
   // Coach Mode capability
   const hasCoachCapability = Boolean(profile?.role === 'coach' || profile?.is_coach_mode || isCoachMode);
@@ -73,6 +100,18 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
 
     try {
       await updateProfile({ auto_rest_timer: nextVal });
+    } catch {
+      // Graceful fallback: local state and localStorage already updated
+    }
+  };
+
+  const handleRestDurationChange = async (nextVal: number) => {
+    if (!isOnline) return;
+    setRestTimerSeconds(nextVal);
+    localStorage.setItem('yourbody_rest_timer_seconds', String(nextVal));
+
+    try {
+      await updateProfile({ rest_timer_seconds: nextVal });
     } catch {
       // Graceful fallback: local state and localStorage already updated
     }
@@ -91,6 +130,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
       target_fat: Number(targetFat),
       target_fiber: Number(targetFiber),
       auto_rest_timer: autoRestTimer,
+      rest_timer_seconds: restTimerSeconds,
     });
 
     if (res.success) {
@@ -228,7 +268,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           <div className="space-y-0.5">
             <div id={restTimerLabelId} className="text-xs font-bold text-white">Auto-start Rest Timer on Set Log</div>
             <div className="text-xs text-zinc-400 leading-relaxed">
-              Automatically start the 90s countdown timer when logging any set.
+              Automatically start the countdown timer when logging any set.
             </div>
             {!isOnline && (
               <p className="text-xs text-amber-400 font-semibold" data-testid="offline-helper-text">
@@ -259,6 +299,41 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
               }`}
             />
           </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 p-3 bg-zinc-950/80 border border-zinc-800/80 rounded-2xl">
+          <div className="space-y-0.5 min-w-0 flex-1">
+            <label htmlFor={restDurationSelectId} className="block text-xs font-bold text-white">
+              Rest timer length
+            </label>
+            <div className="text-xs text-zinc-400 leading-relaxed">
+              Default duration for the rest countdown timer.
+            </div>
+            {!isOnline && (
+              <p className="text-xs text-amber-400 font-semibold" data-testid="offline-helper-text-rest-duration">
+                Available when online
+              </p>
+            )}
+          </div>
+
+          <select
+            id={restDurationSelectId}
+            data-testid="select-rest-duration"
+            aria-label="Rest timer length"
+            value={restTimerSeconds}
+            disabled={!isOnline}
+            title={!isOnline ? 'Available when online' : undefined}
+            onChange={(e) => void handleRestDurationChange(Number(e.target.value))}
+            className={`min-h-[44px] bg-zinc-900 border border-zinc-800 text-white text-xs font-bold rounded-xl px-3 py-2 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none shrink-0 touch-manipulation ${
+              !isOnline ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+            }`}
+          >
+            {REST_TIMER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value} className="bg-zinc-950 text-white">
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

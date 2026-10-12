@@ -27,7 +27,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { invalidateWorkoutDerived } from '../../lib/invalidate';
 
 export const WORKOUT_WITH_SETS_PROJECTION =
-  'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id)';
+  'id, date, name, sets(id, reps, weight, set_index, created_at, exercise_id, set_type, rpe)';
 
 export const SETS_PAGE_LIMIT = 500;
 
@@ -296,7 +296,7 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
             ...setsData.map((s) => ({
               ...s,
               set_index: s.set_index ?? 0,
-              set_type: (s as any).set_type || 'normal',
+              set_type: (s as any).set_type || 'working',
               weight: s.weight ?? 0,
               workout_date: normalizeDateStr(s.workouts?.date || s.created_at),
               workout_name: s.workouts?.name || 'Workout Session',
@@ -314,7 +314,7 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
             const { data: setsData, error: sError } = await supabase
               .from('sets')
               .select(
-                'id, workout_id, exercise_id, weight, reps, set_index, created_at, workouts(date, name), exercise:exercises(id, name, body_parts)'
+                'id, workout_id, exercise_id, weight, reps, set_index, created_at, set_type, rpe, workouts(date, name), exercise:exercises(id, name, body_parts)'
               )
               .in('workout_id', workoutIds)
               .order('created_at', { ascending: false })
@@ -338,7 +338,7 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
                 ...sortedSets.map((s) => ({
                   ...s,
                   set_index: s.set_index ?? 0,
-                  set_type: (s as any).set_type || 'normal',
+                  set_type: (s as any).set_type || 'working',
                   weight: s.weight ?? 0,
                   workout_date: normalizeDateStr(s.workouts?.date || s.created_at),
                   workout_name: s.workouts?.name || 'Workout Session',
@@ -368,7 +368,7 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
           ghostSets = ghostData.map((s: any) => ({
             ...s,
             set_index: s.set_index ?? 0,
-            set_type: (s as any).set_type || 'normal',
+            set_type: (s as any).set_type || 'working',
             weight: s.weight ?? 0,
             workout_date: normalizeDateStr(s.workout_date || s.created_at),
             workout_name: s.workout_name || 'Workout Session',

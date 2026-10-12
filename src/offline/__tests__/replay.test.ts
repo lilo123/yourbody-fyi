@@ -282,6 +282,260 @@ describe('Replay Executor & Idempotency (§A4, §D)', () => {
     expect(mockUpdate).toHaveBeenCalledWith({ weight: 105 });
   });
 
+  it('7b. set.update regression: false conflict avoided when server row has set_type "working" and expected has "normal"', async () => {
+    const mockUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
+    const mockClient: any = {
+      ['from']: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'set-1', weight: 20, reps: 10, set_type: 'working' },
+              error: null,
+            }),
+          }),
+        }),
+        update: mockUpdate,
+      }),
+    };
+
+    const op: OutboxOp = {
+      opId: 'op-up-normal',
+      userId,
+      seq: 1,
+      kind: 'set.update',
+      payload: {
+        id: 'set-1',
+        patch: { reps: 14 },
+        expected: { reps: 10, set_type: 'normal' as any },
+      },
+      createdAt: '2026-09-30T10:00:00Z',
+      attempts: 0,
+      state: 'pending',
+    };
+
+    await expect(executeReplayOp(op, mockClient)).resolves.not.toThrow();
+    expect(mockUpdate).toHaveBeenCalledWith({ reps: 14 });
+  });
+
+  it('7c. set.update regression: false conflict avoided when server row has set_type null (legacy) and expected has "working"', async () => {
+    const mockUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
+    const mockClient: any = {
+      ['from']: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'set-1', weight: 20, reps: 10, set_type: null },
+              error: null,
+            }),
+          }),
+        }),
+        update: mockUpdate,
+      }),
+    };
+
+    const op: OutboxOp = {
+      opId: 'op-up-null',
+      userId,
+      seq: 1,
+      kind: 'set.update',
+      payload: {
+        id: 'set-1',
+        patch: { reps: 14 },
+        expected: { reps: 10, set_type: 'working' },
+      },
+      createdAt: '2026-09-30T10:00:00Z',
+      attempts: 0,
+      state: 'pending',
+    };
+
+    await expect(executeReplayOp(op, mockClient)).resolves.not.toThrow();
+    expect(mockUpdate).toHaveBeenCalledWith({ reps: 14 });
+  });
+
+  it('7d. set.update preserves real conflict: throws "changed elsewhere" when set_type truly changed concurrently on another device', async () => {
+    const mockUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
+    const mockClient: any = {
+      ['from']: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'set-1', weight: 20, reps: 10, set_type: 'warmup' }, // changed to warmup on another device
+              error: null,
+            }),
+          }),
+        }),
+        update: mockUpdate,
+      }),
+    };
+
+    const op: OutboxOp = {
+      opId: 'op-up-real-conflict',
+      userId,
+      seq: 1,
+      kind: 'set.update',
+      payload: {
+        id: 'set-1',
+        patch: { reps: 14 },
+        expected: { reps: 10, set_type: 'working' },
+      },
+      createdAt: '2026-09-30T10:00:00Z',
+      attempts: 0,
+      state: 'pending',
+    };
+
+    await expect(executeReplayOp(op, mockClient)).rejects.toThrow('changed elsewhere');
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('7e. set.update regression (a): editing reps of a warmup set does not conflict when set_type warmup is preserved', async () => {
+    const mockUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
+    const mockClient: any = {
+      ['from']: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'set-warmup', weight: 135, reps: 10, set_type: 'warmup', rpe: null },
+              error: null,
+            }),
+          }),
+        }),
+        update: mockUpdate,
+      }),
+    };
+
+    const op: OutboxOp = {
+      opId: 'op-up-warmup',
+      userId,
+      seq: 1,
+      kind: 'set.update',
+      payload: {
+        id: 'set-warmup',
+        patch: { reps: 12 },
+        expected: { weight: 135, reps: 10, set_type: 'warmup' },
+      },
+      createdAt: '2026-09-30T10:00:00Z',
+      attempts: 0,
+      state: 'pending',
+    };
+
+    await expect(executeReplayOp(op, mockClient)).resolves.not.toThrow();
+    expect(mockUpdate).toHaveBeenCalledWith({ reps: 12 });
+  });
+
+  it('7f. set.update regression (b): editing reps of a set with RPE 8 does not conflict when rpe is preserved', async () => {
+    const mockUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
+    const mockClient: any = {
+      ['from']: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'set-rpe', weight: 225, reps: 5, set_type: 'working', rpe: 8 },
+              error: null,
+            }),
+          }),
+        }),
+        update: mockUpdate,
+      }),
+    };
+
+    const op: OutboxOp = {
+      opId: 'op-up-rpe',
+      userId,
+      seq: 1,
+      kind: 'set.update',
+      payload: {
+        id: 'set-rpe',
+        patch: { reps: 6 },
+        expected: { weight: 225, reps: 5, set_type: 'working', rpe: 8 },
+      },
+      createdAt: '2026-09-30T10:00:00Z',
+      attempts: 0,
+      state: 'pending',
+    };
+
+    await expect(executeReplayOp(op, mockClient)).resolves.not.toThrow();
+    expect(mockUpdate).toHaveBeenCalledWith({ reps: 6 });
+  });
+
+  it('7g. set.update regression (c): real conflict throws "changed elsewhere" when server set_type changed to drop or reps changed concurrently', async () => {
+    // Subcase 1: server changed to 'drop'
+    const mockClientDrop: any = {
+      ['from']: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'set-conflict', weight: 135, reps: 10, set_type: 'drop', rpe: 8 },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const opDrop: OutboxOp = {
+      opId: 'op-drop-conflict',
+      userId,
+      seq: 1,
+      kind: 'set.update',
+      payload: {
+        id: 'set-conflict',
+        patch: { reps: 12 },
+        expected: { weight: 135, reps: 10, set_type: 'warmup', rpe: 8 },
+      },
+      createdAt: '2026-09-30T10:00:00Z',
+      attempts: 0,
+      state: 'pending',
+    };
+
+    await expect(executeReplayOp(opDrop, mockClientDrop)).rejects.toThrow('changed elsewhere');
+
+    // Subcase 2: server reps changed concurrently to 15
+    const mockClientReps: any = {
+      ['from']: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'set-conflict', weight: 135, reps: 15, set_type: 'warmup', rpe: 8 },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const opReps: OutboxOp = {
+      opId: 'op-reps-conflict',
+      userId,
+      seq: 2,
+      kind: 'set.update',
+      payload: {
+        id: 'set-conflict',
+        patch: { reps: 12 },
+        expected: { weight: 135, reps: 10, set_type: 'warmup', rpe: 8 },
+      },
+      createdAt: '2026-09-30T10:00:00Z',
+      attempts: 0,
+      state: 'pending',
+    };
+
+    await expect(executeReplayOp(opReps, mockClientReps)).rejects.toThrow('changed elsewhere');
+  });
+
   it('8. set.delete is idempotent: deletes by id', async () => {
     const mockDelete = vi.fn().mockReturnValue({
       eq: vi.fn().mockResolvedValue({ data: null, error: null }),

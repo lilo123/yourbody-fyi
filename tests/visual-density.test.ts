@@ -5740,6 +5740,99 @@ test.describe("Weight Units", () => {
 
 
 // ---------------------------------------------------------------------------
+// Rest Timer Duration: Settings rest timer length row at 320px and 390px
+// ---------------------------------------------------------------------------
+
+test.describe("Rest Timer Duration Settings", () => {
+  for (const width of [320, 390] as const) {
+    test(`Settings rest timer length row 44px hit target, no overflow, and label not truncated at ${width}px`, async ({ browser }) => {
+      const page = await browser.newPage({
+        viewport: { width, height: 844 },
+        deviceScaleFactor: 1,
+      });
+      try {
+        await setupSettingsDensityPage(page);
+
+        // Find the Rest timer length row inside Workout Preferences card
+        const row = page.locator('[data-testid="select-rest-duration"]').locator('xpath=ancestor::div[contains(@class, "rounded-2xl")][1]');
+        await expect(row).toBeVisible();
+
+        // 1. No horizontal overflow on the row or card container
+        const isRowOverflowing = await row.evaluate((el) => el.scrollWidth > el.clientWidth);
+        expect(isRowOverflowing, `Rest timer length row has no horizontal overflow at ${width}px`).toBe(false);
+
+        // 2. Label is not truncated (scrollWidth <= clientWidth)
+        const label = page.locator('label:has-text("Rest timer length")');
+        await expect(label).toBeVisible();
+        const { labelScrollWidth, labelClientWidth } = await label.evaluate((el: HTMLElement) => ({
+          labelScrollWidth: el.scrollWidth,
+          labelClientWidth: el.clientWidth,
+        }));
+        expect(labelScrollWidth, `Rest timer length label is not truncated at ${width}px`).toBeLessThanOrEqual(labelClientWidth);
+
+        // 3. Touch target for select dropdown is >= 44x44
+        const select = page.locator('[data-testid="select-rest-duration"]');
+        await expect(select).toBeVisible();
+
+        const assertHitArea44 = async (loc: Locator, labelText: string) => {
+          await expect(loc).toBeVisible();
+          const item = await loc.evaluate((el) => {
+            el.scrollIntoView({ block: "center", inline: "nearest" });
+            const r = el.getBoundingClientRect();
+            const cx = r.left + r.width / 2;
+            const cy = r.top + r.height / 2;
+
+            const centerEl = document.elementFromPoint(cx, cy);
+            const centerHits = Boolean(centerEl && (el.contains(centerEl) || centerEl.contains(el)));
+
+            const topEl = document.elementFromPoint(cx, cy - 21.5);
+            const btmEl = document.elementFromPoint(cx, cy + 21.5);
+            const topHits = Boolean(topEl && (el.contains(topEl) || topEl.contains(el)));
+            const btmHits = Boolean(btmEl && (el.contains(btmEl) || btmEl.contains(el)));
+
+            const horizontalAllowed = r.width >= 43;
+            let horizontalHits = true;
+            if (horizontalAllowed) {
+              const leftEl = document.elementFromPoint(cx - 21.5, cy);
+              const rightEl = document.elementFromPoint(cx + 21.5, cy);
+              const leftHits = Boolean(leftEl && (el.contains(leftEl) || leftEl.contains(el)));
+              const rightHits = Boolean(rightEl && (el.contains(rightEl) || rightEl.contains(el)));
+              horizontalHits = leftHits && rightHits;
+            }
+
+            const hasMin44pxHitArea = centerHits && (
+              topHits ||
+              btmHits ||
+              (horizontalAllowed && horizontalHits) ||
+              r.width >= 43 ||
+              r.height >= 43
+            );
+
+            return {
+              tag: el.tagName.toLowerCase(),
+              testId: el.getAttribute("data-testid") || el.getAttribute("aria-label") || el.textContent?.trim().slice(0, 20),
+              width: Math.round(r.width),
+              height: Math.round(r.height),
+              hasMin44pxHitArea,
+            };
+          });
+
+          expect(
+            item.hasMin44pxHitArea,
+            `${labelText} control ${item.testId || item.tag} (${item.width}x${item.height}) failed >=44px hit area: ${JSON.stringify(item)}`
+          ).toBe(true);
+        };
+
+        await assertHitArea44(select, "Rest timer length select");
+      } finally {
+        await page.close();
+      }
+    });
+  }
+});
+
+
+// ---------------------------------------------------------------------------
 // Library: Density, Hit Targets (>=44px), Layout at 320/390px & Axe Audit
 // ---------------------------------------------------------------------------
 
@@ -6150,6 +6243,30 @@ test.describe("Route-Wide Density & Tap Grid", () => {
         await page.close();
       }
     });
+
+    test(`type scale on / (logged-out landing) at ${width}px`, async ({ browser }) => {
+      const page = await browser.newPage({
+        viewport: { width, height: 844 },
+        deviceScaleFactor: 1,
+      });
+      try {
+        await page.goto("/");
+        await page.waitForLoadState("domcontentloaded");
+        await page.waitForTimeout(500);
+
+        const violations = await checkTypeScale(page.locator("body"), {
+          includeHeaderAndNav: true,
+          allowSizes16Plus: true,
+        });
+
+        expect(
+          violations,
+          `D43 type scale violations on / (landing) at ${width}px:\n${JSON.stringify(violations, null, 2)}`
+        ).toHaveLength(0);
+      } finally {
+        await page.close();
+      }
+    });
   }
 
   // 2. Tap Grid on every route at 320px
@@ -6299,6 +6416,75 @@ test.describe("Route-Wide Density & Tap Grid", () => {
         offenders,
         `Tap grid offenders on /coach at 320px:\n${JSON.stringify(offenders, null, 2)}`
       ).toHaveLength(0);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("Tap grid on / (logged-out landing) at 320px", async ({ browser }) => {
+    const page = await browser.newPage({
+      viewport: { width: 320, height: 844 },
+      deviceScaleFactor: 1,
+    });
+    try {
+      await page.goto("/");
+      await page.waitForLoadState("domcontentloaded");
+      await page.waitForTimeout(500);
+
+      const offenders = await checkRouteTapGrid(page, "/");
+      expect(
+        offenders,
+        `Tap grid offenders on / at 320px:\n${JSON.stringify(offenders, null, 2)}`
+      ).toHaveLength(0);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("Standalone mode at / renders app redirect, not landing at 320px", async ({ browser }) => {
+    const page = await browser.newPage({
+      viewport: { width: 320, height: 844 },
+      deviceScaleFactor: 1,
+    });
+    try {
+      await page.addInitScript(() => {
+        const originalMatchMedia = window.matchMedia;
+        window.matchMedia = (query: string) => {
+          if (query === "(display-mode: standalone)") {
+            return {
+              matches: true,
+              media: query,
+              onchange: null,
+              addListener: () => {},
+              removeListener: () => {},
+              addEventListener: () => {},
+              removeEventListener: () => {},
+              dispatchEvent: () => false,
+            } as unknown as MediaQueryList;
+          }
+          return originalMatchMedia ? originalMatchMedia.call(window, query) : ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addListener: () => {},
+            removeListener: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false,
+          } as unknown as MediaQueryList);
+        };
+      });
+
+      await page.goto("/");
+      await page.waitForURL("**/login");
+      await page.waitForLoadState("domcontentloaded");
+
+      const headline = page.getByRole("heading", {
+        level: 1,
+        name: /You know your workout\. We just help you track it\./i,
+      });
+      await expect(headline).not.toBeVisible();
+      await expect(page.locator('input[type="email"]')).toBeVisible();
     } finally {
       await page.close();
     }
@@ -6642,7 +6828,11 @@ test.describe("Route-Wide Density & Tap Grid", () => {
               return { left: r.left, right: r.right, width: r.width, center: (r.left + r.right) / 2 };
             });
 
-            const lCells = Array.from(loggedRow.children).map((el) => {
+            const editBtn = loggedRow.querySelector('[data-testid^="edit-set-btn-"]') as HTMLElement;
+            const lCells = (editBtn
+              ? [...Array.from(editBtn.children), loggedRow.lastElementChild as HTMLElement]
+              : Array.from(loggedRow.children)
+            ).map((el) => {
               const r = el.getBoundingClientRect();
               return { left: r.left, right: r.right, width: r.width, center: (r.left + r.right) / 2 };
             });
@@ -7533,9 +7723,11 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         return route.continue();
       });
 
-      // Reload and set context offline
+      // Reload and wait for route to render before going offline
       await page.reload();
       await page.waitForLoadState('domcontentloaded');
+      await expect(statusBadge).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="add-exercise-btn"]')).toBeVisible({ timeout: 10000 });
       await context.setOffline(true);
 
       // Assert exact text
@@ -7732,7 +7924,8 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         const headerGrid = document.querySelector('#exercise-card-body-0 .grid');
         const headerIndexCell = headerGrid?.firstElementChild;
         const firstRow = document.querySelector('[data-testid^="logged-set-row-"]');
-        const firstRowIndex = firstRow?.firstElementChild;
+        const editBtn = firstRow?.querySelector('[data-testid^="edit-set-btn-"]');
+        const firstRowIndex = editBtn ? editBtn.firstElementChild : firstRow?.firstElementChild;
         if (!headerIndexCell || !firstRowIndex) return null;
 
         const hRect = headerIndexCell.getBoundingClientRect();
