@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { CustomDish } from '../../types/database';
 import { formatCalories } from '../../utils/nutrition';
 import { parseNutritionText } from '../../lib/nutrition/localParse';
@@ -155,6 +155,7 @@ export function useNutritionAi({
   const [nlInput, setNlInput] = useState('');
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const isAnalyzingRef = useRef(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
 
   const {
@@ -177,13 +178,20 @@ export function useNutritionAi({
   });
 
   const handleAnalyze = async (options?: { forceAi?: boolean; overrideText?: string }) => {
+    if (isAnalyzing || isAnalyzingRef.current) return;
     const textToAnalyze = options?.overrideText !== undefined ? options.overrideText : nlInput;
     if (!textToAnalyze.trim() && !selectedPhoto) return;
 
+    isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     setIsError(false);
     setIsRateLimited(false);
     setIsQuotaExceeded(false);
+
+    const stopAnalyzing = () => {
+      isAnalyzingRef.current = false;
+      setIsAnalyzing(false);
+    };
 
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     const mode: NutritionParserMode = configuredParserMode ?? getNutritionParserMode();
@@ -191,7 +199,7 @@ export function useNutritionAi({
     // 1. Text-only routing check (photos and explicit forceAi always use online AI parse)
     if (!options?.forceAi && !selectedPhoto && textToAnalyze.trim()) {
       if (mode === 'on_device') {
-        setIsAnalyzing(false);
+        stopAnalyzing();
         const localResult = parseNutritionText(textToAnalyze.trim());
         const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
 
@@ -213,22 +221,16 @@ export function useNutritionAi({
           }
         }
 
-        if (localResult.confidence === 'partial') {
-          const prefill = extractPrefill(textToAnalyze, localResult);
-          setIsError(true);
-          setStatus('Could not parse: use quick log');
-          onFallbackToManual(prefill.name || textToAnalyze.trim(), prefill);
-          return;
-        }
-
+        const prefill = extractPrefill(textToAnalyze, localResult);
         setIsError(true);
         setStatus('Could not parse: use quick log');
+        onFallbackToManual(prefill.name || textToAnalyze.trim(), prefill);
         return;
       }
 
       if (mode === 'always_ai') {
         if (!isOnline) {
-          setIsAnalyzing(false);
+          stopAnalyzing();
           const localResult = parseNutritionText(textToAnalyze.trim());
           const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
 
@@ -272,7 +274,7 @@ export function useNutritionAi({
         if (localResult.confidence === 'exact' && localResult.meal) {
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
           if (meal) {
-            setIsAnalyzing(false);
+            stopAnalyzing();
             setStatus('Parsed locally');
             onParsedSuccess(meal);
             return;
@@ -281,7 +283,7 @@ export function useNutritionAi({
 
         // Offline routing for non-exact text
         if (!isOnline) {
-          setIsAnalyzing(false);
+          stopAnalyzing();
 
           if (localResult.confidence === 'lenient' && isSingle && localResult.meal) {
             const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'lenient');
@@ -309,7 +311,7 @@ export function useNutritionAi({
 
     // 2. Offline check for photo / forceAi
     if (!isOnline) {
-      setIsAnalyzing(false);
+      stopAnalyzing();
       setIsError(true);
       setStatus('AI needs a connection: use quick log');
       return;
@@ -382,10 +384,27 @@ export function useNutritionAi({
         error?.message?.includes('Failed to fetch');
 
       if (isNetworkError) {
-        setIsError(true);
-        setStatus('AI needs a connection: use quick log');
         const localResult =
           textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
+        const isSingle = !localResult?.meal?.items || localResult.meal.items.length <= 1;
+
+        if (
+          localResult &&
+          (localResult.confidence === 'exact' || (localResult.confidence === 'lenient' && isSingle)) &&
+          localResult.meal
+        ) {
+          const confidence = localResult.confidence === 'exact' ? 'exact' : 'lenient';
+          const meal = buildStagedMealFromLocal(textToAnalyze, localResult, confidence);
+          if (meal) {
+            setIsError(false);
+            setStatus('Parsed locally');
+            onParsedSuccess(meal);
+            return;
+          }
+        }
+
+        setIsError(true);
+        setStatus('AI needs a connection: use quick log');
         const prefill = extractPrefill(textToAnalyze, localResult);
         onFallbackToManual(
           prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
@@ -427,9 +446,15 @@ export function useNutritionAi({
           ? `Meal Analysis: ${errorMsg}`
           : `AI service unavailable: ${errorMsg}`
       );
-      onFallbackToManual(textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''));
+      const localResult =
+        textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
+      const prefill = extractPrefill(textToAnalyze, localResult);
+      onFallbackToManual(
+        prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+        prefill
+      );
     } finally {
-      setIsAnalyzing(false);
+      stopAnalyzing();
     }
   };
 

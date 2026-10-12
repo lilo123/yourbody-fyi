@@ -48,6 +48,7 @@ export interface StagedMealCardProps {
   customDishes?: CustomDish[];
   onAddParsedItems?: (items: StagedItem[], mealAtStart?: StagedMeal) => void;
   onAnalyzeWithAiInstead?: () => void;
+  isAnalyzing?: boolean;
 }
 
 export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
@@ -70,6 +71,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
   customDishes = [],
   onAddParsedItems,
   onAnalyzeWithAiInstead,
+  isAnalyzing = false,
   navHeight: navHeightProp,
 }) => {
   const isOnline = useOnlineStatus();
@@ -288,7 +290,8 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                 type="button"
                 data-testid="analyze-with-ai-instead-btn"
                 onClick={onAnalyzeWithAiInstead}
-                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/50 transition min-h-[44px] touch-manipulation"
+                disabled={isAnalyzing}
+                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/50 transition min-h-[44px] touch-manipulation disabled:opacity-50"
               >
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Analyze with AI instead</span>

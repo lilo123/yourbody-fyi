@@ -401,4 +401,36 @@ describe('NutritionAiInput live regions and accessibility', () => {
       expect(screen.getByTestId('retry-analysis-button')).toBeDefined();
     });
   });
+
+  describe('on_device mode constraints and offline hint suppression', () => {
+    it('on_device mode: keeps Analyze button disabled for prose text even when online', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            isOnline: true,
+            nlInput: 'Steak and eggs with toast',
+            parserMode: 'on_device',
+          } as any)}
+        />
+      );
+
+      const analyzeBtn = screen.getByTestId('analyze-meal-button');
+      expect(analyzeBtn).toBeDisabled();
+    });
+
+    it('on_device mode: hides offline connection hint when offline', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            isOnline: false,
+            nlInput: 'Steak and eggs with toast',
+            parserMode: 'on_device',
+          } as any)}
+        />
+      );
+
+      expect(screen.queryByTestId('ai-offline-hint')).toBeNull();
+      expect(screen.queryByText('AI needs a connection: use quick log')).toBeNull();
+    });
+  });
 });

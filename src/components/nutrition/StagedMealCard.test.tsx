@@ -1896,6 +1896,25 @@ describe('Scale chip on the staged card', () => {
     expect(hintElement.textContent).toMatch(/^Skipped: .*\.\.\.$/);
     expect(hintElement.textContent!.length).toBeLessThanOrEqual(60);
   });
+
+  it('disables "Analyze with AI instead" button when isAnalyzing is true', () => {
+    const meal = {
+      ...makeStagedMeal(),
+      source: 'local' as const,
+      rawText: '2 eggs',
+    };
+    render(
+      <StagedMealCard
+        {...baseProps}
+        stagedMeal={meal}
+        onUpdateStagedMeal={vi.fn()}
+        onAnalyzeWithAiInstead={vi.fn()}
+        isAnalyzing={true}
+      />
+    );
+    const btn = screen.getByTestId('analyze-with-ai-instead-btn');
+    expect(btn).toBeDisabled();
+  });
 });
 
 
