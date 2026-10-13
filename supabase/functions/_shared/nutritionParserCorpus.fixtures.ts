@@ -1883,5 +1883,311 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
       "reason": "MISSING_MACRO",
       "hint": null
     }
+  },
+  {
+    "id": 104,
+    "title": "[Coverage] Case-insensitive calorie unit CAL",
+    "input": "Turkey Wrap\nCalories: 420 CAL\nProtein: 35g\nCarbs: 45g\nFat: 10g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 420,
+      "protein": 35,
+      "carbs": 45,
+      "fat": 10,
+      "fiber": null,
+      "name": "Turkey Wrap",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 105,
+    "title": "[Coverage] Case-insensitive calorie unit kcals",
+    "input": "Protein Smoothie\nEnergy: 310 kcals\nProtein: 30g\nCarbs: 25g\nFat: 5g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 310,
+      "protein": 30,
+      "carbs": 25,
+      "fat": 5,
+      "fiber": null,
+      "name": "Protein Smoothie",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 106,
+    "title": "[Coverage] Approximate prefix ~ and approx.",
+    "input": "Greek Yogurt Bowl\nCalories: ~280 kcal\nProtein: approx. 24g\nCarbs: ~30g\nFat: approx. 4g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 280,
+      "protein": 24,
+      "carbs": 30,
+      "fat": 4,
+      "fiber": null,
+      "name": "Greek Yogurt Bowl",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 107,
+    "title": "[Coverage] Approximate prefix roughly, about, ≈",
+    "input": "Grilled Salmon\nCalories: ≈450 kcal\nProtein: roughly 42g\nCarbs: about 0g\nFat: roughly 22g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 450,
+      "protein": 42,
+      "carbs": 0,
+      "fat": 22,
+      "fiber": null,
+      "name": "Grilled Salmon",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 108,
+    "title": "[Coverage] Markdown table without separator row",
+    "input": "| Item | Calories | Protein | Carbs | Fat |\n| Grilled Chicken | 320 | 50 | 0 | 7 |\n| Steamed Rice | 230 | 4 | 60 | 3 |",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 550,
+      "protein": 54,
+      "carbs": 60,
+      "fat": 10,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 109,
+    "title": "[Coverage] Tab-separated columns table",
+    "input": "Item\tCalories\tProtein\tCarbs\tFat\nGrilled Chicken\t330\t48g\t0g\t8g\nJasmine Rice\t230\t4g\t64g\t2g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 560,
+      "protein": 52,
+      "carbs": 64,
+      "fat": 10,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 110,
+    "title": "[Coverage] Intermediate label row Components: after meal total",
+    "input": "Meal Total: 710 calories, 52g protein, 60g carbs, 26g fat\nComponents:\n- Sirloin Steak: 420 kcal, 48g protein, 0g carbs, 24g fat\n- Sweet Potato: 290 kcal, 4g protein, 60g carbs, 2g fat",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 710,
+      "protein": 52,
+      "carbs": 60,
+      "fat": 26,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 111,
+    "title": "[Coverage] Intermediate label row Items: after dish name",
+    "input": "Chicken & Rice Feast\nItems:\n- Chicken Breast: 320 kcal, 48g protein, 0g carbs, 6g fat\n- White Rice: 210 kcal, 4g protein, 45g carbs, 1g fat",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 530,
+      "protein": 52,
+      "carbs": 45,
+      "fat": 7,
+      "fiber": null,
+      "name": "Chicken & Rice Feast",
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 112,
+    "title": "[Coverage] Tab-separated table with Total row cross-check",
+    "input": "Component\tCalories\tProtein\tCarbs\tFat\nFlank Steak\t380\t46g\t0g\t19g\nRice and Beans\t330\t8g\t68g\t3g\nTotal\t710\t54g\t68g\t22g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 710,
+      "protein": 54,
+      "carbs": 68,
+      "fat": 22,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 113,
+    "title": "[Sweep paste3-056] Salmon Rice table with Calories and Energy columns",
+    "input": "| Food | Calories | Energy | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- | --- |\n| Salmon | 400 | 1674 | 40 | 0 | 25 |\n| Rice | 200 | 837 | 4 | 45 | 1 |",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 600,
+      "protein": 44,
+      "carbs": 45,
+      "fat": 26,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 114,
+    "title": "[Sweep paste3-057] Steak Potato table with Calories and Energy columns",
+    "input": "| Item | Calories | Energy | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- | --- |\n| Steak | 410 | 1715 | 48 | 0 | 22 |\n| Potato | 240 | 1004 | 4 | 54 | 1 |",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 650,
+      "protein": 52,
+      "carbs": 54,
+      "fat": 23,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 115,
+    "title": "[Sweep paste3-058] Chicken Sweet Potato table with Calories and Energy columns",
+    "input": "| Food | Calories | Energy | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- | --- |\n| Chicken | 320 | 1339 | 50 | 0 | 7 |\n| Sweet Potato | 230 | 962 | 4 | 52 | 3 |",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 550,
+      "protein": 54,
+      "carbs": 52,
+      "fat": 10,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 116,
+    "title": "[Coverage] Markdown table with kJ energy column converted to kcal",
+    "input": "| Food | Energy (kJ) | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- |\n| Salmon | 1674 | 40 | 0 | 25 |\n| Rice | 837 | 4 | 45 | 1 |",
+    "expected": {
+      "confidence": "lenient",
+      "ok": true,
+      "calories": 600,
+      "protein": 44,
+      "carbs": 45,
+      "fat": 26,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 117,
+    "title": "[Format C] Emoji-only labels with fire and food macros",
+    "input": "Grilled Salmon Fillet\n🔥 580 kcal\n🥩 46g\n🍞 35g\n🧈 26g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 580,
+      "protein": 46,
+      "carbs": 35,
+      "fat": 26,
+      "fiber": null,
+      "name": "Grilled Salmon Fillet",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 118,
+    "title": "[Format C] Multi-item breakdown with category header and quantity prefix",
+    "input": "Breakfast:\n- 2x Fried Eggs: 220 kcal | 16g P | 2g C | 16g F\n- 1x Toast: 170 kcal | 8g P | 30g C | 1g F",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 390,
+      "protein": 24,
+      "carbs": 32,
+      "fat": 17,
+      "fiber": null,
+      "name": "Breakfast",
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 119,
+    "title": "[Format C] Nested sub-items under single dish total",
+    "input": "Custom Burrito Bowl: 720 kcal, 55g P, 68g C, 24g F\n  • Double Chicken (360 kcal, 48g P)\n  • Brown Rice (210 kcal, 4g P)\n  • Black Beans (150 kcal, 3g P)",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 720,
+      "protein": 55,
+      "carbs": 68,
+      "fat": 24,
+      "fiber": null,
+      "name": "Custom Burrito Bowl",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 120,
+    "title": "[Format C] Grams-only macro breakdown without calories (partial)",
+    "input": "Salmon Avocado Plate\nProtein: 38g\nCarbs: 12g\nFat: 32g",
+    "expected": {
+      "confidence": "partial",
+      "ok": false,
+      "calories": 0,
+      "protein": 38,
+      "carbs": 12,
+      "fat": 32,
+      "fiber": null,
+      "name": "Salmon Avocado Plate",
+      "itemsCount": null,
+      "reason": "MISSING_MACRO",
+      "hint": null
+    }
   }
 ];
