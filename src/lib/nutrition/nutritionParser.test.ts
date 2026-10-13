@@ -556,7 +556,7 @@ Fat: 21g`;
 });
 
 describe('Golden Test Corpus & Sweep Fixtures', () => {
-  it('parses all 103 realistic golden fixtures matching expected results', () => {
+  it('parses all 116 realistic golden fixtures matching expected results', () => {
     for (const fixture of NUTRITION_CORPUS_FIXTURES) {
       const result = parseNutritionText(fixture.input);
       expect(
