@@ -222,6 +222,61 @@ describe('NutritionAiInput live regions and accessibility', () => {
       expect(onAnalyze).toHaveBeenCalledTimes(1);
     });
 
+    it('offline: enables submit button for exact 2-item multi-item breakdowns when navigator.onLine=false', () => {
+      Object.defineProperty(navigator, 'onLine', {
+        configurable: true,
+        writable: true,
+        value: false,
+      });
+
+      const onAnalyze = vi.fn();
+      const exactTwoItemBlock = [
+        'Food Item: Breakfast Plate',
+        '* Scrambled Eggs: 100 g | 140 kcal | 12 g P | 1 g C | 10 g F',
+        '* Sourdough Toast: 50 g | 130 kcal | 4 g P | 24 g C | 1 g F',
+      ].join('\n');
+
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: exactTwoItemBlock,
+            onAnalyze,
+          })}
+        />
+      );
+
+      const analyzeBtn = screen.getByTestId('analyze-meal-button');
+      expect(analyzeBtn).not.toBeDisabled();
+      analyzeBtn.click();
+      expect(onAnalyze).toHaveBeenCalledTimes(1);
+    });
+
+    it('offline: keeps submit button disabled for lenient multi-item breakdowns', () => {
+      Object.defineProperty(navigator, 'onLine', {
+        configurable: true,
+        writable: true,
+        value: false,
+      });
+
+      const lenientMultiItemBlock = [
+        'Food Item: Breakfast Plate',
+        '* Scrambled Eggs: 100 g | 140 kcal | 12 g P | 1 g C | 10 g F',
+        '* Sourdough Toast: 50 g | 130 kcal | 4 g P | 24 g C | 1 g F',
+        'extra unrecognized note line',
+      ].join('\n');
+
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: lenientMultiItemBlock,
+          })}
+        />
+      );
+
+      const analyzeBtn = screen.getByTestId('analyze-meal-button');
+      expect(analyzeBtn).toBeDisabled();
+    });
+
     it('online: enables AI submit and photo triggers, hides connection hint', () => {
       render(
         <NutritionAiInput
@@ -345,6 +400,38 @@ describe('NutritionAiInput live regions and accessibility', () => {
 
       expect(screen.queryByTestId('ai-upgrade-btn')).toBeNull();
       expect(screen.getByTestId('retry-analysis-button')).toBeDefined();
+    });
+  });
+
+  describe('on_device mode constraints and offline hint suppression', () => {
+    it('on_device mode: keeps Analyze button disabled for prose text even when online', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            isOnline: true,
+            nlInput: 'Steak and eggs with toast',
+            parserMode: 'on_device',
+          } as any)}
+        />
+      );
+
+      const analyzeBtn = screen.getByTestId('analyze-meal-button');
+      expect(analyzeBtn).toBeDisabled();
+    });
+
+    it('on_device mode: hides offline connection hint when offline', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            isOnline: false,
+            nlInput: 'Steak and eggs with toast',
+            parserMode: 'on_device',
+          } as any)}
+        />
+      );
+
+      expect(screen.queryByTestId('ai-offline-hint')).toBeNull();
+      expect(screen.queryByText('AI needs a connection: use quick log')).toBeNull();
     });
   });
 });
