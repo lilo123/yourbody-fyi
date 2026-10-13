@@ -33,6 +33,26 @@ The deployment workflow enforces three key operational principles:
   6. Deploy edge functions (`supabase functions deploy --use-api`).
   7. Print remote migration status (`supabase migration list`).
 
+### Staging Keep-Alive (`.github/workflows/staging-keepalive.yml`)
+- **Trigger:**
+  - Scheduled daily via cron (`15 4 * * *` at 04:15 UTC).
+  - Manual trigger via `workflow_dispatch`.
+- **Purpose:**
+  - Performs a lightweight authenticated read against the staging Supabase project to ensure the database remains active and prevent free-tier projects from pausing after 7 days of inactivity (which would disrupt PR preview environments).
+- **Security & Concurrency:**
+  - Serialized via concurrency group `staging-keepalive` (`cancel-in-progress: false`).
+  - Read-only repository token permissions (`contents: read`).
+  - Strict secret hygiene: disables command tracing (`set +x`), masks the retrieved anon key and project ref via `::add-mask::`, and never logs keys, project refs, or URLs.
+  - Fail-safe secret preflight: If staging secrets are not yet configured on the repository, the workflow completes with a notice and skips subsequent steps, keeping scheduled runs green.
+- **Secrets Used:**
+  - Uses existing repository secrets `SUPABASE_ACCESS_TOKEN_STAGING` and `STAGING_PROJECT_REF`. If either secret is missing, the run skips with a notice; repository owners configure these under **Settings** → **Secrets and variables** → **Actions**.
+  - Note: Database password credentials (`STAGING_DB_PASSWORD`) already exist for staging migrations, but encrypted database dumps (`pg_dump`) are omitted from this keep-alive job to keep execution fast and minimal. Automated staging backups may be considered as a possible future follow-up.
+- **Manual Execution:**
+  - Run manually from GitHub Actions under **Actions** → **Staging Keep-Alive** → **Run workflow**, or via the GitHub CLI:
+    ```bash
+    gh workflow run staging-keepalive.yml
+    ```
+
 ### Production Deployment (`.github/workflows/deploy-production.yml`)
 - **Trigger:**
   - Push to `main`.

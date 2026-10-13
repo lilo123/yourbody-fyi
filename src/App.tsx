@@ -12,14 +12,20 @@ import { ToastHost } from './components/common/ToastHost';
 import { UpdateBanner } from './pwa/UpdateBanner';
 import { recordLastRoute, getLastRoute } from './pwa/lastRoute';
 import { SyncToastBridge } from './components/sync/SyncToastBridge';
-import { AttentionBanner } from './components/sync/AttentionBanner';
 import { useOfflinePrefetch } from './offline-prefetch';
 import { registerOutboxUpdateBlocker, startAiQueueProcessor } from './offline';
 import { registerUpdateBlocker } from './pwa/updateSafety';
 import { shouldShowLanding } from './utils/routeDecision';
+import { hasLoggedFirstActivity, onFirstLogRecorded } from './pwa/installPromptEarly';
 import './App.css';
 
 registerOutboxUpdateBlocker(registerUpdateBlocker);
+
+const AttentionBanner = React.lazy(() =>
+  import('./components/sync/AttentionBanner').then((m) => ({ default: m.AttentionBanner }))
+);
+
+const DeferredInstallPrompt = React.lazy(() => import('./pwa/DeferredInstallPrompt'));
 
 const ResetPasswordView = React.lazy(() =>
   import('./components/auth/ResetPasswordView').then((m) => ({ default: m.ResetPasswordView }))
@@ -160,7 +166,21 @@ const RootRoute: React.FC = () => {
 
 function AppLayout() {
   const { user } = useAuth();
+  const [canLoadPrompt, setCanLoadPrompt] = useState(hasLoggedFirstActivity);
   useOfflinePrefetch(user?.id);
+
+  useEffect(() => {
+    if (!user || canLoadPrompt) return;
+    const unsub = onFirstLogRecorded(() => setCanLoadPrompt(true));
+    const win = window as any;
+    const id = win.requestIdleCallback
+      ? win.requestIdleCallback(() => setCanLoadPrompt(true), { timeout: 3000 })
+      : setTimeout(() => setCanLoadPrompt(true), 1500);
+    return () => {
+      unsub();
+      win.cancelIdleCallback ? win.cancelIdleCallback(id) : clearTimeout(id);
+    };
+  }, [user, canLoadPrompt]);
 
   // Start/stop AI queue processor for signed-in user
   useEffect(() => {
@@ -264,6 +284,11 @@ function AppLayout() {
     <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
       <Header />
       <UpdateBanner />
+      {user && canLoadPrompt && (
+        <React.Suspense fallback={null}>
+          <DeferredInstallPrompt />
+        </React.Suspense>
+      )}
       <main className={`flex-1 max-w-xl w-full mx-auto p-4 ${user ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]' : 'pb-8'}`}>
         <React.Suspense fallback={<LazyFallback />}>
           <Routes>
