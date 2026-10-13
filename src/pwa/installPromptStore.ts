@@ -83,7 +83,7 @@ export function getPlatformInfo(
 
   // Detect non-Safari iOS browsers:
   // CriOS = Chrome, FxiOS = Firefox, EdgiOS = Edge, OPiOS/OPT = Opera, DuckDuckGo = DDG
-  const isOtherIOSBrowser = /CriOS|FxiOS|EdgiOS|OPiOS|OPT|DuckDuckGo/i.test(ua);
+  const isOtherIOSBrowser = /DuckDuckGo|CriOS|FxiOS|EdgiOS|OPiOS|OPT/i.test(ua);
   const isIOSSafari = !isOtherIOSBrowser;
 
   return { isIOS: true, isIOSSafari, isOtherIOSBrowser };
