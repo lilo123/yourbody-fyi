@@ -28,14 +28,14 @@ describe('UpgradeSheet component', () => {
     ).toBeDefined();
 
     // Personal bullets
-    expect(screen.getByText('AI meal logging, 5 a day')).toBeDefined();
+    expect(screen.getByText('AI meal logging, 20 a day')).toBeDefined();
     expect(screen.getByText('Coach up to 3 athletes')).toBeDefined();
 
     // Coach and Coach Pro bullets
     expect(screen.getAllByText('AI meal logging, 30 a day').length).toBe(2);
     expect(screen.getByText('Coach up to 10 athletes')).toBeDefined();
     expect(screen.getByText('Coach up to 25 athletes')).toBeDefined();
-    expect(screen.getAllByText('Each athlete gets AI meal logging, 5 a day').length).toBe(2);
+    expect(screen.getAllByText('Each athlete gets AI meal logging, 10 a day').length).toBe(2);
 
     // Assert none of the removed phrases appear anywhere in the document
     const removedPhrases = [
