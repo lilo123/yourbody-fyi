@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
 import { expectNoA11yViolations } from '../../test/a11y';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { EXTERNAL_CHAT_NUTRITION_PROMPT } from '../../lib/nutrition/externalPrompt';
 
 const { mockSession } = vi.hoisted(() => ({
   mockSession: {
@@ -501,6 +502,7 @@ describe('SettingsView', () => {
     await screen.findByDisplayValue('Coach Demo');
     await screen.findByTestId('coach-capacity-badge');
     await screen.findByTestId('toggle-auto-timer');
+    await screen.findByRole('heading', { name: 'Account' });
     await expectNoA11yViolations(container);
   });
 
@@ -697,6 +699,80 @@ describe('SettingsView', () => {
 
       const alwaysAiTab = screen.getByTestId('nutrition-parser-mode-always-ai');
       expect(alwaysAiTab).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('renders the external prompt toggle collapsed by default and expands on click', async () => {
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const toggleBtn = screen.getByTestId('external-prompt-toggle');
+      expect(toggleBtn).toBeDefined();
+      expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId('external-prompt-preview')).toBeNull();
+
+      fireEvent.click(toggleBtn);
+      expect(toggleBtn).toHaveAttribute('aria-expanded', 'true');
+
+      const preview = screen.getByTestId('external-prompt-preview') as HTMLTextAreaElement;
+      expect(preview).toBeDefined();
+      expect(preview.value).toBe(EXTERNAL_CHAT_NUTRITION_PROMPT);
+      expect(preview.readOnly).toBe(true);
+
+      const copyBtn = screen.getByTestId('copy-external-prompt-button');
+      expect(copyBtn).toBeDefined();
+      expect(within(copyBtn).getByText('Copy prompt')).toBeDefined();
+
+      // Click to collapse again
+      fireEvent.click(toggleBtn);
+      expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByTestId('external-prompt-preview')).toBeNull();
+    });
+
+    it('copies the external prompt to clipboard and updates button state', async () => {
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: writeTextMock },
+        writable: true,
+        configurable: true,
+      });
+
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const toggleBtn = screen.getByTestId('external-prompt-toggle');
+      fireEvent.click(toggleBtn);
+
+      const copyBtn = screen.getByTestId('copy-external-prompt-button');
+      fireEvent.click(copyBtn);
+
+      await waitFor(() => {
+        expect(writeTextMock).toHaveBeenCalledWith(EXTERNAL_CHAT_NUTRITION_PROMPT);
+        expect(within(copyBtn).getByText('Copied')).toBeDefined();
+      });
+    });
+
+    it('handles clipboard write failure by selecting text and showing error status', async () => {
+      const writeTextMock = vi.fn().mockRejectedValue(new Error('Permission denied'));
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: writeTextMock },
+        writable: true,
+        configurable: true,
+      });
+      const selectSpy = vi.spyOn(HTMLTextAreaElement.prototype, 'select');
+
+      renderComponent();
+      await screen.findByDisplayValue('Coach Demo');
+
+      const toggleBtn = screen.getByTestId('external-prompt-toggle');
+      fireEvent.click(toggleBtn);
+
+      const copyBtn = screen.getByTestId('copy-external-prompt-button');
+      fireEvent.click(copyBtn);
+
+      await waitFor(() => {
+        expect(selectSpy).toHaveBeenCalled();
+        expect(screen.getByTestId('copy-prompt-error')).toBeDefined();
+      });
     });
   });
 });

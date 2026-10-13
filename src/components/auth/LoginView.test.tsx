@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { LoginView } from './LoginView';
 import { BrowserRouter } from 'react-router-dom';
@@ -327,6 +327,49 @@ describe('LoginView', () => {
     } finally {
       (import.meta.env as any).VITE_FEATURE_TERMS_CONSENT = originalEnv;
     }
+  });
+
+  describe('In-app browser banner on /login', () => {
+    const originalUserAgent = navigator.userAgent;
+
+    afterEach(() => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: originalUserAgent,
+        configurable: true,
+      });
+      sessionStorage.clear();
+    });
+
+    it('renders in-app banner on /login when Instagram UA is detected', async () => {
+      const instagramUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 Mobile/21E236 Instagram 324.0.0.18.109';
+      Object.defineProperty(navigator, 'userAgent', {
+        value: instagramUa,
+        configurable: true,
+      });
+
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('in-app-browser-banner')).toBeDefined();
+      });
+      const banner = screen.getByTestId('in-app-browser-banner');
+      expect(banner).toHaveTextContent(
+        'Open in your browser for the best experience.'
+      );
+    });
+
+    it('does not render in-app banner on /login for normal browser UA', () => {
+      const safariUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 Version/17.4.1 Safari/604.1';
+      Object.defineProperty(navigator, 'userAgent', {
+        value: safariUa,
+        configurable: true,
+      });
+
+      renderComponent();
+      expect(screen.queryByTestId('in-app-browser-banner')).toBeNull();
+    });
   });
 });
 

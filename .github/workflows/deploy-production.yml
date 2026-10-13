@@ -190,6 +190,18 @@ jobs:
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
         run: npx playwright test -c playwright.smoke.config.ts
 
+      # The repository is public, so artifacts are downloadable by anyone and
+      # are not secret-masked. The failure context (page snapshot at the failed
+      # step) is printed to the job log instead, where secrets are masked.
+      - name: Print smoke test failure context
+        if: failure()
+        run: |
+          if [ -d test-results ]; then
+            find test-results -name 'error-context.md' -print -exec cat {} \;
+          else
+            echo "No test-results directory."
+          fi
+
   tag:
     name: Create Release Tag
     needs: deploy

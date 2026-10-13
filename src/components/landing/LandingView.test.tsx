@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { LandingView } from './LandingView';
@@ -327,6 +327,46 @@ describe('LandingView component', () => {
       expect(fetchSpy).not.toHaveBeenCalled();
 
       fetchSpy.mockRestore();
+    });
+  });
+
+  describe('In-app browser banner integration', () => {
+    const originalUserAgent = navigator.userAgent;
+
+    afterEach(() => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: originalUserAgent,
+        configurable: true,
+      });
+      sessionStorage.clear();
+    });
+
+    it('renders in-app banner on landing page when Instagram UA is detected', () => {
+      const instagramUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 Mobile/21E236 Instagram 324.0.0.18.109';
+      Object.defineProperty(navigator, 'userAgent', {
+        value: instagramUa,
+        configurable: true,
+      });
+
+      renderLanding();
+      const banner = screen.getByTestId('in-app-browser-banner');
+      expect(banner).toBeDefined();
+      expect(banner).toHaveTextContent(
+        'Open in your browser for the best experience.'
+      );
+    });
+
+    it('does not render in-app banner on landing page for standard browser UA', () => {
+      const safariUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 Version/17.4.1 Safari/604.1';
+      Object.defineProperty(navigator, 'userAgent', {
+        value: safariUa,
+        configurable: true,
+      });
+
+      renderLanding();
+      expect(screen.queryByTestId('in-app-browser-banner')).toBeNull();
     });
   });
 });
