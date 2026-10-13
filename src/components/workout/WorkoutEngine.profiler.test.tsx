@@ -106,7 +106,7 @@ describe('WorkoutEngine React Profiler Baseline', () => {
     );
 
     // Select Workout A
-    const routineBtn = screen.getByTestId('routine-select-btn');
+    const routineBtn = await screen.findByTestId('routine-select-btn');
     fireEvent.click(routineBtn);
     const workoutABtn = await screen.findByText('Workout A (Push, Quads & Core)');
     fireEvent.click(workoutABtn);

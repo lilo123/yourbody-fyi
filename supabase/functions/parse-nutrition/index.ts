@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "../_shared/edge-runtime.d.ts";
 import { GoogleGenAI, Type } from "npm:@google/genai";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -248,6 +248,41 @@ function isTimeoutError(err: any): boolean {
   );
 }
 
+async function refundQuota(
+  supabaseUrl: string,
+  userId: string | undefined,
+  amount: number
+): Promise<void> {
+  if (!userId || amount <= 0) return;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!serviceRoleKey) {
+    console.warn('[parse-nutrition] SUPABASE_SERVICE_ROLE_KEY missing; cannot refund quota');
+    return;
+  }
+  try {
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const { error: refundErr } = await adminClient.rpc('refund_ai_quota', {
+      p_user_id: userId,
+      p_amount: amount,
+    });
+    if (refundErr) {
+      console.warn('[parse-nutrition] Failed to refund AI quota:', refundErr.message);
+      try {
+        await captureException(refundErr);
+      } catch (sentryErr) {
+        console.warn('[parse-nutrition] Error reporting refund failure:', sentryErr);
+      }
+    }
+  } catch (err: any) {
+    console.warn('[parse-nutrition] Exception during refund_ai_quota:', err?.message || err);
+    try {
+      await captureException(err);
+    } catch (sentryErr) {
+      console.warn('[parse-nutrition] Error reporting refund exception:', sentryErr);
+    }
+  }
+}
+
 export default {
   async fetch(req: Request) {
     const origin = req.headers.get('Origin');
@@ -276,6 +311,19 @@ export default {
     let forceAi = false;
     let localParseResult: NutritionParseResult | null = null;
     let input = '';
+    let isQuotaCharged = false;
+    let chargedAmount = 0;
+    let authenticatedUserId: string | undefined;
+    let configuredSupabaseUrl = '';
+
+    const refundIfCharged = async () => {
+      if (isQuotaCharged && chargedAmount > 0 && authenticatedUserId && configuredSupabaseUrl) {
+        const amountToRefund = chargedAmount;
+        isQuotaCharged = false;
+        chargedAmount = 0;
+        await refundQuota(configuredSupabaseUrl, authenticatedUserId, amountToRefund);
+      }
+    };
 
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -284,6 +332,7 @@ export default {
       if (!supabaseUrl || !anonKey) {
         throw new Error('Supabase environment variables not configured');
       }
+      configuredSupabaseUrl = supabaseUrl;
 
       // Verify caller authentication via Supabase Auth
       const userClient = createClient(supabaseUrl, anonKey, {
@@ -296,6 +345,7 @@ export default {
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      authenticatedUserId = user.id;
 
       let body: any;
       try {
@@ -407,6 +457,11 @@ export default {
 
           if (rpcError) {
             console.warn('[parse-nutrition] Failed to consume AI quota RPC (failing open):', rpcError.message);
+            try {
+              await captureException(rpcError);
+            } catch (sentryErr) {
+              console.warn('[parse-nutrition] Error reporting quota failure:', sentryErr);
+            }
           } else if (quotaResult && quotaResult.allowed === false) {
             if (!forceAi && input) {
               if (!localParseResult) {
@@ -448,9 +503,17 @@ export default {
                 },
               }
             );
+          } else {
+            isQuotaCharged = true;
+            chargedAmount = cost;
           }
         } catch (rpcErr: any) {
           console.warn('[parse-nutrition] consume_ai_quota exception (failing open):', rpcErr?.message || rpcErr);
+          try {
+            await captureException(rpcErr);
+          } catch (sentryErr) {
+            console.warn('[parse-nutrition] Error reporting quota exception:', sentryErr);
+          }
         }
       }
 
@@ -659,6 +722,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
       }
 
       if (!responseText) {
+        await refundIfCharged();
         if (!forceAi && input) {
           if (!localParseResult) {
             localParseResult = parseNutritionText(input);
@@ -757,6 +821,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (error: any) {
+      await refundIfCharged();
       console.error("[parse-nutrition error]:", error?.message || error);
       if (!forceAi && input) {
         if (!localParseResult) {
