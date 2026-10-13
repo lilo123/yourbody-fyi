@@ -120,10 +120,13 @@ test.describe('Production Smoke Suite', () => {
     await expect(ghostWeight).toBeVisible({ timeout: 5000 });
     await ghostWeight.fill(uniqueMarkerWeight);
     await ghostReps.fill(markerReps);
+    await expect(ghostWeight).toHaveValue(uniqueMarkerWeight);
+    await expect(ghostReps).toHaveValue(markerReps);
+    await expect(commitBtn).toBeEnabled();
     await commitBtn.click();
 
     // Verify the logged set appears
-    await expect(markerRows.first()).toBeVisible({ timeout: 10000 });
+    await expect(markerRows.first()).toBeVisible({ timeout: 20000 });
 
     // Delete the logged set through the UI and wait for the server to confirm
     await deleteMarkerRow();

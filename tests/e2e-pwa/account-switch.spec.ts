@@ -120,6 +120,10 @@ test.describe('Account Switch - Multi-User Outbox Isolation', () => {
     // 11. User A signs back in
     await signInUser(page, userA);
     await page.goto('/workout');
+    // Let the route finish loading online first: going offline mid-navigation aborts the
+    // workout history fetch ("Failed to fetch") and the logged row never renders.
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('[data-testid="exercise-card-0"]')).toBeVisible({ timeout: 15000 });
 
     // User A goes offline to inspect pending set
     await goOffline(context, page);
