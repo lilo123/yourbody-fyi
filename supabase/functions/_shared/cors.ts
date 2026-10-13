@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "./edge-runtime.d.ts";
 
 const ALLOWED_STATIC_ORIGINS = new Set([
   "https://www.yourbody.fyi",
