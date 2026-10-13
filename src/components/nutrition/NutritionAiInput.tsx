@@ -133,10 +133,10 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
                 <button
                   type="button"
                   data-testid="parser-mode-chip"
-                  aria-haspopup="menu"
+                  aria-haspopup="listbox"
                   aria-expanded={isModeMenuOpen}
                   onClick={() => setIsModeMenuOpen((prev) => !prev)}
-                  className="px-2 py-0.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-border-interactive transition touch-manipulation flex items-center gap-1"
+                  className="px-2 py-0.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-border-interactive transition touch-manipulation flex items-center gap-1 relative before:absolute before:inset-1/2 before:-translate-x-1/2 before:-translate-y-1/2 before:min-w-[44px] before:min-h-[44px] before:content-['']"
                 >
                   <span>{parserMode === 'on_device' ? 'On-device' : parserMode === 'always_ai' ? 'Always AI' : 'Auto'}</span>
                   <ChevronDown className="w-3 h-3 text-zinc-400" aria-hidden="true" />
@@ -144,10 +144,13 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
                 {isModeMenuOpen && (
                   <div
                     data-testid="parser-mode-menu"
+                    role="listbox"
                     className="absolute left-0 top-full mt-1 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-20 py-1"
                   >
                     <button
                       type="button"
+                      role="option"
+                      aria-selected={parserMode === 'auto'}
                       data-testid="parser-mode-option-auto"
                       onClick={() => {
                         setParserMode('auto');
@@ -161,6 +164,8 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
                     </button>
                     <button
                       type="button"
+                      role="option"
+                      aria-selected={parserMode === 'always_ai'}
                       data-testid="parser-mode-option-always_ai"
                       onClick={() => {
                         setParserMode('always_ai');
@@ -174,6 +179,8 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
                     </button>
                     <button
                       type="button"
+                      role="option"
+                      aria-selected={parserMode === 'on_device'}
                       data-testid="parser-mode-option-on_device"
                       onClick={() => {
                         setParserMode('on_device');
