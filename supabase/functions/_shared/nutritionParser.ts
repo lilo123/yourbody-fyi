@@ -1242,6 +1242,22 @@ function hasMultipleMealLabels(lines: string[]): boolean {
   return mealCategories.size >= 2;
 }
 
+function isExplicitKcalHeader(colName: string): boolean {
+  if (/\b(?:kcals?|calories?|cals?)\b/i.test(colName)) return true;
+  if (/(?:^|\s|\(|\/)(?:cal)(?:$|\s|\)|\/)/i.test(colName)) return true;
+  return false;
+}
+
+function isExplicitKjHeader(colName: string): boolean {
+  if (isExplicitKcalHeader(colName)) return false;
+  return /\bkj\b/i.test(colName);
+}
+
+function isGenericEnergyHeader(colName: string): boolean {
+  if (isExplicitKcalHeader(colName) || isExplicitKjHeader(colName)) return false;
+  return /^energy\b/i.test(colName);
+}
+
 /**
  * Markdown Table Parser.
  * Parses markdown tables: header + optional separator + item rows + Total row cross-check.
@@ -1281,7 +1297,9 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
 
   const headerCells = parseCells(tableLines[0]);
   let nameCol = -1;
-  let calCol = -1;
+  let explicitCalCol = -1;
+  let explicitKjCol = -1;
+  let genericEnergyCol = -1;
   let pCol = -1;
   let cCol = -1;
   let fCol = -1;
@@ -1291,17 +1309,35 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     const colName = headerCells[i].toLowerCase();
     if (/^(?:item|food|dish|name|ingredient|component)$/i.test(colName) && nameCol === -1) {
       nameCol = i;
-    } else if (/^(?:calories?|cal|cals?|energy|kcal)$/i.test(colName)) {
-      calCol = i;
-    } else if (/^(?:protein|prot|p)$/i.test(colName)) {
+    } else if (isExplicitKcalHeader(colName) && explicitCalCol === -1) {
+      explicitCalCol = i;
+    } else if (isExplicitKjHeader(colName) && explicitKjCol === -1) {
+      explicitKjCol = i;
+    } else if (isGenericEnergyHeader(colName) && genericEnergyCol === -1) {
+      genericEnergyCol = i;
+    } else if (/^(?:protein|prot|p)$/i.test(colName) && pCol === -1) {
       pCol = i;
-    } else if (/^(?:carbs?|carbohydrates?|c)$/i.test(colName)) {
+    } else if (/^(?:carbs?|carbohydrates?|c)$/i.test(colName) && cCol === -1) {
       cCol = i;
-    } else if (/^(?:fat|f)$/i.test(colName)) {
+    } else if (/^(?:fat|f)$/i.test(colName) && fCol === -1) {
       fCol = i;
-    } else if (/^(?:dietary\s+)?(?:fib(?:er|re)?)$/i.test(colName)) {
+    } else if (/^(?:dietary\s+)?(?:fib(?:er|re)?)$/i.test(colName) && fibCol === -1) {
       fibCol = i;
     }
+  }
+
+  let calCol = -1;
+  let isCalKj = false;
+  let isGenericEnergy = false;
+  if (explicitCalCol !== -1) {
+    calCol = explicitCalCol;
+    isCalKj = false;
+  } else if (explicitKjCol !== -1) {
+    calCol = explicitKjCol;
+    isCalKj = true;
+  } else if (genericEnergyCol !== -1) {
+    calCol = genericEnergyCol;
+    isGenericEnergy = true;
   }
 
   if (calCol === -1 || pCol === -1 || cCol === -1 || fCol === -1) {
@@ -1309,7 +1345,16 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
   }
   if (nameCol === -1) {
     for (let i = 0; i < headerCells.length; i++) {
-      if (i !== calCol && i !== pCol && i !== cCol && i !== fCol && i !== fibCol) {
+      if (
+        i !== calCol &&
+        i !== explicitCalCol &&
+        i !== explicitKjCol &&
+        i !== genericEnergyCol &&
+        i !== pCol &&
+        i !== cCol &&
+        i !== fCol &&
+        i !== fibCol
+      ) {
         nameCol = i;
         break;
       }
@@ -1334,6 +1379,7 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
   const items: ParsedNutritionItem[] = [];
   let declaredCalories: number | undefined;
   const unreadableLines: string[] = [];
+  let hadKjConversion = false;
 
   for (let rowIdx = startRow; rowIdx < tableLines.length; rowIdx++) {
     const row = tableLines[rowIdx];
@@ -1342,15 +1388,24 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
 
     const firstCell = cells[nameCol] || cells[0] || '';
     if (isSummaryRowLabel(firstCell)) {
-      const calRes = parseLocaleNumber(cells[calCol] || '');
+      const calCellText = cells[calCol] || '';
+      const calRes = parseLocaleNumber(calCellText);
       if (calRes.value !== null) {
-        declaredCalories = calRes.value;
+        let summaryCal = calRes.value;
+        if (/\b(?:kcals?|cals?|calories?)\b/i.test(calCellText)) {
+          // Explicitly kcal in cell
+        } else if (/\bkj\b/i.test(calCellText) || isCalKj) {
+          summaryCal = Math.round(summaryCal / 4.184);
+        }
+        declaredCalories = summaryCal;
       }
       continue;
     }
 
     const itemName = cells[nameCol] || `Item ${items.length + 1}`;
-    const calVal = parseLocaleNumber(cells[calCol] || '').value;
+    const rawCalCell = cells[calCol] || '';
+    const rawCalRes = parseLocaleNumber(rawCalCell);
+    let calVal = rawCalRes.value;
     const pVal = parseLocaleNumber(cells[pCol] || '').value;
     const cVal = parseLocaleNumber(cells[cCol] || '').value;
     const fVal = parseLocaleNumber(cells[fCol] || '').value;
@@ -1359,6 +1414,40 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     if (calVal === null || pVal === null || cVal === null || fVal === null) {
       unreadableLines.push(row);
       continue;
+    }
+
+    if (/\b(?:kcals?|cals?|calories?)\b/i.test(rawCalCell)) {
+      // Explicitly kcal in cell
+    } else if (/\bkj\b/i.test(rawCalCell) || isCalKj) {
+      calVal = Math.round(calVal / 4.184);
+      hadKjConversion = true;
+    } else if (isGenericEnergy) {
+      const rowExpectedKcal = 4 * pVal + 4 * cVal + 9 * fVal;
+      const rawDiscrepancy = Math.abs(rowExpectedKcal - calVal);
+      const maxRawDiscrepancy = Math.max(60, 0.25 * calVal);
+      if (rawDiscrepancy > maxRawDiscrepancy) {
+        const convertedKcal = Math.round(calVal / 4.184);
+        const convDiscrepancy = Math.abs(rowExpectedKcal - convertedKcal);
+        const maxConvDiscrepancy = Math.max(60, 0.25 * convertedKcal);
+        if (convDiscrepancy <= maxConvDiscrepancy) {
+          calVal = convertedKcal;
+          hadKjConversion = true;
+        }
+      }
+    }
+
+    // Calorie consistency check per row: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
+    const rowExpectedKcal = 4 * pVal + 4 * cVal + 9 * fVal;
+    const rowDiscrepancy = Math.abs(rowExpectedKcal - calVal);
+    const maxRowDiscrepancy = Math.max(60, 0.25 * calVal);
+    if (rowDiscrepancy > maxRowDiscrepancy) {
+      return {
+        confidence: 'none',
+        reason: 'KCAL_INCONSISTENT',
+        skippedLines: [row],
+        modifiers: [],
+        foundMacros: ['calories', 'protein', 'carbs', 'fat'],
+      };
     }
 
     items.push({
@@ -1435,6 +1524,23 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
   const sumF = roundToOneDecimal(items.reduce((total, it) => total + it.fat, 0));
   const sumFib = roundToOneDecimal(items.reduce((total, it) => total + it.fiber, 0));
 
+  const foundMacros: MacroKind[] = ['calories', 'protein', 'carbs', 'fat'];
+  if (sumFib > 0) foundMacros.push('fiber');
+
+  // Table-level calorie consistency check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
+  const expectedMealKcal = 4 * sumP + 4 * sumC + 9 * sumF;
+  const mealDiscrepancy = Math.abs(expectedMealKcal - sumCal);
+  const maxMealAllowedDiscrepancy = Math.max(60, 0.25 * sumCal);
+  if (mealDiscrepancy > maxMealAllowedDiscrepancy) {
+    return {
+      confidence: 'none',
+      reason: 'KCAL_INCONSISTENT',
+      skippedLines: [],
+      modifiers: [],
+      foundMacros,
+    };
+  }
+
   // Totals vs items: within 5% or 30 kcal (whichever is larger) items win silently; beyond that grade lenient
   let isLenient = false;
   let hintText: string | undefined;
@@ -1446,6 +1552,10 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
       isLenient = true;
       hintText = `Items add up to ${sumCal}, total says ${declaredCalories}`;
     }
+  }
+
+  if (isCalKj || hadKjConversion) {
+    isLenient = true;
   }
 
   const mealTitle = items.map((it) => it.name).join(', ');
@@ -1462,9 +1572,6 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     items,
     explanation,
   };
-
-  const foundMacros: MacroKind[] = ['calories', 'protein', 'carbs', 'fat'];
-  if (sumFib > 0) foundMacros.push('fiber');
 
   return {
     confidence: isLenient ? 'lenient' : 'exact',

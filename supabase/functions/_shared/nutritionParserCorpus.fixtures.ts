@@ -2045,5 +2045,77 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
       "reason": null,
       "hint": null
     }
+  },
+  {
+    "id": 113,
+    "title": "[Sweep paste3-056] Salmon Rice table with Calories and Energy columns",
+    "input": "| Food | Calories | Energy | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- | --- |\n| Salmon | 400 | 1674 | 40 | 0 | 25 |\n| Rice | 200 | 837 | 4 | 45 | 1 |",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 600,
+      "protein": 44,
+      "carbs": 45,
+      "fat": 26,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 114,
+    "title": "[Sweep paste3-057] Steak Potato table with Calories and Energy columns",
+    "input": "| Item | Calories | Energy | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- | --- |\n| Steak | 410 | 1715 | 48 | 0 | 22 |\n| Potato | 240 | 1004 | 4 | 54 | 1 |",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 650,
+      "protein": 52,
+      "carbs": 54,
+      "fat": 23,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 115,
+    "title": "[Sweep paste3-058] Chicken Sweet Potato table with Calories and Energy columns",
+    "input": "| Food | Calories | Energy | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- | --- |\n| Chicken | 320 | 1339 | 50 | 0 | 7 |\n| Sweet Potato | 230 | 962 | 4 | 52 | 3 |",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 550,
+      "protein": 54,
+      "carbs": 52,
+      "fat": 10,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 116,
+    "title": "[Coverage] Markdown table with kJ energy column converted to kcal",
+    "input": "| Food | Energy (kJ) | Protein | Carbs | Fat |\n| --- | --- | --- | --- | --- |\n| Salmon | 1674 | 40 | 0 | 25 |\n| Rice | 837 | 4 | 45 | 1 |",
+    "expected": {
+      "confidence": "lenient",
+      "ok": true,
+      "calories": 600,
+      "protein": 44,
+      "carbs": 45,
+      "fat": 26,
+      "fiber": null,
+      "name": null,
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
   }
 ];
