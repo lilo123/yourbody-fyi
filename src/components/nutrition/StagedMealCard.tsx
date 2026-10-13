@@ -339,7 +339,13 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
       )}
 
       {/* Itemized Ingredient Breakdown */}
-      <div className="space-y-0.5 pt-0">
+      <div
+        className={`space-y-0.5 ${
+          stagedMeal.source === 'local' || stagedMeal.source === 'rules' || stagedMeal.source === 'ai'
+            ? 'pt-0'
+            : 'pt-2.5'
+        }`}
+      >
         <div
           data-testid="breakdown-header"
           className="flex items-center justify-between gap-2 min-w-0 text-xs font-bold uppercase text-zinc-400 tracking-wider"
