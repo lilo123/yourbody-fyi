@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "../_shared/edge-runtime.d.ts";
 import { GoogleGenAI, Type } from "npm:@google/genai";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
