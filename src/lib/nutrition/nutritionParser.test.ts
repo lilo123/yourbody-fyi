@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   parseNutritionText,
   parseNutritionBlock,
+  parseLocaleNumber,
   type NutritionParseResult,
 } from './localParse';
+import { NUTRITION_CORPUS_FIXTURES } from '../../../supabase/functions/_shared/nutritionParserCorpus.fixtures.ts';
 
 describe('Shared Nutrition Parser Core - Cleanup Cases', () => {
   it('strips leading asterisk bullets (*)', () => {
@@ -550,6 +552,383 @@ Fat: 21g`;
       expect(result.reason).toBe('MISSING_MACRO');
       expect(result.foundMacros).toEqual(['calories', 'protein']);
     });
+  });
+});
+
+describe('Golden Test Corpus & Sweep Fixtures', () => {
+  it('parses all 103 realistic golden fixtures matching expected results', () => {
+    for (const fixture of NUTRITION_CORPUS_FIXTURES) {
+      const result = parseNutritionText(fixture.input);
+      expect(
+        result.confidence,
+        `Fixture #${fixture.id} [${fixture.title}] confidence expected "${fixture.expected.confidence}", got "${result.confidence}"`
+      ).toBe(fixture.expected.confidence);
+
+      if (fixture.expected.calories !== undefined && fixture.expected.calories !== null) {
+        expect(
+          result.meal?.calories,
+          `Fixture #${fixture.id} [${fixture.title}] calories mismatch`
+        ).toBe(fixture.expected.calories);
+      }
+      if (fixture.expected.protein !== undefined && fixture.expected.protein !== null) {
+        expect(
+          result.meal?.protein,
+          `Fixture #${fixture.id} [${fixture.title}] protein mismatch`
+        ).toBe(fixture.expected.protein);
+      }
+      if (fixture.expected.carbs !== undefined && fixture.expected.carbs !== null) {
+        expect(
+          result.meal?.carbs,
+          `Fixture #${fixture.id} [${fixture.title}] carbs mismatch`
+        ).toBe(fixture.expected.carbs);
+      }
+      if (fixture.expected.fat !== undefined && fixture.expected.fat !== null) {
+        expect(
+          result.meal?.fat,
+          `Fixture #${fixture.id} [${fixture.title}] fat mismatch`
+        ).toBe(fixture.expected.fat);
+      }
+      if (fixture.expected.fiber !== undefined && fixture.expected.fiber !== null) {
+        expect(
+          result.meal?.fiber,
+          `Fixture #${fixture.id} [${fixture.title}] fiber mismatch`
+        ).toBe(fixture.expected.fiber);
+      }
+      if (fixture.expected.itemsCount !== undefined && fixture.expected.itemsCount !== null) {
+        expect(
+          result.meal?.items?.length ?? 0,
+          `Fixture #${fixture.id} [${fixture.title}] itemsCount mismatch`
+        ).toBe(fixture.expected.itemsCount);
+      }
+      if (fixture.expected.reason !== undefined && fixture.expected.reason !== null) {
+        expect(
+          result.reason,
+          `Fixture #${fixture.id} [${fixture.title}] reason mismatch`
+        ).toBe(fixture.expected.reason);
+      }
+      if (fixture.expected.hint !== undefined && fixture.expected.hint !== null) {
+        expect(
+          result.hint,
+          `Fixture #${fixture.id} [${fixture.title}] hint mismatch`
+        ).toBe(fixture.expected.hint);
+      }
+
+      expect(
+        result.confidence === 'exact' || result.confidence === 'lenient',
+        `Fixture #${fixture.id} [${fixture.title}] ok mismatch`
+      ).toBe(fixture.expected.ok);
+    }
+  });
+});
+
+describe('Seeded Property Tests', () => {
+  function appearsInText(value: number, text: string): boolean {
+    return (
+      text.includes(String(value)) ||
+      text.includes(value.toLocaleString('en-US')) ||
+      text.includes(value.toLocaleString('de-DE'))
+    );
+  }
+
+  it('Property 1: The kcal of an exact result appears in the input text', () => {
+    // 1. Invariant across all corpus fixtures that parsed with exact confidence:
+    for (const fixture of NUTRITION_CORPUS_FIXTURES) {
+      const result = parseNutritionText(fixture.input);
+      if (result.confidence === 'exact' && result.meal?.calories !== undefined) {
+        const kcalNumber = result.meal.calories;
+        const rawInput = fixture.input;
+        if (result.meal.items && result.meal.items.length > 1) {
+          const itemsAppear = result.meal.items.every((item) =>
+            appearsInText(item.calories, rawInput)
+          );
+          const totalAppears = appearsInText(kcalNumber, rawInput);
+          expect(
+            itemsAppear || totalAppears,
+            `Fixture #${fixture.id} items kcal must appear in input text: "${rawInput}"`
+          ).toBe(true);
+        } else {
+          const appears = appearsInText(kcalNumber, rawInput);
+          expect(
+            appears,
+            `Fixture #${fixture.id} exact kcal ${kcalNumber} must appear in input text: "${rawInput}"`
+          ).toBe(true);
+        }
+      }
+    }
+
+    // 2. Deterministic seeded sweep generating 50 diverse exact meals:
+    let seedState = 42;
+    function nextSeededRandom(): number {
+      seedState = (Math.imul(1664525, seedState) + 1013904223) >>> 0;
+      return seedState / 4294967296;
+    }
+
+    const sampleFoodNames = [
+      'Roasted Salmon',
+      'Grilled Turkey Cutlet',
+      'Beef Tenderloin',
+      'Tofu Scramble',
+      'Greek Yogurt Bowl',
+      'Chicken Breast',
+      'Egg White Omelet',
+    ];
+
+    for (let i = 0; i < 50; i++) {
+      const nameIndex = Math.floor(nextSeededRandom() * sampleFoodNames.length);
+      const foodName = sampleFoodNames[nameIndex];
+      const proteinVal = Math.floor(nextSeededRandom() * 50) + 10;
+      const carbsVal = Math.floor(nextSeededRandom() * 60);
+      const fatVal = Math.floor(nextSeededRandom() * 30) + 1;
+      const exactKcal = 4 * proteinVal + 4 * carbsVal + 9 * fatVal;
+
+      const testInput = `${foodName}\nCalories: ${exactKcal} kcal\nProtein: ${proteinVal}g\nCarbs: ${carbsVal}g\nFat: ${fatVal}g`;
+      const result = parseNutritionText(testInput);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.calories).toBe(exactKcal);
+      expect(testInput.includes(String(exactKcal))).toBe(true);
+    }
+  });
+
+  it('Property 2: Noise, bullets, and formatting invariants', () => {
+    const bulletPrefixes = ['* ', '- ', '• ', '1. ', '  - '];
+    const emojiPrefixes = ['🔥 ', '🥗 ', '🍽️ ', '✨ ', ''];
+    const boldWrappers: Array<(text: string) => string> = [
+      (text: string) => `**${text}**`,
+      (text: string) => `__${text}__`,
+      (text: string) => text,
+    ];
+
+    let seedState = 1337;
+    function nextSeededRandom(): number {
+      seedState = (Math.imul(1664525, seedState) + 1013904223) >>> 0;
+      return seedState / 4294967296;
+    }
+
+    for (let i = 0; i < 30; i++) {
+      const proteinVal = Math.floor(nextSeededRandom() * 40) + 15;
+      const carbsVal = Math.floor(nextSeededRandom() * 50) + 5;
+      const fatVal = Math.floor(nextSeededRandom() * 20) + 2;
+      const calVal = 4 * proteinVal + 4 * carbsVal + 9 * fatVal;
+
+      const cleanLines = [
+        'Protein Bowl',
+        `Calories: ${calVal} kcal`,
+        `Protein: ${proteinVal}g`,
+        `Carbs: ${carbsVal}g`,
+        `Fat: ${fatVal}g`,
+      ];
+      const cleanInput = cleanLines.join('\n');
+      const cleanResult = parseNutritionText(cleanInput);
+      expect(cleanResult.confidence).toBe('exact');
+
+      const noisyLines = cleanLines.map((line, lineIndex) => {
+        const bullet = bulletPrefixes[Math.floor(nextSeededRandom() * bulletPrefixes.length)];
+        const emoji = emojiPrefixes[Math.floor(nextSeededRandom() * emojiPrefixes.length)];
+        const wrapper = boldWrappers[Math.floor(nextSeededRandom() * boldWrappers.length)];
+        if (lineIndex === 0) {
+          return `${bullet}${emoji}${wrapper(line)}`;
+        }
+        return `${bullet}${wrapper(line)}`;
+      });
+
+      const noisyInput = `\n${noisyLines.join('\n\n')}\n`;
+      const noisyResult = parseNutritionText(noisyInput);
+
+      expect(noisyResult.confidence).toBe('exact');
+      expect(noisyResult.meal?.calories).toBe(cleanResult.meal?.calories);
+      expect(noisyResult.meal?.protein).toBe(cleanResult.meal?.protein);
+      expect(noisyResult.meal?.carbs).toBe(cleanResult.meal?.carbs);
+      expect(noisyResult.meal?.fat).toBe(cleanResult.meal?.fat);
+    }
+  });
+
+  it('Property 3: Thousands separators never shrink numbers', () => {
+    // 1. Locale sweep: 1000..5000 in steps of 100 for en-US and de-DE
+    for (let num = 1000; num <= 5000; num += 100) {
+      const usStr = num.toLocaleString('en-US');
+      const deStr = num.toLocaleString('de-DE');
+
+      const usParsed = parseLocaleNumber(usStr);
+      const deParsed = parseLocaleNumber(deStr);
+
+      expect(usParsed.value).toBe(num);
+      expect(deParsed.value).toBe(num);
+      expect((usParsed.value ?? 0) >= 1000).toBe(true);
+      expect((deParsed.value ?? 0) >= 1000).toBe(true);
+    }
+
+    // 2. Decimal thousands:
+    expect(parseLocaleNumber('1,234.5').value).toBe(1234.5);
+    expect(parseLocaleNumber('1.234,5').value).toBe(1234.5);
+    expect(parseLocaleNumber('2,5 g').value).toBe(2.5);
+    expect(parseLocaleNumber('2.5 g').value).toBe(2.5);
+
+    // 3. Full meal parse preserves thousands without shrinking:
+    const usMeal = 'Steak\nCalories: 1,000 kcal\nProtein: 100g\nCarbs: 50g\nFat: 44.4g';
+    const usResult = parseNutritionText(usMeal);
+    expect(usResult.meal?.calories).toBe(1000);
+    expect(usResult.meal?.calories).not.toBe(1);
+
+    const deMeal = 'Steak\nCalories: 1.000 kcal\nProtein: 100g\nCarbs: 50g\nFat: 44.4g';
+    const deResult = parseNutritionText(deMeal);
+    expect(deResult.meal?.calories).toBe(1000);
+    expect(deResult.meal?.calories).not.toBe(1);
+  });
+
+  it('thousands separators with 0 macros yield KCAL_INCONSISTENT (never 1 kcal)', () => {
+    const commaInput = 'Protein Shake\nCalories: 1,000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g';
+    const commaResult = parseNutritionText(commaInput);
+    expect(commaResult.confidence).toBe('none');
+    expect(commaResult.reason).toBe('KCAL_INCONSISTENT');
+
+    const periodInput = 'Protein Shake\nCalories: 1.000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g';
+    const periodResult = parseNutritionText(periodInput);
+    expect(periodResult.confidence).toBe('none');
+    expect(periodResult.reason).toBe('KCAL_INCONSISTENT');
+
+    const blockResultComma = parseNutritionBlock(commaInput);
+    expect(blockResultComma.ok).toBe(false);
+    if (!blockResultComma.ok) {
+      expect(blockResultComma.reason).toBe('KCAL_INCONSISTENT');
+    }
+
+    const blockResultPeriod = parseNutritionBlock(periodInput);
+    expect(blockResultPeriod.ok).toBe(false);
+    if (!blockResultPeriod.ok) {
+      expect(blockResultPeriod.reason).toBe('KCAL_INCONSISTENT');
+    }
+  });
+
+  it("open-ended estimates ('800+', '50+') never yield exact grade", () => {
+    const input = 'Steak\nCalories: 800+ kcal\nProtein: 50+g\nCarbs: 0g\nFat: 30g';
+    const result = parseNutritionText(input);
+    expect(result.confidence).not.toBe('exact');
+  });
+
+  it('portion prefix on food line captures portion size and exact macros', () => {
+    const input = '8 oz Grilled Sirloin Steak: 48g protein, 0g carbs, 18g fat, 360 kcal';
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal?.name).toBe('Grilled Sirloin Steak');
+    expect(result.meal?.servingSize).toBe(8);
+    expect(result.meal?.servingUnit).toBe('oz');
+    expect(result.meal?.calories).toBe(360);
+  });
+
+  it('prefers closest non-macro line above macros for single meal name', () => {
+    const inputWithLeadIn = [
+      'Here is my snack breakdown:',
+      'Protein bar',
+      'Calories: 220 kcal',
+      'Protein: 20g',
+      'Carbs: 22g',
+      'Fat: 6g',
+      'Hope this helps!',
+    ].join('\n');
+    const resultWithLeadIn = parseNutritionText(inputWithLeadIn);
+    expect(resultWithLeadIn.confidence).toBe('lenient');
+    expect(resultWithLeadIn.meal?.name).toBe('Protein bar');
+    expect(resultWithLeadIn.meal?.calories).toBe(220);
+    expect(resultWithLeadIn.meal?.protein).toBe(20);
+    expect(resultWithLeadIn.meal?.carbs).toBe(22);
+    expect(resultWithLeadIn.meal?.fat).toBe(6);
+    expect(resultWithLeadIn.skippedLines).toEqual([
+      'Here is my snack breakdown:',
+      'Hope this helps!',
+    ]);
+
+    const inputWithLunchLeadIn = [
+      "Sure! Here's the breakdown for your lunch:",
+      'Chicken Rice Bowl',
+      'Calories: 520 kcal',
+      'Protein: 46g',
+      'Carbs: 58g',
+      'Fat: 12g',
+      'Hope that helps!',
+    ].join('\n');
+    const resultWithLunch = parseNutritionText(inputWithLunchLeadIn);
+    expect(resultWithLunch.confidence).toBe('lenient');
+    expect(resultWithLunch.meal?.name).toBe('Chicken Rice Bowl');
+    expect(resultWithLunch.meal?.calories).toBe(520);
+    expect(resultWithLunch.skippedLines).toEqual([
+      "Sure! Here's the breakdown for your lunch:",
+      'Hope that helps!',
+    ]);
+
+    const inputWithoutLeadIn = [
+      'Protein bar',
+      'Calories: 220 kcal',
+      'Protein: 20g',
+      'Carbs: 22g',
+      'Fat: 6g',
+    ].join('\n');
+    const resultWithoutLeadIn = parseNutritionText(inputWithoutLeadIn);
+    expect(resultWithoutLeadIn.confidence).toBe('exact');
+    expect(resultWithoutLeadIn.meal?.name).toBe('Protein bar');
+    expect(resultWithoutLeadIn.meal?.calories).toBe(220);
+    expect(resultWithoutLeadIn.skippedLines).toEqual([]);
+  });
+
+  it('percent macros are unread and never exact', () => {
+    const percentInput = [
+      'Zone Balance Plate',
+      'Calories: 500 kcal',
+      'Protein: 40%',
+      'Carbs: 40%',
+      'Fat: 20%',
+    ].join('\n');
+    const result = parseNutritionText(percentInput);
+    expect(result.confidence).toBe('partial');
+    expect(result.reason).toBe('MISSING_MACRO');
+    expect(result.meal?.calories).toBe(500);
+    expect(result.meal?.protein).toBe(0);
+    expect(result.meal?.carbs).toBe(0);
+    expect(result.meal?.fat).toBe(0);
+
+    // Transcribed label that ALSO gives grams keeps grams
+    const labelWithGramsAndPercent = [
+      'Nutrition Facts',
+      'Calories 250',
+      'Total Fat 8g 10%',
+      'Total Carbohydrate 34g 12%',
+      'Protein 10g 20%',
+    ].join('\n');
+    const labelResult = parseNutritionText(labelWithGramsAndPercent);
+    expect(labelResult.confidence).toBe('exact');
+    expect(labelResult.meal?.calories).toBe(250);
+    expect(labelResult.meal?.fat).toBe(8);
+    expect(labelResult.meal?.carbs).toBe(34);
+    expect(labelResult.meal?.protein).toBe(10);
+  });
+
+  it('serving/quantity lines are modifiers and not dropped as noise', () => {
+    const quantityInput = [
+      'Cheeseburger Plate',
+      'Calories: 300 kcal',
+      'Protein: 15g',
+      'Carbs: 25g',
+      'Fat: 12g',
+      'Quantity: 2',
+    ].join('\n');
+    const quantityResult = parseNutritionText(quantityInput);
+    expect(quantityResult.confidence).toBe('lenient');
+    expect(quantityResult.modifiers).toEqual(['Quantity: 2']);
+    expect(quantityResult.skippedLines).toEqual([]);
+    expect(quantityResult.meal?.calories).toBe(300);
+
+    const batchInput = [
+      'Meal Prep Beef Stew',
+      'Servings: 4',
+      'Calories: 1600 kcal',
+      'Protein: 140g',
+      'Carbs: 180g',
+      'Fat: 32g',
+    ].join('\n');
+    const batchResult = parseNutritionText(batchInput);
+    expect(batchResult.confidence).toBe('lenient');
+    expect(batchResult.modifiers).toEqual(['Servings: 4']);
+    expect(batchResult.skippedLines).toEqual([]);
+    expect(batchResult.meal?.calories).toBe(1600);
   });
 });
 
