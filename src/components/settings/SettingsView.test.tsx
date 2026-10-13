@@ -502,6 +502,7 @@ describe('SettingsView', () => {
     await screen.findByDisplayValue('Coach Demo');
     await screen.findByTestId('coach-capacity-badge');
     await screen.findByTestId('toggle-auto-timer');
+    await screen.findByRole('heading', { name: 'Account' });
     await expectNoA11yViolations(container);
   });
 

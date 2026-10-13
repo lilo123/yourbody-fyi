@@ -180,6 +180,12 @@ export interface CustomDishRow {
    * tightened in the next phase when query projections include it.
    */
   notes?: string | null;
+  /** Scalar serving quantity extracted via items->0->quantity */
+  serving_quantity?: number | null;
+  /** Scalar serving unit extracted via items->0->>unit */
+  serving_unit?: string | null;
+  /** See {@link NutritionLog.items}. */
+  items?: NutritionItem[] | null;
 }
 
 export type CustomDish = CustomDishRow;

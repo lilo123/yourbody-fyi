@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "./edge-runtime.d.ts";
 import Stripe from "npm:stripe@17.7.0";
 
 /**
