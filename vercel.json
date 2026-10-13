@@ -7,7 +7,7 @@
   },
   "rewrites": [
     {
-      "source": "/((?!sw\\.js|workbox-.*|manifest\\.webmanifest|robots\\.txt).*)",
+      "source": "/((?!sw\\.js|workbox-.*|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml).*)",
       "destination": "/index.html"
     }
   ],
@@ -109,6 +109,19 @@
         {
           "key": "Content-Type",
           "value": "text/plain"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/xml"
         }
       ]
     },
