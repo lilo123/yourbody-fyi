@@ -1,0 +1,73 @@
+name: Staging Keep-Alive
+
+on:
+  schedule:
+    # Run daily at 04:15 UTC to prevent staging database pausing from inactivity
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    name: Staging Keep-Alive Ping
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check staging secrets configuration
+        id: check_secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN_STAGING }}
+          STAGING_PROJECT_REF: ${{ secrets.STAGING_PROJECT_REF }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$STAGING_PROJECT_REF" ]; then
+            echo "::notice title=Staging Keep-Alive Skipped::Required staging secrets (SUPABASE_ACCESS_TOKEN_STAGING, STAGING_PROJECT_REF) are not configured. Skipping staging keep-alive ping."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.check_secrets.outputs.configured == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Supabase CLI
+        if: steps.check_secrets.outputs.configured == 'true'
+        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.119.0
+
+      - name: Perform staging keep-alive read
+        if: steps.check_secrets.outputs.configured == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN_STAGING }}
+          STAGING_PROJECT_REF: ${{ secrets.STAGING_PROJECT_REF }}
+        run: |
+          set +x
+          set -euo pipefail
+
+          echo "::add-mask::$STAGING_PROJECT_REF"
+
+          ANON_KEY=$(supabase projects api-keys --project-ref "$STAGING_PROJECT_REF" -o json | jq -r '(.[] | select(.name == "anon" or .type == "publishable" or .tags? == "anon") | .api_key) // empty' | head -n 1)
+
+          if [ -z "$ANON_KEY" ]; then
+            echo "::error::Failed to retrieve anon key for staging project"
+            exit 1
+          fi
+
+          echo "::add-mask::$ANON_KEY"
+
+          curl -fsS \
+            -H "apikey: $ANON_KEY" \
+            -H "Authorization: Bearer $ANON_KEY" \
+            "https://${STAGING_PROJECT_REF}.supabase.co/rest/v1/exercises?select=id&limit=1" > /dev/null
+
+          echo "Staging keep-alive read completed successfully."
