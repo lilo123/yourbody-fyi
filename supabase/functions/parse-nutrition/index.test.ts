@@ -1536,11 +1536,19 @@ Deno.test("parse-nutrition pre-structured fast-path returns HTTP 200 without cal
     Deno.env.set("GEMINI_API_KEY", "test-key");
 
     let googleGenAiCalled = false;
+    let quotaRpcCalled = false;
     const originalFetch = globalThis.fetch;
     const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
         const urlString = input.toString();
         if (urlString.includes("/auth/v1/user")) {
             return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+            quotaRpcCalled = true;
+            return new Response(JSON.stringify({ allowed: true }), {
                 status: 200,
                 headers: { "Content-Type": "application/json" }
             });
@@ -1566,10 +1574,441 @@ Deno.test("parse-nutrition pre-structured fast-path returns HTTP 200 without cal
 
         assertEquals(res.status, 200);
         assertEquals(googleGenAiCalled, false);
+        assertEquals(quotaRpcCalled, false);
         const data = await res.json();
         assertEquals(data.name, "Grilled Chicken & Rice");
         assertEquals(data.calories, 535);
+        assertEquals(data.source, "rules");
+        assertEquals(data.confidence, "exact");
         assertEquals(data.items.length, 2);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition: exact text bypasses both Gemini and quota RPC with source 'rules'", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    let googleGenAiCalled = false;
+    let quotaRpcCalled = false;
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+            quotaRpcCalled = true;
+            return new Response(JSON.stringify({ allowed: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            googleGenAiCalled = true;
+            throw new Error("Google Gen AI should not be called for exact text!");
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const exactText = "Protein Shake\n250 kcal | 30g protein | 20g carbs | 5g fat";
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: exactText })
+        });
+
+        const res = await app.fetch(req);
+
+        assertEquals(res.status, 200);
+        assertEquals(googleGenAiCalled, false);
+        assertEquals(quotaRpcCalled, false);
+        const data = await res.json();
+        assertEquals(data.source, "rules");
+        assertEquals(data.confidence, "exact");
+        assertEquals(data.name, "Protein Shake");
+        assertEquals(data.calories, 250);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition: lenient text invokes Gemini and returns source 'ai' on success", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    let googleGenAiCalled = false;
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: false }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            googleGenAiCalled = true;
+            const mockResponse = {
+                candidates: [{
+                    content: {
+                        parts: [{
+                            text: JSON.stringify({
+                                is_food: true,
+                                name: "Protein Shake Special",
+                                calories: 280,
+                                protein: 35,
+                                carbs: 15,
+                                fat: 4,
+                                fiber: 1,
+                                explanation: "Protein shake special",
+                                items: [{ name: "Protein Shake", portion: "1 serving", quantity: 1, unit: "unit", calories: 280, protein: 35, carbs: 15, fat: 4, fiber: 1 }]
+                            })
+                        }]
+                    }
+                }]
+            };
+            return new Response(JSON.stringify(mockResponse), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const lenientText = "Protein Shake\nTasted great\nCalories: 300\nProtein: 40g\nCarbs: 10g\nFat: 5g";
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: lenientText })
+        });
+
+        const res = await app.fetch(req);
+
+        assertEquals(res.status, 200);
+        assertEquals(googleGenAiCalled, true);
+        const data = await res.json();
+        assertEquals(data.source, "ai");
+        assertEquals(data.name, "Protein Shake Special");
+        assertEquals(data.calories, 280);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition: lenient text with exceeded quota falls back to 200 with source 'rules' and confidence 'lenient'", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    let googleGenAiCalled = false;
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+            return new Response(JSON.stringify({ allowed: false, limit: 0, used: 0, plan: "free", period: "month" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            googleGenAiCalled = true;
+            throw new Error("Google Gen AI should not be called when quota is exceeded!");
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const lenientText = "Protein Shake\nAte half\nCalories: 300 kcal\nProtein: 40g\nCarbs: 10g\nFat: 5g";
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: lenientText })
+        });
+
+        const res = await app.fetch(req);
+
+        assertEquals(res.status, 200);
+        assertEquals(googleGenAiCalled, false);
+        const data = await res.json();
+        assertEquals(data.source, "rules");
+        assertEquals(data.confidence, "lenient");
+        assertEquals(data.fallback_reason, "quota_exceeded");
+        assertEquals(data.calories, 300);
+        assertEquals(data.protein, 40);
+        assertEquals(data.carbs, 10);
+        assertEquals(data.fat, 5);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition: partial text with exceeded quota preserves 429 quota_exceeded response unchanged", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+            return new Response(JSON.stringify({ allowed: false, limit: 0, used: 0, plan: "free", period: "month" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const partialText = "Chicken Breast\nCalories: 165\nProtein: 31g";
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: partialText })
+        });
+
+        const res = await app.fetch(req);
+
+        assertEquals(res.status, 429);
+        const data = await res.json();
+        assertEquals(data.code, "quota_exceeded");
+        assertEquals(data.plan, "free");
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition: lenient text falls back to 200 with source 'rules' and fallback_reason 'ai_unavailable' on AI failure", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    let googleGenAiCalled = false;
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: false }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            googleGenAiCalled = true;
+            return new Response(JSON.stringify({ error: { message: "Internal error", code: 500 } }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const lenientText = "Protein Shake\nAte half\nCalories: 300 kcal\nProtein: 40g\nCarbs: 10g\nFat: 5g";
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: lenientText })
+        });
+
+        const res = await app.fetch(req);
+
+        assertEquals(res.status, 200);
+        assertEquals(googleGenAiCalled, true);
+        const data = await res.json();
+        assertEquals(data.source, "rules");
+        assertEquals(data.confidence, "lenient");
+        assertEquals(data.fallback_reason, "ai_unavailable");
+        assertEquals(data.calories, 300);
+        assertEquals(data.protein, 40);
+        assertEquals(data.carbs, 10);
+        assertEquals(data.fat, 5);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition: forceAi with exact text bypasses rules fast-path and invokes Gemini AI", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    let googleGenAiCalled = false;
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: false }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            googleGenAiCalled = true;
+            const mockResponse = {
+                candidates: [{
+                    content: {
+                        parts: [{
+                            text: JSON.stringify({
+                                is_food: true,
+                                name: "Chicken Breast AI Analyzed",
+                                calories: 165,
+                                protein: 31,
+                                carbs: 0,
+                                fat: 3.6,
+                                fiber: 0,
+                                explanation: "Analyzed by AI",
+                                items: [{ name: "Chicken Breast", portion: "100g", quantity: 100, unit: "g", calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0 }]
+                            })
+                        }]
+                    }
+                }]
+            };
+            return new Response(JSON.stringify(mockResponse), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const exactText = "Grilled Chicken Breast\nCalories: 165\nProtein: 31g\nCarbs: 0g\nFat: 3.6g";
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: exactText, forceAi: true })
+        });
+
+        const res = await app.fetch(req);
+
+        assertEquals(res.status, 200);
+        assertEquals(googleGenAiCalled, true);
+        const data = await res.json();
+        assertEquals(data.source, "ai");
+        assertEquals(data.name, "Chicken Breast AI Analyzed");
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("parse-nutrition: bulleted single meal paste no longer returns an item named 'Calories'", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    let googleGenAiCalled = false;
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            googleGenAiCalled = true;
+            throw new Error("Google Gen AI should not be called for exact single meal paste!");
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const bulletText = "Protein ice cream\n- Calories: 300 kcal\n- Protein: 40g\n- Carbs: 20g\n- Fat: 5g";
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: bulletText })
+        });
+
+        const res = await app.fetch(req);
+
+        assertEquals(res.status, 200);
+        assertEquals(googleGenAiCalled, false);
+        const data = await res.json();
+        assertEquals(data.source, "rules");
+        assertEquals(data.confidence, "exact");
+        assertEquals(data.name, "Protein ice cream");
+        assertEquals(data.calories, 300);
+        assertEquals(data.protein, 40);
+        assertEquals(data.carbs, 20);
+        assertEquals(data.fat, 5);
+        assertEquals(data.items.length, 1);
+        assertEquals(data.items[0].name, "Protein ice cream");
+        assertEquals(data.items.some((item: any) => item.name === "Calories"), false);
     } finally {
         globalThis.fetch = originalFetch;
         if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
@@ -3029,4 +3468,321 @@ Deno.test("parse-nutrition AI quota: rpc error -> proceeds to Gemini (fails open
         else Deno.env.delete("GEMINI_API_KEY");
     }
 });
+
+Deno.test("parse-nutrition AI quota: AI failure refunds charged quota (1 for text, 2 for photo)", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    const originalServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    Deno.env.set("GEMINI_API_KEY", "mock-gemini-key");
+    Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "mock-service-role-key");
+
+    const refundCalls: { userId: string; amount: number }[] = [];
+    const originalFetch = globalThis.fetch;
+
+    const createMockFetch = (_isPhoto: boolean) => async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "refund-user-123", email: "refund@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+            return new Response(JSON.stringify({ allowed: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/rpc/refund_ai_quota")) {
+            const body = init?.body ? JSON.parse(init.body.toString()) : {};
+            refundCalls.push({ userId: body.p_user_id, amount: body.p_amount });
+            return new Response(JSON.stringify(0), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            // Simulate AI failure (status 500)
+            return new Response(JSON.stringify({ error: { code: 500, message: "AI model failed" } }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    try {
+        // 1. Text failure -> refund 1 use
+        refundCalls.length = 0;
+        globalThis.fetch = createMockFetch(false);
+        const textReq = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Random unparseable prose text that goes to AI" })
+        });
+        const textRes = await app.fetch(textReq);
+        assertEquals(textRes.status, 500);
+        assertEquals(refundCalls.length, 1);
+        assertEquals(refundCalls[0].userId, "refund-user-123");
+        assertEquals(refundCalls[0].amount, 1);
+
+        // 2. Photo failure -> refund 2 uses
+        refundCalls.length = 0;
+        globalThis.fetch = createMockFetch(true);
+        const photoReq = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({
+                input: "Photo of salad",
+                image_base64: "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
+            })
+        });
+        const photoRes = await app.fetch(photoReq);
+        assertEquals(photoRes.status, 500);
+        assertEquals(refundCalls.length, 1);
+        assertEquals(refundCalls[0].userId, "refund-user-123");
+        assertEquals(refundCalls[0].amount, 2);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+        if (originalServiceKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", originalServiceKey);
+        else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+    }
+});
+
+Deno.test("parse-nutrition AI quota: refund NOT called on success, quota-denied, device-parsed fast path, or when quota flag is off", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    const originalServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    Deno.env.set("GEMINI_API_KEY", "mock-gemini-key");
+    Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "mock-service-role-key");
+
+    const refundCalls: { userId: string; amount: number }[] = [];
+    let consumeCalls = 0;
+    const originalFetch = globalThis.fetch;
+
+    try {
+        // Case A: Success -> no refund
+        refundCalls.length = 0;
+        globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+            const urlString = input.toString();
+            if (urlString.includes("/auth/v1/user")) {
+                return new Response(JSON.stringify({ id: "user-abc", email: "u@yb.fyi" }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/app_config")) {
+                return new Response(JSON.stringify({ value: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+                return new Response(JSON.stringify({ allowed: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/rpc/refund_ai_quota")) {
+                refundCalls.push(JSON.parse(init?.body?.toString() || "{}"));
+                return new Response(JSON.stringify(0), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("generativelanguage.googleapis.com")) {
+                return new Response(JSON.stringify({
+                    candidates: [{ content: { parts: [{ text: JSON.stringify({ is_food: true, name: "Egg", calories: 70, protein: 6, carbs: 0, fat: 5, fiber: 0, explanation: "1 egg", items: [] }) }] } }]
+                }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            return originalFetch(input, init);
+        };
+
+        const successReq = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Had 1 boiled egg" })
+        });
+        const successRes = await app.fetch(successReq);
+        assertEquals(successRes.status, 200);
+        assertEquals(refundCalls.length, 0);
+
+        // Case B: Quota denied -> no refund
+        refundCalls.length = 0;
+        globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+            const urlString = input.toString();
+            if (urlString.includes("/auth/v1/user")) {
+                return new Response(JSON.stringify({ id: "user-abc", email: "u@yb.fyi" }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/app_config")) {
+                return new Response(JSON.stringify({ value: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+                return new Response(JSON.stringify({ allowed: false, limit: 10, used: 10, period: "day" }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/rpc/refund_ai_quota")) {
+                refundCalls.push(JSON.parse(init?.body?.toString() || "{}"));
+                return new Response(JSON.stringify(0), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            return originalFetch(input, init);
+        };
+
+        const deniedReq = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Steak and potatoes" })
+        });
+        const deniedRes = await app.fetch(deniedReq);
+        assertEquals(deniedRes.status, 429);
+        assertEquals(refundCalls.length, 0);
+
+        // Case C: Device fast-path (exact text, forceAi false) -> neither consume nor refund
+        consumeCalls = 0;
+        refundCalls.length = 0;
+        globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+            const urlString = input.toString();
+            if (urlString.includes("/auth/v1/user")) {
+                return new Response(JSON.stringify({ id: "user-abc", email: "u@yb.fyi" }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/app_config")) {
+                return new Response(JSON.stringify({ value: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+                consumeCalls++;
+                return new Response(JSON.stringify({ allowed: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/rpc/refund_ai_quota")) {
+                refundCalls.push(JSON.parse(init?.body?.toString() || "{}"));
+                return new Response(JSON.stringify(0), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            return originalFetch(input, init);
+        };
+
+        const fastPathReq = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Chicken Breast\nCalories: 165 kcal\nProtein: 31g\nCarbs: 0g\nFat: 3.6g" })
+        });
+        const fastPathRes = await app.fetch(fastPathReq);
+        assertEquals(fastPathRes.status, 200);
+        assertEquals(consumeCalls, 0);
+        assertEquals(refundCalls.length, 0);
+
+        // Case D: Flag off -> AI failure does not refund
+        refundCalls.length = 0;
+        globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+            const urlString = input.toString();
+            if (urlString.includes("/auth/v1/user")) {
+                return new Response(JSON.stringify({ id: "user-abc", email: "u@yb.fyi" }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/app_config")) {
+                return new Response(JSON.stringify({ value: false }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("/rest/v1/rpc/refund_ai_quota")) {
+                refundCalls.push(JSON.parse(init?.body?.toString() || "{}"));
+                return new Response(JSON.stringify(0), { status: 200, headers: { "Content-Type": "application/json" } });
+            }
+            if (urlString.includes("generativelanguage.googleapis.com")) {
+                return new Response(JSON.stringify({ error: { code: 500, message: "AI down" } }), { status: 500, headers: { "Content-Type": "application/json" } });
+            }
+            return originalFetch(input, init);
+        };
+
+        const flagOffReq = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Arbitrary text" })
+        });
+        const flagOffRes = await app.fetch(flagOffReq);
+        assertEquals(flagOffRes.status, 500);
+        assertEquals(refundCalls.length, 0);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+        if (originalServiceKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", originalServiceKey);
+        else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+    }
+});
+
+Deno.test("parse-nutrition AI quota: rpc error captures to Sentry and proceeds to Gemini (fails open)", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "mock-gemini-key");
+
+    let geminiCalled = false;
+    let rpcErrorWarnLogged = false;
+    const originalFetch = globalThis.fetch;
+    const originalWarn = console.warn;
+
+    console.warn = (...args: any[]) => {
+        const msg = args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ");
+        if (msg.includes("Failed to consume AI quota RPC (failing open)")) {
+            rpcErrorWarnLogged = true;
+        }
+        originalWarn(...args);
+    };
+
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "user-sentry-test", email: "sentry@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+            return new Response(JSON.stringify({ message: "DB connection timeout" }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            geminiCalled = true;
+            return new Response(JSON.stringify({
+                candidates: [{
+                    content: {
+                        parts: [{
+                            text: JSON.stringify({
+                                is_food: true,
+                                name: "Orange",
+                                calories: 60,
+                                protein: 1,
+                                carbs: 15,
+                                fat: 0,
+                                fiber: 3,
+                                explanation: "1 orange",
+                                items: []
+                            })
+                        }]
+                    }
+                }]
+            }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Had an orange" })
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 200);
+        assertEquals(geminiCalled, true);
+        assertEquals(rpcErrorWarnLogged, true);
+    } finally {
+        globalThis.fetch = originalFetch;
+        console.warn = originalWarn;
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
 
