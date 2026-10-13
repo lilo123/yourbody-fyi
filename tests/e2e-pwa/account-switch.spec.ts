@@ -47,6 +47,7 @@ test.describe('Account Switch - Multi-User Outbox Isolation', () => {
     // 2. Pre-warm /workout while online
     await page.goto('/workout');
     await page.waitForLoadState('networkidle');
+    await expect(page.locator('[data-testid="exercise-card-0"]')).toBeVisible({ timeout: 15000 });
 
     // 3. User A goes offline
     await goOffline(context, page);

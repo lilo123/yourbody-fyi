@@ -372,5 +372,41 @@ describe('WorkoutSessionHistory', () => {
     expect(screen.getByTestId('history-sessions-skeleton')).toBeDefined();
     expect(screen.queryByTestId('pending-mark')).toBeNull();
   });
+
+  it('renders a "Share workout" item in the session overflow menu and triggers sharing on select', async () => {
+    const shareStoryModule = await import('../../utils/workoutStoryShare');
+    const shareSpy = vi.spyOn(shareStoryModule, 'shareWorkoutStory').mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <WorkoutSessionHistory
+          displayedSessions={mockSessions}
+          exercises={[]}
+          timeRange="all"
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+          onLoadMore={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    // Open overflow menu for Leg Day
+    const overflowTrigger = screen.getByRole('button', { name: /Session actions for Leg Day/i });
+    fireEvent.click(overflowTrigger);
+
+    const shareBtn = screen.getByTestId('share-session-session-1');
+    expect(shareBtn).toBeDefined();
+    expect(shareBtn.textContent).toContain('Share workout');
+
+    fireEvent.click(shareBtn);
+    expect(shareSpy).toHaveBeenCalledWith(
+      mockSessions[0],
+      [],
+      'lb',
+      expect.any(Function)
+    );
+
+    shareSpy.mockRestore();
+  });
 });
 

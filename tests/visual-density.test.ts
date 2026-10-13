@@ -5673,6 +5673,123 @@ test.describe("Weight Units", () => {
     }
   });
 
+  // Nutrition Parsing Mode Setting: Settings NutritionParserModeCard with external prompt expanded at 320px and 390px
+  for (const width of [320, 390] as const) {
+    test(`Settings NutritionParserModeCard external prompt expanded 44px hit targets and layout at ${width}px`, async ({ browser }) => {
+      const page = await browser.newPage({
+        viewport: { width, height: 844 },
+        deviceScaleFactor: 1,
+      });
+      try {
+        await setupSettingsDensityPage(page);
+
+        const card = page.locator('[data-testid="nutrition-parser-mode-card"]');
+        await expect(card).toBeVisible();
+
+        const toggle = page.locator('[data-testid="external-prompt-toggle"]');
+        await expect(toggle).toBeVisible();
+        await toggle.click();
+
+        const preview = page.locator('[data-testid="external-prompt-preview"]');
+        await expect(preview).toBeVisible();
+
+        const copyBtn = page.locator('[data-testid="copy-external-prompt-button"]');
+        await expect(copyBtn).toBeVisible();
+
+        const isCardOverflowing = await card.evaluate((el) => el.scrollWidth > el.clientWidth);
+        expect(isCardOverflowing, `NutritionParserModeCard has no horizontal overflow with external prompt expanded at ${width}px`).toBe(false);
+
+        // Check 44px hit targets on toggle and copy buttons
+        const assertHitArea44 = async (loc: Locator, label: string) => {
+          await expect(loc).toBeVisible();
+          const item = await loc.evaluate((el) => {
+            el.scrollIntoView({ block: "center", inline: "nearest" });
+            const r = el.getBoundingClientRect();
+            const cx = r.left + r.width / 2;
+            const cy = r.top + r.height / 2;
+
+            const centerEl = document.elementFromPoint(cx, cy);
+            const centerHits = Boolean(centerEl && (el.contains(centerEl) || centerEl.contains(el)));
+
+            const topEl = document.elementFromPoint(cx, cy - 21.5);
+            const btmEl = document.elementFromPoint(cx, cy + 21.5);
+            const topHits = Boolean(topEl && (el.contains(topEl) || topEl.contains(el)));
+            const btmHits = Boolean(btmEl && (el.contains(btmEl) || btmEl.contains(el)));
+
+            const horizontalAllowed = r.width >= 43;
+            let horizontalHits = true;
+            if (horizontalAllowed) {
+              const leftEl = document.elementFromPoint(cx - 21.5, cy);
+              const rightEl = document.elementFromPoint(cx + 21.5, cy);
+              const leftHits = Boolean(leftEl && (el.contains(leftEl) || leftEl.contains(el)));
+              const rightHits = Boolean(rightEl && (el.contains(rightEl) || rightEl.contains(el)));
+              horizontalHits = leftHits && rightHits;
+            }
+
+            const hasMin44pxHitArea = centerHits && (
+              topHits ||
+              btmHits ||
+              (horizontalAllowed && horizontalHits) ||
+              r.width >= 43 ||
+              r.height >= 43
+            );
+
+            return {
+              tag: el.tagName.toLowerCase(),
+              testId: el.getAttribute("data-testid") || el.getAttribute("aria-label") || el.textContent?.trim().slice(0, 20),
+              width: Math.round(r.width),
+              height: Math.round(r.height),
+              hasMin44pxHitArea,
+            };
+          });
+
+          expect(
+            item.hasMin44pxHitArea,
+            `${label} control ${item.testId || item.tag} (${item.width}x${item.height}) failed >=44px hit area: ${JSON.stringify(item)}`
+          ).toBe(true);
+        };
+
+        await assertHitArea44(toggle, "External prompt toggle");
+        await assertHitArea44(copyBtn, "Copy external prompt button");
+      } finally {
+        await page.close();
+      }
+    });
+  }
+
+  // Clean axe audit on NutritionParserModeCard with external prompt expanded
+  test("clean axe-core accessibility audit on Settings NutritionParserModeCard with external prompt expanded", async ({ browser }) => {
+    const page = await browser.newPage({
+      viewport: { width: 375, height: 812 },
+      deviceScaleFactor: 1,
+    });
+    try {
+      await setupSettingsDensityPage(page);
+      await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" });
+
+      const card = page.locator('[data-testid="nutrition-parser-mode-card"]');
+      await expect(card).toBeVisible();
+
+      const toggle = page.locator('[data-testid="external-prompt-toggle"]');
+      await toggle.click();
+      await expect(page.locator('[data-testid="external-prompt-preview"]')).toBeVisible();
+
+      const violations = await card.evaluate(async (el) => {
+        // @ts-ignore
+        const res = await axe.run(el, {
+          runOnly: {
+            type: "tag",
+            values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+          },
+        });
+        return res.violations;
+      });
+      expect(violations, `Settings NutritionParserModeCard expanded prompt axe violations: ${JSON.stringify(violations, null, 2)}`).toHaveLength(0);
+    } finally {
+      await page.close();
+    }
+  });
+
   // (c) kg-mode /workout and /history at 320px and 390px: hit targets, layout, and axe audit
   for (const width of [320, 390] as const) {
     test(`kg-mode hit-area and layout acceptance at ${width}px on /workout and /history`, async ({ browser }) => {
@@ -6544,6 +6661,80 @@ test.describe("Route-Wide Density & Tap Grid", () => {
       await page.close();
     }
   });
+
+  for (const width of [320, 390] as const) {
+    test(`Meal demo section visual density at ${width}px`, async ({ browser }) => {
+      const page = await browser.newPage({
+        viewport: { width, height: 844 },
+        deviceScaleFactor: 1,
+      });
+      try {
+        await page.goto("/");
+        await page.waitForLoadState("domcontentloaded");
+        await page.waitForTimeout(500);
+
+        const section = page.locator('[data-testid="meal-demo-section"]');
+        await expect(section).toBeVisible();
+
+        const violations = await checkTypeScale(section, {
+          includeHeaderAndNav: true,
+          allowSizes16Plus: true,
+        });
+
+        expect(
+          violations,
+          `D43 type scale violations on meal demo section at ${width}px:\n${JSON.stringify(violations, null, 2)}`
+        ).toHaveLength(0);
+      } finally {
+        await page.close();
+      }
+    });
+
+    test(`In-app browser banner on / (Instagram UA) at ${width}px`, async ({ browser }) => {
+      const instagramUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21E236 Instagram 324.0.0.18.109';
+      const page = await browser.newPage({
+        viewport: { width, height: 844 },
+        deviceScaleFactor: 1,
+        userAgent: instagramUa,
+      });
+      try {
+        await page.goto('/');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
+
+        const banner = page.locator('[data-testid="in-app-browser-banner"]');
+        await expect(banner).toBeVisible();
+
+        const bannerBox = await banner.boundingBox();
+        const headerBox = await page.locator('[data-testid="landing-header"]').boundingBox();
+        expect(bannerBox && headerBox && bannerBox.y < headerBox.y, 'Banner renders above landing header').toBe(true);
+
+        const hasPageHOverflow = await page.evaluate(
+          () => document.documentElement.scrollWidth > document.documentElement.clientWidth
+        );
+        expect(
+          hasPageHOverflow,
+          `Viewport ${width}px must not have horizontal overflow with in-app banner`
+        ).toBe(false);
+
+        const violations = await checkTypeScale(banner, {
+          includeHeaderAndNav: true,
+          allowSizes16Plus: true,
+        });
+        expect(
+          violations,
+          `Type scale violations on in-app banner at ${width}px:\n${JSON.stringify(violations, null, 2)}`
+        ).toHaveLength(0);
+
+        const dismissBtn = page.locator('[data-testid="in-app-browser-dismiss"]');
+        await dismissBtn.click();
+        await expect(banner).not.toBeVisible();
+      } finally {
+        await page.close();
+      }
+    });
+  }
 
   test("Standalone mode at / renders app redirect, not landing at 320px", async ({ browser }) => {
     const page = await browser.newPage({
@@ -9012,12 +9203,13 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
 
           await page.reload();
           await page.waitForLoadState('domcontentloaded');
+          const statusPill = page.locator('[data-testid="connection-status"]');
+          await expect(statusPill).toBeVisible({ timeout: 10000 });
 
           await page.evaluate(() => {
             Object.defineProperty(navigator, 'onLine', { configurable: true, writable: true, value: false });
             window.dispatchEvent(new Event('offline'));
           });
-          const statusPill = page.locator('[data-testid="connection-status"]');
           await expect(statusPill).toHaveAttribute('title', /99 pending/, { timeout: 10000 });
 
           await verifyWordmarkGeometry(page, 'Offline · 99 pending');
@@ -9388,12 +9580,13 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
 
       await page.reload();
       await page.waitForLoadState('domcontentloaded');
+      const statusPill = page.locator('[data-testid="connection-status"]');
+      await expect(statusPill).toBeVisible({ timeout: 10000 });
 
       await page.evaluate(() => {
         Object.defineProperty(navigator, 'onLine', { configurable: true, writable: true, value: false });
         window.dispatchEvent(new Event('offline'));
       });
-      const statusPill = page.locator('[data-testid="connection-status"]');
       await expect(statusPill).toHaveAttribute('title', /99 pending/, { timeout: 10000 });
     };
 

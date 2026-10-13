@@ -426,4 +426,33 @@ describe('NutritionHistoryTimeline', () => {
       expect(screen.getByText('60g P')).toBeDefined();
     });
   });
+
+  describe('Share day button', () => {
+    it('renders a 44px Share day button with aria-label="Share day" and triggers share on click', async () => {
+      const shareStoryModule = await import('../../utils/macroStoryShare');
+      const shareSpy = vi.spyOn(shareStoryModule, 'shareMacroStory').mockResolvedValue(undefined);
+
+      render(
+        <NutritionHistoryTimeline
+          filteredNutritionDays={[sampleDay]}
+          timeRange="all"
+          isInspectingAthlete={false}
+          onEditMeal={vi.fn()}
+          onDeleteMeal={vi.fn()}
+        />
+      );
+
+      const shareBtn = screen.getByTestId('share-day-btn-2026-09-27');
+      expect(shareBtn).toBeDefined();
+      expect(shareBtn.getAttribute('aria-label')).toBe('Share day');
+      expect(shareBtn.className).toContain('min-w-[44px]');
+      expect(shareBtn.className).toContain('min-h-[44px]');
+
+      fireEvent.click(shareBtn);
+      expect(shareSpy).toHaveBeenCalledTimes(1);
+      expect(shareSpy).toHaveBeenCalledWith(sampleDay, null, expect.any(Function));
+
+      shareSpy.mockRestore();
+    });
+  });
 });

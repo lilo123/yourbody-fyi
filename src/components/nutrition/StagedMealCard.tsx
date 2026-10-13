@@ -15,6 +15,7 @@ import {
   scaleStagedMeal,
   getScrollBehavior,
   useNavHeight,
+  formatLenientHint,
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
@@ -47,6 +48,7 @@ export interface StagedMealCardProps {
   customDishes?: CustomDish[];
   onAddParsedItems?: (items: StagedItem[], mealAtStart?: StagedMeal) => void;
   onAnalyzeWithAiInstead?: () => void;
+  isAnalyzing?: boolean;
 }
 
 export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
@@ -69,6 +71,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
   customDishes = [],
   onAddParsedItems,
   onAnalyzeWithAiInstead,
+  isAnalyzing = false,
   navHeight: navHeightProp,
 }) => {
   const isOnline = useOnlineStatus();
@@ -211,6 +214,10 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
 
   const isMultiItem = stagedMeal.items && stagedMeal.items.length > 1;
   const macroColumns = computeVisibleMacroColumns(stagedMeal.items);
+  const lenientHint =
+    stagedMeal.confidence === 'lenient'
+      ? formatLenientHint(stagedMeal.skippedLines, stagedMeal.modifiers)
+      : null;
 
   return (
     <div
@@ -283,7 +290,8 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                 type="button"
                 data-testid="analyze-with-ai-instead-btn"
                 onClick={onAnalyzeWithAiInstead}
-                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/50 transition min-h-[44px] touch-manipulation"
+                disabled={isAnalyzing}
+                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/50 transition min-h-[44px] touch-manipulation disabled:opacity-50"
               >
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Analyze with AI instead</span>
@@ -293,9 +301,14 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
           {stagedMeal.confidence === 'lenient' && (
             <div
               data-testid="lenient-fallback-banner"
-              className="flex items-center gap-1.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1"
+              className="flex flex-col gap-0.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1"
             >
               <span>Please review macros before logging.</span>
+              {lenientHint && (
+                <span data-testid="lenient-hint" className="text-amber-300/80 truncate">
+                  {lenientHint}
+                </span>
+              )}
             </div>
           )}
         </div>
