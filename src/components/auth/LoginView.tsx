@@ -6,6 +6,10 @@ import { StatusBanner } from '../common/StatusBanner';
 import { isTermsConsentEnabled, CURRENT_TERMS_VERSION } from '../../config/features';
 import { MIN_PASSWORD_LENGTH } from '../../constants/auth';
 
+const InAppBrowserBanner = React.lazy(() =>
+  import('../common/InAppBrowserBanner').then((m) => ({ default: m.InAppBrowserBanner }))
+);
+
 type AuthMode = 'signin' | 'register' | 'check_email' | 'forgot_password';
 
 export const LoginView: React.FC = () => {
@@ -108,6 +112,9 @@ export const LoginView: React.FC = () => {
 
   return (
     <div className="max-w-md w-full mx-auto px-4 py-8">
+      <React.Suspense fallback={null}>
+        <InAppBrowserBanner className="mb-6 rounded-2xl border" />
+      </React.Suspense>
       {/* Brand card */}
       <div className="text-center mb-8">
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-[0_0_25px_rgba(6,182,212,0.4)] mx-auto mb-3">
