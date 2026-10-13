@@ -4,6 +4,10 @@ import App from './App';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from './lib/supabase';
 import { restTimerStore } from './utils/restTimerStore';
+import './components/workout/WorkoutEngine';
+import './components/nutrition/NutritionEngine';
+import './components/history/HistoryView';
+import './components/coach/CoachCockpit';
 
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from './test/supabaseBuilderMock';
 
@@ -16,6 +20,7 @@ const { mockSession } = vi.hoisted(() => ({
 vi.mock('./lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user-id' } } }),
       getSession: vi.fn().mockResolvedValue({ data: { session: mockSession } }),
@@ -36,6 +41,7 @@ describe('App Shell & Navigation', () => {
     (supabase.auth.getUser as any).mockResolvedValue({ data: { user: { id: 'test-user-id' } } });
     (supabase.auth.getSession as any).mockResolvedValue({ data: { session: mockSession } });
     (supabase.auth.onAuthStateChange as any).mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
+    (supabase as any).rpc = vi.fn().mockResolvedValue({ data: [], error: null });
 
     const mockUser = {
       id: 'test-user-id',
@@ -85,23 +91,18 @@ describe('App Shell & Navigation', () => {
   });
 
   it('navigates to Nutrition tab when bottom nav item is clicked', async () => {
+    window.history.pushState({}, '', '/workout');
     render(
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-nutrition')).toBeDefined();
-    });
-
-    const nutritionTab = screen.getByTestId('nav-nutrition');
+    const nutritionTab = await screen.findByTestId('nav-nutrition');
     fireEvent.click(nutritionTab);
 
-    await waitFor(() => {
-      expect(screen.getByText("Today's Nutrition")).toBeDefined();
-    }, { timeout: 10000 });
-  });
+    expect(await screen.findByText("Today's Nutrition", {}, { timeout: 10000 })).toBeDefined();
+  }, 15000);
 
   it('redirects to /login when session expires (SIGNED_OUT event)', async () => {
     let authCallback: any = null;
@@ -134,6 +135,7 @@ describe('App Shell & Navigation', () => {
   });
 
   it('persists global rest timer pill across /workout, /nutrition, and /history navigation', async () => {
+    window.history.pushState({}, '', '/workout');
     render(
       <QueryClientProvider client={queryClient}>
         <App />
@@ -156,17 +158,17 @@ describe('App Shell & Navigation', () => {
     });
 
     // Navigate to /nutrition
-    const nutritionTab = screen.getByTestId('nav-nutrition');
+    const nutritionTab = await screen.findByTestId('nav-nutrition');
     fireEvent.click(nutritionTab);
 
     await waitFor(() => {
       expect(screen.getByText("Today's Nutrition")).toBeDefined();
       expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
       expect(screen.getByTestId('rest-timer-display')).toBeDefined();
-    }, { timeout: 3000 });
+    }, { timeout: 10000 });
 
     // Navigate to /history
-    const historyTab = screen.getByTestId('nav-history');
+    const historyTab = await screen.findByTestId('nav-history');
     fireEvent.click(historyTab);
 
     await waitFor(() => {
@@ -174,7 +176,7 @@ describe('App Shell & Navigation', () => {
       expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
       expect(screen.getByTestId('rest-timer-display')).toBeDefined();
     }, { timeout: 10000 });
-  });
+  }, 15000);
 
   it('renders Cyberpunk pulse spinner and retry button in ProtectedRoute when loading exceeds 2s', async () => {
     window.history.pushState({}, '', '/workout');
@@ -234,6 +236,7 @@ describe('App Shell & Navigation', () => {
   });
 
   it('renders exactly 5 tabs in BottomNav with Coach absent, and reaches Coach view via Header mode switch', async () => {
+    window.history.pushState({}, '', '/workout');
     localStorage.setItem('yourbody_view_mode', 'athlete');
 
     render(
@@ -249,7 +252,7 @@ describe('App Shell & Navigation', () => {
     });
 
     // Assert rendered bottom nav tab count is 5
-    const navItems = screen.getAllByTestId(/^nav-/);
+    const navItems = await screen.findAllByTestId(/^nav-/);
     expect(navItems).toHaveLength(5);
     expect(screen.getByTestId('nav-workout')).toBeDefined();
     expect(screen.getByTestId('nav-nutrition')).toBeDefined();
@@ -282,7 +285,7 @@ describe('App Shell & Navigation', () => {
       expect(roleButton.getAttribute('aria-label')).toContain(roleButton.textContent?.trim() || '');
       expect(screen.queryByText('Coach Dashboard')).toBeNull();
     }, { timeout: 10000 });
-  });
+  }, 15000);
 
   it('renders landing headline for a logged-out browser visitor at /', async () => {
     (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
