@@ -2117,5 +2117,77 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
       "reason": null,
       "hint": null
     }
+  },
+  {
+    "id": 117,
+    "title": "[Format C] Emoji-only labels with fire and food macros",
+    "input": "Grilled Salmon Fillet\n🔥 580 kcal\n🥩 46g\n🍞 35g\n🧈 26g",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 580,
+      "protein": 46,
+      "carbs": 35,
+      "fat": 26,
+      "fiber": null,
+      "name": "Grilled Salmon Fillet",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 118,
+    "title": "[Format C] Multi-item breakdown with category header and quantity prefix",
+    "input": "Breakfast:\n- 2x Fried Eggs: 220 kcal | 16g P | 2g C | 16g F\n- 1x Toast: 170 kcal | 8g P | 30g C | 1g F",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 390,
+      "protein": 24,
+      "carbs": 32,
+      "fat": 17,
+      "fiber": null,
+      "name": "Breakfast",
+      "itemsCount": 2,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 119,
+    "title": "[Format C] Nested sub-items under single dish total",
+    "input": "Custom Burrito Bowl: 720 kcal, 55g P, 68g C, 24g F\n  • Double Chicken (360 kcal, 48g P)\n  • Brown Rice (210 kcal, 4g P)\n  • Black Beans (150 kcal, 3g P)",
+    "expected": {
+      "confidence": "exact",
+      "ok": true,
+      "calories": 720,
+      "protein": 55,
+      "carbs": 68,
+      "fat": 24,
+      "fiber": null,
+      "name": "Custom Burrito Bowl",
+      "itemsCount": null,
+      "reason": null,
+      "hint": null
+    }
+  },
+  {
+    "id": 120,
+    "title": "[Format C] Grams-only macro breakdown without calories (partial)",
+    "input": "Salmon Avocado Plate\nProtein: 38g\nCarbs: 12g\nFat: 32g",
+    "expected": {
+      "confidence": "partial",
+      "ok": false,
+      "calories": 0,
+      "protein": 38,
+      "carbs": 12,
+      "fat": 32,
+      "fiber": null,
+      "name": "Salmon Avocado Plate",
+      "itemsCount": null,
+      "reason": "MISSING_MACRO",
+      "hint": null
+    }
   }
 ];
