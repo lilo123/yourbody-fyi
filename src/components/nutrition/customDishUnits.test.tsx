@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, act, renderHook } from '@testing-library/react';
+import { render, screen, act, renderHook, fireEvent } from '@testing-library/react';
 import React from 'react';
 import fs from 'node:fs';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { CustomDishesModal } from './CustomDishesModal';
 import { useCustomDishModal } from './useCustomDishModal';
 import { useCustomDishActions } from './useCustomDishActions';
 import { useCustomDishSaving } from './useCustomDishSaving';
+import { mapLegacyUnit } from './legacyUnitMapping';
 import type { CustomDish, CustomDishDetail } from '../../types/database';
 import type { StagedItem, StagedMeal } from './nutritionEngineHelpers';
 import { getCustomDishPortion, sumItems } from '../../utils/itemModel';
@@ -691,6 +692,418 @@ INSERT INTO public.custom_dishes (
 
       fs.writeFileSync('/tmp/custom_dish_probes.sql', sqlContent, 'utf-8');
       expect(fs.existsSync('/tmp/custom_dish_probes.sql')).toBe(true);
+    });
+  });
+
+  describe('5. Scale nutrition with amount toggle (L-2)', () => {
+    it('checkbox on by default each time modal opens and scales macros proportionally', async () => {
+      const onSaveDish = vi.fn();
+      const mockDetail: CustomDishDetail = {
+        ...singleItemDishWithItems,
+      };
+
+      const { result } = renderHook(() =>
+        useCustomDishModal({
+          onSaveDish,
+          onDeleteDish: vi.fn(),
+          onDismissToast: vi.fn(),
+          fetchDishDetail: vi.fn().mockResolvedValue(mockDetail),
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleOpenEditDishModal(singleItemDishWithItems);
+      });
+
+      expect(result.current.scaleNutritionWithAmount).toBe(true);
+
+      // Scale 40 g -> 33 g while checkbox is on
+      act(() => {
+        result.current.handleQuantityChange(33);
+      });
+
+      expect(result.current.dishModalQuantity).toBe(33);
+      // 140 * 33 / 40 = 115.5
+      expect(result.current.dishModalCalories).toBe(115.5);
+      // 30 * 33 / 40 = 24.75 -> 24.8
+      expect(result.current.dishModalProtein).toBe(24.8);
+    });
+
+    it('checkbox off keeps macros as typed when amount or unit changes', async () => {
+      const onSaveDish = vi.fn();
+      const mockDetail: CustomDishDetail = {
+        ...singleItemDishWithItems,
+      };
+
+      const { result } = renderHook(() =>
+        useCustomDishModal({
+          onSaveDish,
+          onDeleteDish: vi.fn(),
+          onDismissToast: vi.fn(),
+          fetchDishDetail: vi.fn().mockResolvedValue(mockDetail),
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleOpenEditDishModal(singleItemDishWithItems);
+      });
+
+      // Turn off scale checkbox
+      act(() => {
+        result.current.setScaleNutritionWithAmount(false);
+      });
+
+      expect(result.current.scaleNutritionWithAmount).toBe(false);
+
+      // Change amount from 40 g to 50 g
+      act(() => {
+        result.current.handleQuantityChange(50);
+      });
+
+      expect(result.current.dishModalQuantity).toBe(50);
+      // Macros must remain unchanged
+      expect(result.current.dishModalCalories).toBe(140);
+      expect(result.current.dishModalProtein).toBe(30);
+      expect(result.current.dishModalCarbs).toBe(2);
+      expect(result.current.dishModalFat).toBe(1);
+      expect(result.current.dishModalFiber).toBe(0);
+
+      // Change unit: macros still stay unchanged
+      act(() => {
+        result.current.handleUnitChange('ml');
+      });
+      expect(result.current.dishModalUnit).toBe('ml');
+      expect(result.current.dishModalCalories).toBe(140);
+      expect(result.current.dishModalProtein).toBe(30);
+
+      // Direct macro editing never rescales
+      act(() => {
+        result.current.setDishModalCalories(150);
+      });
+      expect(result.current.dishModalCalories).toBe(150);
+
+      // Saving dish persists serving size 50 ml with 150 kcal
+      act(() => {
+        result.current.handleSaveCustomDishModal({ preventDefault: vi.fn() } as any);
+      });
+
+      expect(onSaveDish).toHaveBeenCalled();
+      const { dishPayload } = onSaveDish.mock.calls[0][0];
+      expect(dishPayload.calories).toBe(150);
+      expect(dishPayload.protein).toBe(30);
+      expect(dishPayload.items).toHaveLength(1);
+      expect(dishPayload.items[0]).toMatchObject({
+        quantity: 50,
+        unit: 'ml',
+        calories: 150,
+        protein: 30,
+      });
+    });
+
+    it('CustomDishesModal renders checkbox only when editingDish is present, on by default, and reveals hint when off', () => {
+      const onScaleChange = vi.fn();
+
+      // Case A: New dish (editingDish is null) -> checkbox is NOT rendered
+      const { rerender } = render(
+        <CustomDishesModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingDish={null}
+          dishModalName="New Whey"
+          setDishModalName={vi.fn()}
+          dishModalCalories={140}
+          setDishModalCalories={vi.fn()}
+          dishModalProtein={30}
+          setDishModalProtein={vi.fn()}
+          dishModalCarbs={2}
+          setDishModalCarbs={vi.fn()}
+          dishModalFat={1}
+          setDishModalFat={vi.fn()}
+          dishModalFiber={0}
+          setDishModalFiber={vi.fn()}
+          dishModalItems={[]}
+          setDishModalItems={vi.fn()}
+          onSaveDish={vi.fn()}
+          onDeleteDish={vi.fn()}
+          isSaving={false}
+          isDeleting={false}
+          customDishes={[]}
+          onOpenEditDishModal={vi.fn()}
+        />
+      );
+
+      expect(screen.queryByLabelText('Scale nutrition with amount')).toBeNull();
+      expect(screen.queryByTestId('scale-nutrition-hint')).toBeNull();
+
+      // Case B: Edit dish (editingDish is present) -> checkbox IS rendered and checked by default
+      rerender(
+        <CustomDishesModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingDish={singleItemDishWithItems}
+          dishModalName="Whey Protein"
+          setDishModalName={vi.fn()}
+          dishModalQuantity={40}
+          dishModalUnit="g"
+          dishModalCalories={140}
+          setDishModalCalories={vi.fn()}
+          dishModalProtein={30}
+          setDishModalProtein={vi.fn()}
+          dishModalCarbs={2}
+          setDishModalCarbs={vi.fn()}
+          dishModalFat={1}
+          setDishModalFat={vi.fn()}
+          dishModalFiber={0}
+          setDishModalFiber={vi.fn()}
+          dishModalItems={singleItemDishWithItems.items || []}
+          setDishModalItems={vi.fn()}
+          onSaveDish={vi.fn()}
+          onDeleteDish={vi.fn()}
+          isSaving={false}
+          isDeleting={false}
+          customDishes={[singleItemDishWithItems]}
+          onOpenEditDishModal={vi.fn()}
+          onScaleNutritionChange={onScaleChange}
+        />
+      );
+
+      const checkbox = screen.getByLabelText('Scale nutrition with amount') as HTMLInputElement;
+      expect(checkbox).toBeDefined();
+      expect(checkbox.checked).toBe(true);
+      expect(screen.queryByText('Nutrition stays the same; only the serving size changes')).toBeNull();
+
+      // Uncheck checkbox -> hint appears
+      fireEvent.click(checkbox);
+      expect(screen.getByText('Nutrition stays the same; only the serving size changes')).toBeDefined();
+      expect(onScaleChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('6. UnitChip choices (g / ml / unit) in CustomDishesModal (L-1)', () => {
+    it('renders UnitChip and allows selecting canonical choices g, ml, unit', () => {
+      const onUnitChange = vi.fn();
+
+      render(
+        <CustomDishesModal
+          isOpen={true}
+          onClose={vi.fn()}
+          editingDish={singleItemDishWithItems}
+          dishModalName="Whey Protein"
+          setDishModalName={vi.fn()}
+          dishModalQuantity={40}
+          dishModalUnit="g"
+          onUnitChange={onUnitChange}
+          dishModalCalories={140}
+          setDishModalCalories={vi.fn()}
+          dishModalProtein={30}
+          setDishModalProtein={vi.fn()}
+          dishModalCarbs={2}
+          setDishModalCarbs={vi.fn()}
+          dishModalFat={1}
+          setDishModalFat={vi.fn()}
+          dishModalFiber={0}
+          setDishModalFiber={vi.fn()}
+          dishModalItems={singleItemDishWithItems.items || []}
+          setDishModalItems={vi.fn()}
+          onSaveDish={vi.fn()}
+          onDeleteDish={vi.fn()}
+          isSaving={false}
+          isDeleting={false}
+          customDishes={[singleItemDishWithItems]}
+          onOpenEditDishModal={vi.fn()}
+        />
+      );
+
+      // Unit chip button is rendered
+      const chip = screen.getByTestId('custom-dish-unit-chip');
+      expect(chip).toBeDefined();
+      expect(chip.textContent).toContain('g');
+
+      // Click chip to open sheet
+      fireEvent.click(chip);
+
+      // Verify choices are available
+      expect(screen.getByTestId('unit-option-g')).toBeDefined();
+      expect(screen.getByTestId('unit-option-ml')).toBeDefined();
+      expect(screen.getByTestId('unit-option-unit')).toBeDefined();
+
+      // Click 'ml' option
+      fireEvent.click(screen.getByTestId('unit-option-ml'));
+      expect(onUnitChange).toHaveBeenCalledWith('ml');
+    });
+  });
+
+  describe('7. Legacy unit mapping (L-1)', () => {
+    it('mapLegacyUnit maps grams spellings to g', () => {
+      expect(mapLegacyUnit('g')).toBe('g');
+      expect(mapLegacyUnit('G')).toBe('g');
+      expect(mapLegacyUnit('  g  ')).toBe('g');
+      expect(mapLegacyUnit('gram')).toBe('g');
+      expect(mapLegacyUnit('Gram')).toBe('g');
+      expect(mapLegacyUnit('grams')).toBe('g');
+      expect(mapLegacyUnit('GRAMS')).toBe('g');
+      expect(mapLegacyUnit('gr')).toBe('g');
+      expect(mapLegacyUnit('GR')).toBe('g');
+      expect(mapLegacyUnit('gm')).toBe('g');
+      expect(mapLegacyUnit('GM')).toBe('g');
+      expect(mapLegacyUnit('gms')).toBe('g');
+      expect(mapLegacyUnit('GMS')).toBe('g');
+      expect(mapLegacyUnit('gramme')).toBe('g');
+      expect(mapLegacyUnit('grammes')).toBe('g');
+      expect(mapLegacyUnit('g.')).toBe('g');
+      expect(mapLegacyUnit('gr.')).toBe('g');
+    });
+
+    it('mapLegacyUnit maps millilitre spellings to ml', () => {
+      expect(mapLegacyUnit('ml')).toBe('ml');
+      expect(mapLegacyUnit('mL')).toBe('ml');
+      expect(mapLegacyUnit('ML')).toBe('ml');
+      expect(mapLegacyUnit('  ml  ')).toBe('ml');
+      expect(mapLegacyUnit('milliliter')).toBe('ml');
+      expect(mapLegacyUnit('Milliliter')).toBe('ml');
+      expect(mapLegacyUnit('milliliters')).toBe('ml');
+      expect(mapLegacyUnit('MILLILITERS')).toBe('ml');
+      expect(mapLegacyUnit('millilitre')).toBe('ml');
+      expect(mapLegacyUnit('Millilitre')).toBe('ml');
+      expect(mapLegacyUnit('millilitres')).toBe('ml');
+      expect(mapLegacyUnit('mls')).toBe('ml');
+      expect(mapLegacyUnit('ml.')).toBe('ml');
+    });
+
+    it('mapLegacyUnit maps unknown, non-standard, or empty values to unit', () => {
+      expect(mapLegacyUnit('unit')).toBe('unit');
+      expect(mapLegacyUnit('piece')).toBe('unit');
+      expect(mapLegacyUnit('pieces')).toBe('unit');
+      expect(mapLegacyUnit('slice')).toBe('unit');
+      expect(mapLegacyUnit('slices')).toBe('unit');
+      expect(mapLegacyUnit('cup')).toBe('unit');
+      expect(mapLegacyUnit('cups')).toBe('unit');
+      expect(mapLegacyUnit('oz')).toBe('unit');
+      expect(mapLegacyUnit('serving')).toBe('unit');
+      expect(mapLegacyUnit('servings')).toBe('unit');
+      expect(mapLegacyUnit('unknown')).toBe('unit');
+      expect(mapLegacyUnit('')).toBe('unit');
+      expect(mapLegacyUnit('   ')).toBe('unit');
+      expect(mapLegacyUnit(null)).toBe('unit');
+      expect(mapLegacyUnit(undefined)).toBe('unit');
+    });
+
+    it('handleOpenEditDishModal maps legacy units on open', async () => {
+      const dishWithGr: CustomDish = {
+        id: 'dish-legacy-gr',
+        user_id: 'user-1',
+        name: 'Legacy Gr Dish',
+        calories: 100,
+        protein: 10,
+        carbs: 10,
+        fat: 2,
+        fiber: 1,
+        kind: 'food',
+        use_count: 1,
+        serving_quantity: 50,
+        serving_unit: 'gr',
+        items: [
+          {
+            id: 'item-gr',
+            name: 'Legacy Gr Item',
+            quantity: 50,
+            unit: 'gr' as any,
+            calories: 100,
+            protein: 10,
+            carbs: 10,
+            fat: 2,
+            fiber: 1,
+          },
+        ],
+      };
+
+      const dishWithMl: CustomDish = {
+        id: 'dish-legacy-ml',
+        user_id: 'user-1',
+        name: 'Legacy ML Dish',
+        calories: 80,
+        protein: 2,
+        carbs: 12,
+        fat: 1,
+        fiber: 0,
+        kind: 'food',
+        use_count: 1,
+        serving_quantity: 250,
+        serving_unit: 'milliliters',
+        items: [
+          {
+            id: 'item-ml',
+            name: 'Legacy ML Item',
+            quantity: 250,
+            unit: 'milliliters' as any,
+            calories: 80,
+            protein: 2,
+            carbs: 12,
+            fat: 1,
+            fiber: 0,
+          },
+        ],
+      };
+
+      const dishWithSlice: CustomDish = {
+        id: 'dish-legacy-slice',
+        user_id: 'user-1',
+        name: 'Legacy Slice Dish',
+        calories: 90,
+        protein: 3,
+        carbs: 15,
+        fat: 1,
+        fiber: 1,
+        kind: 'food',
+        use_count: 1,
+        serving_quantity: 1,
+        serving_unit: 'slice',
+        items: [
+          {
+            id: 'item-slice',
+            name: 'Legacy Slice Item',
+            quantity: 1,
+            unit: 'slice' as any,
+            calories: 90,
+            protein: 3,
+            carbs: 15,
+            fat: 1,
+            fiber: 1,
+          },
+        ],
+      };
+
+      const { result } = renderHook(() =>
+        useCustomDishModal({
+          onSaveDish: vi.fn(),
+          onDeleteDish: vi.fn(),
+          onDismissToast: vi.fn(),
+          fetchDishDetail: vi.fn().mockImplementation((id) => {
+            if (id === 'dish-legacy-gr') return Promise.resolve(dishWithGr);
+            if (id === 'dish-legacy-ml') return Promise.resolve(dishWithMl);
+            if (id === 'dish-legacy-slice') return Promise.resolve(dishWithSlice);
+            return Promise.resolve(null);
+          }),
+        })
+      );
+
+      // Test gr -> g
+      await act(async () => {
+        await result.current.handleOpenEditDishModal(dishWithGr);
+      });
+      expect(result.current.dishModalUnit).toBe('g');
+
+      // Test milliliters -> ml
+      await act(async () => {
+        await result.current.handleOpenEditDishModal(dishWithMl);
+      });
+      expect(result.current.dishModalUnit).toBe('ml');
+
+      // Test slice -> unit
+      await act(async () => {
+        await result.current.handleOpenEditDishModal(dishWithSlice);
+      });
+      expect(result.current.dishModalUnit).toBe('unit');
     });
   });
 });
