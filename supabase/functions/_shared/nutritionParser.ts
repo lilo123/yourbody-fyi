@@ -358,10 +358,10 @@ function cleanLine(rawLine: string): string {
   // 1. Strip markdown bold and double underscores first: **text** or __text__
   line = line.replace(/\*\*/g, '').replace(/__/g, '');
 
-  // 2. Strip leading bullets, numbered markers, and emoji bullets (e.g. 🔥 Calories: 650, 🥩 Protein: 40g)
-  // \p{Extended_Pictographic} handles all standard Unicode emoji symbols.
+  // 2. Strip leading bullets, numbered markers, and non-macro emoji bullets.
+  line = line.replace(/^(?:[\*•\-+]|\d+[.)])+\s*/u, '');
   line = line.replace(
-    /^(?:[\*•\-+]|\d+[.)]|\p{Extended_Pictographic}|\p{Emoji_Presentation})+\s*/gu,
+    /^(?:🔥\s*(?=(?:total\s+)?(?:calories?|kcal|cals?|cal|energy)\b)|🥩\s*(?=(?:total\s+)?(?:protein|prot|protien|p)\b)|🍞\s*(?=(?:total\s+)?(?:carbohydrates?|carbs?|carb|c)\b)|🧈\s*(?=(?:total\s+)?(?:fat|f)\b)|(?![🔥🥩🍞🧈])(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}))+\s*/giu,
     ''
   );
 
@@ -648,6 +648,94 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
   const approx = '(?:(?:~|≈|\\b(?:approx(?:imately|\\.)?|approx|roughly|about)\\b)\\s*)?';
   // Number or range regex: matches numbers with commas/dots or ranges like 600-700, or estimates like 800+
   const numOrRange = `(${approx}-?\\d+(?:[.,]\\d+)*(?:\\s*\\+)?(?:\\s*(?:[-–—]|\\bto\\b)\\s*${approx}\\d+(?:[.,]\\d+)*(?:\\s*\\+)?)?)`;
+
+  // Emoji macro patterns: 🔥 (calories), 🥩 (protein), 🍞 (carbs), 🧈 (fat)
+  const emojiCalMatch = segment.match(
+    new RegExp(
+      `^🔥${sep}?${numOrRange}\\s*(?:\\((?:kcals?|cals?|calories?|cal)\\)|kcals?|cals?|calories?|cal)?(?:\\s+\\d+\\s*%)?$`,
+      'i'
+    )
+  );
+  if (emojiCalMatch) {
+    const numRes = parseNumberOrRange(emojiCalMatch[1]);
+    if (numRes.value !== null) {
+      return {
+        kind: 'calories',
+        value: numRes.value,
+        isRange: numRes.isRange,
+        ambiguous: numRes.ambiguous,
+      };
+    }
+  }
+
+  const emojiProteinMatch = segment.match(
+    new RegExp(
+      `^🥩${sep}?${numOrRange}\\s*([a-zA-Z%()]+)?(?:\\s*(?:of\\s+)?(?:protein|prot|p))?(?:\\s+\\d+\\s*%)?$`,
+      'i'
+    )
+  );
+  if (emojiProteinMatch) {
+    const numRes = parseNumberOrRange(emojiProteinMatch[1]);
+    const unit = emojiProteinMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
+    if (numRes.value !== null) {
+      return {
+        kind: 'protein',
+        value: numRes.value,
+        invalidUnit: isInvalidMacroUnit(unit),
+        isRange: numRes.isRange,
+        ambiguous: numRes.ambiguous,
+      };
+    }
+  }
+
+  const emojiCarbsMatch = segment.match(
+    new RegExp(
+      `^🍞${sep}?${numOrRange}\\s*([a-zA-Z%()]+)?(?:\\s*(?:of\\s+)?(?:carbohydrates?|carbs?|carb|c))?(?:\\s+\\d+\\s*%)?$`,
+      'i'
+    )
+  );
+  if (emojiCarbsMatch) {
+    const numRes = parseNumberOrRange(emojiCarbsMatch[1]);
+    const unit = emojiCarbsMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
+    if (numRes.value !== null) {
+      return {
+        kind: 'carbs',
+        value: numRes.value,
+        invalidUnit: isInvalidMacroUnit(unit),
+        isRange: numRes.isRange,
+        ambiguous: numRes.ambiguous,
+      };
+    }
+  }
+
+  const emojiFatMatch = segment.match(
+    new RegExp(
+      `^🧈${sep}?${numOrRange}\\s*([a-zA-Z%()]+)?(?:\\s*(?:of\\s+)?(?:fat|f))?(?:\\s+\\d+\\s*%)?$`,
+      'i'
+    )
+  );
+  if (emojiFatMatch) {
+    const numRes = parseNumberOrRange(emojiFatMatch[1]);
+    const unit = emojiFatMatch[2];
+    if (unit && unit.includes('%')) {
+      return null;
+    }
+    if (numRes.value !== null) {
+      return {
+        kind: 'fat',
+        value: numRes.value,
+        invalidUnit: isInvalidMacroUnit(unit),
+        isRange: numRes.isRange,
+        ambiguous: numRes.ambiguous,
+      };
+    }
+  }
 
   // 1. Calories / Energy
   const energyKjKcalMatch = segment.match(
@@ -1075,7 +1163,7 @@ function splitLineIntoSegments(line: string): string[] {
 
   // 8. Keyword-delimited without commas
   const keywordSplit = trimmed.split(
-    /(?<=\S)\s+(?=(?:total\s+calories?|calories?|cals?|cal|energy|total\s+protein|protein|prot|total\s+fat|fat|total\s+carbs?|total\s+carbohydrates?|carbohydrates?|carbs?|total\s+fiber|dietary\s+fiber|fib(?:er|re)?|p\s*\d+|\d+\s*p|c\s*\d+|\d+\s*c|f\s*\d+|\d+\s*f|\d+\s*(?:kcals?|cals?|calories?))\b)/i
+    /(?<=\S)\s+(?=(?:total\s+calories?|calories?|cals?|cal|energy|total\s+protein|protein|prot|total\s+fat|fat|total\s+carbs?|total\s+carbohydrates?|carbohydrates?|carbs?|total\s+fiber|dietary\s+fiber|fib(?:er|re)?|p\s*\d+|\d+\s*p|c\s*\d+|\d+\s*c|f\s*\d+|\d+\s*f|\d+\s*(?:kcals?|cals?|calories?))\b|[🔥🥩🍞🧈])/iu
   );
   if (keywordSplit.length > 1) {
     return keywordSplit.map((part) => part.trim()).filter(Boolean);
@@ -1089,7 +1177,7 @@ function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
   if (!cleaned) return null;
 
   // Must have macro indicators
-  const hasMacros = /(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b)/i.test(cleaned);
+  const hasMacros = /(?:kcal|cal|\bp\b|\bprotein\b|\bc\b|\bcarbs?\b|\bf\b|\bfat\b|[🔥🥩🍞🧈])/i.test(cleaned);
   if (!hasMacros) return null;
 
   let nameAndPortion = '';
@@ -1701,7 +1789,10 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
     // Try parsing as multi-item line
     const parsedItem = tryParseMultiItemLine(rawLine);
     if (parsedItem) {
-      if (candidateTitle) {
+      if (candidateTitle && !declaredTitle && candidateTitle.length <= 60 && !isLeadInLine(candidateTitle, cleanLine(candidateTitle))) {
+        declaredTitle = candidateTitle.replace(/[:\s—–]+$/, '').trim();
+        candidateTitle = undefined;
+      } else if (candidateTitle) {
         skippedLines.push(candidateTitle);
         candidateTitle = undefined;
       }
@@ -1901,6 +1992,10 @@ function isMultiMealPaste(lines: string[]): boolean {
   const mealHeaderCount = lines.filter((l) => mealHeaderRegex.test(l)).length;
   if (mealHeaderCount >= 2) return true;
 
+  const containerRegex = /\b(?:box|container|portion)\s*\d+\s*(?:\/|of)\s*\d+\b/i;
+  const containerCount = lines.filter((l) => containerRegex.test(l)).length;
+  if (containerCount >= 2) return true;
+
   // Check meal headers with inline colons followed by lines containing calories
   let mealCountWithCals = 0;
   for (let i = 0; i < lines.length; i++) {
@@ -1948,7 +2043,7 @@ function isMacroOrServingLine(rawLine: string): boolean {
 
   let lineToParse = cleaned;
   const foodPrefixMatch = cleaned.match(
-    /^((?:(?:\d+(?:[.,]\d+)?)\s*(?:oz|g|ml|lbs?|cups?|pieces?|slices?|servings?|scoops?)\s+)?[a-zA-Z\s&+,;/]{2,40}):\s*(.+)$/i
+    /^((?:(?:\d+(?:[.,]\d+)?)\s*(?:oz|g|ml|lbs?|cups?|pieces?|slices?|servings?|scoops?)\s+)?[a-zA-Z\s&+,;/]{2,40})(?::\s*|\s+[-—–]\s+)(.+)$/i
   );
   if (foodPrefixMatch) {
     const candidatePrefix = foodPrefixMatch[1].trim();
@@ -1973,6 +2068,57 @@ function isMacroOrServingLine(rawLine: string): boolean {
     }
   }
   return true;
+}
+
+function tryParseNestedSubitems(effectiveText: string): NutritionParseResult | null {
+  const lines = effectiveText.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return null;
+
+  // Line 0 must not be indented; lines 1..N must all be indented
+  if (/^\s/.test(lines[0])) return null;
+  const isAllIndented = lines.slice(1).every((l) => /^\s{2,}|\t/.test(l));
+  if (!isAllIndented) return null;
+
+  const parentResult = parseNutritionText(lines[0]);
+  if (parentResult.confidence !== 'exact' || !parentResult.meal) {
+    return null;
+  }
+
+  let subCalSum = 0;
+  let hasSubCals = false;
+  for (let i = 1; i < lines.length; i++) {
+    const rawSub = lines[i];
+    const calMatch = rawSub.match(/(?:(?:\b(\d+(?:[.,]\d+)*)\s*(?:kcals?|cals?|calories?|cal)\b)|(?:(?:calories?|cal|cals?|energy|kcal)\s*[:=\s—–]*(\d+(?:[.,]\d+)*)))/i);
+    if (calMatch) {
+      const rawNum = calMatch[1] || calMatch[2];
+      const parsedNum = parseLocaleNumber(rawNum).value;
+      if (parsedNum !== null && parsedNum > 0) {
+        subCalSum += parsedNum;
+        hasSubCals = true;
+      }
+    }
+  }
+
+  if (hasSubCals) {
+    const diff = Math.abs(subCalSum - parentResult.meal.calories);
+    const maxTol = Math.max(30, 0.05 * parentResult.meal.calories);
+    if (diff > maxTol) {
+      return {
+        confidence: 'lenient',
+        meal: parentResult.meal,
+        hint: `Sub-items add up to ${subCalSum}, total says ${parentResult.meal.calories}`,
+        skippedLines: [],
+        modifiers: [],
+        foundMacros: parentResult.foundMacros,
+      };
+    }
+  }
+
+  return {
+    ...parentResult,
+    skippedLines: [],
+    modifiers: [],
+  };
 }
 
 export function parseNutritionText(text: string): NutritionParseResult {
@@ -2014,6 +2160,12 @@ export function parseNutritionText(text: string): NutritionParseResult {
     };
   }
 
+  // Try parsing nested sub-items before multi-item
+  const nestedResult = tryParseNestedSubitems(effectiveText);
+  if (nestedResult) {
+    return nestedResult;
+  }
+
   // Try parsing as structured multi-item breakdown block
   const multiItemResult = tryParseMultiItemBlock(rawLines);
   if (multiItemResult) {
@@ -2043,7 +2195,7 @@ export function parseNutritionText(text: string): NutritionParseResult {
 
   // Check if input has completely zero nutrition macro indicators (pure non-nutrition prose / lists)
   const hasAnyMacroKeyword =
-    /(?:calories?|kcal|cals?|energy|protein|prot|\bp\d|\d+p\b|carbs?|carbohydrates?|\bc\d|\d+c\b|fat|\bf\d|\d+f\b)/i.test(
+    /(?:calories?|kcal|cals?|energy|protein|prot|\bp\d|\d+p\b|carbs?|carbohydrates?|\bc\d|\d+c\b|fat|\bf\d|\d+f\b|[🔥🥩🍞🧈])/i.test(
       trimmedInput
     );
   if (!hasAnyMacroKeyword) {
@@ -2191,7 +2343,7 @@ export function parseNutritionText(text: string): NutritionParseResult {
     // Check if line has a food name prefix like "Chicken breast: 200 kcal, 30g protein..."
     // or portion + food name like "8 oz Grilled Sirloin Steak: 48g protein..."
     let lineToParse = cleaned;
-    const foodPrefixMatch = cleaned.match(/^((?:(?:\d+(?:[.,]\d+)?)\s*(?:oz|g|ml|lbs?|cups?|pieces?|slices?|servings?|scoops?)\s+)?[a-zA-Z\s&+,;\/]{2,40}):\s*(.+)$/i);
+    const foodPrefixMatch = cleaned.match(/^((?:(?:\d+(?:[.,]\d+)?)\s*(?:oz|g|ml|lbs?|cups?|pieces?|slices?|servings?|scoops?)\s+)?[a-zA-Z\s&+,;\/]{2,40})(?::\s*|\s+[-—–]\s+)(.+)$/i);
     if (foodPrefixMatch) {
       const candidatePrefix = foodPrefixMatch[1].trim();
       const restOfLine = foodPrefixMatch[2].trim();

@@ -28,7 +28,7 @@ const PLANS: PlanDetails[] = [
     monthlyPrice: '$2/mo',
     yearlyPrice: '$10/yr',
     bullets: [
-      'AI meal logging, 5 a day',
+      'AI meal logging, 20 a day',
       'Coach up to 3 athletes',
     ],
     testIdCard: 'plan-card-personal',
@@ -43,7 +43,7 @@ const PLANS: PlanDetails[] = [
     bullets: [
       'AI meal logging, 30 a day',
       'Coach up to 10 athletes',
-      'Each athlete gets AI meal logging, 5 a day',
+      'Each athlete gets AI meal logging, 10 a day',
     ],
     testIdCard: 'plan-card-coach',
     testIdBtn: 'upgrade-plan-coach-btn',
@@ -57,7 +57,7 @@ const PLANS: PlanDetails[] = [
     bullets: [
       'AI meal logging, 30 a day',
       'Coach up to 25 athletes',
-      'Each athlete gets AI meal logging, 5 a day',
+      'Each athlete gets AI meal logging, 10 a day',
     ],
     testIdCard: 'plan-card-coach_pro',
     testIdBtn: 'upgrade-plan-coach_pro-btn',
