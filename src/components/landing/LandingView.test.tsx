@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { LandingView } from './LandingView';
 
@@ -255,4 +255,119 @@ describe('LandingView component', () => {
       }
     });
   });
+
+  describe('Meal parser demo section', () => {
+    it('renders heading, prefilled textarea, and Read it button', () => {
+      renderLanding();
+
+      expect(screen.getByRole('heading', { level: 2, name: /Try the meal parser/i })).toBeDefined();
+
+      const textarea = screen.getByRole('textbox', { name: /Nutrition block input/i });
+      expect(textarea).toBeDefined();
+      expect(textarea).toHaveValue(
+        `Greek yogurt\nServing: 170 g\nCalories: 130\nProtein: 15g\nCarbs: 6g\nFat: 5g`
+      );
+
+      const readBtn = screen.getByRole('button', { name: /Read it/i });
+      expect(readBtn).toBeDefined();
+    });
+
+    it('parses example block successfully and displays parsed values and Start free CTA', async () => {
+      renderLanding();
+
+      const readBtn = screen.getByRole('button', { name: /Read it/i });
+      fireEvent.click(readBtn);
+
+      expect(await screen.findByText('Greek yogurt')).toBeDefined();
+      expect(screen.getByText('170 g')).toBeDefined();
+      expect(screen.getByText('130')).toBeDefined();
+      expect(screen.getByText('15g')).toBeDefined();
+      expect(screen.getByText('6g')).toBeDefined();
+      expect(screen.getByText('5g')).toBeDefined();
+
+      const resultCard = screen.getByTestId('meal-demo-result');
+      const ctaLink = within(resultCard).getByRole('link', { name: /Start free/i });
+      expect(ctaLink.getAttribute('href')).toBe('/login?mode=signup');
+    });
+
+    it('shows failure line when input is not a parseable nutrition block', async () => {
+      renderLanding();
+
+      const textarea = screen.getByRole('textbox', { name: /Nutrition block input/i });
+      fireEvent.change(textarea, { target: { value: 'I had two slices of pizza and a soda' } });
+
+      const readBtn = screen.getByRole('button', { name: /Read it/i });
+      fireEvent.click(readBtn);
+
+      expect(
+        await screen.findByText(/The full app can read this with on-device parsing after signing up\./i)
+      ).toBeDefined();
+
+      const resultCard = screen.getByTestId('meal-demo-result');
+      const ctaLink = within(resultCard).getByRole('link', { name: /Start free/i });
+      expect(ctaLink.getAttribute('href')).toBe('/login?mode=signup');
+    });
+
+    it('makes no fetch calls during local parse', async () => {
+      const fetchSpy = vi.spyOn(window, 'fetch');
+      renderLanding();
+
+      const readBtn = screen.getByRole('button', { name: /Read it/i });
+      fireEvent.click(readBtn);
+
+      await screen.findByText('Greek yogurt');
+      expect(fetchSpy).not.toHaveBeenCalled();
+
+      // Also on failure
+      const textarea = screen.getByRole('textbox', { name: /Nutrition block input/i });
+      fireEvent.change(textarea, { target: { value: 'invalid non-nutrition text' } });
+      fireEvent.click(readBtn);
+
+      await screen.findByText(/The full app can read this with on-device parsing after signing up\./i);
+      expect(fetchSpy).not.toHaveBeenCalled();
+
+      fetchSpy.mockRestore();
+    });
+  });
+
+  describe('In-app browser banner integration', () => {
+    const originalUserAgent = navigator.userAgent;
+
+    afterEach(() => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: originalUserAgent,
+        configurable: true,
+      });
+      sessionStorage.clear();
+    });
+
+    it('renders in-app banner on landing page when Instagram UA is detected', () => {
+      const instagramUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 Mobile/21E236 Instagram 324.0.0.18.109';
+      Object.defineProperty(navigator, 'userAgent', {
+        value: instagramUa,
+        configurable: true,
+      });
+
+      renderLanding();
+      const banner = screen.getByTestId('in-app-browser-banner');
+      expect(banner).toBeDefined();
+      expect(banner).toHaveTextContent(
+        'Open in your browser for the best experience.'
+      );
+    });
+
+    it('does not render in-app banner on landing page for standard browser UA', () => {
+      const safariUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 Version/17.4.1 Safari/604.1';
+      Object.defineProperty(navigator, 'userAgent', {
+        value: safariUa,
+        configurable: true,
+      });
+
+      renderLanding();
+      expect(screen.queryByTestId('in-app-browser-banner')).toBeNull();
+    });
+  });
 });
+
