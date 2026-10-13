@@ -1,6 +1,7 @@
 import { assertEquals, assertNotEquals } from "jsr:@std/assert@1.0.19";
 import {
   parseNutritionText,
+  extractYourbodyFencedBlock,
   type NutritionParseResult,
 } from "./nutritionParser.ts";
 
@@ -124,3 +125,91 @@ Deno.test("shared nutritionParser: no servingSize when no weight line exists", (
   assertEquals(result.meal?.servingSize, undefined);
   assertEquals(result.meal?.servingUnit, undefined);
 });
+
+Deno.test("shared nutritionParser: extracts fenced yourbody and yourbody-v1 blocks", () => {
+  // 1. Chat reply with prose + yourbody-v1 block -> exact
+  const chatReply = [
+    "Sure! Here is the nutritional breakdown for your lunch:",
+    "```yourbody-v1",
+    "Chicken Rice Bowl",
+    "Calories: 520 kcal",
+    "Protein: 46g",
+    "Carbs: 58g",
+    "Fat: 12g",
+    "```",
+    "Let me know if you would like me to adjust portions!",
+  ].join("\n");
+  const result1 = parseNutritionText(chatReply);
+  assertEquals(result1.confidence, "exact");
+  assertEquals(result1.meal?.name, "Chicken Rice Bowl");
+  assertEquals(result1.meal?.calories, 520);
+  assertEquals(result1.meal?.protein, 46);
+  assertEquals(result1.meal?.carbs, 58);
+  assertEquals(result1.meal?.fat, 12);
+  assertEquals(result1.skippedLines, []);
+
+  // 2. Chat reply with ```yourbody fence
+  const yourbodyReply = [
+    "I estimated your shake:",
+    "```yourbody",
+    "Whey Protein Shake",
+    "Calories: 140 kcal",
+    "Protein: 25g",
+    "Carbs: 3g",
+    "Fat: 2g",
+    "```",
+  ].join("\n");
+  const result2 = parseNutritionText(yourbodyReply);
+  assertEquals(result2.confidence, "exact");
+  assertEquals(result2.meal?.name, "Whey Protein Shake");
+  assertEquals(result2.meal?.calories, 140);
+
+  // 3. Two blocks -> parses the last one
+  const twoBlocks = [
+    "First estimate:",
+    "```yourbody",
+    "Single Scoop",
+    "Calories: 120 kcal",
+    "Protein: 24g",
+    "Carbs: 2g",
+    "Fat: 1g",
+    "```",
+    "Actually, you had two scoops:",
+    "```yourbody-v1",
+    "Double Scoop",
+    "Calories: 240 kcal",
+    "Protein: 48g",
+    "Carbs: 4g",
+    "Fat: 2g",
+    "```",
+    "Hope that helps!",
+  ].join("\n");
+  const result3 = parseNutritionText(twoBlocks);
+  assertEquals(result3.confidence, "exact");
+  assertEquals(result3.meal?.name, "Double Scoop");
+  assertEquals(result3.meal?.calories, 240);
+  assertEquals(result3.meal?.protein, 48);
+
+  // 4. Malformed block -> confidence rules evaluated on block content, not surrounding prose
+  const malformedBlock = [
+    "Here is your partial data:",
+    "```yourbody-v1",
+    "Protein Snack",
+    "Calories: 150 kcal",
+    "Protein: 20g",
+    "```",
+    "Could not calculate carbs or fat.",
+  ].join("\n");
+  const result4 = parseNutritionText(malformedBlock);
+  assertEquals(result4.confidence, "partial");
+  assertEquals(result4.reason, "MISSING_MACRO");
+  assertEquals(result4.foundMacros, ["calories", "protein"]);
+
+  // 5. Direct extraction helper tests
+  assertEquals(extractYourbodyFencedBlock("no fence here"), null);
+  assertEquals(
+    extractYourbodyFencedBlock("```yourbody\ntest content\n```"),
+    "test content"
+  );
+});
+

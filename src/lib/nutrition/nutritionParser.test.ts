@@ -463,4 +463,93 @@ Fat: 21g`;
       expect(deviceResult.reason).toBe('MULTIPLE_FOODS');
     }
   });
+
+  describe('Fenced Code Block Extraction (P5)', () => {
+    it('extracts fenced yourbody-v1 block from conversational prose with exact confidence', () => {
+      const chatReply = [
+        'Sure! Here is the nutritional breakdown for your lunch:',
+        '```yourbody-v1',
+        'Chicken Rice Bowl',
+        'Calories: 520 kcal',
+        'Protein: 46g',
+        'Carbs: 58g',
+        'Fat: 12g',
+        '```',
+        'Let me know if you would like me to adjust portions!',
+      ].join('\n');
+
+      const result = parseNutritionText(chatReply);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.name).toBe('Chicken Rice Bowl');
+      expect(result.meal?.calories).toBe(520);
+      expect(result.meal?.protein).toBe(46);
+      expect(result.meal?.carbs).toBe(58);
+      expect(result.meal?.fat).toBe(12);
+      expect(result.skippedLines).toEqual([]);
+    });
+
+    it('extracts fenced yourbody block from conversational prose', () => {
+      const chatReply = [
+        'I estimated your post-workout shake:',
+        '```yourbody',
+        'Whey Protein Shake',
+        'Calories: 140 kcal',
+        'Protein: 25g',
+        'Carbs: 3g',
+        'Fat: 2g',
+        '```',
+      ].join('\n');
+
+      const result = parseNutritionText(chatReply);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.name).toBe('Whey Protein Shake');
+      expect(result.meal?.calories).toBe(140);
+    });
+
+    it('when multiple blocks appear, parses the content of the LAST block', () => {
+      const twoBlocks = [
+        'First estimate:',
+        '```yourbody',
+        'Single Scoop',
+        'Calories: 120 kcal',
+        'Protein: 24g',
+        'Carbs: 2g',
+        'Fat: 1g',
+        '```',
+        'Actually, with two scoops:',
+        '```yourbody-v1',
+        'Double Scoop',
+        'Calories: 240 kcal',
+        'Protein: 48g',
+        'Carbs: 4g',
+        'Fat: 2g',
+        '```',
+        'Hope that helps!',
+      ].join('\n');
+
+      const result = parseNutritionText(twoBlocks);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.name).toBe('Double Scoop');
+      expect(result.meal?.calories).toBe(240);
+      expect(result.meal?.protein).toBe(48);
+    });
+
+    it('applies confidence rules to the block content when block is malformed (never on surrounding prose)', () => {
+      const partialBlock = [
+        'Here is your meal calculation:',
+        '```yourbody-v1',
+        'Protein Snack',
+        'Calories: 150 kcal',
+        'Protein: 20g',
+        '```',
+        'I could not determine carbs or fat values.',
+      ].join('\n');
+
+      const result = parseNutritionText(partialBlock);
+      expect(result.confidence).toBe('partial');
+      expect(result.reason).toBe('MISSING_MACRO');
+      expect(result.foundMacros).toEqual(['calories', 'protein']);
+    });
+  });
 });
+

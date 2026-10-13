@@ -925,8 +925,26 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
   };
 }
 
+/**
+ * Extracts the content of the last ```yourbody or ```yourbody-v1 fenced block.
+ * Returns null if no matching fenced block is found.
+ */
+export function extractYourbodyFencedBlock(text: string): string | null {
+  const fenceRegex =
+    /^[ \t]*(?:`{3,}|~{3,})[ \t]*(?:yourbody-v1|yourbody)(?=[ \t\r\n]|$)[^\r\n]*\r?\n([\s\S]*?)\r?\n[ \t]*(?:`{3,}|~{3,})[ \t]*$/gim;
+  let match: RegExpExecArray | null;
+  let lastBlock: string | null = null;
+  while ((match = fenceRegex.exec(text)) !== null) {
+    lastBlock = match[1];
+  }
+  return lastBlock;
+}
+
 export function parseNutritionText(text: string): NutritionParseResult {
-  const trimmedInput = text.trim();
+  const fencedBlock = extractYourbodyFencedBlock(text);
+  const effectiveText = fencedBlock !== null ? fencedBlock : text;
+
+  const trimmedInput = effectiveText.trim();
   if (!trimmedInput) {
     return {
       confidence: 'none',
