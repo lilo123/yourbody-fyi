@@ -1,9 +1,11 @@
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import {
   captureException,
+  captureMessage,
   isEdgeReportingConfigured,
   resetEdgeReportingForTesting,
   scrubEdgeEvent,
+  setTestCaptureHook,
 } from "./errorReporting.ts";
 import app from "../parse-nutrition/index.ts";
 
@@ -115,3 +117,46 @@ Deno.test("parse-nutrition: still returns 500 error shape when Sentry capture th
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("errorReporting shared helper: captureMessage safe no-op when SENTRY_DSN is unset", async () => {
+  const originalDsn = Deno.env.get("SENTRY_DSN");
+  try {
+    Deno.env.delete("SENTRY_DSN");
+    resetEdgeReportingForTesting();
+
+    assertEquals(isEdgeReportingConfigured(), false);
+    // Calling captureMessage must resolve without error and without initializing Sentry
+    await captureMessage("parse-nutrition AI timeout", { tags: { kind: "text" } });
+  } finally {
+    if (originalDsn) {
+      Deno.env.set("SENTRY_DSN", originalDsn);
+    } else {
+      Deno.env.delete("SENTRY_DSN");
+    }
+    resetEdgeReportingForTesting();
+  }
+});
+
+Deno.test("errorReporting shared helper: setTestCaptureHook intercepts messages and exceptions", async () => {
+  const captured: Array<{ type: string; arg: unknown; context?: Record<string, unknown> }> = [];
+  setTestCaptureHook((type, arg, context) => {
+    captured.push({ type, arg, context });
+  });
+
+  try {
+    await captureMessage("test message", { tags: { test: "val" } });
+    await captureException(new Error("test error"), { tags: { err: "yes" } });
+
+    assertEquals(captured.length, 2);
+    assertEquals(captured[0].type, "message");
+    assertEquals(captured[0].arg, "test message");
+    assertEquals(captured[0].context?.tags, { test: "val" });
+
+    assertEquals(captured[1].type, "exception");
+    assertEquals((captured[1].arg as Error).message, "test error");
+    assertEquals(captured[1].context?.tags, { err: "yes" });
+  } finally {
+    resetEdgeReportingForTesting();
+  }
+});
+
