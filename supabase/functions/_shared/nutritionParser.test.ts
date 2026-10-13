@@ -215,7 +215,7 @@ Deno.test("shared nutritionParser: extracts fenced yourbody and yourbody-v1 bloc
   );
 });
 
-Deno.test("shared nutritionParser: 116 golden corpus & sweep fixtures", () => {
+Deno.test("shared nutritionParser: 103 golden corpus & sweep fixtures", () => {
   for (const fixture of NUTRITION_CORPUS_FIXTURES) {
     const result = parseNutritionText(fixture.input);
     assertEquals(
