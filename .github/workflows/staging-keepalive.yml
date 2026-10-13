@@ -68,6 +68,6 @@ jobs:
           curl -fsS \
             -H "apikey: $ANON_KEY" \
             -H "Authorization: Bearer $ANON_KEY" \
-            "https://${STAGING_PROJECT_REF}.supabase.co/rest/v1/app_config?select=key&limit=1" > /dev/null
+            "https://${STAGING_PROJECT_REF}.supabase.co/rest/v1/exercises?select=id&limit=1" > /dev/null
 
           echo "Staging keep-alive read completed successfully."
