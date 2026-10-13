@@ -800,6 +800,117 @@ INSERT INTO public.custom_dishes (
       });
     });
 
+    it('macro edit snapshots baseline so subsequent quantity scaling scales from edited values (checkbox ON)', async () => {
+      const mockDetail: CustomDishDetail = {
+        ...singleItemDishWithItems,
+      };
+
+      const { result } = renderHook(() =>
+        useCustomDishModal({
+          onSaveDish: vi.fn(),
+          onDeleteDish: vi.fn(),
+          onDismissToast: vi.fn(),
+          fetchDishDetail: vi.fn().mockResolvedValue(mockDetail),
+        })
+      );
+
+      // Open "40 g, 140/30/2/1", checkbox ON
+      await act(async () => {
+        await result.current.handleOpenEditDishModal(singleItemDishWithItems);
+      });
+
+      expect(result.current.dishModalQuantity).toBe(40);
+      expect(result.current.dishModalCalories).toBe(140);
+      expect(result.current.dishModalProtein).toBe(30);
+      expect(result.current.scaleNutritionWithAmount).toBe(true);
+
+      // Amount 40 -> 33 (shows 115.5 kcal, 24.8 protein)
+      act(() => {
+        result.current.handleQuantityChange(33);
+      });
+      expect(result.current.dishModalQuantity).toBe(33);
+      expect(result.current.dishModalCalories).toBe(115.5);
+      expect(result.current.dishModalProtein).toBe(24.8);
+
+      // Edit protein to 25
+      act(() => {
+        result.current.setDishModalProtein(25);
+      });
+      expect(result.current.dishModalProtein).toBe(25);
+      expect(result.current.dishModalCalories).toBe(115.5);
+
+      // Amount 33 -> 66 must scale from the 33 g baseline:
+      // calories: 115.5 * 2 = 231 (NOT 280 from stale 40 g base!)
+      // protein: 25 * 2 = 50
+      act(() => {
+        result.current.handleQuantityChange(66);
+      });
+      expect(result.current.dishModalQuantity).toBe(66);
+      expect(result.current.dishModalCalories).toBe(231);
+      expect(result.current.dishModalProtein).toBe(50);
+    });
+
+    it('macro edit snapshots baseline with checkbox OFF (keeps macros and updates baseline if toggled ON)', async () => {
+      const mockDetail: CustomDishDetail = {
+        ...singleItemDishWithItems,
+      };
+
+      const { result } = renderHook(() =>
+        useCustomDishModal({
+          onSaveDish: vi.fn(),
+          onDeleteDish: vi.fn(),
+          onDismissToast: vi.fn(),
+          fetchDishDetail: vi.fn().mockResolvedValue(mockDetail),
+        })
+      );
+
+      // Open "40 g, 140/30/2/1"
+      await act(async () => {
+        await result.current.handleOpenEditDishModal(singleItemDishWithItems);
+      });
+
+      // Turn checkbox OFF
+      act(() => {
+        result.current.setScaleNutritionWithAmount(false);
+      });
+      expect(result.current.scaleNutritionWithAmount).toBe(false);
+
+      // Amount 40 -> 33 with checkbox OFF keeps 140 / 30 / 2 / 1
+      act(() => {
+        result.current.handleQuantityChange(33);
+      });
+      expect(result.current.dishModalQuantity).toBe(33);
+      expect(result.current.dishModalCalories).toBe(140);
+      expect(result.current.dishModalProtein).toBe(30);
+
+      // Edit protein to 25
+      act(() => {
+        result.current.setDishModalProtein(25);
+      });
+      expect(result.current.dishModalProtein).toBe(25);
+      expect(result.current.dishModalCalories).toBe(140);
+
+      // With checkbox OFF, amount 33 -> 66 still keeps 140 / 25
+      act(() => {
+        result.current.handleQuantityChange(66);
+      });
+      expect(result.current.dishModalQuantity).toBe(66);
+      expect(result.current.dishModalCalories).toBe(140);
+      expect(result.current.dishModalProtein).toBe(25);
+
+      // If user toggles checkbox ON, then changes amount 66 -> 132 (2x):
+      // Baseline was snapshotted at 66 g (140 kcal, 25 protein)
+      act(() => {
+        result.current.setScaleNutritionWithAmount(true);
+      });
+      act(() => {
+        result.current.handleQuantityChange(132);
+      });
+      expect(result.current.dishModalQuantity).toBe(132);
+      expect(result.current.dishModalCalories).toBe(280);
+      expect(result.current.dishModalProtein).toBe(50);
+    });
+
     it('CustomDishesModal renders checkbox only when editingDish is present, on by default, and reveals hint when off', () => {
       const onScaleChange = vi.fn();
 
