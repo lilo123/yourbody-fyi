@@ -88,8 +88,9 @@ Evaluates whether a user is eligible for trial parsing (`now() < COALESCE(trial_
     "photo_cost": 2,
     "plans": {
       "trial": { "period": "day", "limit": 30 },
-      "basic": { "period": "month", "limit": 100 },
+      "basic": { "period": "day", "limit": 20 },
       "pro": { "period": "day", "limit": 30 },
+      "athlete": { "period": "day", "limit": 10 },
       "free": { "period": "month", "limit": 0 }
     },
     "trial_days": 14
@@ -193,9 +194,9 @@ The application supports three subscription tiers mapped to database `plan` and 
 
 | Tier | Database `plan` | Database `coach_tier` | Stripe Lookup Keys | Capacity / Quota |
 |---|---|---|---|---|
-| **Personal** | `basic` | `free` | `personal_monthly`, `personal_yearly` | 3 athletes, 5 own AI parses/day |
-| **Coach** | `pro` | `pro` | `coach_monthly`, `coach_yearly` | 10 athletes, 30 own AI parses/day, 5/day each active athlete |
-| **Coach Pro** | `pro` | `enterprise` | `coach_pro_monthly`, `coach_pro_yearly` | 25 athletes, 30 own AI parses/day, 5/day each active athlete |
+| **Personal** | `basic` | `free` | `personal_monthly`, `personal_yearly` | 3 athletes, 20 own AI parses/day |
+| **Coach** | `pro` | `pro` | `coach_monthly`, `coach_yearly` | 10 athletes, 30 own AI parses/day, 10/day each active athlete |
+| **Coach Pro** | `pro` | `enterprise` | `coach_pro_monthly`, `coach_pro_yearly` | 25 athletes, 30 own AI parses/day, 10/day each active athlete |
 
 ### Edge Functions
 All edge functions are configured in `supabase/config.toml` and execute in the Supabase Deno Edge Runtime:

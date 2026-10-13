@@ -7,7 +7,24 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // so that edge function timeouts/fallbacks resolve before the client drops the connection.
 export const OVERALL_BUDGET_VISION_MS = 42000;
 export const OVERALL_BUDGET_TEXT_MS = 27000;
+// First-attempt timeout caps prevent a hanging primary model from starving the fallback model.
+export const FIRST_ATTEMPT_BUDGET_VISION_MS = 20000;
+export const FIRST_ATTEMPT_BUDGET_TEXT_MS = 12000;
 export const MIN_ATTEMPT_BUDGET_MS = 1500;
+
+export interface AiBudgetConfig {
+  overallTextMs: number;
+  overallVisionMs: number;
+  firstAttemptTextMs: number;
+  firstAttemptVisionMs: number;
+  minAttemptMs: number;
+}
+
+let customBudgetConfig: Partial<AiBudgetConfig> | null = null;
+
+export function setAiBudgetConfigForTesting(config: Partial<AiBudgetConfig> | null): void {
+  customBudgetConfig = config;
+}
 
 // Maximum decoded byte size allowed for meal photo payload (~1.5 MB in binary bytes).
 // Measures decoded binary bytes: Math.floor((cleanBase64.length * 3) / 4) - padding
@@ -25,7 +42,36 @@ const HTTP_RETRY_OPTIONS = {
 };
 
 import { isAllowedOrigin, getCorsHeaders as getBaseCorsHeaders } from "../_shared/cors.ts";
-import { captureException } from "../_shared/errorReporting.ts";
+import {
+  captureException,
+  captureMessage,
+  setTestCaptureHook,
+} from "../_shared/errorReporting.ts";
+
+export { setTestCaptureHook };
+
+export async function reportAiFailureToSentry(
+  isTimeout: boolean,
+  model: string,
+  attemptCount: number,
+  elapsedMs: number,
+  isVision: boolean
+): Promise<void> {
+  const message = isTimeout ? "parse-nutrition AI timeout" : "parse-nutrition AI model error";
+  const context: Record<string, unknown> = {
+    tags: {
+      model_id: model || "unknown",
+      attempt_count: String(attemptCount),
+      elapsed_ms: String(elapsedMs),
+      kind: isVision ? "vision" : "text",
+    },
+  };
+  try {
+    await captureMessage(message, context);
+  } catch (sentryErr) {
+    console.warn("[parse-nutrition] Sentry reporting failed:", sentryErr);
+  }
+}
 import {
   parseNutritionText,
   type ParsedNutritionMeal,
@@ -323,6 +369,34 @@ export default {
     let activeQuotaResult: any = null;
     let authenticatedUserId: string | undefined;
     let configuredSupabaseUrl = '';
+    let cleanBase64 = '';
+    let lastModelAttempted = '';
+    let attemptsCount = 0;
+    let loopStartTime = 0;
+    let aiFailureReported = false;
+
+    const reportAiFailure = async (isTimeout: boolean) => {
+      if (aiFailureReported) return;
+      aiFailureReported = true;
+      const totalElapsedMs = loopStartTime > 0 ? (Date.now() - loopStartTime) : 0;
+      const model = lastModelAttempted || "unknown";
+      // Avoid delaying the 504/5xx response by the Sentry flush (up to 2 s), which could
+      // push an edge timeout past the client's 30 s ceiling. Dispatch via EdgeRuntime.waitUntil
+      // when available; fall back to awaiting in test environments where EdgeRuntime is absent.
+      const p = reportAiFailureToSentry(
+        isTimeout,
+        model,
+        attemptsCount,
+        totalElapsedMs,
+        Boolean(cleanBase64)
+      );
+      const er = (globalThis as any).EdgeRuntime;
+      if (er && typeof er.waitUntil === 'function') {
+        er.waitUntil(p);
+      } else {
+        await p;
+      }
+    };
 
     const refundIfCharged = async () => {
       if (isQuotaCharged && chargedAmount > 0 && authenticatedUserId && configuredSupabaseUrl) {
@@ -369,7 +443,7 @@ export default {
       const rawImage = body.image_base64 || body.imageBase64 || body.image || "";
       const rawMimeType = body.imageMimeType || body.image_mime_type || body.mimeType || body.mime_type || "";
       const imageBase64 = typeof rawImage === 'string' ? rawImage.trim() : "";
-      const cleanBase64 = (imageBase64 === 'data:,' || imageBase64.startsWith('data:,'))
+      cleanBase64 = (imageBase64 === 'data:,' || imageBase64.startsWith('data:,'))
         ? ""
         : imageBase64
             .replace(/^data:[^,]*;base64,/i, '')
@@ -650,24 +724,40 @@ CORE RESPONSIBILITIES & GUIDELINES:
       let capacityErrorEncountered: any = null;
       let timeoutEncountered: any = null;
 
-      const overallBudgetMs = cleanBase64 ? OVERALL_BUDGET_VISION_MS : OVERALL_BUDGET_TEXT_MS;
-      const loopStartTime = Date.now();
+      const overallBudgetMs = cleanBase64
+        ? (customBudgetConfig?.overallVisionMs ?? OVERALL_BUDGET_VISION_MS)
+        : (customBudgetConfig?.overallTextMs ?? OVERALL_BUDGET_TEXT_MS);
+      const firstAttemptBudgetMs = cleanBase64
+        ? (customBudgetConfig?.firstAttemptVisionMs ?? FIRST_ATTEMPT_BUDGET_VISION_MS)
+        : (customBudgetConfig?.firstAttemptTextMs ?? FIRST_ATTEMPT_BUDGET_TEXT_MS);
+      const minAttemptBudgetMs = customBudgetConfig?.minAttemptMs ?? MIN_ATTEMPT_BUDGET_MS;
+      loopStartTime = Date.now();
 
-      for (const model of candidateModels) {
+      for (let attemptIndex = 0; attemptIndex < candidateModels.length; attemptIndex++) {
+        const model = candidateModels[attemptIndex];
+        lastModelAttempted = model;
+        attemptsCount = attemptIndex + 1;
+
         // Rationale: instant 503s cost ~0.3s so falling through remains cheap,
         // while a slow-but-healthy model gets all remaining time.
         const elapsed = Date.now() - loopStartTime;
         const remaining = overallBudgetMs - elapsed;
-        if (remaining < MIN_ATTEMPT_BUDGET_MS) {
-          const timeoutErr = new Error(`Overall AI budget exceeded: remaining ${remaining}ms < ${MIN_ATTEMPT_BUDGET_MS}ms`);
+        if (remaining < minAttemptBudgetMs) {
+          const timeoutErr = new Error(`Overall AI budget exceeded: remaining ${remaining}ms < ${minAttemptBudgetMs}ms`);
           timeoutEncountered = timeoutErr;
           lastAiError = timeoutErr;
           break;
         }
 
+        // Cap first attempt so fallback model gets remaining overall budget if first model hangs.
+        // Subsequent models get the remaining overall budget.
+        const attemptTimeoutMs = attemptIndex === 0
+          ? Math.min(firstAttemptBudgetMs, remaining)
+          : remaining;
+
         const attemptStartTime = Date.now();
         try {
-          const timeoutSignal = AbortSignal.timeout(remaining);
+          const timeoutSignal = AbortSignal.timeout(attemptTimeoutMs);
           const response = await ai.models.generateContent({
             model,
             contents,
@@ -770,6 +860,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
         }
 
         if (isCapacityError(lastAiError) || capacityErrorEncountered) {
+          await reportAiFailure(false);
           return new Response(
             JSON.stringify({
               error: "AI model capacity is temporarily exhausted. Please try again in 5 seconds or switch to manual entry.",
@@ -788,6 +879,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
         }
 
         if (isTimeoutError(lastAiError) || timeoutEncountered) {
+          await reportAiFailure(true);
           return new Response(
             JSON.stringify({
               error: "AI model request timed out. Please try again or switch to manual entry.",
@@ -803,6 +895,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
           );
         }
 
+        await reportAiFailure(false);
         throw lastAiError || new Error("All AI models failed to generate content");
       }
 
@@ -883,6 +976,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
         );
       }
       if (isCapacityError(error)) {
+        await reportAiFailure(false);
         return new Response(
           JSON.stringify({
             error: "AI model capacity is temporarily exhausted. Please try again in 5 seconds or switch to manual entry.",
@@ -900,6 +994,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
         );
       }
       if (isTimeoutError(error)) {
+        await reportAiFailure(true);
         return new Response(
           JSON.stringify({
             error: "AI model request timed out. Please try again or switch to manual entry.",
@@ -915,7 +1010,11 @@ CORE RESPONSIBILITIES & GUIDELINES:
         );
       }
       try {
-        await captureException(error);
+        if (attemptsCount > 0) {
+          await reportAiFailure(false);
+        } else {
+          await captureException(error);
+        }
       } catch (sentryErr) {
         console.warn("[parse-nutrition] Error reporting failed:", sentryErr);
       }
