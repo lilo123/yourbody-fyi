@@ -2,6 +2,7 @@ import React from 'react';
 import { InAppBrowserBanner } from '../common/InAppBrowserBanner';
 import { LandingHeader } from './LandingHeader';
 import { HeroSection } from './HeroSection';
+import { MealDemoSection } from './MealDemoSection';
 import { FeaturesSection } from './FeaturesSection';
 import { PricingSection } from './PricingSection';
 import { FaqSection } from './FaqSection';
@@ -14,6 +15,7 @@ export const LandingView: React.FC = () => {
       <LandingHeader />
       <main className="w-full">
         <HeroSection />
+        <MealDemoSection />
         <FeaturesSection />
         <PricingSection />
         <FaqSection />
