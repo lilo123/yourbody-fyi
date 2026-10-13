@@ -4341,6 +4341,247 @@ Deno.test("AI fallback Sentry: all models fail with non-timeout non-capacity err
     }
 });
 
+Deno.test("AI fallback attribution: primary 503 fast fail and fallback timeout reports 504 timeout with attempt count 2", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+    setAiBudgetConfigForTesting({
+        overallTextMs: 3000,
+        firstAttemptTextMs: 1600,
+        minAttemptMs: 50,
+    });
+
+    const capturedEvents: Array<{ type: string; message: string; context: any }> = [];
+    setTestCaptureHook((type, arg, context) => {
+        capturedEvents.push({
+            type,
+            message: typeof arg === "string" ? arg : (arg as any)?.message,
+            context,
+        });
+    });
+
+    const calledModels: string[] = [];
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            if (urlString.includes("gemini-3.5-flash-lite")) {
+                if (!calledModels.includes("gemini-3.5-flash-lite")) {
+                    calledModels.push("gemini-3.5-flash-lite");
+                }
+                // Primary model fails fast with 503 capacity error
+                return new Response(JSON.stringify({
+                    error: { code: 503, message: "The model is overloaded due to high demand (DECODE_PREEMPTED)" },
+                }), {
+                    status: 503,
+                    headers: { "Content-Type": "application/json" },
+                });
+            }
+            if (urlString.includes("gemini-3.1-flash-lite")) {
+                if (!calledModels.includes("gemini-3.1-flash-lite")) {
+                    calledModels.push("gemini-3.1-flash-lite");
+                }
+                // Fallback model hangs until aborted
+                return new Promise((_, reject) => {
+                    if (init?.signal?.aborted) {
+                        reject(new DOMException("The operation was aborted", "AbortError"));
+                        return;
+                    }
+                    init?.signal?.addEventListener("abort", () => {
+                        reject(new DOMException("The operation was aborted", "AbortError"));
+                    });
+                });
+            }
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Protein shake 300 kcal", forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 504);
+        const data = await res.json();
+        assertEquals(data.code, "TIMEOUT");
+        assertEquals(calledModels, ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
+
+        assertEquals(capturedEvents.length, 1);
+        const event = capturedEvents[0];
+        assertEquals(event.message, "parse-nutrition AI timeout");
+        assertExists(event.context?.tags);
+        assertEquals(event.context.tags.model_id, "gemini-3.1-flash-lite");
+        assertEquals(event.context.tags.attempt_count, "2");
+        assertEquals(event.context.tags.kind, "text");
+    } finally {
+        globalThis.fetch = originalFetch;
+        setAiBudgetConfigForTesting(null);
+        setTestCaptureHook(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("AI fallback attribution: primary model hang with remaining budget below minimum skips fallback and reports attempt count 1", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+    setAiBudgetConfigForTesting({
+        overallTextMs: 70,
+        firstAttemptTextMs: 50,
+        minAttemptMs: 30,
+    });
+
+    const capturedEvents: Array<{ type: string; message: string; context: any }> = [];
+    setTestCaptureHook((type, arg, context) => {
+        capturedEvents.push({
+            type,
+            message: typeof arg === "string" ? arg : (arg as any)?.message,
+            context,
+        });
+    });
+
+    const calledModels: string[] = [];
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            const match = urlString.match(/models\/([^:]+):/);
+            if (match) {
+                calledModels.push(match[1]);
+            }
+            // Primary model hangs until aborted
+            return new Promise((_, reject) => {
+                if (init?.signal?.aborted) {
+                    reject(new DOMException("The operation was aborted", "AbortError"));
+                    return;
+                }
+                init?.signal?.addEventListener("abort", () => {
+                    reject(new DOMException("The operation was aborted", "AbortError"));
+                });
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Protein shake 300 kcal", forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 504);
+        const data = await res.json();
+        assertEquals(data.code, "TIMEOUT");
+        // Fallback is NOT called because remaining budget is below minAttemptBudgetMs
+        assertEquals(calledModels, ["gemini-3.5-flash-lite"]);
+
+        assertEquals(capturedEvents.length, 1);
+        const event = capturedEvents[0];
+        assertEquals(event.message, "parse-nutrition AI timeout");
+        assertExists(event.context?.tags);
+        assertEquals(event.context.tags.model_id, "gemini-3.5-flash-lite");
+        assertEquals(event.context.tags.attempt_count, "1");
+        assertEquals(event.context.tags.kind, "text");
+    } finally {
+        globalThis.fetch = originalFetch;
+        setAiBudgetConfigForTesting(null);
+        setTestCaptureHook(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("AI fallback attribution: primary 503 and fallback 503 returns 503 capacity exhausted unchanged", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const capturedEvents: Array<{ type: string; message: string; context: any }> = [];
+    setTestCaptureHook((type, arg, context) => {
+        capturedEvents.push({
+            type,
+            message: typeof arg === "string" ? arg : (arg as any)?.message,
+            context,
+        });
+    });
+
+    const calledModels: string[] = [];
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            const match = urlString.match(/models\/([^:]+):/);
+            if (match && !calledModels.includes(match[1])) {
+                calledModels.push(match[1]);
+            }
+            // Both primary and fallback return 503 capacity error
+            return new Response(JSON.stringify({
+                error: { code: 503, message: "The model is overloaded due to high demand (DECODE_PREEMPTED)" },
+            }), {
+                status: 503,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Protein shake 300 kcal", forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 503);
+        assertEquals(res.headers.get("Retry-After"), "5");
+        const data = await res.json();
+        assertEquals(data.code, "CAPACITY_EXHAUSTED");
+        assertEquals(data.retryAfter, 5);
+        assertEquals(calledModels, ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
+
+        assertEquals(capturedEvents.length, 1);
+        const event = capturedEvents[0];
+        assertEquals(event.message, "parse-nutrition AI model error");
+        assertExists(event.context?.tags);
+        assertEquals(event.context.tags.model_id, "gemini-3.1-flash-lite");
+        assertEquals(event.context.tags.attempt_count, "2");
+        assertEquals(event.context.tags.kind, "text");
+    } finally {
+        globalThis.fetch = originalFetch;
+        setTestCaptureHook(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
 
 
 
