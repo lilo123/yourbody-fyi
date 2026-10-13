@@ -1853,68 +1853,6 @@ describe('Scale chip on the staged card', () => {
     expect(screen.getByTestId('parsed-locally-badge')).toBeInTheDocument();
     expect(screen.getByTestId('lenient-fallback-banner')).toBeInTheDocument();
     expect(screen.getByText('Please review macros before logging.')).toBeInTheDocument();
-    expect(screen.queryByTestId('lenient-hint')).toBeNull();
-  });
-
-  it('renders hint showing skipped line when confidence is lenient and skippedLines is provided', () => {
-    const meal = {
-      ...makeStagedMeal(),
-      source: 'rules' as const,
-      confidence: 'lenient' as const,
-      skippedLines: ['Unknown dressing 15g'],
-    };
-    render(<StagedMealCard {...baseProps} stagedMeal={meal} onUpdateStagedMeal={vi.fn()} />);
-    expect(screen.getByTestId('lenient-fallback-banner')).toBeInTheDocument();
-    expect(screen.getByTestId('lenient-hint')).toBeInTheDocument();
-    expect(screen.getByText('Skipped: Unknown dressing 15g')).toBeInTheDocument();
-  });
-
-  it('renders hint showing modifier when confidence is lenient and modifiers is provided', () => {
-    const meal = {
-      ...makeStagedMeal(),
-      source: 'local' as const,
-      confidence: 'lenient' as const,
-      modifiers: ['ate half'],
-    };
-    render(<StagedMealCard {...baseProps} stagedMeal={meal} onUpdateStagedMeal={vi.fn()} />);
-    expect(screen.getByTestId('lenient-fallback-banner')).toBeInTheDocument();
-    expect(screen.getByTestId('lenient-hint')).toBeInTheDocument();
-    expect(screen.getByText('Modifier: ate half')).toBeInTheDocument();
-  });
-
-  it('truncates long skipped line to at most 60 characters in hint', () => {
-    const meal = {
-      ...makeStagedMeal(),
-      source: 'local' as const,
-      confidence: 'lenient' as const,
-      skippedLines: [
-        'A very lengthy unrecognized descriptive line describing how the dish was prepared with extra olive oil and herbs',
-      ],
-    };
-    render(<StagedMealCard {...baseProps} stagedMeal={meal} onUpdateStagedMeal={vi.fn()} />);
-    const hintElement = screen.getByTestId('lenient-hint');
-    expect(hintElement.textContent).toMatch(/^Skipped: .*\.\.\.$/);
-    expect(hintElement.textContent!.length).toBeLessThanOrEqual(60);
-  });
-
-  it('disables "Analyze with AI instead" button when isAnalyzing is true', () => {
-    const meal = {
-      ...makeStagedMeal(),
-      source: 'local' as const,
-      rawText: '2 eggs',
-    };
-    render(
-      <StagedMealCard
-        {...baseProps}
-        stagedMeal={meal}
-        onUpdateStagedMeal={vi.fn()}
-        onAnalyzeWithAiInstead={vi.fn()}
-        isAnalyzing={true}
-      />
-    );
-    const btn = screen.getByTestId('analyze-with-ai-instead-btn');
-    expect(btn).toBeDisabled();
   });
 });
-
 

@@ -1,8 +1,8 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import type { CustomDish } from '../../types/database';
 import { formatCalories } from '../../utils/nutrition';
 import { parseNutritionText } from '../../lib/nutrition/localParse';
-import { buildStagedItem, recomputeStagedTotals, type StagedMeal } from './nutritionEngineHelpers';
+import { buildStagedItem, type StagedMeal } from './nutritionEngineHelpers';
 import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
 import type { ManualMealPrefill } from './useManualMealForm';
@@ -29,41 +29,6 @@ function buildStagedMealFromLocal(
 ): StagedMeal | null {
   const parsed = localResult.meal;
   if (!parsed) return null;
-
-  if (parsed.items && parsed.items.length > 1) {
-    const stagedItems = parsed.items.map((item) =>
-      buildStagedItem({
-        name: item.name,
-        portion: item.portion || '1 serving',
-        calories: item.calories,
-        protein: item.protein,
-        carbs: item.carbs,
-        fat: item.fat,
-        fiber: item.fiber,
-      })
-    );
-    const totals = recomputeStagedTotals(stagedItems);
-    const macroSummary = `Total: ${totals.calories} kcal | ${totals.protein}g P | ${totals.carbs}g C | ${totals.fat}g F | ${totals.fiber}g Fiber`;
-    return {
-      name: parsed.name || 'Meal',
-      mealType: 'Breakfast',
-      explanation: totals.explanation ? `${totals.explanation} | ${macroSummary}` : macroSummary,
-      items: stagedItems,
-      calories: totals.calories,
-      protein: totals.protein,
-      carbs: totals.carbs,
-      fat: totals.fat,
-      fiber: totals.fiber,
-      servingSize: parsed.servingSize ?? 1,
-      servingUnit: parsed.servingUnit ?? 'serving',
-      source: 'local',
-      confidence,
-      rawText: text.trim(),
-      skippedLines: localResult.skippedLines,
-      modifiers: localResult.modifiers,
-    };
-  }
-
   const stagedItem = buildStagedItem({
     name: parsed.name || 'Meal',
     portion:
@@ -94,8 +59,6 @@ function buildStagedMealFromLocal(
     source: 'local',
     confidence,
     rawText: text.trim(),
-    skippedLines: localResult.skippedLines,
-    modifiers: localResult.modifiers,
   };
 }
 
@@ -155,7 +118,6 @@ export function useNutritionAi({
   const [nlInput, setNlInput] = useState('');
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const isAnalyzingRef = useRef(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
 
   const {
@@ -178,20 +140,13 @@ export function useNutritionAi({
   });
 
   const handleAnalyze = async (options?: { forceAi?: boolean; overrideText?: string }) => {
-    if (isAnalyzing || isAnalyzingRef.current) return;
     const textToAnalyze = options?.overrideText !== undefined ? options.overrideText : nlInput;
     if (!textToAnalyze.trim() && !selectedPhoto) return;
 
-    isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     setIsError(false);
     setIsRateLimited(false);
     setIsQuotaExceeded(false);
-
-    const stopAnalyzing = () => {
-      isAnalyzingRef.current = false;
-      setIsAnalyzing(false);
-    };
 
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     const mode: NutritionParserMode = configuredParserMode ?? getNutritionParserMode();
@@ -199,11 +154,11 @@ export function useNutritionAi({
     // 1. Text-only routing check (photos and explicit forceAi always use online AI parse)
     if (!options?.forceAi && !selectedPhoto && textToAnalyze.trim()) {
       if (mode === 'on_device') {
-        stopAnalyzing();
+        setIsAnalyzing(false);
         const localResult = parseNutritionText(textToAnalyze.trim());
         const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
 
-        if (localResult.confidence === 'exact' && localResult.meal) {
+        if (localResult.confidence === 'exact' && isSingle && localResult.meal) {
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
           if (meal) {
             setStatus('Parsed locally');
@@ -221,20 +176,26 @@ export function useNutritionAi({
           }
         }
 
-        const prefill = extractPrefill(textToAnalyze, localResult);
+        if (localResult.confidence === 'partial') {
+          const prefill = extractPrefill(textToAnalyze, localResult);
+          setIsError(true);
+          setStatus('Could not parse: use quick log');
+          onFallbackToManual(prefill.name || textToAnalyze.trim(), prefill);
+          return;
+        }
+
         setIsError(true);
         setStatus('Could not parse: use quick log');
-        onFallbackToManual(prefill.name || textToAnalyze.trim(), prefill);
         return;
       }
 
       if (mode === 'always_ai') {
         if (!isOnline) {
-          stopAnalyzing();
+          setIsAnalyzing(false);
           const localResult = parseNutritionText(textToAnalyze.trim());
           const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
 
-          if (localResult.confidence === 'exact' && localResult.meal) {
+          if (localResult.confidence === 'exact' && isSingle && localResult.meal) {
             const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
             if (meal) {
               setStatus('Parsed locally');
@@ -270,11 +231,11 @@ export function useNutritionAi({
         const localResult = parseNutritionText(textToAnalyze.trim());
         const isSingle = !localResult.meal?.items || localResult.meal.items.length <= 1;
 
-        // Exact breakdown (single or multi-item): stage locally, zero network (both online and offline)
-        if (localResult.confidence === 'exact' && localResult.meal) {
+        // Exact single item: stage locally, zero network (both online and offline)
+        if (localResult.confidence === 'exact' && isSingle && localResult.meal) {
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
           if (meal) {
-            stopAnalyzing();
+            setIsAnalyzing(false);
             setStatus('Parsed locally');
             onParsedSuccess(meal);
             return;
@@ -283,7 +244,7 @@ export function useNutritionAi({
 
         // Offline routing for non-exact text
         if (!isOnline) {
-          stopAnalyzing();
+          setIsAnalyzing(false);
 
           if (localResult.confidence === 'lenient' && isSingle && localResult.meal) {
             const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'lenient');
@@ -311,7 +272,7 @@ export function useNutritionAi({
 
     // 2. Offline check for photo / forceAi
     if (!isOnline) {
-      stopAnalyzing();
+      setIsAnalyzing(false);
       setIsError(true);
       setStatus('AI needs a connection: use quick log');
       return;
@@ -336,14 +297,6 @@ export function useNutritionAi({
         forceAi: effectiveForceAi,
       });
 
-      let localSkippedLines: string[] | undefined;
-      let localModifiers: string[] | undefined;
-      if (parsed.confidence === 'lenient' && textToAnalyze.trim() && !selectedPhoto) {
-        const local = parseNutritionText(textToAnalyze.trim());
-        localSkippedLines = local.skippedLines;
-        localModifiers = local.modifiers;
-      }
-
       const meal = {
         name: parsed.name || textToAnalyze || (selectedPhoto ? 'Meal Photo' : 'Meal'),
         mealType: 'Breakfast',
@@ -364,8 +317,6 @@ export function useNutritionAi({
         source: parsed.source === 'rules' ? 'rules' : 'ai',
         confidence: parsed.confidence,
         rawText: textToAnalyze.trim(),
-        skippedLines: localSkippedLines,
-        modifiers: localModifiers,
       } as StagedMeal;
 
       setIsRateLimited(false);
@@ -384,27 +335,10 @@ export function useNutritionAi({
         error?.message?.includes('Failed to fetch');
 
       if (isNetworkError) {
-        const localResult =
-          textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
-        const isSingle = !localResult?.meal?.items || localResult.meal.items.length <= 1;
-
-        if (
-          localResult &&
-          (localResult.confidence === 'exact' || (localResult.confidence === 'lenient' && isSingle)) &&
-          localResult.meal
-        ) {
-          const confidence = localResult.confidence === 'exact' ? 'exact' : 'lenient';
-          const meal = buildStagedMealFromLocal(textToAnalyze, localResult, confidence);
-          if (meal) {
-            setIsError(false);
-            setStatus('Parsed locally');
-            onParsedSuccess(meal);
-            return;
-          }
-        }
-
         setIsError(true);
         setStatus('AI needs a connection: use quick log');
+        const localResult =
+          textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
         const prefill = extractPrefill(textToAnalyze, localResult);
         onFallbackToManual(
           prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
@@ -446,15 +380,9 @@ export function useNutritionAi({
           ? `Meal Analysis: ${errorMsg}`
           : `AI service unavailable: ${errorMsg}`
       );
-      const localResult =
-        textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
-      const prefill = extractPrefill(textToAnalyze, localResult);
-      onFallbackToManual(
-        prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
-        prefill
-      );
+      onFallbackToManual(textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''));
     } finally {
-      stopAnalyzing();
+      setIsAnalyzing(false);
     }
   };
 
