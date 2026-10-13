@@ -300,7 +300,7 @@ describe('LandingView component', () => {
       fireEvent.click(readBtn);
 
       expect(
-        await screen.findByText(/The full app can read this with AI parse after signing up\./i)
+        await screen.findByText(/The full app can read this with on-device parsing after signing up\./i)
       ).toBeDefined();
 
       const resultCard = screen.getByTestId('meal-demo-result');
@@ -323,7 +323,7 @@ describe('LandingView component', () => {
       fireEvent.change(textarea, { target: { value: 'invalid non-nutrition text' } });
       fireEvent.click(readBtn);
 
-      await screen.findByText(/The full app can read this with AI parse after signing up\./i);
+      await screen.findByText(/The full app can read this with on-device parsing after signing up\./i);
       expect(fetchSpy).not.toHaveBeenCalled();
 
       fetchSpy.mockRestore();

@@ -104,7 +104,7 @@ export const MealDemoSection: React.FC = () => {
                     data-testid="meal-demo-failure"
                     className="rounded-xl bg-cyan-500/10 border border-cyan-500/20 p-3 text-xs text-cyan-300"
                   >
-                    The full app can read this with AI parse after signing up.
+                    The full app can read this with on-device parsing after signing up.
                   </div>
                 )}
 
