@@ -1,62 +1,25 @@
 import type { WorkoutStoryData } from './workoutStorySummary';
-
-function drawRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
-): void {
-  if (typeof ctx.roundRect === 'function') {
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, r);
-    return;
-  }
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-/**
- * Truncates text so that ctx.measureText(text).width <= maxWidth.
- */
-function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let truncated = text;
-  while (truncated.length > 0 && ctx.measureText(truncated + '…').width > maxWidth) {
-    truncated = truncated.slice(0, -1);
-  }
-  return truncated.length > 0 ? truncated.trimEnd() + '…' : '…';
-}
+import {
+  STORY_CANVAS_WIDTH,
+  STORY_CANVAS_HEIGHT,
+  drawRoundedRect,
+  fitText,
+  drawStoryBackground,
+  drawStoryFooter,
+  canvasToBlob,
+} from './storyCanvasHelpers';
 
 export function renderWorkoutStory(canvas: HTMLCanvasElement, data: WorkoutStoryData): void {
-  const width = 1080;
-  const height = 1920;
+  const width = STORY_CANVAS_WIDTH;
+  const height = STORY_CANVAS_HEIGHT;
   canvas.width = width;
   canvas.height = height;
 
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not obtain 2D canvas context');
 
-  // 1. Dark Base Background (#09090b - app semantic surface-base)
-  ctx.fillStyle = '#09090b';
-  ctx.fillRect(0, 0, width, height);
-
-  // Subtle ambient cyan glow near the top-center (matching app theme)
-  const glow = ctx.createRadialGradient(540, 180, 50, 540, 180, 600);
-  glow.addColorStop(0, 'rgba(6, 182, 212, 0.12)'); // cyan-500
-  glow.addColorStop(1, 'rgba(9, 9, 11, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, width, 800);
+  // 1. Dark Base Background & ambient glow (#09090b + cyan)
+  drawStoryBackground(ctx, width, height, 'rgba(6, 182, 212, 0.12)');
 
   const marginX = 64;
   const contentWidth = width - marginX * 2; // 952 px
@@ -226,23 +189,11 @@ export function renderWorkoutStory(canvas: HTMLCanvasElement, data: WorkoutStory
   }
 
   // 6. Wordmark Footer at bottom
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '600 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillStyle = '#71717a';
-  ctx.fillText('yourbody.fyi', 540, 1850);
+  drawStoryFooter(ctx, width, 1850);
 }
 
 export async function renderWorkoutStoryToBlob(data: WorkoutStoryData): Promise<Blob> {
   const canvas = document.createElement('canvas');
   renderWorkoutStory(canvas, data);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) {
-        resolve(blob);
-      } else {
-        reject(new Error('Canvas toBlob failed'));
-      }
-    }, 'image/png');
-  });
+  return canvasToBlob(canvas);
 }
