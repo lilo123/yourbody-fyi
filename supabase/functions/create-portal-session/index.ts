@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "../_shared/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { isAllowedOrigin, getCorsHeaders } from "../_shared/cors.ts";
 import { resolveStripeConfig, LiveKeyRefusedError, createBillingErrorResponse } from "../_shared/stripeConfig.ts";
