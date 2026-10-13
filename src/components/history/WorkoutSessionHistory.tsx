@@ -13,8 +13,10 @@ import { OverflowMenu, type OverflowMenuItem } from '../common/OverflowMenu';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useToast } from '../../hooks/useToast';
 import { PendingMark } from '../sync/PendingMark';
 import { formatVolume, formatWeight, weightUnitLabel } from '../../utils/weight';
+import { shareWorkoutStory } from '../../utils/workoutStoryShare';
 import type { HistorySession } from './useWorkoutHistory';
 
 export type { HistorySession };
@@ -76,6 +78,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
   const navigate = onNavigate || routerNavigate;
   const unit = useWeightUnit();
   const isOnline = useOnlineStatus();
+  const { show: showToast } = useToast();
 
   const parentRef = React.useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = React.useState(0);
@@ -280,6 +283,13 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
     const isSessionPending = Boolean((session as any).pending || session.sets?.some((s: any) => s.pending));
 
     const overflowItems: OverflowMenuItem[] = [
+      {
+        label: 'Share workout',
+        onSelect: () => {
+          void shareWorkoutStory(session, exercises, unit, showToast);
+        },
+        testId: `share-session-${session.id}`,
+      },
       {
         label: 'Edit in Workout',
         onSelect: () => navigate(`/workout?date=${civilDate}`),

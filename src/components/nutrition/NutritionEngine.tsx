@@ -418,6 +418,7 @@ export const NutritionEngine: React.FC = () => {
             customDishes={displayedCustomDishes}
             onAddParsedItems={handleAddParsedItems}
             onAnalyzeWithAiInstead={() => ai.handleForceAiAnalyze(stagedMeal.rawText || stagedMeal.name)}
+            isAnalyzing={ai.isAnalyzing}
           />
         </div>
       ) : (
@@ -550,6 +551,8 @@ export const NutritionEngine: React.FC = () => {
         editingDish={dishModal.editingDish} customDishes={displayedCustomDishes}
         dishModalKind={dishModal.dishModalKind} setDishModalKind={dishModal.setDishModalKind}
         dishModalName={dishModal.dishModalName} setDishModalName={dishModal.setDishModalName}
+        dishModalQuantity={dishModal.dishModalQuantity} setDishModalQuantity={dishModal.setDishModalQuantity} dishModalUnit={dishModal.dishModalUnit} setDishModalUnit={dishModal.setDishModalUnit}
+        onQuantityChange={dishModal.handleQuantityChange} onUnitChange={dishModal.handleUnitChange}
         dishModalCalories={dishModal.dishModalCalories} setDishModalCalories={dishModal.setDishModalCalories}
         dishModalProtein={dishModal.dishModalProtein} setDishModalProtein={dishModal.setDishModalProtein}
         dishModalCarbs={dishModal.dishModalCarbs} setDishModalCarbs={dishModal.setDishModalCarbs}

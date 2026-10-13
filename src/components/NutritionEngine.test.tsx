@@ -257,7 +257,8 @@ describe('NutritionEngine', () => {
     const input = screen.getByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await userEvent.type(input, '3 eggs and 2 slices sourdough');
+    const user = userEvent.setup({ delay: null });
+    await user.type(input, '3 eggs and 2 slices sourdough');
 
     fireEvent.click(screen.getByText('Analyze Meal'));
 
@@ -591,7 +592,7 @@ describe('NutritionEngine', () => {
     expect(getRecordedTables()).toContain('custom_dishes');
     expect(getRecordedSelects()).toContainEqual({
       table: 'custom_dishes',
-      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+      projection: 'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit',
     });
   });
 
@@ -620,7 +621,7 @@ describe('NutritionEngine', () => {
 
     // Submitting manual meal form stages into StagedMealCard without DB insert
     expect(mockInsert).not.toHaveBeenCalled();
-    expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+    expect(await screen.findByTestId('staged-meal-card')).toBeDefined();
     expect(screen.getByDisplayValue('Greek Yogurt & Honey')).toBeDefined();
 
     // Logging the staged manual meal writes exactly the totals shown
@@ -660,7 +661,7 @@ describe('NutritionEngine', () => {
 
     // Staged card appears with single item (150 kcal)
     expect(mockInsert).not.toHaveBeenCalled();
-    expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+    expect(await screen.findByTestId('staged-meal-card')).toBeDefined();
 
     // 2. Edit nutrition of single item (150 -> 200 kcal, 15 -> 20 P)
     fireEvent.click(screen.getByTestId('component-actions'));
@@ -941,7 +942,8 @@ describe('NutritionEngine', () => {
     const input = screen.getByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await userEvent.type(input, 'Power oatmeal bowl with 6 ingredients');
+    const user = userEvent.setup({ delay: null });
+    await user.type(input, 'Power oatmeal bowl with 6 ingredients');
     fireEvent.click(screen.getByText('Analyze Meal'));
 
     await waitFor(() => {
@@ -1055,7 +1057,8 @@ describe('NutritionEngine', () => {
     const input = screen.getByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await userEvent.type(input, '3 eggs, 2 slices sourdough, 1 tbsp butter');
+    const user = userEvent.setup({ delay: null });
+    await user.type(input, '3 eggs, 2 slices sourdough, 1 tbsp butter');
     fireEvent.click(screen.getByText('Analyze Meal'));
 
     await waitFor(() => {

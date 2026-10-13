@@ -233,7 +233,7 @@ describe('reviewCaptureTime - O2 capture date and original timestamp preservatio
     expect(getRecordedSelects()).toContainEqual({
       table: 'custom_dishes',
       projection:
-        'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+        'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit',
     });
     expect(getRecordedSelects()).toContainEqual({
       table: 'nutrition_logs',
@@ -323,7 +323,7 @@ describe('reviewCaptureTime - O2 capture date and original timestamp preservatio
     expect(getRecordedSelects()).toContainEqual({
       table: 'custom_dishes',
       projection:
-        'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+        'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit',
     });
     expect(getRecordedSelects()).toContainEqual({
       table: 'nutrition_logs',
@@ -390,7 +390,7 @@ describe('reviewCaptureTime - O2 capture date and original timestamp preservatio
     expect(getRecordedSelects()).toContainEqual({
       table: 'custom_dishes',
       projection:
-        'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes',
+        'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit',
     });
     expect(getRecordedSelects()).toContainEqual({
       table: 'nutrition_logs',

@@ -185,7 +185,7 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     fireEvent.click(screen.getByText('Log Meal'));
 
     expect(mockInsert).not.toHaveBeenCalled();
-    expect(screen.getByTestId('staged-meal-card')).toBeInTheDocument();
+    expect(await screen.findByTestId('staged-meal-card')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Protein Oats')).toBeInTheDocument();
 
     // 3. Change date to Y while meal is staged

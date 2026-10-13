@@ -10,6 +10,7 @@ import {
   setFlusherSessionUser,
   type NutritionLogPayload,
 } from '../../offline';
+import { markFirstLogCompleted } from '../../pwa/installPromptEarly';
 
 export async function fetchDishDetail(dishId: string): Promise<CustomDishDetail | null> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -108,7 +109,7 @@ export function useNutritionData({
       const { data, error } = await supabase
         .from('custom_dishes')
         .select(
-          'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes'
+          'id, user_id, name, calories, protein, carbs, fat, fiber, created_at, kind, use_count, notes, serving_quantity:items->0->quantity, serving_unit:items->0->>unit'
         )
         .eq('user_id', targetUserId)
         .order('created_at', { ascending: false })
@@ -300,6 +301,7 @@ export function useNutritionData({
       if (created?.incrementDishId) {
         queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
       }
+      markFirstLogCompleted();
       onMutationSuccessReset();
     },
     onError: (error: Error) => {
@@ -396,8 +398,9 @@ export function useNutritionData({
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         throw new Error('Available when online');
       }
+      const { serving_quantity: _sq, serving_unit: _su, ...cleanPayload } = dishPayload;
       const payloadWithKind = {
-        ...dishPayload,
+        ...cleanPayload,
         kind: dishPayload.kind ?? (dishPayload.items && dishPayload.items.length > 1 ? 'recipe' : 'food'),
       };
       if (editingDishId) {

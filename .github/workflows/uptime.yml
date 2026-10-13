@@ -2,7 +2,8 @@ name: Uptime Check
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # Off the top of the hour: scheduled runs at :00/:30 are often delayed or dropped under load.
+    - cron: '17,47 * * * *'
   workflow_dispatch:
 
 permissions:

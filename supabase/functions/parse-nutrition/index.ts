@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "../_shared/edge-runtime.d.ts";
 import { GoogleGenAI, Type } from "npm:@google/genai";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -290,7 +290,6 @@ function computeResetsAt(period: string, now = new Date()): string {
   }
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0)).toISOString();
 }
-
 export default {
   async fetch(req: Request) {
     const origin = req.headers.get('Origin');

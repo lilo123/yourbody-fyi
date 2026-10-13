@@ -1,13 +1,16 @@
 import React from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import type { NutritionLog } from '../../types/database';
-import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import type { NutritionLog, UserProfile } from '../../types/database';
+import { Calendar, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import { formatCalories, formatMacro } from '../../utils/nutrition';
 import { MealLogRow } from '../nutrition/MealLogRow';
 import type { NutritionItem } from '../../utils/itemModel';
 import { FALLBACK_WINDOW } from './virtualizationConstants';
 import { Skeleton } from '../common/Skeleton';
 import { formatNutritionDayHeader } from './useHistoryData';
+import { AuthContext } from '../../context/AuthContextTypes';
+import { useToast } from '../../hooks/useToast';
+import { shareMacroStory } from '../../utils/macroStoryShare';
 
 export interface NutritionDaySummary {
   date: string;
@@ -33,6 +36,8 @@ export interface NutritionHistoryTimelineProps {
   onLoadMoreNutrition?: () => void;
   // Pending delete hiding
   pendingDeleteMealId?: string | null;
+  // Optional profile targets for story card sharing
+  profile?: Partial<UserProfile> | null;
 }
 
 // Realistic collapsed day-card height estimate derived from 390px/320px browser measurements
@@ -51,7 +56,11 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   isLoadingMoreNutrition = false,
   onLoadMoreNutrition,
   pendingDeleteMealId,
+  profile,
 }) => {
+  const auth = React.useContext(AuthContext);
+  const { show: showToast } = useToast();
+  const effectiveProfile = profile ?? auth?.profile ?? null;
   const parentRef = React.useRef<HTMLDivElement | null>(null);
   const [scrollMargin, setScrollMargin] = React.useState(0);
 
@@ -248,6 +257,17 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
                 <span className="sr-only">{day.date} • {day.meals.length} {day.meals.length === 1 ? "meal" : "meals"} logged</span>
               </div>
             </div>
+
+            {/* 44px Share day icon button */}
+            <button
+              type="button"
+              onClick={() => void shareMacroStory(day, effectiveProfile, showToast)}
+              aria-label="Share day"
+              data-testid={`share-day-btn-${day.date}`}
+              className="min-w-[44px] min-h-[44px] rounded-xl bg-zinc-800/60 hover:bg-cyan-500/20 text-zinc-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-95 touch-manipulation cursor-pointer shrink-0"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
 
             {/* D-YB-9: 44px Chevron toggle with aria-expanded & aria-controls */}
             <button
