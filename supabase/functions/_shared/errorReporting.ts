@@ -7,6 +7,7 @@
  */
 
 let isSentryInitialized = false;
+let testCaptureHook: ((type: 'exception' | 'message', arg: unknown, context?: Record<string, unknown>) => void) | null = null;
 
 export function isEdgeReportingConfigured(): boolean {
   const dsn = Deno.env.get('SENTRY_DSN');
@@ -15,6 +16,13 @@ export function isEdgeReportingConfigured(): boolean {
 
 export function resetEdgeReportingForTesting(): void {
   isSentryInitialized = false;
+  testCaptureHook = null;
+}
+
+export function setTestCaptureHook(
+  hook: ((type: 'exception' | 'message', arg: unknown, context?: Record<string, unknown>) => void) | null
+): void {
+  testCaptureHook = hook;
 }
 
 export function scrubEdgeEvent(event: any): any {
@@ -95,6 +103,13 @@ export async function captureException(
   context?: Record<string, unknown>
 ): Promise<void> {
   try {
+    if (testCaptureHook) {
+      try {
+        testCaptureHook('exception', err, context);
+      } catch (hookErr) {
+        console.warn('[errorReporting] testCaptureHook error:', hookErr);
+      }
+    }
     if (!isEdgeReportingConfigured()) {
       return;
     }
@@ -108,5 +123,33 @@ export async function captureException(
   } catch (error) {
     // Sentry failure can NEVER break the function response
     console.warn('[errorReporting] Sentry captureException error:', error);
+  }
+}
+
+export async function captureMessage(
+  message: string,
+  context?: Record<string, unknown>
+): Promise<void> {
+  try {
+    if (testCaptureHook) {
+      try {
+        testCaptureHook('message', message, context);
+      } catch (hookErr) {
+        console.warn('[errorReporting] testCaptureHook error:', hookErr);
+      }
+    }
+    if (!isEdgeReportingConfigured()) {
+      return;
+    }
+    const Sentry = await initEdgeSentry();
+    if (Sentry && typeof Sentry.captureMessage === 'function') {
+      Sentry.captureMessage(message, context);
+      if (typeof Sentry.flush === 'function') {
+        await Sentry.flush(2000);
+      }
+    }
+  } catch (error) {
+    // Sentry failure can NEVER break the function response
+    console.warn('[errorReporting] Sentry captureMessage error:', error);
   }
 }

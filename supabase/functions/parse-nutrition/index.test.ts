@@ -1,5 +1,15 @@
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
-import app, { reconcileParentWithItems, MAX_IMAGE_BYTES, MAX_FALLBACK_MODELS } from "./index.ts";
+import app, {
+    reconcileParentWithItems,
+    MAX_IMAGE_BYTES,
+    MAX_FALLBACK_MODELS,
+    FIRST_ATTEMPT_BUDGET_TEXT_MS,
+    FIRST_ATTEMPT_BUDGET_VISION_MS,
+    OVERALL_BUDGET_TEXT_MS,
+    OVERALL_BUDGET_VISION_MS,
+    setAiBudgetConfigForTesting,
+    setTestCaptureHook,
+} from "./index.ts";
 
 Deno.env.set("SUPABASE_URL", "https://mock.supabase.co");
 Deno.env.set("SUPABASE_ANON_KEY", "mock-anon-key");
@@ -3784,5 +3794,553 @@ Deno.test("parse-nutrition AI quota: rpc error captures to Sentry and proceeds t
         else Deno.env.delete("GEMINI_API_KEY");
     }
 });
+
+Deno.test("AI fallback constants: verify budget constants and relationships", () => {
+    assertEquals(OVERALL_BUDGET_TEXT_MS, 27000);
+    assertEquals(OVERALL_BUDGET_VISION_MS, 42000);
+    assertEquals(FIRST_ATTEMPT_BUDGET_TEXT_MS, 12000);
+    assertEquals(FIRST_ATTEMPT_BUDGET_VISION_MS, 20000);
+    assertEquals(FIRST_ATTEMPT_BUDGET_TEXT_MS < OVERALL_BUDGET_TEXT_MS, true);
+    assertEquals(FIRST_ATTEMPT_BUDGET_VISION_MS < OVERALL_BUDGET_VISION_MS, true);
+});
+
+Deno.test("AI fallback timing: first model hangs -> fallback is tried and succeeds within total budget", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+    setAiBudgetConfigForTesting({
+        overallTextMs: 150,
+        firstAttemptTextMs: 50,
+        minAttemptMs: 10,
+    });
+
+    const calledModels: string[] = [];
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            if (urlString.includes("gemini-3.5-flash-lite")) {
+                calledModels.push("gemini-3.5-flash-lite");
+                // Simulate primary model hanging until abortSignal fires
+                return new Promise((_, reject) => {
+                    if (init?.signal?.aborted) {
+                        reject(new DOMException("The operation was aborted", "AbortError"));
+                        return;
+                    }
+                    init?.signal?.addEventListener("abort", () => {
+                        reject(new DOMException("The operation was aborted", "AbortError"));
+                    });
+                });
+            }
+            if (urlString.includes("gemini-3.1-flash-lite")) {
+                calledModels.push("gemini-3.1-flash-lite");
+                const mockResponse = {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    is_food: true,
+                                    name: "Protein Shake",
+                                    calories: 300,
+                                    protein: 30,
+                                    carbs: 20,
+                                    fat: 5,
+                                    fiber: 2,
+                                    explanation: "Whey protein with milk",
+                                    items: [{ name: "Protein Shake", portion: "1 shake", calories: 300, protein: 30, carbs: 20, fat: 5, fiber: 2 }],
+                                }),
+                            }],
+                        },
+                    }],
+                };
+                return new Response(JSON.stringify(mockResponse), {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" },
+                });
+            }
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const startTime = Date.now();
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Special shake 400 kcal", forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        const elapsed = Date.now() - startTime;
+
+        assertEquals(res.status, 200);
+        const data = await res.json();
+        assertEquals(data.name, "Protein Shake");
+        assertEquals(calledModels.includes("gemini-3.5-flash-lite"), true);
+        assertEquals(calledModels.includes("gemini-3.1-flash-lite"), true);
+        // Completed well within the overall text budget
+        assertEquals(elapsed < 200, true);
+    } finally {
+        globalThis.fetch = originalFetch;
+        setAiBudgetConfigForTesting(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("AI fallback timing: first model errors fast -> fallback gets the rest of the budget", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+    setAiBudgetConfigForTesting({
+        overallTextMs: 250,
+        firstAttemptTextMs: 60,
+        minAttemptMs: 10,
+    });
+
+    const calledModels: string[] = [];
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            if (urlString.includes("gemini-3.5-flash-lite")) {
+                calledModels.push("gemini-3.5-flash-lite");
+                // Errors fast (immediate 400, non-retryable so zero backoff delay)
+                return new Response(JSON.stringify({
+                    error: { code: 400, message: "Model request rejected" },
+                }), {
+                    status: 400,
+                    headers: { "Content-Type": "application/json" },
+                });
+            }
+            if (urlString.includes("gemini-3.1-flash-lite")) {
+                calledModels.push("gemini-3.1-flash-lite");
+                // Delay 90ms: longer than firstAttemptTextMs (60ms), but well within remaining overall budget (250ms).
+                // If fallback were capped at 60ms, it would abort; because it gets the remaining budget, it succeeds.
+                await new Promise((resolve) => setTimeout(resolve, 90));
+                const mockResponse = {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    is_food: true,
+                                    name: "Fast Recovery Oatmeal",
+                                    calories: 250,
+                                    protein: 10,
+                                    carbs: 45,
+                                    fat: 4,
+                                    fiber: 6,
+                                    explanation: "Oatmeal with water",
+                                    items: [{ name: "Oatmeal", portion: "1 bowl", calories: 250, protein: 10, carbs: 45, fat: 4, fiber: 6 }],
+                                }),
+                            }],
+                        },
+                    }],
+                };
+                return new Response(JSON.stringify(mockResponse), {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" },
+                });
+            }
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Bowl of oatmeal", forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 200);
+        const data = await res.json();
+        assertEquals(data.name, "Fast Recovery Oatmeal");
+        assertEquals(calledModels, ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
+    } finally {
+        globalThis.fetch = originalFetch;
+        setAiBudgetConfigForTesting(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("AI fallback timing: both models hang -> 504 at the total budget", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+    setAiBudgetConfigForTesting({
+        overallTextMs: 120,
+        firstAttemptTextMs: 40,
+        minAttemptMs: 10,
+    });
+
+    const calledModels: string[] = [];
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            const match = urlString.match(/models\/([^:]+):/);
+            if (match) {
+                calledModels.push(match[1]);
+            }
+            // Both models hang until aborted
+            return new Promise((_, reject) => {
+                if (init?.signal?.aborted) {
+                    reject(new DOMException("The operation was aborted", "AbortError"));
+                    return;
+                }
+                init?.signal?.addEventListener("abort", () => {
+                    reject(new DOMException("The operation was aborted", "AbortError"));
+                });
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const startTime = Date.now();
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Both models hang test meal", forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        const elapsed = Date.now() - startTime;
+
+        assertEquals(res.status, 504);
+        const data = await res.json();
+        assertEquals(data.code, "TIMEOUT");
+        assertEquals(calledModels, ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
+        // Completed at approximately total budget (not immediately, and not exceeding excessive time)
+        assertEquals(elapsed >= 80, true);
+    } finally {
+        globalThis.fetch = originalFetch;
+        setAiBudgetConfigForTesting(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("AI fallback Sentry: capture is called with message + tags and WITHOUT meal text/payload", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+    setAiBudgetConfigForTesting({
+        overallTextMs: 100,
+        firstAttemptTextMs: 40,
+        minAttemptMs: 10,
+    });
+
+    const capturedEvents: Array<{ type: string; message: string; context: any }> = [];
+    setTestCaptureHook((type, arg, context) => {
+        capturedEvents.push({
+            type,
+            message: typeof arg === "string" ? arg : (arg as any)?.message,
+            context,
+        });
+    });
+
+    const sensitiveInputText = "Top-secret-granola-bar-with-macadamia-nuts-987654";
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "sensitive-athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            // Both models hang
+            return new Promise((_, reject) => {
+                if (init?.signal?.aborted) {
+                    reject(new DOMException("The operation was aborted", "AbortError"));
+                    return;
+                }
+                init?.signal?.addEventListener("abort", () => {
+                    reject(new DOMException("The operation was aborted", "AbortError"));
+                });
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: sensitiveInputText, forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 504);
+
+        // Exactly one event captured for the request
+        assertEquals(capturedEvents.length, 1);
+        const event = capturedEvents[0];
+        assertEquals(event.message, "parse-nutrition AI timeout");
+
+        assertExists(event.context);
+        assertExists(event.context.tags);
+        const tags = event.context.tags;
+        assertEquals(tags.model_id, "gemini-3.1-flash-lite");
+        assertEquals(tags.model, undefined);
+        assertEquals(tags.attempt_count, "2");
+        assertEquals(tags.kind, "text");
+        assertExists(tags.elapsed_ms);
+
+        // Assert WITHOUT the meal text, image, user id, or request payload
+        const serialized = JSON.stringify(event);
+        assertEquals(serialized.includes(sensitiveInputText), false);
+        assertEquals(serialized.includes("granola"), false);
+        assertEquals(serialized.includes("macadamia"), false);
+        assertEquals(serialized.includes("sensitive-athlete@yourbody.fyi"), false);
+        assertEquals(serialized.includes("mock-user-id"), false);
+    } finally {
+        globalThis.fetch = originalFetch;
+        setAiBudgetConfigForTesting(null);
+        setTestCaptureHook(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("AI fallback Sentry: model error reports parse-nutrition AI model error with tags", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const capturedEvents: Array<{ type: string; message: string; context: any }> = [];
+    setTestCaptureHook((type, arg, context) => {
+        capturedEvents.push({
+            type,
+            message: typeof arg === "string" ? arg : (arg as any)?.message,
+            context,
+        });
+    });
+
+    const privateMeal = "Confidential pre-workout creatine formula 8888";
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            // Both models fail with 503 capacity exhaustion
+            return new Response(JSON.stringify({
+                error: { code: 503, message: "The model is overloaded due to high demand (DECODE_PREEMPTED)" },
+            }), {
+                status: 503,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: privateMeal, forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 503);
+
+        assertEquals(capturedEvents.length, 1);
+        const event = capturedEvents[0];
+        assertEquals(event.message, "parse-nutrition AI model error");
+        assertExists(event.context?.tags);
+        assertEquals(event.context.tags.model_id, "gemini-3.1-flash-lite");
+        assertEquals(event.context.tags.model, undefined);
+        assertEquals(event.context.tags.attempt_count, "2");
+        assertEquals(event.context.tags.kind, "text");
+
+        const serialized = JSON.stringify(event);
+        assertEquals(serialized.includes(privateMeal), false);
+        assertEquals(serialized.includes("creatine"), false);
+        assertEquals(serialized.includes("8888"), false);
+    } finally {
+        globalThis.fetch = originalFetch;
+        setTestCaptureHook(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("AI fallback Sentry: vision timeout reports tags.kind = vision without image payload", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+    setAiBudgetConfigForTesting({
+        overallVisionMs: 120,
+        firstAttemptVisionMs: 50,
+        minAttemptMs: 10,
+    });
+
+    const capturedEvents: Array<{ type: string; message: string; context: any }> = [];
+    setTestCaptureHook((type, arg, context) => {
+        capturedEvents.push({
+            type,
+            message: typeof arg === "string" ? arg : (arg as any)?.message,
+            context,
+        });
+    });
+
+    const imagePayload = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            return new Promise((_, reject) => {
+                if (init?.signal?.aborted) {
+                    reject(new DOMException("The operation was aborted", "AbortError"));
+                    return;
+                }
+                init?.signal?.addEventListener("abort", () => {
+                    reject(new DOMException("The operation was aborted", "AbortError"));
+                });
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "", image_base64: imagePayload }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 504);
+
+        assertEquals(capturedEvents.length, 1);
+        const event = capturedEvents[0];
+        assertEquals(event.message, "parse-nutrition AI timeout");
+        assertExists(event.context?.tags);
+        assertEquals(event.context.tags.kind, "vision");
+        assertEquals(event.context.tags.attempt_count, "2");
+
+        const serialized = JSON.stringify(event);
+        assertEquals(serialized.includes(imagePayload), false);
+        assertEquals(serialized.includes("iVBORw0"), false);
+    } finally {
+        globalThis.fetch = originalFetch;
+        setAiBudgetConfigForTesting(null);
+        setTestCaptureHook(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+Deno.test("AI fallback Sentry: all models fail with non-timeout non-capacity error -> capture hook called exactly once", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const capturedEvents: Array<{ type: string; message: string; context: any }> = [];
+    setTestCaptureHook((type, arg, context) => {
+        capturedEvents.push({
+            type,
+            message: typeof arg === "string" ? arg : (arg as any)?.message,
+            context,
+        });
+    });
+
+    const privateMeal = "Specialist recovery supplement 7777";
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            // Non-timeout, non-capacity error (HTTP 400 Bad Request, fast fail with zero retries)
+            return new Response(JSON.stringify({
+                error: { code: 400, message: "Invalid argument format" },
+            }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+            });
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: privateMeal, forceAi: true }),
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 500);
+
+        // Crucial invariant: aiFailureReported prevents double reporting when throw lastAiError
+        // is caught by outer catch block
+        assertEquals(capturedEvents.length, 1);
+        const event = capturedEvents[0];
+        assertEquals(event.message, "parse-nutrition AI model error");
+        assertExists(event.context?.tags);
+        assertEquals(event.context.tags.model_id, "gemini-3.1-flash-lite");
+        assertEquals(event.context.tags.model, undefined);
+        assertEquals(event.context.tags.attempt_count, "2");
+        assertEquals(event.context.tags.kind, "text");
+
+        const serialized = JSON.stringify(event);
+        assertEquals(serialized.includes(privateMeal), false);
+        assertEquals(serialized.includes("supplement"), false);
+        assertEquals(serialized.includes("7777"), false);
+    } finally {
+        globalThis.fetch = originalFetch;
+        setTestCaptureHook(null);
+        if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
+        else Deno.env.delete("GEMINI_API_KEY");
+    }
+});
+
+
 
 

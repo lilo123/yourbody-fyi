@@ -525,11 +525,11 @@ BEGIN
   SELECT value INTO v_cfg FROM public.app_config WHERE key = 'ai_quota_limits';
   v_plans := v_cfg->'plans';
 
-  IF (v_plans->'basic'->>'limit')::integer <> 5 OR v_plans->'basic'->>'period' <> 'day' THEN
+  IF (v_plans->'basic'->>'limit')::integer <> 20 OR v_plans->'basic'->>'period' <> 'day' THEN
     RAISE EXCEPTION 'basic plan quota mismatch: %', v_plans->'basic';
   END IF;
 
-  IF (v_plans->'athlete'->>'limit')::integer <> 5 OR v_plans->'athlete'->>'period' <> 'day' THEN
+  IF (v_plans->'athlete'->>'limit')::integer <> 10 OR v_plans->'athlete'->>'period' <> 'day' THEN
     RAISE EXCEPTION 'athlete plan quota mismatch: %', v_plans->'athlete';
   END IF;
 
@@ -550,7 +550,7 @@ BEGIN
   END IF;
 END;
 $$;
-SELECT pass('Quota config: basic (5/day), athlete (5/day), pro (30/day), trial (30/day), free (0/month), photo_cost (2)');
+SELECT pass('Quota config: basic (20/day), athlete (10/day), pro (30/day), trial (30/day), free (0/month), photo_cost (2)');
 
 -- 16. consume_ai_quota integration for athlete plan
 DO $$
@@ -570,31 +570,31 @@ BEGIN
   PERFORM set_config('role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', '{"role":"authenticated","sub":"' || v_ath || '"}', true);
 
-  -- 5 consumes allowed
-  FOR i IN 1..5 LOOP
+  -- 10 consumes allowed
+  FOR i IN 1..10 LOOP
     v_res := public.consume_ai_quota(1);
     IF (v_res->>'allowed')::boolean <> true
        OR v_res->>'plan' <> 'athlete'
-       OR (v_res->>'limit')::integer <> 5
+       OR (v_res->>'limit')::integer <> 10
        OR (v_res->>'used')::integer <> i
        OR v_res->>'period' <> 'day' THEN
       RAISE EXCEPTION 'Athlete consume % unexpected: %', i, v_res;
     END IF;
   END LOOP;
 
-  -- 6th consume denied
+  -- 11th consume denied
   v_res := public.consume_ai_quota(1);
   IF (v_res->>'allowed')::boolean <> false
-     OR (v_res->>'used')::integer <> 5
-     OR (v_res->>'limit')::integer <> 5 THEN
-    RAISE EXCEPTION '6th athlete consume unexpected: %', v_res;
+     OR (v_res->>'used')::integer <> 10
+     OR (v_res->>'limit')::integer <> 10 THEN
+    RAISE EXCEPTION '11th athlete consume unexpected: %', v_res;
   END IF;
 
   PERFORM set_config('role', 'postgres', true);
   PERFORM set_config('request.jwt.claims', '', true);
 END;
 $$;
-SELECT pass('consume_ai_quota: athlete gets 5/day and is denied on 6th consume');
+SELECT pass('consume_ai_quota: athlete gets 10/day and is denied on 11th consume');
 
 -- 17. Grandfather extension sets enterprise + 2035 and is idempotent
 DO $$
