@@ -142,17 +142,13 @@ export function useCustomDishModal({
       setDishModalUnit(resolvedUnit);
       foodRef.current = item0;
     } else if (initialKind === 'food') {
-      const resolvedUnit = (mergedDish as any).serving_unit
-        ? mapLegacyUnit((mergedDish as any).serving_unit)
-        : 'g';
-      const servingQty = (mergedDish as any).serving_quantity;
-      setDishModalQuantity(servingQty != null && servingQty > 0 ? servingQty : '');
-      setDishModalUnit(resolvedUnit);
+      setDishModalQuantity('');
+      setDishModalUnit('g');
       foodRef.current = {
         id: newId(),
         name: dish.name,
-        quantity: servingQty != null && servingQty > 0 ? Number(servingQty) : 0,
-        unit: resolvedUnit as any,
+        quantity: 0,
+        unit: 'g' as any,
         calories: Number(dish.calories) || 0,
         protein: Number(dish.protein) || 0,
         carbs: Number(dish.carbs) || 0,
