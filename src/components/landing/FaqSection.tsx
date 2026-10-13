@@ -25,7 +25,7 @@ const FAQ_ITEMS: readonly FaqItem[] = [
   {
     question: 'Can my clients use it for free?',
     answer:
-      'Yes. Athletes can track workouts and meals completely free. When connected to a coach on a paid plan (Coach or Coach Pro), athletes also receive 5 AI meal logs a day.',
+      'Yes. Athletes can track workouts and meals completely free. When connected to a coach on a paid plan (Coach or Coach Pro), athletes also receive 10 AI meal logs a day.',
   },
 ];
 

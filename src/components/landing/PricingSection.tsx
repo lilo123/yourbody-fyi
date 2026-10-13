@@ -124,7 +124,7 @@ export const PricingSection: React.FC = () => {
               <ul className="space-y-3 text-xs text-zinc-300 border-t border-zinc-800/80 pt-4">
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                  <span><strong>AI Meal Logging:</strong> 5 / day (photo = 2)</span>
+                  <span><strong>AI Meal Logging:</strong> 20 / day (photo = 2)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
@@ -187,7 +187,7 @@ export const PricingSection: React.FC = () => {
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                  <span><strong>Athlete AI:</strong> 5 / day each</span>
+                  <span><strong>Athlete AI:</strong> 10 / day each</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
@@ -242,7 +242,7 @@ export const PricingSection: React.FC = () => {
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                  <span><strong>Athlete AI:</strong> 5 / day each</span>
+                  <span><strong>Athlete AI:</strong> 10 / day each</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />

@@ -556,7 +556,7 @@ Fat: 21g`;
 });
 
 describe('Golden Test Corpus & Sweep Fixtures', () => {
-  it('parses all 103 realistic golden fixtures matching expected results', () => {
+  it('parses all 120 realistic golden fixtures matching expected results', () => {
     for (const fixture of NUTRITION_CORPUS_FIXTURES) {
       const result = parseNutritionText(fixture.input);
       expect(
@@ -930,5 +930,63 @@ describe('Seeded Property Tests', () => {
     expect(batchResult.skippedLines).toEqual([]);
     expect(batchResult.meal?.calories).toBe(1600);
   });
-});
+  describe('Format C: Extended Device-Readable Paste Formats', () => {
+    it('parses emoji-only macro labels as exact when consistent', () => {
+      const text = 'Grilled Salmon Fillet\n🔥 580 kcal\n🥩 46g\n🍞 35g\n🧈 26g';
+      const result = parseNutritionText(text);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.calories).toBe(580);
+      expect(result.meal?.protein).toBe(46);
+      expect(result.meal?.carbs).toBe(35);
+      expect(result.meal?.fat).toBe(26);
+      expect(result.meal?.name).toBe('Grilled Salmon Fillet');
+    });
 
+    it('parses multi-item blocks with category header and quantity prefixes', () => {
+      const text = [
+        'Breakfast:',
+        '- 2x Fried Eggs: 220 kcal | 16g P | 2g C | 16g F',
+        '- 1x Toast: 170 kcal | 8g P | 30g C | 1g F',
+      ].join('\n');
+      const result = parseNutritionText(text);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.calories).toBe(390);
+      expect(result.meal?.protein).toBe(24);
+      expect(result.meal?.carbs).toBe(32);
+      expect(result.meal?.fat).toBe(17);
+      expect(result.meal?.name).toBe('Breakfast');
+      expect(result.meal?.items).toHaveLength(2);
+    });
+
+    it('parses nested sub-items under single dish total when consistent', () => {
+      const text = [
+        'Custom Burrito Bowl: 720 kcal, 55g P, 68g C, 24g F',
+        '  • Double Chicken (360 kcal, 48g P)',
+        '  • Brown Rice (210 kcal, 4g P)',
+        '  • Black Beans (150 kcal, 3g P)',
+      ].join('\n');
+      const result = parseNutritionText(text);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.calories).toBe(720);
+      expect(result.meal?.protein).toBe(55);
+      expect(result.meal?.carbs).toBe(68);
+      expect(result.meal?.fat).toBe(24);
+      expect(result.meal?.name).toBe('Custom Burrito Bowl');
+    });
+
+    it('declines grams-only macro breakdown to partial missing calories', () => {
+      const text = [
+        'Salmon Avocado Plate',
+        'Protein: 38g',
+        'Carbs: 12g',
+        'Fat: 32g',
+      ].join('\n');
+      const result = parseNutritionText(text);
+      expect(result.confidence).toBe('partial');
+      expect(result.reason).toBe('MISSING_MACRO');
+      expect(result.meal?.protein).toBe(38);
+      expect(result.meal?.carbs).toBe(12);
+      expect(result.meal?.fat).toBe(32);
+    });
+  });
+});

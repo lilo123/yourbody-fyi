@@ -215,7 +215,7 @@ Deno.test("shared nutritionParser: extracts fenced yourbody and yourbody-v1 bloc
   );
 });
 
-Deno.test("shared nutritionParser: 103 golden corpus & sweep fixtures", () => {
+Deno.test("shared nutritionParser: 120 golden corpus & sweep fixtures", () => {
   for (const fixture of NUTRITION_CORPUS_FIXTURES) {
     const result = parseNutritionText(fixture.input);
     assertEquals(
@@ -587,3 +587,60 @@ Deno.test("shared nutritionParser: serving/quantity lines are modifiers and not 
   assertEquals(batchResult.meal?.calories, 1600);
 });
 
+Deno.test("shared nutritionParser: Format C - emoji-only macro labels", () => {
+  const text = "Grilled Salmon Fillet\n🔥 580 kcal\n🥩 46g\n🍞 35g\n🧈 26g";
+  const result = parseNutritionText(text);
+  assertEquals(result.confidence, "exact");
+  assertEquals(result.meal?.calories, 580);
+  assertEquals(result.meal?.protein, 46);
+  assertEquals(result.meal?.carbs, 35);
+  assertEquals(result.meal?.fat, 26);
+  assertEquals(result.meal?.name, "Grilled Salmon Fillet");
+});
+
+Deno.test("shared nutritionParser: Format C - category header and quantity prefix", () => {
+  const text = [
+    "Breakfast:",
+    "- 2x Fried Eggs: 220 kcal | 16g P | 2g C | 16g F",
+    "- 1x Toast: 170 kcal | 8g P | 30g C | 1g F",
+  ].join("\n");
+  const result = parseNutritionText(text);
+  assertEquals(result.confidence, "exact");
+  assertEquals(result.meal?.calories, 390);
+  assertEquals(result.meal?.protein, 24);
+  assertEquals(result.meal?.carbs, 32);
+  assertEquals(result.meal?.fat, 17);
+  assertEquals(result.meal?.name, "Breakfast");
+  assertEquals(result.meal?.items?.length, 2);
+});
+
+Deno.test("shared nutritionParser: Format C - nested sub-items under single dish total", () => {
+  const text = [
+    "Custom Burrito Bowl: 720 kcal, 55g P, 68g C, 24g F",
+    "  • Double Chicken (360 kcal, 48g P)",
+    "  • Brown Rice (210 kcal, 4g P)",
+    "  • Black Beans (150 kcal, 3g P)",
+  ].join("\n");
+  const result = parseNutritionText(text);
+  assertEquals(result.confidence, "exact");
+  assertEquals(result.meal?.calories, 720);
+  assertEquals(result.meal?.protein, 55);
+  assertEquals(result.meal?.carbs, 68);
+  assertEquals(result.meal?.fat, 24);
+  assertEquals(result.meal?.name, "Custom Burrito Bowl");
+});
+
+Deno.test("shared nutritionParser: Format C - grams-only macro breakdown partial", () => {
+  const text = [
+    "Salmon Avocado Plate",
+    "Protein: 38g",
+    "Carbs: 12g",
+    "Fat: 32g",
+  ].join("\n");
+  const result = parseNutritionText(text);
+  assertEquals(result.confidence, "partial");
+  assertEquals(result.reason, "MISSING_MACRO");
+  assertEquals(result.meal?.protein, 38);
+  assertEquals(result.meal?.carbs, 12);
+  assertEquals(result.meal?.fat, 32);
+});
