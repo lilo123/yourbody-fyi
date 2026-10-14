@@ -7,7 +7,8 @@ import { roundTo1Decimal, calculateRemainingFuel } from '../../utils/nutrition';
 import { itemsForPersist, sumItems, type NutritionItem } from '../../utils/itemModel';
 import { MealLogRow } from './MealLogRow';
 import { NutrientBreakdownModal, type BreakdownNutrient } from './NutrientBreakdownModal';
-import { stagedToItem, recomputeStagedTotals, buildStagedMealFromManualData, useStagedCardFocus, type StagedMeal } from './nutritionEngineHelpers';
+import { stagedToItem, recomputeStagedTotals, buildStagedMealFromManualData, useStagedCardFocus } from './nutritionEngineHelpers';
+import { useStagedMealDraft } from './useStagedMealDraft';
 import { Skeleton } from '../common/Skeleton';
 import { useDeferredDelete } from '../common/useDeferredDelete';
 import { useNutritionData } from './useNutritionData';
@@ -36,16 +37,14 @@ export const NutritionEngine: React.FC = () => {
   const { user, profile } = useAuth();
   const targetUserId = user?.id || '';
 
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return getLocalDateStr(new Date());
-  });
+  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateStr(new Date()));
 
-  const [stagedMeal, setStagedMeal] = useState<StagedMeal | null>(null);
+  const { stagedMeal, setStagedMeal, clearDraft } = useStagedMealDraft(targetUserId);
   const [showManualForm, setShowManualForm] = useState(false);
   const [breakdownNutrient, setBreakdownNutrient] = useState<BreakdownNutrient | null>(null);
   const [status, setStatus] = useState<string>('');
   const [isError, setIsError] = useState(false);
-  const [aiQuota, setAiQuota] = useState<AiQuotaInfo | null>(null);
+  const [aiQuota, setAiQuota] = useState<AiQuotaInfo | null>(() => stagedMeal?.quota ?? null);
 
   const handleStageManualMeal = (data: ManualMealStagedData) => {
     setStagedMeal(buildStagedMealFromManualData(data, ai.selectedPhoto?.dataUrl));
@@ -72,7 +71,7 @@ export const NutritionEngine: React.FC = () => {
     selectedDate,
     profile,
     onMutationSuccessReset: () => {
-      setStagedMeal(null); ai.setSelectedPhoto(null); setShowManualForm(false);
+      clearDraft(); ai.setSelectedPhoto(null); setShowManualForm(false);
       ai.setIsRateLimited(false); ai.setNlInput(''); manualMealForm.resetManualForm();
     },
     setStatus,
@@ -200,7 +199,7 @@ export const NutritionEngine: React.FC = () => {
       } else if (!manualMealForm.manualDishName.trim()) {
         manualMealForm.setManualDishName(dishName);
       }
-      setStagedMeal(null);
+      clearDraft();
     },
     setStatus,
     setIsError,
@@ -245,7 +244,7 @@ export const NutritionEngine: React.FC = () => {
     const updatedItems = stagedMeal.items.filter((it) => it.id !== itemId);
     if (updatedItems.length === 0) {
       decideFocusRestore();
-      setStagedMeal(null);
+      clearDraft();
       return;
     }
     setStagedMeal({ ...stagedMeal, items: updatedItems, ...recomputeStagedTotals(updatedItems) });
@@ -413,7 +412,7 @@ export const NutritionEngine: React.FC = () => {
             onSaveItemAsCustomDish={handleSaveItemAsCustomDish}
             onLogStagedMeal={handleLogStagedMeal}
             onSaveStagedAsCustomDish={handleSaveStagedAsCustomDish}
-            onDiscardStagedMeal={(e) => { decideFocusRestore(e); setStagedMeal(null); }}
+            onDiscardStagedMeal={(e) => { decideFocusRestore(e); clearDraft(); }}
             isPending={mutation.isPending}
             customDishes={displayedCustomDishes}
             onAddParsedItems={handleAddParsedItems}
