@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, Activity } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, Activity } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { CoachProvider } from './context/CoachContext';
@@ -138,15 +138,11 @@ const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
 // Redirect '/' and '*' to user's last tab route (default /workout) per A12
 const LastRouteRedirect: React.FC = () => {
   const { user, isCoachMode } = useAuth();
-  const navigate = useNavigate();
   let destination = getLastRoute(user?.id);
   if (destination === '/coach' && user && !isCoachMode) {
     destination = '/workout';
   }
-  useLayoutEffect(() => {
-    navigate(destination, { replace: true });
-  }, [destination, navigate]);
-  return null;
+  return <Navigate to={destination} replace />;
 };
 
 const RootRoute: React.FC = () => {

@@ -244,7 +244,8 @@ export function getExpectedRouting(
   grade: 'exact' | 'lenient' | 'partial' | 'none',
   isSingle: boolean,
   mode: 'auto' | 'always_ai' | 'on_device',
-  isOnline: boolean
+  isOnline: boolean,
+  lenientKind?: 'noise' | 'modifier' | 'range' | 'conflict'
 ): RoutingOutcome {
   if (mode === 'on_device') {
     // lines 201-229
@@ -269,6 +270,11 @@ export function getExpectedRouting(
     if (grade === 'partial') return 'Quick Log prefill';
     return 'disabled with reason';
   }
+  // In auto mode online: noise-only lenient text is staged locally on device;
+  // modifier, range, and conflict continue to AI
+  if (grade === 'lenient' && isSingle && lenientKind === 'noise') {
+    return 'staged on device';
+  }
   return 'AI called (forceAi false)';
 }
 
@@ -277,6 +283,7 @@ export interface RenderedCase {
   meal: KnownMeal;
   text: string;
   expectedGrade: 'exact' | 'lenient' | 'partial' | 'none';
+  expectedLenientKind?: 'noise' | 'modifier' | 'range' | 'conflict';
   expectedCalories: number;
   expectedProtein: number;
   expectedCarbs: number;
@@ -392,6 +399,7 @@ export function generateSweepCases(meals: KnownMeal[]): RenderedCase[] {
       meal,
       text: `${meal.name}\nCalories: ${meal.calories - 50}-${meal.calories + 50} kcal\nProtein: ${meal.protein - 4}-${meal.protein + 4}g\nCarbs: ${meal.carbs - 6}-${meal.carbs + 6}g\nFat: ${meal.fat - 2}-${meal.fat + 2}g`,
       expectedGrade: 'lenient',
+      expectedLenientKind: 'range',
       expectedCalories: meal.calories,
       expectedProtein: meal.protein,
       expectedCarbs: meal.carbs,
@@ -450,6 +458,7 @@ export function generateSweepCases(meals: KnownMeal[]): RenderedCase[] {
       meal,
       text: `Here is the nutritional breakdown for your meal:\n${meal.name}\nCalories: ${meal.calories} kcal\nProtein: ${meal.protein}g\nCarbs: ${meal.carbs}g\nFat: ${meal.fat}g\nNote: nutritional values are estimates based on standard portions.`,
       expectedGrade: 'lenient',
+      expectedLenientKind: 'noise',
       expectedCalories: meal.calories,
       expectedProtein: meal.protein,
       expectedCarbs: meal.carbs,
@@ -643,7 +652,8 @@ describe('nutrition parser deterministic sweep', () => {
               testCase.expectedGrade,
               testCase.isSingle,
               mode,
-              isOnline
+              isOnline,
+              testCase.expectedLenientKind
             );
             const actualRouting = await executeRouting(testCase.text, mode, isOnline);
             if (actualRouting !== expectedRouting) {

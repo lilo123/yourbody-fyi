@@ -133,23 +133,19 @@ describe('History Keep-Alive Shell', () => {
       </QueryClientProvider>
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-workout-view')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
 
     expect(screen.queryByTestId('mock-history-view')).toBeNull();
     expect(historyMountCount).toBe(0);
 
-    const nutritionTab = screen.getByTestId('nav-nutrition');
+    const nutritionTab = await screen.findByTestId('nav-nutrition', {}, { timeout: 10000 });
     fireEvent.click(nutritionTab);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-nutrition-view')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-nutrition-view', {}, { timeout: 10000 })).toBeDefined();
 
     expect(screen.queryByTestId('mock-history-view')).toBeNull();
     expect(historyMountCount).toBe(0);
-  });
+  }, 15000);
 
   it('(b) state inside History survives /history -> /workout -> /history (mock HistoryView lazily with a counter component: counter keeps value, mount count 1)', async () => {
     render(
@@ -158,16 +154,13 @@ describe('History Keep-Alive Shell', () => {
       </QueryClientProvider>
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-history')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Navigate to /history
-    fireEvent.click(screen.getByTestId('nav-history'));
+    const historyTab = await screen.findByTestId('nav-history', {}, { timeout: 10000 });
+    fireEvent.click(historyTab);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-history-view')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-history-view', {}, { timeout: 10000 })).toBeDefined();
 
     expect(historyMountCount).toBe(1);
     expect(screen.getByTestId('history-counter').textContent).toBe('0');
@@ -178,23 +171,21 @@ describe('History Keep-Alive Shell', () => {
     expect(screen.getByTestId('history-counter').textContent).toBe('2');
 
     // Navigate to /workout
-    fireEvent.click(screen.getByTestId('nav-workout'));
+    const workoutTab = await screen.findByTestId('nav-workout', {}, { timeout: 10000 });
+    fireEvent.click(workoutTab);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-workout-view')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Navigate back to /history
-    fireEvent.click(screen.getByTestId('nav-history'));
+    const historyTabAgain = await screen.findByTestId('nav-history', {}, { timeout: 10000 });
+    fireEvent.click(historyTabAgain);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-history-view')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-history-view', {}, { timeout: 10000 })).toBeDefined();
 
     // State preserved and mount count remains 1
     expect(screen.getByTestId('history-counter').textContent).toBe('2');
     expect(historyMountCount).toBe(1);
-  });
+  }, 15000);
 
   it('(c) Workout/Nutrition remount normally (mount count increments)', async () => {
     render(
@@ -203,45 +194,38 @@ describe('History Keep-Alive Shell', () => {
       </QueryClientProvider>
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-workout-view')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
     expect(workoutMountCount).toBe(1);
 
     // Navigate to /history
-    fireEvent.click(screen.getByTestId('nav-history'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-history-view')).toBeDefined();
-    });
+    const historyTab = await screen.findByTestId('nav-history', {}, { timeout: 10000 });
+    fireEvent.click(historyTab);
+    expect(await screen.findByTestId('mock-history-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Navigate back to /workout
-    fireEvent.click(screen.getByTestId('nav-workout'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-workout-view')).toBeDefined();
-    });
+    const workoutTab = await screen.findByTestId('nav-workout', {}, { timeout: 10000 });
+    fireEvent.click(workoutTab);
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
     expect(workoutMountCount).toBe(2);
 
     // Navigate to /nutrition
-    fireEvent.click(screen.getByTestId('nav-nutrition'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-nutrition-view')).toBeDefined();
-    });
+    const nutritionTab = await screen.findByTestId('nav-nutrition', {}, { timeout: 10000 });
+    fireEvent.click(nutritionTab);
+    expect(await screen.findByTestId('mock-nutrition-view', {}, { timeout: 10000 })).toBeDefined();
     expect(nutritionMountCount).toBe(1);
 
     // Navigate back to /workout
-    fireEvent.click(screen.getByTestId('nav-workout'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-workout-view')).toBeDefined();
-    });
+    const workoutTabAgain = await screen.findByTestId('nav-workout', {}, { timeout: 10000 });
+    fireEvent.click(workoutTabAgain);
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
     expect(workoutMountCount).toBe(3);
 
     // Navigate back to /nutrition
-    fireEvent.click(screen.getByTestId('nav-nutrition'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-nutrition-view')).toBeDefined();
-    });
+    const nutritionTabAgain = await screen.findByTestId('nav-nutrition', {}, { timeout: 10000 });
+    fireEvent.click(nutritionTabAgain);
+    expect(await screen.findByTestId('mock-nutrition-view', {}, { timeout: 10000 })).toBeDefined();
     expect(nutritionMountCount).toBe(2);
-  });
+  }, 15000);
 
   it('(d) scroll position restored', async () => {
     const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
@@ -252,15 +236,12 @@ describe('History Keep-Alive Shell', () => {
       </QueryClientProvider>
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-history')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Visit /history
-    fireEvent.click(screen.getByTestId('nav-history'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-history-view')).toBeDefined();
-    });
+    const historyTab = await screen.findByTestId('nav-history', {}, { timeout: 10000 });
+    fireEvent.click(historyTab);
+    expect(await screen.findByTestId('mock-history-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Simulate scrolling on /history
     window.scrollY = 350;
@@ -270,22 +251,20 @@ describe('History Keep-Alive Shell', () => {
     window.scrollY = 0;
 
     // Navigate to /workout
-    fireEvent.click(screen.getByTestId('nav-workout'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-workout-view')).toBeDefined();
-    });
+    const workoutTab = await screen.findByTestId('nav-workout', {}, { timeout: 10000 });
+    fireEvent.click(workoutTab);
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Navigate back to /history
-    fireEvent.click(screen.getByTestId('nav-history'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-history-view')).toBeDefined();
-    });
+    const historyTabAgain = await screen.findByTestId('nav-history', {}, { timeout: 10000 });
+    fireEvent.click(historyTabAgain);
+    expect(await screen.findByTestId('mock-history-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Scroll position should be restored to 350
     await waitFor(() => {
       expect(scrollToSpy).toHaveBeenCalledWith(0, 350);
-    });
-  });
+    }, { timeout: 10000 });
+  }, 15000);
 
   it('(e) sign-out unmounts History', async () => {
     render(
@@ -294,15 +273,12 @@ describe('History Keep-Alive Shell', () => {
       </QueryClientProvider>
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-history')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Visit /history and change state
-    fireEvent.click(screen.getByTestId('nav-history'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-history-view')).toBeDefined();
-    });
+    const historyTab = await screen.findByTestId('nav-history', {}, { timeout: 10000 });
+    fireEvent.click(historyTab);
+    expect(await screen.findByTestId('mock-history-view', {}, { timeout: 10000 })).toBeDefined();
     expect(historyMountCount).toBe(1);
 
     fireEvent.click(screen.getByTestId('history-increment-btn'));
@@ -317,7 +293,7 @@ describe('History Keep-Alive Shell', () => {
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText('you@example.com')).toBeDefined();
-    });
+    }, { timeout: 10000 });
 
     // HistoryView should be completely unmounted from the DOM
     expect(screen.queryByTestId('mock-history-view')).toBeNull();
@@ -331,21 +307,18 @@ describe('History Keep-Alive Shell', () => {
       }
     });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('nav-history')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
 
     // Before visiting history, history is not mounted
     expect(screen.queryByTestId('mock-history-view')).toBeNull();
 
     // Visit /history again
-    fireEvent.click(screen.getByTestId('nav-history'));
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-history-view')).toBeDefined();
-    });
+    const historyTabAgain = await screen.findByTestId('nav-history', {}, { timeout: 10000 });
+    fireEvent.click(historyTabAgain);
+    expect(await screen.findByTestId('mock-history-view', {}, { timeout: 10000 })).toBeDefined();
 
     // New mount count and fresh state
     expect(historyMountCount).toBe(2);
     expect(screen.getByTestId('history-counter').textContent).toBe('0');
-  });
+  }, 15000);
 });

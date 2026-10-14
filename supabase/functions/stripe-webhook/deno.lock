@@ -340,10 +340,8 @@
       ]
     }
   },
-
   "workspace": {
     "dependencies": [
-      "jsr:@supabase/functions-js@2",
       "npm:@supabase/supabase-js@2",
       "npm:stripe@17.7.0"
     ]

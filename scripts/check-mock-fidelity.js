@@ -166,7 +166,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Nutrition history query',
     },
     {
@@ -192,7 +192,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Nutrition history query',
     },
     {
@@ -245,7 +245,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Daily nutrition logs query',
     },
     {
@@ -271,7 +271,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Nutrition logs query',
     },
   ],
@@ -493,7 +493,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Daily nutrition logs query',
     },
   ],
@@ -501,7 +501,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Daily nutrition logs list query',
     },
     {
@@ -515,7 +515,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Daily nutrition logs list query',
     },
     {
@@ -542,7 +542,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Nutrition logs 14-day window query',
     },
     {
@@ -562,7 +562,7 @@ const SERVICED_QUERIES_REGISTRY = {
     {
       table: 'nutrition_logs',
       type: 'EXACT',
-      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components',
+      projection: 'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source',
       description: 'Daily nutrition logs query',
     },
   ],

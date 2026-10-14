@@ -99,7 +99,7 @@ function buildStagedMealFromLocal(
   };
 }
 
-function extractPrefill(
+export function extractPrefill(
   text: string,
   localResult: {
     meal?: {
@@ -281,6 +281,24 @@ export function useNutritionAi({
           }
         }
 
+        // Auto mode, online: a lenient result whose only reason is ignored noise lines
+        // is staged on device with the review banner. Modifier / range / conflict continues to AI.
+        const isNoiseOnlyLenient =
+          localResult.confidence === 'lenient' &&
+          localResult.skippedLines.length > 0 &&
+          localResult.modifiers.length === 0 &&
+          !localResult.hint;
+
+        if (isOnline && isNoiseOnlyLenient && isSingle && localResult.meal) {
+          const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'lenient');
+          if (meal) {
+            stopAnalyzing();
+            setStatus('Parsed locally');
+            onParsedSuccess(meal);
+            return;
+          }
+        }
+
         // Offline routing for non-exact text
         if (!isOnline) {
           stopAnalyzing();
@@ -366,6 +384,7 @@ export function useNutritionAi({
         rawText: textToAnalyze.trim(),
         skippedLines: localSkippedLines,
         modifiers: localModifiers,
+        quota: parsed.quota,
       } as StagedMeal;
 
       setIsRateLimited(false);

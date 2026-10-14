@@ -152,6 +152,14 @@ export interface NutritionLog {
    * tightened in the next phase when query projections include it.
    */
   notes?: string | null;
+  /**
+   * Provenance of the logged meal: 'device', 'ai', or 'manual'. Null for legacy rows.
+   */
+  source?: 'device' | 'ai' | 'manual' | null;
+  /**
+   * Parser version string active when the meal was logged, e.g. '2026.10'.
+   */
+  parser_version?: string | null;
 }
 
 export type CustomDishKind = 'food' | 'recipe';
