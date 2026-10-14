@@ -443,7 +443,7 @@ describe('App Shell & Navigation', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Rest & Recovery')).toBeDefined();
+      expect(screen.getByTestId('routine-select-btn')).toBeDefined();
     }, { timeout: 3000 });
   });
 });
