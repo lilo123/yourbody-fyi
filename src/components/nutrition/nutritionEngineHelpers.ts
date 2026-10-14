@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import type { AiQuotaInfo } from './parseNutrition';
 
 export const getScrollBehavior = (): ScrollBehavior => {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -229,6 +230,8 @@ export interface StagedMeal {
   skippedLines?: string[];
   /** Modifiers detected during rule-based parsing */
   modifiers?: string[];
+  /** AI quota details when returned from parse-nutrition */
+  quota?: AiQuotaInfo;
 }
 
 let itemSequence = 0;
@@ -542,6 +545,7 @@ export function buildStagedMealFromManualData(
     servingSize: data.serving_size,
     servingUnit: data.serving_unit,
     photoUrl,
+    source: 'manual',
   };
 }
 

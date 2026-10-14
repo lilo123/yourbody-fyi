@@ -8717,7 +8717,7 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
       // Badges
       const parsedBadge = stagedCard.locator('[data-testid="parsed-locally-badge"]');
       await expect(parsedBadge).toBeVisible();
-      await expect(parsedBadge).toHaveText('Parsed locally');
+      await expect(parsedBadge).toHaveText('Device');
 
       const aiInsteadBtn = stagedCard.locator('[data-testid="analyze-with-ai-instead-btn"]');
       await expect(aiInsteadBtn).toBeVisible();

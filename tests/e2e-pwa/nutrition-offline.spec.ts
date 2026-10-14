@@ -78,7 +78,7 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
 
     const badge = stagedCard.locator('[data-testid="parsed-locally-badge"]');
     await expect(badge).toBeVisible();
-    await expect(badge).toHaveText('Parsed locally');
+    await expect(badge).toHaveText('Device');
 
     // Assert not auto-logged yet: 0 rows in database, 0 meal log items in UI
     expect(countRows('public.nutrition_logs', `user_id = '${user.id}'`)).toBe(0);
@@ -183,7 +183,7 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
     await expect(stagedCard).toBeVisible({ timeout: 10000 });
 
     // Both badge and button are visible online
-    await expect(stagedCard.locator('[data-testid="parsed-locally-badge"]')).toHaveText('Parsed locally');
+    await expect(stagedCard.locator('[data-testid="parsed-locally-badge"]')).toHaveText('Device');
     const aiInsteadBtn = stagedCard.locator('[data-testid="analyze-with-ai-instead-btn"]');
     await expect(aiInsteadBtn).toBeVisible();
     await expect(aiInsteadBtn).toContainText('Analyze with AI instead');
@@ -194,8 +194,8 @@ test.describe('PWA Nutrition Offline Acceptance Specs (O2)', () => {
     // Verify verbatim text reached parse-nutrition endpoint
     await expect.poll(() => interceptedRequestText).toBe(clearBlock);
 
-    // Verify card updated with AI response without local badge
-    await expect(stagedCard.locator('[data-testid="parsed-locally-badge"]')).not.toBeVisible({ timeout: 5000 });
+    // Verify card updated with AI response and labelled AI
+    await expect(stagedCard.locator('[data-testid="parsed-locally-badge"]')).toHaveText('AI');
     await expect(page.locator('[data-testid="dish-name-input"]')).toHaveValue(
       'Atlantic Salmon Fillet (AI Deep Parsed)'
     );

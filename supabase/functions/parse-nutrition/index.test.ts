@@ -4365,6 +4365,15 @@ Deno.test("AI fallback attribution: primary 503 fast fail and fallback timeout r
         const urlString = input.toString();
         if (urlString.includes("/auth/v1/user")) {
             return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+Deno.test("parse-nutrition attaches quota object to 200 response when ai_quota_enabled is true and AI charged", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "mock-test-key");
+
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "user-quota-200", email: "quota@yourbody.fyi" }), {
                 status: 200,
                 headers: { "Content-Type": "application/json" }
             });
@@ -4456,6 +4465,21 @@ Deno.test("AI fallback attribution: primary model hang with remaining budget bel
         const urlString = input.toString();
         if (urlString.includes("/auth/v1/user")) {
             return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/rpc/consume_ai_quota")) {
+            return new Response(JSON.stringify({
+                allowed: true,
+                limit: 20,
+                used: 5,
+                period: "day",
+                plan: "free",
+                resets_at: "2026-10-13T00:00:00.000Z"
+            }), {
                 status: 200,
                 headers: { "Content-Type": "application/json" }
             });
@@ -4474,6 +4498,27 @@ Deno.test("AI fallback attribution: primary model hang with remaining budget bel
                 init?.signal?.addEventListener("abort", () => {
                     reject(new DOMException("The operation was aborted", "AbortError"));
                 });
+            return new Response(JSON.stringify({
+                candidates: [{
+                    content: {
+                        parts: [{
+                            text: JSON.stringify({
+                                is_food: true,
+                                name: "Apple",
+                                calories: 95,
+                                protein: 0,
+                                carbs: 25,
+                                fat: 0,
+                                fiber: 4,
+                                explanation: "1 apple",
+                                items: []
+                            })
+                        }]
+                    }
+                }]
+            }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
             });
         }
         return originalFetch(input, init);
@@ -4506,6 +4551,20 @@ Deno.test("AI fallback attribution: primary model hang with remaining budget bel
         globalThis.fetch = originalFetch;
         setAiBudgetConfigForTesting(null);
         setTestCaptureHook(null);
+            body: JSON.stringify({ input: "Had an apple" })
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 200);
+        const data = await res.json();
+        assertExists(data.quota);
+        assertEquals(data.quota.limit, 20);
+        assertEquals(data.quota.used, 5);
+        assertEquals(data.quota.remaining, 15);
+        assertEquals(data.quota.period, "day");
+        assertEquals(data.quota.resetsAt, "2026-10-13T00:00:00.000Z");
+    } finally {
+        globalThis.fetch = originalFetch;
         if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
         else Deno.env.delete("GEMINI_API_KEY");
     }
@@ -4530,6 +4589,21 @@ Deno.test("AI fallback attribution: primary 503 and fallback 503 returns 503 cap
         const urlString = input.toString();
         if (urlString.includes("/auth/v1/user")) {
             return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+Deno.test("parse-nutrition does not attach quota object when ai_quota_enabled is false", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "mock-test-key");
+
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "user-quota-off", email: "off@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("/rest/v1/app_config")) {
+            return new Response(JSON.stringify({ value: false }), {
                 status: 200,
                 headers: { "Content-Type": "application/json" }
             });
@@ -4545,6 +4619,27 @@ Deno.test("AI fallback attribution: primary 503 and fallback 503 returns 503 cap
             }), {
                 status: 503,
                 headers: { "Content-Type": "application/json" },
+            return new Response(JSON.stringify({
+                candidates: [{
+                    content: {
+                        parts: [{
+                            text: JSON.stringify({
+                                is_food: true,
+                                name: "Apple",
+                                calories: 95,
+                                protein: 0,
+                                carbs: 25,
+                                fat: 0,
+                                fiber: 4,
+                                explanation: "1 apple",
+                                items: []
+                            })
+                        }]
+                    }
+                }]
+            }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
             });
         }
         return originalFetch(input, init);
@@ -4577,6 +4672,15 @@ Deno.test("AI fallback attribution: primary 503 and fallback 503 returns 503 cap
     } finally {
         globalThis.fetch = originalFetch;
         setTestCaptureHook(null);
+            body: JSON.stringify({ input: "Had an apple" })
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 200);
+        const data = await res.json();
+        assertEquals(data.quota, undefined);
+    } finally {
+        globalThis.fetch = originalFetch;
         if (originalKey) Deno.env.set("GEMINI_API_KEY", originalKey);
         else Deno.env.delete("GEMINI_API_KEY");
     }

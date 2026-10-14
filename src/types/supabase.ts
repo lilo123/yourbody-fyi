@@ -286,6 +286,8 @@ export type Database = {
           protein: number | null
           serving_size: number | null
           serving_unit: string | null
+          source: string | null
+          parser_version: string | null
           user_id: string
         }
         Insert: {
@@ -306,6 +308,8 @@ export type Database = {
           protein?: number | null
           serving_size?: number | null
           serving_unit?: string | null
+          source?: string | null
+          parser_version?: string | null
           user_id: string
         }
         Update: {
@@ -326,6 +330,8 @@ export type Database = {
           protein?: number | null
           serving_size?: number | null
           serving_unit?: string | null
+          source?: string | null
+          parser_version?: string | null
           user_id?: string
         }
         Relationships: [
