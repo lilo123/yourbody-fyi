@@ -329,6 +329,13 @@ async function refundQuota(
   }
 }
 
+function computeResetsAt(period: string, now = new Date()): string {
+  const d = new Date(now);
+  if (period === 'month') {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 0, 0, 0, 0)).toISOString();
+  }
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0)).toISOString();
+}
 export default {
   async fetch(req: Request) {
     const origin = req.headers.get('Origin');
@@ -359,6 +366,7 @@ export default {
     let input = '';
     let isQuotaCharged = false;
     let chargedAmount = 0;
+    let activeQuotaResult: any = null;
     let authenticatedUserId: string | undefined;
     let configuredSupabaseUrl = '';
     let cleanBase64 = '';
@@ -580,6 +588,7 @@ export default {
           } else {
             isQuotaCharged = true;
             chargedAmount = cost;
+            activeQuotaResult = quotaResult;
           }
         } catch (rpcErr: any) {
           console.warn('[parse-nutrition] consume_ai_quota exception (failing open):', rpcErr?.message || rpcErr);
@@ -904,6 +913,22 @@ CORE RESPONSIBILITIES & GUIDELINES:
         const parsed = JSON.parse(responseText);
         if (parsed && typeof parsed === 'object') {
           parsed.source = 'ai';
+          if (isQuotaEnabled && isQuotaCharged && chargedAmount > 0 && activeQuotaResult) {
+            const limit = Number(activeQuotaResult.limit) || 0;
+            const used = Number(activeQuotaResult.used) || 0;
+            const remaining = Math.max(0, limit - used);
+            const period = activeQuotaResult.period === 'month' ? 'month' : 'day';
+            const resetsAt = activeQuotaResult.resets_at
+              ? new Date(activeQuotaResult.resets_at).toISOString()
+              : computeResetsAt(period);
+            parsed.quota = {
+              limit,
+              used,
+              remaining,
+              period,
+              resetsAt,
+            };
+          }
           responseText = JSON.stringify(parsed);
         }
       } catch {
