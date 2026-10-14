@@ -223,10 +223,10 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
     <div
       ref={cardRef}
       data-testid="staged-meal-card"
-      className="bg-zinc-900/90 border border-cyan-500/50 rounded-2xl sm:rounded-3xl px-3 pt-0.5 pb-0 sm:pt-4 sm:px-4 sm:pb-0 shadow-[0_0_30px_rgba(6,182,212,0.15)] space-y-1.5 sm:space-y-2 animate-in fade-in motion-reduce:animate-none scroll-mt-16 sm:scroll-mt-20"
+      className="bg-zinc-900/90 border border-cyan-500/50 rounded-2xl sm:rounded-3xl px-3 pt-0.5 pb-0 sm:pt-4 sm:px-4 sm:pb-0 shadow-[0_0_30px_rgba(6,182,212,0.15)] space-y-0.5 sm:space-y-2 animate-in fade-in motion-reduce:animate-none scroll-mt-16 sm:scroll-mt-20"
     >
       {/* Header row: Dish Name & Meal Type (1 row on mobile & desktop) */}
-      <div className="flex items-center gap-2 border-b border-zinc-800 pb-1">
+      <div className="flex items-center gap-2 border-b border-zinc-800 pb-0.5">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {stagedMeal.photoUrl ? (
             <div className="w-8 h-8 rounded-lg overflow-hidden border border-cyan-500/40 shrink-0 bg-zinc-950 shadow-md">
@@ -275,17 +275,21 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
         </div>
       </div>
 
-      {/* Local Parse provenance banner */}
-      {(stagedMeal.source === 'local' || stagedMeal.source === 'rules') && (
-        <div className="flex flex-col gap-1 border-b border-zinc-800 pb-1.5 pt-0.5">
+      {/* Parse provenance banner */}
+      {(stagedMeal.source === 'local' || stagedMeal.source === 'rules' || stagedMeal.source === 'ai') && (
+        <div className="flex flex-col gap-0.5 border-b border-zinc-800 pb-0.5 pt-0">
           <div className="flex items-center justify-between gap-2">
             <span
               data-testid="parsed-locally-badge"
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30"
+              className={`inline-flex items-center gap-1 px-2.5 py-0 rounded-full text-xs font-bold leading-tight ${
+                stagedMeal.source === 'ai'
+                  ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+                  : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
+              }`}
             >
-              Parsed locally
+              {stagedMeal.source === 'ai' ? 'AI' : 'Device'}
             </span>
-            {isOnline && onAnalyzeWithAiInstead && (
+            {isOnline && onAnalyzeWithAiInstead && (stagedMeal.source === 'local' || stagedMeal.source === 'rules') && (
               <button
                 type="button"
                 data-testid="analyze-with-ai-instead-btn"
@@ -335,7 +339,13 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
       )}
 
       {/* Itemized Ingredient Breakdown */}
-      <div className="space-y-0.5 pt-0.5">
+      <div
+        className={`space-y-0.5 ${
+          stagedMeal.source === 'local' || stagedMeal.source === 'rules' || stagedMeal.source === 'ai'
+            ? 'pt-0'
+            : 'pt-2.5'
+        }`}
+      >
         <div
           data-testid="breakdown-header"
           className="flex items-center justify-between gap-2 min-w-0 text-xs font-bold uppercase text-zinc-400 tracking-wider"
@@ -500,7 +510,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
       <div
         data-testid="staged-card-actions"
         style={{ bottom: `${effectiveNavHeight}px` }}
-        className="sticky z-20 bg-zinc-900 border-t border-zinc-800/80 -mx-3 px-3 sm:-mx-4 sm:px-4 py-1.5 flex items-center gap-1.5 sm:gap-2 rounded-b-2xl sm:rounded-b-3xl"
+        className="sticky z-20 bg-zinc-900 border-t border-zinc-800/80 -mx-3 px-3 sm:-mx-4 sm:px-4 py-1 flex items-center gap-1.5 sm:gap-2 rounded-b-2xl sm:rounded-b-3xl"
       >
         <button
           ref={logButtonRef}

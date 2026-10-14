@@ -12,6 +12,14 @@ export interface ParseNutritionArgs {
   forceAi?: boolean;
 }
 
+export interface AiQuotaInfo {
+  limit: number;
+  used: number;
+  remaining: number;
+  period: 'day' | 'month' | string;
+  resetsAt: string;
+}
+
 export interface ParseNutritionResult {
   name?: string;
   explanation?: string;
@@ -26,6 +34,7 @@ export interface ParseNutritionResult {
   source?: 'rules' | 'ai';
   confidence?: 'exact' | 'lenient';
   fallbackReason?: 'quota_exceeded' | 'ai_unavailable' | 'timeout';
+  quota?: AiQuotaInfo;
 }
 
 export interface ParseNutritionError extends Error {
@@ -296,6 +305,7 @@ export async function parseNutrition({
       source: parsed.source,
       confidence: parsed.confidence,
       fallbackReason: parsed.fallback_reason ?? parsed.fallbackReason,
+      quota: parsed.quota,
     };
   }
 

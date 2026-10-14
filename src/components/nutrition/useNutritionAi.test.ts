@@ -377,4 +377,110 @@ describe('useNutritionAi quota exceeded handling', () => {
 
     expect(parseNutritionModule.parseNutrition).toHaveBeenCalledTimes(1);
   });
+
+  describe('auto mode online routing for lenient text', () => {
+    it('stages noise-only lenient text locally without calling AI', async () => {
+      const mockParse = vi.spyOn(parseNutritionModule, 'parseNutrition');
+
+      const { result } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus,
+          setIsError,
+          onParsedSuccess,
+          onFallbackToManual,
+        })
+      );
+
+      // Noise-only prose text that parses leniently
+      const text =
+        'Here is my lunch breakdown:\nGrilled chicken breast\nCalories: 250 kcal\nProtein: 40g\nCarbs: 0g\nFat: 5g\nHope this helps!';
+
+      await act(async () => {
+        await result.current.handleAnalyze({ overrideText: text });
+      });
+
+      // Local parse handled it -> AI was not called
+      expect(mockParse).not.toHaveBeenCalled();
+      expect(onParsedSuccess).toHaveBeenCalledTimes(1);
+      const staged = onParsedSuccess.mock.calls[0][0];
+      expect(staged.calories).toBe(250);
+      expect(staged.protein).toBe(40);
+      expect(staged.confidence).toBe('lenient');
+    });
+
+    it('routes lenient text with ranges to AI in auto mode online', async () => {
+      const mockParse = vi.spyOn(parseNutritionModule, 'parseNutrition').mockResolvedValueOnce({
+        name: 'Turkey Sandwich',
+        items: [],
+        calories: 350,
+        protein: 30,
+        carbs: 40,
+        fat: 10,
+        fiber: 4,
+        servingSize: 1,
+        servingUnit: 'serving',
+        source: 'ai',
+      });
+
+      const { result } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus,
+          setIsError,
+          onParsedSuccess,
+          onFallbackToManual,
+        })
+      );
+
+      // Text with a calorie range (ranges -> must go to AI)
+      const text =
+        'Turkey Sandwich\nCalories: 300-400 kcal\nProtein: 30g\nCarbs: 40g\nFat: 10g';
+
+      await act(async () => {
+        await result.current.handleAnalyze({ overrideText: text });
+      });
+
+      expect(mockParse).toHaveBeenCalledTimes(1);
+      expect(onParsedSuccess).toHaveBeenCalledTimes(1);
+      const staged = onParsedSuccess.mock.calls[0][0];
+      expect(staged.source).toBe('ai');
+    });
+
+    it('routes lenient text with modifiers (e.g. ate half) to AI in auto mode online', async () => {
+      const mockParse = vi.spyOn(parseNutritionModule, 'parseNutrition').mockResolvedValueOnce({
+        name: 'Pizza slice',
+        items: [],
+        calories: 150,
+        protein: 8,
+        carbs: 20,
+        fat: 5,
+        fiber: 1,
+        servingSize: 1,
+        servingUnit: 'serving',
+        source: 'ai',
+      });
+
+      const { result } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus,
+          setIsError,
+          onParsedSuccess,
+          onFallbackToManual,
+        })
+      );
+
+      // Text with a modifier "ate half"
+      const text =
+        'ate half\nPizza slice\nCalories: 300 kcal\nProtein: 16g\nCarbs: 40g\nFat: 10g';
+
+      await act(async () => {
+        await result.current.handleAnalyze({ overrideText: text });
+      });
+
+      expect(mockParse).toHaveBeenCalledTimes(1);
+      expect(onParsedSuccess).toHaveBeenCalledTimes(1);
+    });
+  });
 });

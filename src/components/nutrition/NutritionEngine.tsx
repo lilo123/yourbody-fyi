@@ -29,6 +29,8 @@ import { StatusBanner } from '../common/StatusBanner';
 import { PendingReviewList } from './PendingReviewList';
 import { useAiQueueReview } from './useAiQueueReview';
 import { deleteAfterLog, newId } from '../../offline';
+import { PARSER_VERSION } from '../../lib/nutrition/localParse';
+import type { AiQuotaInfo } from './parseNutrition';
 
 export const NutritionEngine: React.FC = () => {
   const { user, profile } = useAuth();
@@ -43,6 +45,7 @@ export const NutritionEngine: React.FC = () => {
   const [breakdownNutrient, setBreakdownNutrient] = useState<BreakdownNutrient | null>(null);
   const [status, setStatus] = useState<string>('');
   const [isError, setIsError] = useState(false);
+  const [aiQuota, setAiQuota] = useState<AiQuotaInfo | null>(null);
 
   const handleStageManualMeal = (data: ManualMealStagedData) => {
     setStagedMeal(buildStagedMealFromManualData(data, ai.selectedPhoto?.dataUrl));
@@ -182,7 +185,13 @@ export const NutritionEngine: React.FC = () => {
     onParsedSuccess: (meal) => {
       setStagedMeal(meal);
       setShowManualForm(false);
-      showToast({ message: 'Analyzed', verb: 'Analyzed', subject: meal.name, kind: 'info', testId: 'status-message' });
+      if (meal.quota) setAiQuota(meal.quota);
+      const isDevice = meal.source === 'local' || meal.source === 'rules';
+      const quotaSuffix = !isDevice && meal.quota
+        ? ` · ${meal.quota.remaining} of ${meal.quota.limit} left ${meal.quota.period === 'month' ? 'this month' : 'today'}`
+        : '';
+      const message = `${isDevice ? 'Read on your device · no AI used' : 'Analyzed with AI'}${quotaSuffix}`;
+      showToast({ message, verb: message, subject: meal.name, kind: 'info', testId: 'status-message' });
     },
     onFallbackToManual: (dishName, prefill) => {
       setShowManualForm(true);
@@ -254,14 +263,22 @@ export const NutritionEngine: React.FC = () => {
     const logTimestamp = stagedMeal.capturedAt || formatLocalTimestamp(selectedDate, undefined, profile?.timezone ?? undefined);
     const aiqItemId = stagedMeal.aiqItemId;
 
+    const logSource: 'device' | 'ai' | 'manual' =
+      stagedMeal.source === 'ai'
+        ? 'ai'
+        : (stagedMeal.source === 'local' || stagedMeal.source === 'rules')
+          ? 'device'
+          : 'manual';
+
+    const targetItem = isSingle && item0 ? item0 : totals;
     const payload = {
       id: newId(),
       food_name: stagedMeal.name,
-      calories: isSingle && item0 ? roundTo1Decimal(item0.calories) : roundTo1Decimal(totals.calories),
-      protein: isSingle && item0 ? roundTo1Decimal(item0.protein) : roundTo1Decimal(totals.protein),
-      carbs: isSingle && item0 ? roundTo1Decimal(item0.carbs) : roundTo1Decimal(totals.carbs),
-      fat: isSingle && item0 ? roundTo1Decimal(item0.fat) : roundTo1Decimal(totals.fat),
-      fiber: isSingle && item0 ? roundTo1Decimal(item0.fiber) : roundTo1Decimal(totals.fiber),
+      calories: roundTo1Decimal(targetItem.calories),
+      protein: roundTo1Decimal(targetItem.protein),
+      carbs: roundTo1Decimal(targetItem.carbs),
+      fat: roundTo1Decimal(targetItem.fat),
+      fiber: roundTo1Decimal(targetItem.fiber),
       meal_type: stagedMeal.mealType,
       serving_size: Number(stagedMeal.servingSize) || 1,
       serving_unit: stagedMeal.servingUnit || 'serving',
@@ -269,6 +286,8 @@ export const NutritionEngine: React.FC = () => {
       logged_date: logDate,
       items: items.length > 1 ? itemsForPersist(items) : null,
       notes: stagedMeal.notes ?? null,
+      source: logSource,
+      parser_version: PARSER_VERSION,
     };
     mutation.mutate(payload, {
       onSuccess: async () => {
@@ -363,13 +382,9 @@ export const NutritionEngine: React.FC = () => {
               type="button"
               data-testid="dish-fetch-retry"
               onClick={() => {
-                if (dishFetchError) {
-                  dishFetchError.retry();
-                } else if (dishModal.dishFetchError) {
-                  dishModal.dishFetchError.retry();
-                } else {
-                  void refetchCustomDishes();
-                }
+                if (dishFetchError) dishFetchError.retry();
+                else if (dishModal.dishFetchError) dishModal.dishFetchError.retry();
+                else void refetchCustomDishes();
               }}
               className="shrink-0 rounded border border-rose-400/40 bg-rose-500/20 px-2.5 py-1 text-xs font-bold text-rose-200 hover:bg-rose-500/30 touch-manipulation"
             >
@@ -398,10 +413,7 @@ export const NutritionEngine: React.FC = () => {
             onSaveItemAsCustomDish={handleSaveItemAsCustomDish}
             onLogStagedMeal={handleLogStagedMeal}
             onSaveStagedAsCustomDish={handleSaveStagedAsCustomDish}
-            onDiscardStagedMeal={(e) => {
-              decideFocusRestore(e);
-              setStagedMeal(null);
-            }}
+            onDiscardStagedMeal={(e) => { decideFocusRestore(e); setStagedMeal(null); }}
             isPending={mutation.isPending}
             customDishes={displayedCustomDishes}
             onAddParsedItems={handleAddParsedItems}
@@ -427,15 +439,15 @@ export const NutritionEngine: React.FC = () => {
           onSwitchToManual={() => {
             setShowManualForm(true);
             ai.setIsRateLimited(false);
-            if (!manualMealForm.manualDishName.trim()) {
-              manualMealForm.setManualDishName(ai.nlInput.trim() || (ai.selectedPhoto ? 'Meal Photo' : ''));
-            }
+            if (!manualMealForm.manualDishName.trim()) manualMealForm.setManualDishName(ai.nlInput.trim() || (ai.selectedPhoto ? 'Meal Photo' : ''));
           }}
           status={status}
           isError={isError}
           fileInputRef={ai.fileInputRef}
           hasCustomDishes={displayedCustomDishes.length > 0}
           isQuotaExceeded={ai.isQuotaExceeded}
+          quota={aiQuota}
+          timeZone={profile?.timezone ?? undefined}
         />
       )}
 
@@ -444,24 +456,15 @@ export const NutritionEngine: React.FC = () => {
         onClose={() => setShowManualForm(false)}
         selectedPhoto={ai.selectedPhoto}
         onRemovePhoto={ai.handleRemovePhoto}
-        manualName={manualMealForm.manualDishName}
-        onManualNameChange={manualMealForm.setManualDishName}
-        manualMealType={manualMealForm.manualMealType}
-        onManualMealTypeChange={manualMealForm.setManualMealType}
-        manualCalories={manualMealForm.manualCalories}
-        onManualCaloriesChange={manualMealForm.setManualCalories}
-        manualProtein={manualMealForm.manualProtein}
-        onManualProteinChange={manualMealForm.setManualProtein}
-        manualCarbs={manualMealForm.manualCarbs}
-        onManualCarbsChange={manualMealForm.setManualCarbs}
-        manualFat={manualMealForm.manualFat}
-        onManualFatChange={manualMealForm.setManualFat}
-        manualFiber={manualMealForm.manualFiber}
-        onManualFiberChange={manualMealForm.setManualFiber}
-        manualServingSize={manualMealForm.manualServingSize}
-        onManualServingSizeChange={manualMealForm.setManualServingSize}
-        manualServingUnit={manualMealForm.manualServingUnit}
-        onManualServingUnitChange={manualMealForm.setManualServingUnit}
+        manualName={manualMealForm.manualDishName} onManualNameChange={manualMealForm.setManualDishName}
+        manualMealType={manualMealForm.manualMealType} onManualMealTypeChange={manualMealForm.setManualMealType}
+        manualCalories={manualMealForm.manualCalories} onManualCaloriesChange={manualMealForm.setManualCalories}
+        manualProtein={manualMealForm.manualProtein} onManualProteinChange={manualMealForm.setManualProtein}
+        manualCarbs={manualMealForm.manualCarbs} onManualCarbsChange={manualMealForm.setManualCarbs}
+        manualFat={manualMealForm.manualFat} onManualFatChange={manualMealForm.setManualFat}
+        manualFiber={manualMealForm.manualFiber} onManualFiberChange={manualMealForm.setManualFiber}
+        manualServingSize={manualMealForm.manualServingSize} onManualServingSizeChange={manualMealForm.setManualServingSize}
+        manualServingUnit={manualMealForm.manualServingUnit} onManualServingUnitChange={manualMealForm.setManualServingUnit}
         onSubmit={manualMealForm.handleManualSubmit}
         isPending={mutation.isPending}
       />
@@ -524,12 +527,7 @@ export const NutritionEngine: React.FC = () => {
         />
 
         {isNutritionLogsError ? null : isLogsPending ? (
-          <Skeleton
-            variant="row"
-            count={3}
-            ariaLabel="Loading meal logs..."
-            testId="nutrition-logs-skeleton"
-          />
+          <Skeleton variant="row" count={3} ariaLabel="Loading meal logs..." testId="nutrition-logs-skeleton" />
         ) : displayedTodayLogs.length === 0 ? (
           <div className="p-6 text-center text-zinc-400 text-xs">
             No meals logged for this date yet.
@@ -554,7 +552,7 @@ export const NutritionEngine: React.FC = () => {
         dishModalKind={dishModal.dishModalKind} setDishModalKind={dishModal.setDishModalKind}
         dishModalName={dishModal.dishModalName} setDishModalName={dishModal.setDishModalName}
         dishModalQuantity={dishModal.dishModalQuantity} setDishModalQuantity={dishModal.setDishModalQuantity} dishModalUnit={dishModal.dishModalUnit} setDishModalUnit={dishModal.setDishModalUnit}
-        onQuantityChange={dishModal.handleQuantityChange} onUnitChange={dishModal.handleUnitChange}
+        scaleNutritionWithAmount={dishModal.scaleNutritionWithAmount} onScaleNutritionChange={dishModal.handleScaleNutritionChange} onQuantityChange={dishModal.handleQuantityChange} onUnitChange={dishModal.handleUnitChange}
         dishModalCalories={dishModal.dishModalCalories} setDishModalCalories={dishModal.setDishModalCalories}
         dishModalProtein={dishModal.dishModalProtein} setDishModalProtein={dishModal.setDishModalProtein}
         dishModalCarbs={dishModal.dishModalCarbs} setDishModalCarbs={dishModal.setDishModalCarbs}
