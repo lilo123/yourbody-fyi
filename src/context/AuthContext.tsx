@@ -19,6 +19,7 @@ import {
   setFlusherSessionUser,
 } from '../offline';
 import { isTermsConsentEnabled } from '../config/features';
+import { clearAllStagedMealDrafts } from '../components/nutrition/stagedMealDraft';
 
 export const AUTH_STORAGE_PREFIX = 'yourbody_';
 
@@ -497,17 +498,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem(key);
       }
     });
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        Object.keys(sessionStorage).forEach((key) => {
-          if (key.startsWith(AUTH_STORAGE_PREFIX) || key.startsWith('yourbody_staged_meal_')) {
-            sessionStorage.removeItem(key);
-          }
-        });
-      }
-    } catch {
-      // ignore
-    }
+    clearAllStagedMealDrafts();
     setUser(null);
     setProfile(null);
     queryClient.clear();

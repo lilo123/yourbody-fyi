@@ -422,7 +422,10 @@ Dietary Fiber 0g`;
   it('7. sign-out removes the draft key', async () => {
     saveStagedMealDraft('test-user-id', todayStr, sampleAiMeal);
     const storageKey = getStagedMealStorageKey('test-user-id');
+    const workoutMirrorKey = 'yourbody_active_exercises_test-user-id';
+    sessionStorage.setItem(workoutMirrorKey, JSON.stringify({ active: true }));
     expect(sessionStorage.getItem(storageKey)).not.toBeNull();
+    expect(sessionStorage.getItem(workoutMirrorKey)).not.toBeNull();
 
     renderComponent();
 
@@ -440,6 +443,8 @@ Dietary Fiber 0g`;
     });
 
     expect(sessionStorage.getItem(storageKey)).toBeNull();
+    // Invariant: Unrelated sessionStorage keys (e.g. workout session mirrors) must remain untouched
+    expect(sessionStorage.getItem(workoutMirrorKey)).not.toBeNull();
   });
 
   describe('stagedMealDraft utility robustness & boundary rejections', () => {
