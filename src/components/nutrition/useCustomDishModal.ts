@@ -254,6 +254,10 @@ export function useCustomDishModal({
         ...foodRef.current,
         quantity: dishModalQuantity,
         calories: Number(c) || 0,
+        protein: Number(dishModalProtein) || 0,
+        carbs: Number(dishModalCarbs) || 0,
+        fat: Number(dishModalFat) || 0,
+        fiber: Number(dishModalFiber) || 0,
       };
     }
   };
@@ -264,7 +268,11 @@ export function useCustomDishModal({
       foodRef.current = {
         ...foodRef.current,
         quantity: dishModalQuantity,
+        calories: Number(dishModalCalories) || 0,
         protein: Number(p) || 0,
+        carbs: Number(dishModalCarbs) || 0,
+        fat: Number(dishModalFat) || 0,
+        fiber: Number(dishModalFiber) || 0,
       };
     }
   };
@@ -275,7 +283,11 @@ export function useCustomDishModal({
       foodRef.current = {
         ...foodRef.current,
         quantity: dishModalQuantity,
+        calories: Number(dishModalCalories) || 0,
+        protein: Number(dishModalProtein) || 0,
         carbs: Number(cb) || 0,
+        fat: Number(dishModalFat) || 0,
+        fiber: Number(dishModalFiber) || 0,
       };
     }
   };
@@ -286,7 +298,11 @@ export function useCustomDishModal({
       foodRef.current = {
         ...foodRef.current,
         quantity: dishModalQuantity,
+        calories: Number(dishModalCalories) || 0,
+        protein: Number(dishModalProtein) || 0,
+        carbs: Number(dishModalCarbs) || 0,
         fat: Number(f) || 0,
+        fiber: Number(dishModalFiber) || 0,
       };
     }
   };
@@ -297,6 +313,10 @@ export function useCustomDishModal({
       foodRef.current = {
         ...foodRef.current,
         quantity: dishModalQuantity,
+        calories: Number(dishModalCalories) || 0,
+        protein: Number(dishModalProtein) || 0,
+        carbs: Number(dishModalCarbs) || 0,
+        fat: Number(dishModalFat) || 0,
         fiber: Number(fib) || 0,
       };
     }
