@@ -94,6 +94,46 @@ test.describe('Landing Page & Root Route Decisions', () => {
     await expect(page.locator('[data-testid="app-header"]')).toBeVisible();
   });
 
+  test('signed-in visitor with default route opens / on fresh page and renders workout content', async ({ page, context }) => {
+    await page.goto('/login');
+    await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
+    await page.fill('input[type="password"]', 'password123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL('**/workout');
+    await expect(page.locator('[data-testid="routine-select-btn"]')).toBeVisible({ timeout: 5000 });
+
+    const freshPage = await context.newPage();
+    try {
+      await freshPage.goto('/');
+      await expect(freshPage).toHaveURL(/\/workout/, { timeout: 5000 });
+      await expect(freshPage.locator('[data-testid="routine-select-btn"]')).toBeVisible({ timeout: 5000 });
+    } finally {
+      await freshPage.close();
+    }
+  });
+
+  test('signed-in visitor with last route /nutrition opens / on fresh page and renders nutrition content', async ({ page, context }) => {
+    await page.goto('/login');
+    await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
+    await page.fill('input[type="password"]', 'password123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL('**/workout');
+    await expect(page.locator('[data-testid="routine-select-btn"]')).toBeVisible({ timeout: 5000 });
+
+    await page.click('[data-testid="nav-nutrition"]');
+    await page.waitForURL('**/nutrition');
+    await expect(page.locator('[data-testid="nutrition-date-input"]')).toBeVisible({ timeout: 5000 });
+
+    const freshPage = await context.newPage();
+    try {
+      await freshPage.goto('/');
+      await expect(freshPage).toHaveURL(/\/nutrition/, { timeout: 5000 });
+      await expect(freshPage.locator('[data-testid="nutrition-date-input"]')).toBeVisible({ timeout: 5000 });
+    } finally {
+      await freshPage.close();
+    }
+  });
+
   test('landing page footer contains support email mailto link and legal routes', async ({ page }) => {
     await page.goto('/');
 
