@@ -42,6 +42,7 @@ import {
   sumItems,
   type NutritionItem,
 } from '../../utils/itemModel';
+import { PARSER_VERSION } from '../../lib/nutrition/localParse';
 export const logItemsMemoryCache = new Map<string, any>();
 
 export function getCachedLogItems(logId: string): any {
@@ -182,7 +183,7 @@ export function useNutritionData({
       const { data, error } = await supabase
         .from('nutrition_logs')
         .select(
-          'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components'
+          'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, has_components, source'
         )
         .eq('user_id', targetUserId)
         .gte('logged_at', windowStart)
@@ -260,6 +261,8 @@ export function useNutritionData({
         logged_date: logDate,
         items: newLog.items ?? null,
         notes: newLog.notes ?? null,
+        source: newLog.source ?? 'manual',
+        parser_version: newLog.parser_version ?? PARSER_VERSION,
         incrementDishId: newLog.incrementDishId,
       };
 

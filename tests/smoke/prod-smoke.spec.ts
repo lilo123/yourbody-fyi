@@ -11,6 +11,8 @@ if (!smokeEmail || !smokePassword) {
 
 test.describe('Production Smoke Suite', () => {
   test('end-to-end smoke verification', async ({ page }) => {
+    test.setTimeout(90_000);
+
     // -------------------------------------------------------------------------
     // Step 1: Load the app and see the landing page, the sign-in screen or the app shell
     // -------------------------------------------------------------------------
@@ -152,8 +154,9 @@ test.describe('Production Smoke Suite', () => {
     await analyzeBtn.click();
 
     // Staged meal card appears with parsed results
+    // Allow up to 40s because the client AI parse can take up to 30s.
     const stagedCard = page.locator('[data-testid="staged-meal-card"]');
-    await expect(stagedCard).toBeVisible({ timeout: 25000 });
+    await expect(stagedCard).toBeVisible({ timeout: 40000 });
 
     // Assert parsed meal contents appear (WITHOUT clicking Log Meal)
     await expect(

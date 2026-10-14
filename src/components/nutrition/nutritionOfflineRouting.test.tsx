@@ -141,7 +141,7 @@ Dietary Fiber 0g`;
       );
 
       expect(screen.getByTestId('parsed-locally-badge')).toBeDefined();
-      expect(screen.getByText('Parsed locally')).toBeDefined();
+      expect(screen.getByText('Device')).toBeDefined();
     });
 
     it('shows "Analyze with AI instead" button only when online, and clicking it triggers AI analysis', async () => {

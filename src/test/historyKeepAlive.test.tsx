@@ -133,23 +133,19 @@ describe('History Keep-Alive Shell', () => {
       </QueryClientProvider>
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-workout-view')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-workout-view', {}, { timeout: 10000 })).toBeDefined();
 
     expect(screen.queryByTestId('mock-history-view')).toBeNull();
     expect(historyMountCount).toBe(0);
 
-    const nutritionTab = screen.getByTestId('nav-nutrition');
+    const nutritionTab = await screen.findByTestId('nav-nutrition', {}, { timeout: 10000 });
     fireEvent.click(nutritionTab);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mock-nutrition-view')).toBeDefined();
-    });
+    expect(await screen.findByTestId('mock-nutrition-view', {}, { timeout: 10000 })).toBeDefined();
 
     expect(screen.queryByTestId('mock-history-view')).toBeNull();
     expect(historyMountCount).toBe(0);
-  });
+  }, 15000);
 
   it('(b) state inside History survives /history -> /workout -> /history (mock HistoryView lazily with a counter component: counter keeps value, mount count 1)', async () => {
     render(

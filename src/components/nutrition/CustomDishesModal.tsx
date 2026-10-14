@@ -1,4 +1,4 @@
-import React, { memo, useId } from 'react';
+import React, { memo, useId, useState } from 'react';
 import type { CustomDish, CustomDishKind } from '../../types/database';
 import { getCustomDishPortion, type NutritionItem } from '../../utils/itemModel';
 import { roundTo1Decimal, formatCalories, formatMacro } from '../../utils/nutrition';
@@ -6,6 +6,8 @@ import { getDishIcon } from '../../utils/dishIcons';
 import { Star, X, Trash2, Edit2 } from 'lucide-react';
 import { CustomDishEditor } from './CustomDishEditor';
 import { NotesField } from './NotesField';
+import { UnitChip } from './UnitChip';
+import { mapLegacyUnit } from './legacyUnitMapping';
 import { useModalA11y } from '../../hooks/useModalA11y';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
@@ -21,8 +23,11 @@ export interface CustomDishesModalProps {
   setDishModalQuantity?: (val: number | '') => void;
   dishModalUnit?: string;
   setDishModalUnit?: (val: string) => void;
-  onQuantityChange?: (val: number | '') => void;
+  onQuantityChange?: (val: number | '', scale?: boolean) => void;
   onUnitChange?: (val: string) => void;
+  scaleNutritionWithAmount?: boolean;
+  setScaleNutritionWithAmount?: (val: boolean) => void;
+  onScaleNutritionChange?: (val: boolean) => void;
   dishModalCalories: number | '';
   setDishModalCalories: (val: number | '') => void;
   dishModalProtein: number | '';
@@ -59,6 +64,9 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
   setDishModalUnit = () => {},
   onQuantityChange,
   onUnitChange,
+  scaleNutritionWithAmount,
+  setScaleNutritionWithAmount,
+  onScaleNutritionChange,
   dishModalCalories,
   setDishModalCalories,
   dishModalProtein,
@@ -83,12 +91,33 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
   const baseId = useId();
   const nameId = `${baseId}-dish-name`;
   const qtyId = `${baseId}-quantity`;
-  const unitId = `${baseId}-unit`;
   const calId = `${baseId}-calories`;
   const proteinId = `${baseId}-protein`;
   const carbsId = `${baseId}-carbs`;
   const fatId = `${baseId}-fat`;
   const fiberId = `${baseId}-fiber`;
+
+  const [prevOpenDish, setPrevOpenDish] = useState<{ isOpen: boolean; dishId?: string }>({
+    isOpen,
+    dishId: editingDish?.id,
+  });
+  const [internalScale, setInternalScale] = useState(true);
+
+  if (prevOpenDish.isOpen !== isOpen || prevOpenDish.dishId !== editingDish?.id) {
+    setPrevOpenDish({ isOpen, dishId: editingDish?.id });
+    if (isOpen) {
+      setInternalScale(true);
+    }
+  }
+
+  const isScaleEnabled =
+    scaleNutritionWithAmount !== undefined ? scaleNutritionWithAmount : internalScale;
+
+  const handleScaleToggle = (checked: boolean) => {
+    setInternalScale(checked);
+    onScaleNutritionChange?.(checked);
+    setScaleNutritionWithAmount?.(checked);
+  };
 
   const dishModalRef = useModalA11y(isOpen, onClose);
   const isOnline = useOnlineStatus();
@@ -229,7 +258,7 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                     onChange={(e) => {
                       const next = e.target.value === '' ? '' : Number(e.target.value);
                       if (onQuantityChange) {
-                        onQuantityChange(next);
+                        onQuantityChange(next, isScaleEnabled);
                       } else {
                         setDishModalQuantity(next);
                       }
@@ -239,29 +268,46 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                   />
                 </div>
                 <div>
-                  <label
-                    htmlFor={unitId}
+                  <span
                     className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1"
                   >
                     Unit
-                  </label>
-                  <input
-                    id={unitId}
-                    type="text"
-                    value={dishModalUnit}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      if (onUnitChange) {
-                        onUnitChange(next);
-                      } else {
-                        setDishModalUnit(next);
-                      }
-                    }}
-                    placeholder="e.g. g"
-                    className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
-                  />
+                  </span>
+                  <div className="flex min-h-[44px] items-center">
+                    <UnitChip
+                      value={mapLegacyUnit(dishModalUnit)}
+                      onChange={(next) => {
+                        if (onUnitChange) {
+                          onUnitChange(next);
+                        } else {
+                          setDishModalUnit(next);
+                        }
+                      }}
+                      testId="custom-dish-unit-chip"
+                    />
+                  </div>
                 </div>
               </div>
+
+              {Boolean(editingDish) && (
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-300">
+                    <input
+                      type="checkbox"
+                      data-testid="scale-nutrition-checkbox"
+                      checked={isScaleEnabled}
+                      onChange={(e) => handleScaleToggle(e.target.checked)}
+                      className="accent-cyan-500 rounded min-w-[16px] min-h-[16px]"
+                    />
+                    <span>Scale nutrition with amount</span>
+                  </label>
+                  {!isScaleEnabled && (
+                    <p data-testid="scale-nutrition-hint" className="text-xs text-zinc-400">
+                      Nutrition stays the same; only the serving size changes
+                    </p>
+                  )}
+                </div>
+              )}
               <div data-testid="parent-macros" className="grid grid-cols-6 sm:grid-cols-5 gap-2">
               <div className="col-span-2 sm:col-span-1">
                 <label
