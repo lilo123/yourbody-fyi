@@ -290,7 +290,8 @@ function isTimeoutError(err: any): boolean {
     msg.includes('timeout') ||
     msg.includes('timed out') ||
     msg.includes('abort') ||
-    msg.includes('deadline_exceeded')
+    msg.includes('deadline_exceeded') ||
+    msg.includes('budget exceeded')
   );
 }
 
@@ -329,6 +330,13 @@ async function refundQuota(
   }
 }
 
+function computeResetsAt(period: string, now = new Date()): string {
+  const d = new Date(now);
+  if (period === 'month') {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 0, 0, 0, 0)).toISOString();
+  }
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0)).toISOString();
+}
 export default {
   async fetch(req: Request) {
     const origin = req.headers.get('Origin');
@@ -359,6 +367,7 @@ export default {
     let input = '';
     let isQuotaCharged = false;
     let chargedAmount = 0;
+    let activeQuotaResult: any = null;
     let authenticatedUserId: string | undefined;
     let configuredSupabaseUrl = '';
     let cleanBase64 = '';
@@ -580,6 +589,7 @@ export default {
           } else {
             isQuotaCharged = true;
             chargedAmount = cost;
+            activeQuotaResult = quotaResult;
           }
         } catch (rpcErr: any) {
           console.warn('[parse-nutrition] consume_ai_quota exception (failing open):', rpcErr?.message || rpcErr);
@@ -712,8 +722,6 @@ CORE RESPONSIBILITIES & GUIDELINES:
       let responseText = "";
       let lastAiError: any = null;
       let rateLimitEncountered: any = null;
-      let capacityErrorEncountered: any = null;
-      let timeoutEncountered: any = null;
 
       const overallBudgetMs = cleanBase64
         ? (customBudgetConfig?.overallVisionMs ?? OVERALL_BUDGET_VISION_MS)
@@ -726,8 +734,6 @@ CORE RESPONSIBILITIES & GUIDELINES:
 
       for (let attemptIndex = 0; attemptIndex < candidateModels.length; attemptIndex++) {
         const model = candidateModels[attemptIndex];
-        lastModelAttempted = model;
-        attemptsCount = attemptIndex + 1;
 
         // Rationale: instant 503s cost ~0.3s so falling through remains cheap,
         // while a slow-but-healthy model gets all remaining time.
@@ -735,10 +741,13 @@ CORE RESPONSIBILITIES & GUIDELINES:
         const remaining = overallBudgetMs - elapsed;
         if (remaining < minAttemptBudgetMs) {
           const timeoutErr = new Error(`Overall AI budget exceeded: remaining ${remaining}ms < ${minAttemptBudgetMs}ms`);
-          timeoutEncountered = timeoutErr;
+          timeoutErr.name = "TimeoutError";
           lastAiError = timeoutErr;
           break;
         }
+
+        lastModelAttempted = model;
+        attemptsCount = attemptIndex + 1;
 
         // Cap first attempt so fallback model gets remaining overall budget if first model hangs.
         // Subsequent models get the remaining overall budget.
@@ -800,10 +809,6 @@ CORE RESPONSIBILITIES & GUIDELINES:
           lastAiError = modelErr;
           if (isRateLimitError(modelErr)) {
             rateLimitEncountered = modelErr;
-          } else if (isCapacityError(modelErr)) {
-            capacityErrorEncountered = modelErr;
-          } else if (isTimeoutError(modelErr)) {
-            timeoutEncountered = modelErr;
           }
           const attemptDurationMs = Date.now() - attemptStartTime;
           const statusInfo = modelErr?.status ? ` (status ${modelErr.status})` : '';
@@ -819,7 +824,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
           }
           if (localParseResult?.meal && (localParseResult.confidence === 'exact' || localParseResult.confidence === 'lenient')) {
             const fallbackReason =
-              isTimeoutError(lastAiError) || timeoutEncountered ? 'timeout' : 'ai_unavailable';
+              isTimeoutError(lastAiError) ? 'timeout' : 'ai_unavailable';
             const fallbackResult = mealToStructuredResult(
               localParseResult.meal,
               'rules',
@@ -832,6 +837,7 @@ CORE RESPONSIBILITIES & GUIDELINES:
           }
         }
 
+        // Preserve 429 rate limit when any attempt encounters API quota exhaustion.
         if (isRateLimitError(lastAiError) || rateLimitEncountered) {
           return new Response(
             JSON.stringify({
@@ -850,7 +856,25 @@ CORE RESPONSIBILITIES & GUIDELINES:
           );
         }
 
-        if (isCapacityError(lastAiError) || capacityErrorEncountered) {
+        // Decision logic: evaluate the final attempt's error (lastAiError) so earlier non-terminal capacity errors do not shadow fallback timeouts or budget exhaustion.
+        if (isTimeoutError(lastAiError)) {
+          await reportAiFailure(true);
+          return new Response(
+            JSON.stringify({
+              error: "AI model request timed out. Please try again or switch to manual entry.",
+              code: "TIMEOUT",
+            }),
+            {
+              status: 504,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+        }
+
+        if (isCapacityError(lastAiError)) {
           await reportAiFailure(false);
           return new Response(
             JSON.stringify({
@@ -864,23 +888,6 @@ CORE RESPONSIBILITIES & GUIDELINES:
                 ...corsHeaders,
                 'Content-Type': 'application/json',
                 'Retry-After': '5',
-              },
-            }
-          );
-        }
-
-        if (isTimeoutError(lastAiError) || timeoutEncountered) {
-          await reportAiFailure(true);
-          return new Response(
-            JSON.stringify({
-              error: "AI model request timed out. Please try again or switch to manual entry.",
-              code: "TIMEOUT",
-            }),
-            {
-              status: 504,
-              headers: {
-                ...corsHeaders,
-                'Content-Type': 'application/json',
               },
             }
           );
@@ -904,6 +911,22 @@ CORE RESPONSIBILITIES & GUIDELINES:
         const parsed = JSON.parse(responseText);
         if (parsed && typeof parsed === 'object') {
           parsed.source = 'ai';
+          if (isQuotaEnabled && isQuotaCharged && chargedAmount > 0 && activeQuotaResult) {
+            const limit = Number(activeQuotaResult.limit) || 0;
+            const used = Number(activeQuotaResult.used) || 0;
+            const remaining = Math.max(0, limit - used);
+            const period = activeQuotaResult.period === 'month' ? 'month' : 'day';
+            const resetsAt = activeQuotaResult.resets_at
+              ? new Date(activeQuotaResult.resets_at).toISOString()
+              : computeResetsAt(period);
+            parsed.quota = {
+              limit,
+              used,
+              remaining,
+              period,
+              resetsAt,
+            };
+          }
           responseText = JSON.stringify(parsed);
         }
       } catch {

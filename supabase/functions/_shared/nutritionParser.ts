@@ -6,6 +6,8 @@
  * Zero external dependencies, zero imports.
  */
 
+export const PARSER_VERSION = '2026.10';
+
 export type ParseConfidence = 'exact' | 'lenient' | 'partial' | 'none';
 export type MacroKind = 'calories' | 'protein' | 'carbs' | 'fat' | 'fiber';
 

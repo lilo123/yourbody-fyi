@@ -12,6 +12,7 @@ import {
 import { parseQuantityInput } from '../../utils/unitConverter';
 import { newId } from '../../offline';
 import { fetchDishDetail as defaultFetchDishDetail } from './useNutritionData';
+import { mapLegacyUnit } from './legacyUnitMapping';
 
 export interface UseCustomDishModalOptions {
   onSaveDish: (args: { dishPayload: Partial<CustomDishDetail>; editingDishId?: string }) => void;
@@ -35,6 +36,7 @@ export function useCustomDishModal({
   const [dishModalName, setDishModalName] = useState('');
   const [dishModalQuantity, setDishModalQuantity] = useState<number | ''>('');
   const [dishModalUnit, setDishModalUnit] = useState('g');
+  const [scaleNutritionWithAmount, setScaleNutritionWithAmount] = useState(true);
   const [dishModalCalories, setDishModalCalories] = useState<number | ''>('');
   const [dishModalProtein, setDishModalProtein] = useState<number | ''>('');
   const [dishModalCarbs, setDishModalCarbs] = useState<number | ''>('');
@@ -49,6 +51,7 @@ export function useCustomDishModal({
     setDishModalName('');
     setDishModalQuantity('');
     setDishModalUnit('g');
+    setScaleNutritionWithAmount(true);
     setDishModalCalories('');
     setDishModalProtein('');
     setDishModalCarbs('');
@@ -97,8 +100,21 @@ export function useCustomDishModal({
     setDishModalFat(dish.fat != null ? roundTo1Decimal(dish.fat) : '');
     setDishModalFiber(dish.fiber != null ? roundTo1Decimal(dish.fiber) : '');
     setDishModalNotes(dish.notes ?? '');
+
+    const rawDishItems = Array.isArray(mergedDish.items)
+      ? mergedDish.items.map((it) => {
+          if (it && typeof it === 'object') {
+            return {
+              ...it,
+              unit: mapLegacyUnit((it as any).unit),
+            };
+          }
+          return it;
+        })
+      : mergedDish.items;
+
     const rawItems =
-      normalizeItems(mergedDish.items) ??
+      normalizeItems(rawDishItems) ??
       itemsFromLegacyIngredients(mergedDish.id, mergedDish.name, mergedDish.ingredients) ??
       [];
     const initialKind: CustomDishKind =
@@ -106,6 +122,7 @@ export function useCustomDishModal({
     setDishModalKind(initialKind);
     const normalizedItems = rawItems.map((it) => ({
       ...it,
+      unit: mapLegacyUnit(it.unit),
       quantity: roundTo1Decimal(it.quantity),
       calories: roundTo1Decimal(it.calories),
       protein: roundTo1Decimal(it.protein),
@@ -114,12 +131,16 @@ export function useCustomDishModal({
       fiber: roundTo1Decimal(it.fiber),
     }));
     setDishModalItems(normalizedItems);
+    setScaleNutritionWithAmount(true);
 
     if (initialKind === 'food' && normalizedItems.length === 1) {
-      const item0 = normalizedItems[0];
+      const first = normalizedItems[0];
+      const resolvedUnit = mapLegacyUnit(first.unit ?? (mergedDish as any).serving_unit);
+      const item0 = { ...first, unit: resolvedUnit };
+      setDishModalItems([item0]);
       setDishModalQuantity(item0.quantity);
-      setDishModalUnit(item0.unit || 'g');
-      foodRef.current = { ...item0 };
+      setDishModalUnit(resolvedUnit);
+      foodRef.current = item0;
     } else if (initialKind === 'food') {
       setDishModalQuantity('');
       setDishModalUnit('g');
@@ -143,40 +164,85 @@ export function useCustomDishModal({
     setShowDishModal(true);
   };
 
-  const handleQuantityChange = (nextQty: number | '') => {
+  const handleQuantityChange = (
+    nextQty: number | '',
+    shouldScale: boolean = scaleNutritionWithAmount
+  ) => {
     setDishModalQuantity(nextQty);
     if (nextQty === '' || nextQty <= 0) return;
     const parsed = Number(nextQty);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
 
-    if (foodRef.current && foodRef.current.quantity > 0) {
-      const scaled = scaleItemToQuantity(foodRef.current, parsed);
-      setDishModalCalories(roundTo1Decimal(scaled.calories));
-      setDishModalProtein(roundTo1Decimal(scaled.protein));
-      setDishModalCarbs(roundTo1Decimal(scaled.carbs));
-      setDishModalFat(roundTo1Decimal(scaled.fat));
-      setDishModalFiber(roundTo1Decimal(scaled.fiber));
+    if (shouldScale) {
+      if (foodRef.current && foodRef.current.quantity > 0) {
+        const scaled = scaleItemToQuantity(foodRef.current, parsed);
+        setDishModalCalories(roundTo1Decimal(scaled.calories));
+        setDishModalProtein(roundTo1Decimal(scaled.protein));
+        setDishModalCarbs(roundTo1Decimal(scaled.carbs));
+        setDishModalFat(roundTo1Decimal(scaled.fat));
+        setDishModalFiber(roundTo1Decimal(scaled.fiber));
+      } else {
+        foodRef.current = {
+          id: foodRef.current?.id || newId(),
+          name: dishModalName || '',
+          quantity: parsed,
+          unit: (mapLegacyUnit(dishModalUnit) || 'g') as any,
+          calories: Number(dishModalCalories) || 0,
+          protein: Number(dishModalProtein) || 0,
+          carbs: Number(dishModalCarbs) || 0,
+          fat: Number(dishModalFat) || 0,
+          fiber: Number(dishModalFiber) || 0,
+        };
+      }
     } else {
+      if (foodRef.current) {
+        foodRef.current = {
+          ...foodRef.current,
+          quantity: parsed,
+          calories: Number(dishModalCalories) || 0,
+          protein: Number(dishModalProtein) || 0,
+          carbs: Number(dishModalCarbs) || 0,
+          fat: Number(dishModalFat) || 0,
+          fiber: Number(dishModalFiber) || 0,
+        };
+      } else {
+        foodRef.current = {
+          id: newId(),
+          name: dishModalName || '',
+          quantity: parsed,
+          unit: (mapLegacyUnit(dishModalUnit) || 'g') as any,
+          calories: Number(dishModalCalories) || 0,
+          protein: Number(dishModalProtein) || 0,
+          carbs: Number(dishModalCarbs) || 0,
+          fat: Number(dishModalFat) || 0,
+          fiber: Number(dishModalFiber) || 0,
+        };
+      }
+    }
+  };
+
+  const handleUnitChange = (nextUnit: string) => {
+    const canonical = mapLegacyUnit(nextUnit);
+    setDishModalUnit(canonical);
+    if (foodRef.current) {
       foodRef.current = {
-        id: foodRef.current?.id || newId(),
-        name: dishModalName || '',
-        quantity: parsed,
-        unit: (dishModalUnit || 'g') as any,
+        ...foodRef.current,
+        unit: canonical as any,
+      };
+    }
+  };
+
+  const handleScaleNutritionChange = (enabled: boolean) => {
+    setScaleNutritionWithAmount(enabled);
+    if (!enabled && foodRef.current && typeof dishModalQuantity === 'number' && dishModalQuantity > 0) {
+      foodRef.current = {
+        ...foodRef.current,
+        quantity: dishModalQuantity,
         calories: Number(dishModalCalories) || 0,
         protein: Number(dishModalProtein) || 0,
         carbs: Number(dishModalCarbs) || 0,
         fat: Number(dishModalFat) || 0,
         fiber: Number(dishModalFiber) || 0,
-      };
-    }
-  };
-
-  const handleUnitChange = (nextUnit: string) => {
-    setDishModalUnit(nextUnit);
-    if (foodRef.current) {
-      foodRef.current = {
-        ...foodRef.current,
-        unit: nextUnit as any,
       };
     }
   };
@@ -188,6 +254,10 @@ export function useCustomDishModal({
         ...foodRef.current,
         quantity: dishModalQuantity,
         calories: Number(c) || 0,
+        protein: Number(dishModalProtein) || 0,
+        carbs: Number(dishModalCarbs) || 0,
+        fat: Number(dishModalFat) || 0,
+        fiber: Number(dishModalFiber) || 0,
       };
     }
   };
@@ -198,7 +268,11 @@ export function useCustomDishModal({
       foodRef.current = {
         ...foodRef.current,
         quantity: dishModalQuantity,
+        calories: Number(dishModalCalories) || 0,
         protein: Number(p) || 0,
+        carbs: Number(dishModalCarbs) || 0,
+        fat: Number(dishModalFat) || 0,
+        fiber: Number(dishModalFiber) || 0,
       };
     }
   };
@@ -209,7 +283,11 @@ export function useCustomDishModal({
       foodRef.current = {
         ...foodRef.current,
         quantity: dishModalQuantity,
+        calories: Number(dishModalCalories) || 0,
+        protein: Number(dishModalProtein) || 0,
         carbs: Number(cb) || 0,
+        fat: Number(dishModalFat) || 0,
+        fiber: Number(dishModalFiber) || 0,
       };
     }
   };
@@ -220,7 +298,11 @@ export function useCustomDishModal({
       foodRef.current = {
         ...foodRef.current,
         quantity: dishModalQuantity,
+        calories: Number(dishModalCalories) || 0,
+        protein: Number(dishModalProtein) || 0,
+        carbs: Number(dishModalCarbs) || 0,
         fat: Number(f) || 0,
+        fiber: Number(dishModalFiber) || 0,
       };
     }
   };
@@ -231,6 +313,10 @@ export function useCustomDishModal({
       foodRef.current = {
         ...foodRef.current,
         quantity: dishModalQuantity,
+        calories: Number(dishModalCalories) || 0,
+        protein: Number(dishModalProtein) || 0,
+        carbs: Number(dishModalCarbs) || 0,
+        fat: Number(dishModalFat) || 0,
         fiber: Number(fib) || 0,
       };
     }
@@ -287,16 +373,15 @@ export function useCustomDishModal({
         ? dishModalQuantity
         : parseQuantityInput(dishModalQuantity);
 
-      const unit = dishModalUnit.trim();
+      const resolvedUnit = mapLegacyUnit(dishModalUnit || 'g');
 
       if (parsedQty != null && parsedQty > 0) {
         const qty = roundTo1Decimal(parsedQty);
-        const resolvedUnit = unit || 'g';
         const foodItem: NutritionItem = {
           id: editingDish?.items?.[0]?.id || newId(),
           name: dishModalName.trim(),
           quantity: qty,
-          unit: resolvedUnit as any,
+          unit: resolvedUnit,
           calories: clamp(Number(dishModalCalories) || 0),
           protein: clamp(Number(dishModalProtein) || 0),
           carbs: clamp(Number(dishModalCarbs) || 0),
@@ -354,6 +439,9 @@ export function useCustomDishModal({
     setDishModalUnit,
     handleQuantityChange,
     handleUnitChange,
+    scaleNutritionWithAmount,
+    setScaleNutritionWithAmount: handleScaleNutritionChange,
+    handleScaleNutritionChange,
     dishModalCalories,
     setDishModalCalories: setCalories,
     dishModalProtein,

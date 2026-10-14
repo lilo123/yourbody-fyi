@@ -87,6 +87,8 @@ export interface NutritionLogPayload {
   logged_date: string; // civil date YYYY-MM-DD
   items?: unknown | null;
   notes?: string | null;
+  source?: 'device' | 'ai' | 'manual' | null;
+  parser_version?: string | null;
   incrementDishId?: string;
   [key: string]: unknown;
 }
