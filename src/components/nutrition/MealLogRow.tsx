@@ -205,6 +205,18 @@ export const MealLogRow: React.FC<MealLogRowProps> = ({
               {log.meal_type}
             </span>
           )}
+          {(log.source === 'device' || log.source === 'ai') && (
+            <span
+              data-testid="meal-log-source-badge"
+              className={`whitespace-nowrap rounded-lg px-1.5 py-0.5 text-xs font-bold ${
+                log.source === 'ai'
+                  ? 'border border-purple-500/30 bg-purple-500/10 text-purple-300'
+                  : 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+              }`}
+            >
+              {log.source === 'ai' ? 'AI' : 'Device'}
+            </span>
+          )}
           <span className="whitespace-nowrap font-bold text-amber-400">
             {formatCalories(shown.calories)} kcal
           </span>

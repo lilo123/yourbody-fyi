@@ -6,6 +6,7 @@ import { useCustomDishActions } from './useCustomDishActions';
 import type { CustomDish, CustomDishDetail } from '../../types/database';
 import { isWithinDayBounds } from '../../utils/date';
 import { supabase } from '../../lib/supabase';
+import { PARSER_VERSION } from '../../lib/nutrition/localParse';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -301,6 +302,8 @@ describe('useCustomDishActions', () => {
       logged_date: '2026-09-26',
       notes: 'Vanilla flavor',
       incrementDishId: 'dish-quick-1',
+      source: 'manual',
+      parser_version: PARSER_VERSION,
     });
     expect(isWithinDayBounds(payload.logged_at, '2026-09-26')).toBe(true);
 
