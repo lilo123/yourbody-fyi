@@ -393,6 +393,59 @@ describe('App Shell & Navigation', () => {
     // App header IS present on authenticated app view
     expect(screen.getByTestId('connection-status')).toBeDefined();
   });
+
+  it('renders Nutrition view when cold loading / with last route set to /nutrition', async () => {
+    const cachedProfile = {
+      id: 'test-user-id',
+      email: 'coach@yourbody.fyi',
+      username: 'Coach Demo',
+      role: 'coach',
+      target_calories: 2400,
+      target_protein: 180,
+      target_carbs: 240,
+      target_fat: 70,
+      target_fiber: 30,
+    };
+    localStorage.setItem('yourbody_user', JSON.stringify(cachedProfile));
+    localStorage.setItem('yourbody_last_route_test-user-id', '/nutrition');
+    window.history.pushState({}, '', '/');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nutrition-date-input')).toBeDefined();
+    }, { timeout: 3000 });
+  });
+
+  it('renders Workout view when cold loading / with default last route', async () => {
+    const cachedProfile = {
+      id: 'test-user-id',
+      email: 'coach@yourbody.fyi',
+      username: 'Coach Demo',
+      role: 'coach',
+      target_calories: 2400,
+      target_protein: 180,
+      target_carbs: 240,
+      target_fat: 70,
+      target_fiber: 30,
+    };
+    localStorage.setItem('yourbody_user', JSON.stringify(cachedProfile));
+    window.history.pushState({}, '', '/');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Rest & Recovery')).toBeDefined();
+    }, { timeout: 3000 });
+  });
 });
 
 
