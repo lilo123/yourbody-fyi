@@ -55,10 +55,12 @@ export async function reportAiFailureToSentry(
   model: string,
   attemptCount: number,
   elapsedMs: number,
-  isVision: boolean
+  isVision: boolean = false
 ): Promise<void> {
   const message = isTimeout ? "parse-nutrition AI timeout" : "parse-nutrition AI model error";
+  const kind = isTimeout ? "timeout" : "model_error";
   const context: Record<string, unknown> = {
+    fingerprint: ["parse-nutrition", kind],
     tags: {
       model_id: model || "unknown",
       attempt_count: String(attemptCount),

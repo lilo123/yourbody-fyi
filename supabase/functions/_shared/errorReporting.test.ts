@@ -160,3 +160,94 @@ Deno.test("errorReporting shared helper: setTestCaptureHook intercepts messages 
   }
 });
 
+Deno.test("errorReporting shared helper: scrubEdgeEvent strips synthetic exception, sets logentry, and preserves fingerprint", () => {
+  const rawMessageEvent = {
+    message: "parse-nutrition AI timeout",
+    fingerprint: ["parse-nutrition", "timeout"],
+    tags: {
+      model_id: "gemini-3.5-flash-lite",
+      attempt_count: "2",
+      elapsed_ms: "1420",
+      kind: "text",
+    },
+    exception: {
+      values: [
+        {
+          value: "parse-nutrition AI timeout",
+          stacktrace: {
+            frames: [
+              { filename: "errorReporting.ts", function: "captureMessage", lineno: 142 },
+            ],
+          },
+          mechanism: {
+            type: "generic",
+            handled: true,
+            synthetic: true,
+          },
+        },
+      ],
+    },
+    user: { id: "usr-sensitive-123" },
+    extra: {
+      meal: "secret protein shake",
+      endpoint: "parse-nutrition",
+    },
+  };
+
+  const scrubbed = scrubEdgeEvent(rawMessageEvent);
+
+  // Synthetic exception must be stripped so Sentry does not title the issue "captureMessage"
+  assertEquals(scrubbed.exception, undefined);
+
+  // Message and logentry must be present for event title extraction
+  assertEquals(scrubbed.message, "parse-nutrition AI timeout");
+  assertExists(scrubbed.logentry);
+  assertEquals(scrubbed.logentry.message, "parse-nutrition AI timeout");
+  assertEquals(scrubbed.logentry.formatted, "parse-nutrition AI timeout");
+
+  // Fingerprint and tags must be preserved exactly
+  assertEquals(scrubbed.fingerprint, ["parse-nutrition", "timeout"]);
+  assertEquals(scrubbed.tags, {
+    model_id: "gemini-3.5-flash-lite",
+    attempt_count: "2",
+    elapsed_ms: "1420",
+    kind: "text",
+  });
+
+  // User and meal details must be scrubbed
+  assertEquals(scrubbed.user, undefined);
+  assertEquals(scrubbed.extra.meal, undefined);
+  assertEquals(scrubbed.extra.endpoint, "parse-nutrition");
+});
+
+Deno.test("errorReporting shared helper: scrubEdgeEvent preserves real exceptions with stacktrace", () => {
+  const rawExceptionEvent = {
+    exception: {
+      values: [
+        {
+          type: "TypeError",
+          value: "Cannot read properties of undefined",
+          stacktrace: {
+            frames: [
+              { filename: "index.ts", function: "fetch", lineno: 50 },
+            ],
+          },
+          mechanism: {
+            type: "generic",
+            handled: true,
+          },
+        },
+      ],
+    },
+  };
+
+  const scrubbed = scrubEdgeEvent(rawExceptionEvent);
+
+  // Real exception must NOT be stripped
+  assertExists(scrubbed.exception);
+  assertEquals(scrubbed.exception.values[0].type, "TypeError");
+  assertEquals(scrubbed.exception.values[0].value, "Cannot read properties of undefined");
+  assertExists(scrubbed.exception.values[0].stacktrace);
+});
+
+

@@ -4106,6 +4106,7 @@ Deno.test("AI fallback Sentry: capture is called with message + tags and WITHOUT
         assertEquals(event.message, "parse-nutrition AI timeout");
 
         assertExists(event.context);
+        assertEquals(event.context.fingerprint, ["parse-nutrition", "timeout"]);
         assertExists(event.context.tags);
         const tags = event.context.tags;
         assertEquals(tags.model_id, "gemini-3.1-flash-lite");
@@ -4180,6 +4181,7 @@ Deno.test("AI fallback Sentry: model error reports parse-nutrition AI model erro
         assertEquals(capturedEvents.length, 1);
         const event = capturedEvents[0];
         assertEquals(event.message, "parse-nutrition AI model error");
+        assertEquals(event.context?.fingerprint, ["parse-nutrition", "model_error"]);
         assertExists(event.context?.tags);
         assertEquals(event.context.tags.model_id, "gemini-3.1-flash-lite");
         assertEquals(event.context.tags.model, undefined);
@@ -4255,6 +4257,7 @@ Deno.test("AI fallback Sentry: vision timeout reports tags.kind = vision without
         assertEquals(capturedEvents.length, 1);
         const event = capturedEvents[0];
         assertEquals(event.message, "parse-nutrition AI timeout");
+        assertEquals(event.context?.fingerprint, ["parse-nutrition", "timeout"]);
         assertExists(event.context?.tags);
         assertEquals(event.context.tags.kind, "vision");
         assertEquals(event.context.tags.attempt_count, "2");
@@ -4323,6 +4326,7 @@ Deno.test("AI fallback Sentry: all models fail with non-timeout non-capacity err
         assertEquals(capturedEvents.length, 1);
         const event = capturedEvents[0];
         assertEquals(event.message, "parse-nutrition AI model error");
+        assertEquals(event.context?.fingerprint, ["parse-nutrition", "model_error"]);
         assertExists(event.context?.tags);
         assertEquals(event.context.tags.model_id, "gemini-3.1-flash-lite");
         assertEquals(event.context.tags.model, undefined);
@@ -4569,6 +4573,7 @@ Deno.test("AI fallback attribution: primary 503 fast fail and fallback timeout r
         assertEquals(capturedEvents.length, 1);
         const event = capturedEvents[0];
         assertEquals(event.message, "parse-nutrition AI timeout");
+        assertEquals(event.context?.fingerprint, ["parse-nutrition", "timeout"]);
         assertExists(event.context?.tags);
         assertEquals(event.context.tags.model_id, "gemini-3.1-flash-lite");
         assertEquals(event.context.tags.attempt_count, "2");
@@ -4648,6 +4653,7 @@ Deno.test("AI fallback attribution: primary model hang with remaining budget bel
         assertEquals(capturedEvents.length, 1);
         const event = capturedEvents[0];
         assertEquals(event.message, "parse-nutrition AI timeout");
+        assertEquals(event.context?.fingerprint, ["parse-nutrition", "timeout"]);
         assertExists(event.context?.tags);
         assertEquals(event.context.tags.model_id, "gemini-3.5-flash-lite");
         assertEquals(event.context.tags.attempt_count, "1");
@@ -4720,6 +4726,7 @@ Deno.test("AI fallback attribution: primary 503 and fallback 503 returns 503 cap
         assertEquals(capturedEvents.length, 1);
         const event = capturedEvents[0];
         assertEquals(event.message, "parse-nutrition AI model error");
+        assertEquals(event.context?.fingerprint, ["parse-nutrition", "model_error"]);
         assertExists(event.context?.tags);
         assertEquals(event.context.tags.model_id, "gemini-3.1-flash-lite");
         assertEquals(event.context.tags.attempt_count, "2");

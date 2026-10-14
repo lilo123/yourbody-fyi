@@ -64,6 +64,20 @@ export function scrubEdgeEvent(event: any): any {
     }
   }
 
+  // Remove synthetic exception stacktraces created by Sentry SDK for captureMessage calls.
+  // When an event has an exception with mechanism.synthetic = true, Sentry treats it as an
+  // error/exception event and generates the issue title from the top frame ("captureMessage"),
+  // hiding the message text and grouping distinct message types together by stack frame.
+  // Stripping the synthetic exception ensures Sentry treats this as a pure message event
+  // where the issue title is event.message / event.logentry.message, and issue grouping
+  // honors event.fingerprint.
+  if (event.exception?.values?.[0]?.mechanism?.synthetic) {
+    delete event.exception;
+  }
+  if (event.message && !event.logentry) {
+    event.logentry = { formatted: event.message, message: event.message };
+  }
+
   return event;
 }
 
@@ -84,6 +98,7 @@ export async function initEdgeSentry(): Promise<any> {
           'production',
         sendDefaultPii: false,
         tracesSampleRate: 0,
+        attachStacktrace: false,
         beforeSend(event: any) {
           return scrubEdgeEvent(event);
         },
