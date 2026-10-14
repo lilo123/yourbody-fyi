@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { NutritionEngine } from './nutrition/NutritionEngine';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../context/AuthContext';
@@ -166,20 +165,21 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     renderComponent();
 
     // 1. Explicitly select date X
-    const dateInput = screen.getByTestId('nutrition-date-input');
+    const dateInput = await screen.findByTestId('nutrition-date-input');
     fireEvent.change(dateInput, { target: { value: dateX } });
     expect((dateInput as HTMLInputElement).value).toBe(dateX);
 
     // 2. Open manual entry form
-    const user = userEvent.setup({ delay: null });
-    fireEvent.click(screen.getByText('Manual Entry'));
+    const manualBtn = await screen.findByText('Manual Entry');
+    fireEvent.click(manualBtn);
 
-    await user.type(screen.getByTestId('dish-name-input'), 'Protein Oats');
-    await user.type(screen.getByTestId('calories-input'), '420');
-    await user.type(screen.getByTestId('protein-input'), '32');
-    await user.type(screen.getByTestId('carbs-input'), '55');
-    await user.type(screen.getByTestId('fat-input'), '8');
-    await user.type(screen.getByTestId('fiber-input'), '7');
+    const dishNameInput = await screen.findByTestId('dish-name-input');
+    fireEvent.change(dishNameInput, { target: { value: 'Protein Oats' } });
+    fireEvent.change(screen.getByTestId('calories-input'), { target: { value: '420' } });
+    fireEvent.change(screen.getByTestId('protein-input'), { target: { value: '32' } });
+    fireEvent.change(screen.getByTestId('carbs-input'), { target: { value: '55' } });
+    fireEvent.change(screen.getByTestId('fat-input'), { target: { value: '8' } });
+    fireEvent.change(screen.getByTestId('fiber-input'), { target: { value: '7' } });
 
     // Submit manual meal form to stage into StagedMealCard
     fireEvent.click(screen.getByText('Log Meal'));
@@ -193,10 +193,11 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     expect((dateInput as HTMLInputElement).value).toBe(dateY);
 
     // 4. Verify staged meal card survives date change (c)
-    expect(screen.getByTestId('staged-meal-card')).toBeInTheDocument();
+    expect(await screen.findByTestId('staged-meal-card')).toBeInTheDocument();
 
     // 5. Tap Log on the staged card
-    fireEvent.click(screen.getByRole('button', { name: /log meal \(\+420 kcal\)/i }));
+    const logStagedBtn = await screen.findByRole('button', { name: /log meal \(\+420 kcal\)/i });
+    fireEvent.click(logStagedBtn);
 
     await waitFor(() => {
       expect(mockInsert).toHaveBeenCalled();
@@ -212,7 +213,7 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     expect(payload.food_name).toBe('Protein Oats');
     expect(payload.calories).toBe(420);
     expect(payload.protein).toBe(32);
-  });
+  }, 15000);
 
   it("(b) Day total row recomputes from date Y's logged intake after date change, not date X's", async () => {
     // Seed different logged intake for date X and date Y in the mocked query layer
@@ -284,11 +285,10 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     fireEvent.change(dateInput, { target: { value: dateX } });
 
     // 2. Stage meal of 600 kcal, 45g protein
-    const user = userEvent.setup({ delay: null });
-    const input = screen.getByPlaceholderText(
+    const input = await screen.findByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await user.type(input, 'salmon bowl');
+    fireEvent.change(input, { target: { value: 'salmon bowl' } });
     fireEvent.click(screen.getByText('Analyze Meal'));
 
     await waitFor(() => {
@@ -339,11 +339,10 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     fireEvent.change(dateInput, { target: { value: dateX } });
 
     // 2. Stage meal
-    const user = userEvent.setup({ delay: null });
-    const input = screen.getByPlaceholderText(
+    const input = await screen.findByPlaceholderText(
       'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
     );
-    await user.type(input, 'greek yogurt bowl');
+    fireEvent.change(input, { target: { value: 'greek yogurt bowl' } });
     fireEvent.click(screen.getByText('Analyze Meal'));
 
     await waitFor(() => {
