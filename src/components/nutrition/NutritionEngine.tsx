@@ -7,7 +7,8 @@ import { roundTo1Decimal, calculateRemainingFuel } from '../../utils/nutrition';
 import { itemsForPersist, sumItems, type NutritionItem } from '../../utils/itemModel';
 import { MealLogRow } from './MealLogRow';
 import { NutrientBreakdownModal, type BreakdownNutrient } from './NutrientBreakdownModal';
-import { stagedToItem, recomputeStagedTotals, buildStagedMealFromManualData, useStagedCardFocus } from './nutritionEngineHelpers';
+import { stagedToItem, recomputeStagedTotals, buildStagedMealFromManualData, useStagedCardFocus, type StagedMeal } from './nutritionEngineHelpers';
+import { loadStagedMealDraft } from './stagedMealDraft';
 import { useStagedMealDraft } from './useStagedMealDraft';
 import { Skeleton } from '../common/Skeleton';
 import { useDeferredDelete } from '../common/useDeferredDelete';
@@ -38,13 +39,15 @@ export const NutritionEngine: React.FC = () => {
   const targetUserId = user?.id || '';
 
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateStr(new Date()));
-
-  const { stagedMeal, setStagedMeal, clearDraft } = useStagedMealDraft(targetUserId);
-  const [showManualForm, setShowManualForm] = useState(false);
-  const [breakdownNutrient, setBreakdownNutrient] = useState<BreakdownNutrient | null>(null);
-  const [status, setStatus] = useState<string>('');
-  const [isError, setIsError] = useState(false);
-  const [aiQuota, setAiQuota] = useState<AiQuotaInfo | null>(() => stagedMeal?.quota ?? null);
+  const [aiQuota, setAiQuota] = useState<AiQuotaInfo | null>(
+    () => (targetUserId ? loadStagedMealDraft(targetUserId, getLocalDateStr(new Date()))?.quota ?? null : null)
+  );
+  const handleDraftRestored = useCallback((draft: StagedMeal) => {
+    if (draft.quota) setAiQuota((prev) => prev ?? draft.quota ?? null);
+  }, []);
+  const { stagedMeal, setStagedMeal, clearDraft } = useStagedMealDraft(targetUserId, handleDraftRestored);
+  const [showManualForm, setShowManualForm] = useState(false); const [breakdownNutrient, setBreakdownNutrient] = useState<BreakdownNutrient | null>(null);
+  const [status, setStatus] = useState<string>(''); const [isError, setIsError] = useState(false);
 
   const handleStageManualMeal = (data: ManualMealStagedData) => {
     setStagedMeal(buildStagedMealFromManualData(data, ai.selectedPhoto?.dataUrl));
