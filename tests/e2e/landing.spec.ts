@@ -44,6 +44,13 @@ test.describe('Landing Page & Root Route Decisions', () => {
 
     // App header IS present on login / app routes
     await expect(page.locator('[data-testid="app-header"]')).toBeVisible();
+
+    // 8. Logo on login view links to / and navigates back to landing
+    const logoLink = page.getByRole('link', { name: 'Yourbody.fyi Home' }).first();
+    await expect(logoLink).toBeVisible();
+    await expect(logoLink).toHaveAttribute('href', '/');
+    await logoLink.click();
+    await expect(headline).toBeVisible();
   });
 
   test('visitor at / in standalone mode does not see landing and redirects', async ({ page }) => {

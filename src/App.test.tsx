@@ -446,6 +446,29 @@ describe('App Shell & Navigation', () => {
       expect(screen.getByTestId('routine-select-btn')).toBeDefined();
     }, { timeout: 3000 });
   });
+
+  it('navigates from /login to landing page at / when logo is clicked by a signed-out visitor', async () => {
+    (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
+    (supabase.auth.getSession as any).mockResolvedValue({ data: { session: null } });
+    localStorage.clear();
+    window.history.pushState({}, '', '/login');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    const logoLink = await screen.findByRole('link', { name: 'Yourbody.fyi Home' });
+    expect(logoLink.getAttribute('href')).toBe('/');
+    fireEvent.click(logoLink);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /You know your workout\. We just help you track it\./i })
+      ).toBeDefined();
+    });
+  });
 });
 
 
