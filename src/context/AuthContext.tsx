@@ -20,6 +20,7 @@ import {
 } from '../offline';
 import { isTermsConsentEnabled } from '../config/features';
 import { clearAllStagedMealDrafts } from '../components/nutrition/stagedMealDraft';
+import { NUTRITION_PARSER_MODE_KEY } from '../hooks/useNutritionParserMode';
 
 export const AUTH_STORAGE_PREFIX = 'yourbody_';
 
@@ -316,6 +317,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         setProfile(null);
         localStorage.removeItem('yourbody_user');
+        localStorage.removeItem(NUTRITION_PARSER_MODE_KEY);
+        clearAllStagedMealDrafts();
       }
       setLoading(false);
     });
