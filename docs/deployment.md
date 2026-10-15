@@ -58,16 +58,49 @@ The following occurrences are permanently preserved and allowlisted in `check:br
   - DNS cutover is manual: any updates to DNS records pointing to Cloudflare Pages must be performed manually in Cloudflare DNS.
   - Prior to cutover, verify header parity (`public/_headers`) and CSP enforcement on the `pages.dev` deployment.
 
-## Backend Migrations (Supabase)
-- Database schema changes are version controlled in `supabase/migrations/`.
-- Deploy changes via Supabase CLI:
-  ```bash
-  npx supabase db push
-  ```
-- Deploy Edge Functions:
-  ```bash
-  npx supabase functions deploy
-  ```
+## Automated CI/CD Deployment Pipeline
+
+Database migrations, edge functions, frontend rollouts, and smoke tests are managed through GitHub Actions workflows:
+
+### Production Deployment Pipeline (`deploy-production.yml`)
+Production releases are orchestrated by `.github/workflows/deploy-production.yml`:
+1. **Trigger & Gate**:
+   - Executes automatically on `push` to the `main` branch or manually via `workflow_dispatch`.
+   - Guarded by repository variable `vars.PROD_DEPLOY_ENABLED == 'true'`.
+   - Targeted to the GitHub environment `production`, requiring manual environment reviewer approval before execution begins.
+2. **Preflight Secrets Check**:
+   - Validates that all required production secrets are configured: `SUPABASE_ACCESS_TOKEN_PROD`, `PROD_DB_PASSWORD`, `PROD_PROJECT_REF`, `AGE_RECIPIENT`, `OPS_REPO_TOKEN`, `SMOKE_EMAIL`, and `SMOKE_PASSWORD`.
+3. **Encrypted Pre-Deploy Database Backup**:
+   - Connects to the linked production project via Supabase CLI IPv4 connection pooler (`supabase link`).
+   - Dumps roles (`supabase db dump --role-only`), schema (`supabase db dump`), and table data (`supabase db dump --data-only --use-copy`).
+   - Archives dumps into a tarball and encrypts it with `age` (`age -r "$AGE_RECIPIENT"`).
+   - Clones the private operations repository (`lilo123/yourbody-ops`), commits the encrypted backup artifact (`predeploy/<timestamp>-<sha>.tar.age`), and pushes it to `origin main`.
+4. **Database Migrations Push**:
+   - Applies pending migrations from `supabase/migrations/` using `supabase db push --password "$PROD_DB_PASSWORD"`.
+   - Can be skipped during rollback deployments via the `skip_db_push` workflow dispatch parameter.
+5. **Edge Functions Deploy**:
+   - Deploys edge functions via the Supabase Management API using `supabase functions deploy --use-api`.
+6. **Frontend Rollout & Version Verification**:
+   - Triggers the Vercel production deploy hook (`VERCEL_DEPLOY_HOOK_PROD`).
+   - Polls `https://www.yourbody.fyi/version.json` (every 15 seconds, up to 15 minutes) until the deployed commit SHA matches `$GITHUB_SHA`.
+7. **Cloudflare Pages Deployment (Optional)**:
+   - Dispatches a deploy hook to Cloudflare Pages (`CLOUDFLARE_DEPLOY_HOOK_URL`) non-blockingly.
+   - *Note*: Cloudflare cutover has not taken place; Vercel remains the active production host.
+8. **Production Smoke Testing**:
+   - Executes the automated Playwright smoke test suite against `https://www.yourbody.fyi` (`npx playwright test -c playwright.smoke.config.ts`).
+9. **Release Tagging (`tag` job)**:
+   - On deployment success on `main`, queries existing release tags (`vYYYY.MM.DD-*`), determines the next daily release number (`vYYYY.MM.DD-N`), and pushes an annotated git tag to `origin`.
+
+### Staging Deployment Pipeline (`deploy-staging.yml`)
+Pull request validation and staging deployments are handled by `.github/workflows/deploy-staging.yml`:
+1. **Trigger**:
+   - Runs automatically on pull requests targeting `main` that include changes under `supabase/**` or `.github/workflows/deploy-staging.yml`, as well as on manual `workflow_dispatch`.
+2. **Execution Steps**:
+   - Validates configuration of staging secrets (`SUPABASE_ACCESS_TOKEN_STAGING`, `STAGING_DB_PASSWORD`, `STAGING_PROJECT_REF`).
+   - Links the staging project using `supabase link --project-ref "$STAGING_PROJECT_REF"`.
+   - Pushes pending migrations using `supabase db push --password "$STAGING_DB_PASSWORD"`.
+   - Deploys edge functions using `supabase functions deploy --use-api`.
+   - Lists applied migrations using `supabase migration list`.
 
 ## Mobile Deployment (Android)
 To build and release the Yourbody APK/AAB bundle:
