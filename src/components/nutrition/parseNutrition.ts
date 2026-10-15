@@ -5,6 +5,9 @@ import { MAX_PHOTO_BYTES } from '../../utils/photoLimits';
 import { roundTo1Decimal } from '../../utils/nutrition';
 import { buildStagedItem, type StagedItem } from './nutritionEngineHelpers';
 
+export const TEXT_PARSE_TIMEOUT_MS = 33000;
+export const VISION_PARSE_TIMEOUT_MS = 45000;
+
 export interface ParseNutritionArgs {
   text?: string;
   photo?: CompressedImage | null;
@@ -80,7 +83,7 @@ export async function parseNutrition({
   }
 
   let timeoutId: any;
-  const timeoutMs = photo ? 45000 : 30000;
+  const timeoutMs = photo ? VISION_PARSE_TIMEOUT_MS : TEXT_PARSE_TIMEOUT_MS;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(
       () => reject(new Error(`Edge function timeout after ${timeoutMs / 1000}s`)),
