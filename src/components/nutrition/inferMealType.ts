@@ -71,7 +71,7 @@ export function mealTypeCandidate(
   fallbackName?: string | null
 ): string | undefined {
   if (typeof text === 'string') {
-    const headerLine = text.trim().split('\n')[0]?.trim().replace(/[:\s—–]+$/, '');
+    const headerLine = text.trim().split('\n')[0]?.trim().replace(/[:\s—–-]+$/, '');
     if (headerLine && isMealWord(headerLine)) {
       return headerLine;
     }
@@ -94,7 +94,7 @@ export function mealTypeCandidate(
  */
 export function inferMealType(name?: string | null, now?: Date | null): CanonicalMealType {
   if (typeof name === 'string') {
-    const trimmed = name.trim().toLowerCase();
+    const trimmed = name.trim().replace(/[:\s—–-]+$/, '').toLowerCase();
     if (trimmed === 'breakfast') return 'Breakfast';
     if (trimmed === 'lunch') return 'Lunch';
     if (trimmed === 'dinner') return 'Dinner';

@@ -75,11 +75,16 @@ describe('inferMealType unit tests', () => {
       expect(mealTypeCandidate('dinner:\n1 banana', 'Banana')).toBe('dinner');
       expect(mealTypeCandidate('LUNCH —\n2 eggs', 'Eggs')).toBe('LUNCH');
       expect(mealTypeCandidate('Breakfast', 'Meal')).toBe('Breakfast');
+      expect(mealTypeCandidate('DINNER -\n1 steak 400 kcal', 'Steak')).toBe('DINNER');
+      expect(mealTypeCandidate('Lunch - \n2 eggs', 'Eggs')).toBe('Lunch');
+      expect(mealTypeCandidate('Snack:\n1 apple', 'Apple')).toBe('Snack');
     });
 
     it('falls back to fallbackName when header line is not a meal word', () => {
       expect(mealTypeCandidate('1 medium banana 105 kcal', 'Medium Banana')).toBe('Medium Banana');
       expect(mealTypeCandidate('Pre-Workout\nprotein shake', 'Protein Shake')).toBe('Protein Shake');
+      expect(mealTypeCandidate('Pre-Workout -\nprotein shake', 'Protein Shake')).toBe('Protein Shake');
+      expect(mealTypeCandidate('Dinner-ish\n1 steak 400 kcal', 'Steak')).toBe('Steak');
       expect(mealTypeCandidate('', 'Oatmeal')).toBe('Oatmeal');
       expect(mealTypeCandidate(undefined, 'Oatmeal')).toBe('Oatmeal');
       expect(mealTypeCandidate(null, 'Oatmeal')).toBe('Oatmeal');
@@ -88,6 +93,48 @@ describe('inferMealType unit tests', () => {
     it('returns undefined when both text and fallbackName are omitted or empty', () => {
       expect(mealTypeCandidate(undefined, undefined)).toBeUndefined();
       expect(mealTypeCandidate('', '')).toBeUndefined();
+      expect(mealTypeCandidate('Dinner-ish')).toBeUndefined();
+      expect(mealTypeCandidate('Pre-Workout')).toBeUndefined();
+    });
+  });
+
+  describe('headers and names with trailing hyphens and punctuation', () => {
+    const morningTime = new Date(2026, 9, 15, 8, 0); // 08:00 local time -> Breakfast if fallback
+
+    it('recognizes "DINNER -" as Dinner', () => {
+      expect(inferMealType('DINNER -', morningTime)).toBe('Dinner');
+      expect(mealTypeCandidate('DINNER -\n1 steak 400 kcal', 'Steak')).toBe('DINNER');
+      expect(inferMealType(mealTypeCandidate('DINNER -\n1 steak 400 kcal', 'Steak'), morningTime)).toBe('Dinner');
+    });
+
+    it('recognizes "Lunch - " as Lunch', () => {
+      expect(inferMealType('Lunch - ', morningTime)).toBe('Lunch');
+      expect(mealTypeCandidate('Lunch - \n2 eggs 140 kcal', 'Eggs')).toBe('Lunch');
+      expect(inferMealType(mealTypeCandidate('Lunch - \n2 eggs 140 kcal', 'Eggs'), morningTime)).toBe('Lunch');
+    });
+
+    it('still recognizes "Snack:" as Snack', () => {
+      expect(inferMealType('Snack:', morningTime)).toBe('Snack');
+      expect(mealTypeCandidate('Snack:\n1 apple 95 kcal', 'Apple')).toBe('Snack');
+      expect(inferMealType(mealTypeCandidate('Snack:\n1 apple 95 kcal', 'Apple'), morningTime)).toBe('Snack');
+    });
+
+    it('"Dinner-ish" (no trailing hyphen) is NOT a meal word and falls back to time of day', () => {
+      expect(inferMealType('Dinner-ish', morningTime)).toBe('Breakfast');
+      expect(mealTypeCandidate('Dinner-ish\n1 steak 400 kcal', 'Steak')).toBe('Steak');
+      expect(mealTypeCandidate('Dinner-ish')).toBeUndefined();
+      expect(inferMealType(mealTypeCandidate('Dinner-ish\n1 steak 400 kcal'), morningTime)).toBe('Breakfast');
+    });
+
+    it('"Pre-Workout" header is NOT a meal word and falls back to time of day', () => {
+      expect(inferMealType('Pre-Workout', morningTime)).toBe('Breakfast');
+      expect(inferMealType('Pre-Workout -', morningTime)).toBe('Breakfast');
+      expect(mealTypeCandidate('Pre-Workout\nprotein shake 200 kcal', 'Protein Shake')).toBe('Protein Shake');
+      expect(mealTypeCandidate('Pre-Workout -\nprotein shake 200 kcal', 'Protein Shake')).toBe('Protein Shake');
+      expect(mealTypeCandidate('Pre-Workout')).toBeUndefined();
+      expect(mealTypeCandidate('Pre-Workout -')).toBeUndefined();
+      expect(inferMealType(mealTypeCandidate('Pre-Workout\nprotein shake 200 kcal'), morningTime)).toBe('Breakfast');
+      expect(inferMealType(mealTypeCandidate('Pre-Workout -\nprotein shake 200 kcal'), morningTime)).toBe('Breakfast');
     });
   });
 
