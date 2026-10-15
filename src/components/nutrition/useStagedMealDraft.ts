@@ -13,10 +13,16 @@ export interface UseStagedMealDraftReturn {
   clearDraft: () => void;
 }
 
-export function useStagedMealDraft(targetUserId: string): UseStagedMealDraftReturn {
+export function useStagedMealDraft(
+  targetUserId: string,
+  onDraftRestored?: (draft: StagedMeal) => void
+): UseStagedMealDraftReturn {
   const [stagedMeal, setStagedMeal] = useState<StagedMeal | null>(() => {
     return loadStagedMealDraft(targetUserId, getLocalDateStr(new Date()));
   });
+
+  const onDraftRestoredRef = useRef(onDraftRestored);
+  onDraftRestoredRef.current = onDraftRestored;
 
   const prevUserIdRef = useRef<string>(targetUserId);
 
@@ -28,6 +34,9 @@ export function useStagedMealDraft(targetUserId: string): UseStagedMealDraftRetu
         const restored = loadStagedMealDraft(targetUserId, getLocalDateStr(new Date()));
         if (restored || !wasEmpty) {
           setStagedMeal(restored);
+          if (restored) {
+            onDraftRestoredRef.current?.(restored);
+          }
         }
       } else {
         setStagedMeal(null);
