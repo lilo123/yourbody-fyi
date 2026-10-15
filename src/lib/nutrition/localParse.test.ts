@@ -3,6 +3,9 @@ import {
   LOCAL_PARSE_GRAMMAR_DOC,
   type LocalParseRejectReason,
   parseNutritionBlock,
+  parseNutritionText,
+  extractCountedPortion,
+  isVolumeOrWeightUnit,
 } from './localParse';
 
 describe('LOCAL_PARSE_GRAMMAR_DOC export', () => {
@@ -899,3 +902,162 @@ Fat: 8g`,
     }
   );
 });
+
+describe('Counted Portion Handling (Task COUNTPORTION)', () => {
+  it('parses "Spaghetti Allo Scoglio (2 small plates)" with full macros keeping total macros unchanged', () => {
+    const input = [
+      'Meal: Dinner',
+      '- Spaghetti Allo Scoglio (2 small plates): 900 kcal | 30g protein | 120g carbs | 33g fat',
+    ].join('\n');
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal).toBeDefined();
+    const item = result.meal?.items?.[0];
+    expect(item?.name).toBe('Spaghetti Allo Scoglio (2 small plates)');
+    expect(item?.amount).toBe(2);
+    expect(item?.unit).toBe('unit');
+    expect(item?.calories).toBe(900);
+    expect(item?.calories! / item?.amount!).toBe(450);
+    expect(item?.protein).toBe(30);
+    expect(item?.carbs).toBe(120);
+    expect(item?.fat).toBe(33);
+  });
+
+  it('parses "3 slices pizza" with full macros -> 3 unit, total 855', () => {
+    const input = '3 slices pizza: 855 kcal | 30g protein | 90g carbs | 41g fat';
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal).toBeDefined();
+    expect(result.meal?.amount).toBe(3);
+    expect(result.meal?.unit).toBe('unit');
+    expect(result.meal?.calories).toBe(855);
+    expect(result.meal?.calories! / result.meal?.amount!).toBe(285);
+    expect(result.meal?.protein).toBe(30);
+    expect(result.meal?.carbs).toBe(90);
+    expect(result.meal?.fat).toBe(41);
+  });
+
+  it('parses "Gyoza (2 pieces)" with full macros -> 2 unit, total 140', () => {
+    const input = [
+      'Meal: Lunch',
+      '- Gyoza (2 pieces): 140 kcal | 6g protein | 16g carbs | 6g fat',
+    ].join('\n');
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal).toBeDefined();
+    const item = result.meal?.items?.[0];
+    expect(item?.name).toBe('Gyoza (2 pieces)');
+    expect(item?.amount).toBe(2);
+    expect(item?.unit).toBe('unit');
+    expect(item?.calories).toBe(140);
+    expect(item?.calories! / item?.amount!).toBe(70);
+    expect(item?.protein).toBe(6);
+    expect(item?.carbs).toBe(16);
+    expect(item?.fat).toBe(6);
+  });
+
+  it("regression: paste-061 retains main's result (confidence none)", () => {
+    const input = 'Personal Pepperoni Pizza (4 slices) - 680 kcal | 32g P | 72g C | 28g F';
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('none');
+    expect(result.meal).toBeUndefined();
+  });
+
+  it('leaves a no-count line unchanged (same object as before)', () => {
+    const input = 'Garlic Toast: 160 kcal | 4g protein | 14g carbs | 9g fat';
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal).toBeDefined();
+    expect(result.meal?.name).toBe('Garlic Toast');
+    expect(result.meal?.amount).toBeUndefined();
+    expect(result.meal?.unit).toBeUndefined();
+    expect(result.meal?.servingSize).toBeUndefined();
+    expect(result.meal?.servingUnit).toBeUndefined();
+    expect(result.meal?.calories).toBe(160);
+    expect(result.meal?.protein).toBe(4);
+    expect(result.meal?.carbs).toBe(14);
+    expect(result.meal?.fat).toBe(9);
+  });
+
+  it('parses multi-item meal with counted portions keeping item names, counts, and per-item totals', () => {
+    const multiInput = [
+      'Meal: Dinner',
+      '- Spaghetti Allo Scoglio (2 small plates): 900 kcal | 30g protein | 120g carbs | 33g fat',
+      '- 3 slices pizza: 855 kcal | 30g protein | 90g carbs | 41g fat',
+      '- Gyoza (2 pieces): 140 kcal | 6g protein | 16g carbs | 6g fat',
+      '- Garlic Toast: 160 kcal | 4g protein | 14g carbs | 9g fat',
+      '- Total meal: 2055 kcal | 70g protein | 240g carbs | 89g fat',
+    ].join('\n');
+    const result = parseNutritionText(multiInput);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal?.items).toHaveLength(4);
+
+    const items = result.meal?.items!;
+    expect(items[0].name).toBe('Spaghetti Allo Scoglio (2 small plates)');
+    expect(items[0].amount).toBe(2);
+    expect(items[0].unit).toBe('unit');
+    expect(items[0].portion).toBe('2 unit');
+    expect(items[0].calories).toBe(900);
+
+    expect(items[1].name).toBe('3 slices pizza');
+    expect(items[1].amount).toBe(3);
+    expect(items[1].unit).toBe('unit');
+    expect(items[1].portion).toBe('3 unit');
+    expect(items[1].calories).toBe(855);
+
+    expect(items[2].name).toBe('Gyoza (2 pieces)');
+    expect(items[2].amount).toBe(2);
+    expect(items[2].unit).toBe('unit');
+    expect(items[2].portion).toBe('2 unit');
+    expect(items[2].calories).toBe(140);
+
+    // No-count line in multi-item
+    expect(items[3].name).toBe('Garlic Toast');
+    expect(items[3].amount).toBeUndefined();
+    expect(items[3].unit).toBeUndefined();
+    expect(items[3].portion).toBe('1 serving');
+    expect(items[3].calories).toBe(160);
+  });
+
+  it('does not touch volume or weight units', () => {
+    expect(isVolumeOrWeightUnit('cups')).toBe(true);
+    expect(isVolumeOrWeightUnit('oz')).toBe(true);
+    expect(isVolumeOrWeightUnit('g')).toBe(true);
+    expect(isVolumeOrWeightUnit('unit')).toBe(false);
+    expect(isVolumeOrWeightUnit('slices')).toBe(false);
+
+    const volumeInput = '2 cups brown rice: 430 kcal | 9g P | 90g C | 3g F';
+    const volumeResult = parseNutritionText(volumeInput);
+    expect(volumeResult.meal?.servingUnit).not.toBe('unit');
+
+    const weightInput = '8 oz Grilled Sirloin Steak: 48g protein, 0g carbs, 18g fat, 360 kcal';
+    const weightResult = parseNutritionText(weightInput);
+    expect(weightResult.meal?.servingUnit).toBe('oz');
+    expect(weightResult.meal?.amount).toBeUndefined();
+  });
+
+  it('extractCountedPortion only accepts integer counts 2-20 and valid containers', () => {
+    expect(extractCountedPortion('1 slice')).toBeNull();
+    expect(extractCountedPortion('21 pieces')).toBeNull();
+    expect(extractCountedPortion('2.5 slices')).toBeNull();
+    expect(extractCountedPortion('2 cups')).toBeNull();
+    expect(extractCountedPortion('2 plates')?.count).toBe(2);
+    expect(extractCountedPortion('20 bowls')?.count).toBe(20);
+    expect(extractCountedPortion('(2 small plates)')?.size).toBe('small');
+    expect(extractCountedPortion('(4 large portions)')?.size).toBe('large');
+    expect(extractCountedPortion('(3 medium bowls)')?.size).toBe('medium');
+    expect(extractCountedPortion('(2 big slices)')?.size).toBe('big');
+  });
+
+  it('parseNutritionBlock succeeds with counted portion item', () => {
+    const input = '3 slices pizza: 855 kcal | 30g protein | 90g carbs | 41g fat';
+    const result = parseNutritionBlock(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.meal.amount).toBe(3);
+      expect(result.meal.unit).toBe('unit');
+      expect(result.meal.calories).toBe(855);
+    }
+  });
+});
+

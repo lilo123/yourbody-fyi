@@ -11,10 +11,7 @@ vi.mock('./parseNutrition', () => ({
 }));
 
 vi.mock('../../offline', () => ({
-  enqueueAiItem: vi.fn(),
   enqueueAndAwait: vi.fn(),
-  deleteAfterLog: vi.fn(),
-  discardAiItem: vi.fn(),
 }));
 
 describe('Device multi-item breakdown staging (P6)', () => {

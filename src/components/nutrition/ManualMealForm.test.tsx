@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { ManualMealForm, type ManualMealFormProps } from './ManualMealForm';
 import { useManualMealForm } from './useManualMealForm';
@@ -204,6 +204,15 @@ describe('ManualMealForm', () => {
   });
 
   describe('useManualMealForm', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 9, 15, 8, 0));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('stages blank P/C/F/Fib as 0 in staged data', () => {
       const onStageMeal = vi.fn();
       const { result } = renderHook(() =>
@@ -437,6 +446,46 @@ describe('ManualMealForm', () => {
       expect(result.current.manualCarbs).toBe('');
       expect(result.current.manualFat).toBe('');
       expect(result.current.manualFiber).toBe('');
+    });
+  });
+
+  describe('scrollIntoView on open', () => {
+    it('opening Manual Entry calls scrollIntoView once; closing does not', () => {
+      const scrollSpy = vi.fn();
+      Element.prototype.scrollIntoView = scrollSpy;
+
+      const { rerender, props } = renderForm({ show: false });
+      expect(scrollSpy).not.toHaveBeenCalled();
+
+      rerender(<ManualMealForm {...props} show={true} />);
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'end' });
+
+      rerender(<ManualMealForm {...props} show={false} />);
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('respects prefers-reduced-motion when scrolling on open', () => {
+      const scrollSpy = vi.fn();
+      Element.prototype.scrollIntoView = scrollSpy;
+
+      window.matchMedia = vi.fn().mockImplementation((query) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+
+      const { rerender, props } = renderForm({ show: false });
+      expect(scrollSpy).not.toHaveBeenCalled();
+
+      rerender(<ManualMealForm {...props} show={true} />);
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'auto', block: 'end' });
     });
   });
 });

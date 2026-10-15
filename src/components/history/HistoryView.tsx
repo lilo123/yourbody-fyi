@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import type { WorkoutSet, NutritionLog, Exercise } from '../../types/database';
 import { AlertCircle, Shield, RotateCcw } from 'lucide-react';
 import { EditMealSheet } from '../nutrition/EditMealSheet';
+import { useMealUpdateToast } from '../nutrition/useNutritionData';
 import { EditSetSheet } from '../sets/EditSetSheet';
 import { useHistorySetDeferredDelete } from './useHistorySetDeferredDelete';
 import { useHistoryMealDeferredDelete } from './useHistoryMealDeferredDelete';
@@ -50,6 +51,7 @@ export const HistoryView: React.FC = () => {
   const [editingMealLog, setEditingMealLog] = useState<NutritionLog | null>(null);
   const [editingSet, setEditingSet] = useState<(WorkoutSet & { workout_date?: string; workout_name?: string }) | null>(null);
   const [timeRange, setTimeRange] = useState<HistoryRange>('all');
+  const triggerToast = useMealUpdateToast();
 
   /* oxlint-disable react/set-state-in-effect */
   React.useEffect(() => {
@@ -459,6 +461,11 @@ export const HistoryView: React.FC = () => {
         targetUserId={targetUserId}
         nutritionLogs={nutritionLogs}
         timeZone={effectiveTimeZone}
+        triggerToast={triggerToast}
+        setStatus={(msg) => setMutationError(msg)}
+        setIsError={(isErr) => {
+          if (!isErr) setMutationError(null);
+        }}
       />
 
 

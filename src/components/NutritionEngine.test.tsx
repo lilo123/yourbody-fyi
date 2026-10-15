@@ -2667,7 +2667,7 @@ Total Fiber: 1 g`;
     });
   });
 
-  it('enforces adaptive timeouts of 30s for text-only input', async () => {
+  it('enforces adaptive timeouts of 33s for text-only input', async () => {
     (supabase.functions.invoke as any).mockImplementation(() => new Promise(() => {}));
 
     renderComponent();
@@ -2679,17 +2679,17 @@ Total Fiber: 1 g`;
     try {
       fireEvent.click(screen.getByTestId('analyze-meal-button'));
 
-      // Advance by 29 seconds (should not timeout yet)
+      // Advance by 32 seconds (should not timeout yet)
       await act(async () => {
-        vi.advanceTimersByTime(29000);
+        vi.advanceTimersByTime(32000);
       });
       expect(screen.queryByText(/Edge function timeout/i)).toBeNull();
 
-      // Advance past 30 seconds
+      // Advance past 33 seconds
       await act(async () => {
         vi.advanceTimersByTime(2000);
       });
-      expect(within(screen.getByTestId('status-message')).getByText(/Edge function timeout after 30s/i)).toBeDefined();
+      expect(within(screen.getByTestId('status-message')).getByText(/Edge function timeout after 33s/i)).toBeDefined();
     } finally {
       vi.useRealTimers();
     }
@@ -2716,7 +2716,7 @@ Total Fiber: 1 g`;
     try {
       fireEvent.click(screen.getByTestId('analyze-meal-button'));
 
-      // Advance by 35 seconds (past the 30s text timeout, should NOT timeout yet because photo timeout is 45s)
+      // Advance by 35 seconds (past the 33s text timeout, should NOT timeout yet because photo timeout is 45s)
       await act(async () => {
         vi.advanceTimersByTime(35000);
       });

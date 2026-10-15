@@ -759,6 +759,67 @@ describe('HistoryView', () => {
     });
   });
 
+  it('shows Updated toast with Undo after editing meal from History and restores previous values on undo', async () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByTestId('history-tab-nutrition'));
+    await expandNutritionDay();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('meal-actions-log-1')).toBeDefined();
+    });
+
+    openMealAction('log-1', 'edit');
+
+    // Modify values
+    fireEvent.change(screen.getByTestId('dish-name-input'), {
+      target: { value: 'Grilled Lemon Herb Chicken & Rice' },
+    });
+    fireEvent.change(screen.getByTestId('meal-type-select'), {
+      target: { value: 'Dinner' },
+    });
+
+    // Save
+    fireEvent.click(screen.getByTestId('save-edit-meal-btn'));
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          food_name: 'Grilled Lemon Herb Chicken & Rice',
+          meal_type: 'Dinner',
+        })
+      );
+      expect(mockUpdateEq).toHaveBeenCalledWith('id', 'log-1');
+    });
+
+    // Sheet closes
+    await waitFor(() => {
+      expect(screen.queryByTestId('edit-meal-sheet')).toBeNull();
+    });
+
+    // Toast is shown with Updated copy and Undo button
+    const toast = await screen.findByTestId('quick-log-toast');
+    expect(toast).toHaveTextContent('Updated');
+    expect(toast).toHaveTextContent('Grilled Lemon Herb Chicken & Rice');
+    expect(screen.getByTestId('toast-dish-text')).toHaveTextContent('Grilled Lemon Herb Chicken & Rice');
+
+    const undoBtn = screen.getByTestId('toast-undo-btn');
+    expect(undoBtn).toBeInTheDocument();
+
+    // Clicking Undo restores the previous meal values
+    fireEvent.click(undoBtn);
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          food_name: 'Grilled Chicken & Rice',
+          meal_type: 'lunch',
+        })
+      );
+      expect(mockUpdateEq).toHaveBeenLastCalledWith('id', 'log-1');
+    });
+  });
+
   it('displays error notification in Edit Meal sheet when meal update fails', async () => {
     mockUpdateEq.mockReturnValueOnce({
       select: vi.fn().mockResolvedValue({ data: null, error: { message: 'Database update failed' } }),
