@@ -371,5 +371,37 @@ describe('LoginView', () => {
       expect(screen.queryByTestId('in-app-browser-banner')).toBeNull();
     });
   });
+
+  it('renders the logo as a link to / with accessible name', () => {
+    renderComponent();
+    const logoLink = screen.getByRole('link', { name: 'Yourbody.fyi Home' });
+    expect(logoLink).toBeDefined();
+    expect(logoLink.getAttribute('href')).toBe('/');
+  });
+
+  it('navigates to / when the logo link is clicked in MemoryRouter', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const { MemoryRouter, Routes, Route } = await import('react-router-dom');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/login']}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<LoginView />} />
+              <Route path="/" element={<div data-testid="landing-stub">Landing View</div>} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const logoLink = screen.getByRole('link', { name: 'Yourbody.fyi Home' });
+    expect(logoLink).toBeDefined();
+    expect(logoLink.getAttribute('href')).toBe('/');
+    fireEvent.click(logoLink);
+
+    expect(screen.getByTestId('landing-stub')).toBeDefined();
+  });
 });
 
