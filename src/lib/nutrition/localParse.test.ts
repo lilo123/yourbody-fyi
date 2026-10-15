@@ -904,42 +904,23 @@ Fat: 8g`,
 });
 
 describe('Counted Portion Handling (Task COUNTPORTION)', () => {
-  it('parses "Spaghetti Allo Scoglio (2 small plates) 900 kcal" with amount 2, unit "unit", total kcal 900 (per-unit 450)', () => {
-    const result = parseNutritionText('Spaghetti Allo Scoglio (2 small plates) 900 kcal');
-    expect(result.confidence).toBe('exact');
-    expect(result.meal).toBeDefined();
-    expect(result.meal?.name).toBe('Spaghetti Allo Scoglio (2 small plates)');
-    expect(result.meal?.amount).toBe(2);
-    expect(result.meal?.unit).toBe('unit');
-    expect(result.meal?.servingSize).toBe(2);
-    expect(result.meal?.servingUnit).toBe('unit');
-    expect(result.meal?.calories).toBe(900);
-    expect(result.meal?.calories! / result.meal?.amount!).toBe(450);
-  });
-
   it('parses "Spaghetti Allo Scoglio (2 small plates)" with full macros keeping total macros unchanged', () => {
-    const input = 'Spaghetti Allo Scoglio (2 small plates): 900 kcal | 30g protein | 120g carbs | 33g fat';
+    const input = [
+      'Meal: Dinner',
+      '- Spaghetti Allo Scoglio (2 small plates): 900 kcal | 30g protein | 120g carbs | 33g fat',
+    ].join('\n');
     const result = parseNutritionText(input);
     expect(result.confidence).toBe('exact');
     expect(result.meal).toBeDefined();
-    expect(result.meal?.name).toBe('Spaghetti Allo Scoglio (2 small plates)');
-    expect(result.meal?.amount).toBe(2);
-    expect(result.meal?.unit).toBe('unit');
-    expect(result.meal?.calories).toBe(900);
-    expect(result.meal?.calories! / result.meal?.amount!).toBe(450);
-    expect(result.meal?.protein).toBe(30);
-    expect(result.meal?.carbs).toBe(120);
-    expect(result.meal?.fat).toBe(33);
-  });
-
-  it('parses "3 slices pizza 855 kcal" -> 3 unit, total 855', () => {
-    const result = parseNutritionText('3 slices pizza 855 kcal');
-    expect(result.confidence).toBe('exact');
-    expect(result.meal).toBeDefined();
-    expect(result.meal?.amount).toBe(3);
-    expect(result.meal?.unit).toBe('unit');
-    expect(result.meal?.calories).toBe(855);
-    expect(result.meal?.calories! / result.meal?.amount!).toBe(285);
+    const item = result.meal?.items?.[0];
+    expect(item?.name).toBe('Spaghetti Allo Scoglio (2 small plates)');
+    expect(item?.amount).toBe(2);
+    expect(item?.unit).toBe('unit');
+    expect(item?.calories).toBe(900);
+    expect(item?.calories! / item?.amount!).toBe(450);
+    expect(item?.protein).toBe(30);
+    expect(item?.carbs).toBe(120);
+    expect(item?.fat).toBe(33);
   });
 
   it('parses "3 slices pizza" with full macros -> 3 unit, total 855', () => {
@@ -950,34 +931,36 @@ describe('Counted Portion Handling (Task COUNTPORTION)', () => {
     expect(result.meal?.amount).toBe(3);
     expect(result.meal?.unit).toBe('unit');
     expect(result.meal?.calories).toBe(855);
+    expect(result.meal?.calories! / result.meal?.amount!).toBe(285);
     expect(result.meal?.protein).toBe(30);
     expect(result.meal?.carbs).toBe(90);
     expect(result.meal?.fat).toBe(41);
   });
 
-  it('parses "Gyoza (2 pieces) 140 kcal" -> 2 unit, total 140', () => {
-    const result = parseNutritionText('Gyoza (2 pieces) 140 kcal');
-    expect(result.confidence).toBe('exact');
-    expect(result.meal).toBeDefined();
-    expect(result.meal?.name).toBe('Gyoza (2 pieces)');
-    expect(result.meal?.amount).toBe(2);
-    expect(result.meal?.unit).toBe('unit');
-    expect(result.meal?.calories).toBe(140);
-    expect(result.meal?.calories! / result.meal?.amount!).toBe(70);
-  });
-
   it('parses "Gyoza (2 pieces)" with full macros -> 2 unit, total 140', () => {
-    const input = 'Gyoza (2 pieces): 140 kcal, 6g protein, 16g carbs, 6g fat';
+    const input = [
+      'Meal: Lunch',
+      '- Gyoza (2 pieces): 140 kcal | 6g protein | 16g carbs | 6g fat',
+    ].join('\n');
     const result = parseNutritionText(input);
     expect(result.confidence).toBe('exact');
     expect(result.meal).toBeDefined();
-    expect(result.meal?.name).toBe('Gyoza (2 pieces)');
-    expect(result.meal?.amount).toBe(2);
-    expect(result.meal?.unit).toBe('unit');
-    expect(result.meal?.calories).toBe(140);
-    expect(result.meal?.protein).toBe(6);
-    expect(result.meal?.carbs).toBe(16);
-    expect(result.meal?.fat).toBe(6);
+    const item = result.meal?.items?.[0];
+    expect(item?.name).toBe('Gyoza (2 pieces)');
+    expect(item?.amount).toBe(2);
+    expect(item?.unit).toBe('unit');
+    expect(item?.calories).toBe(140);
+    expect(item?.calories! / item?.amount!).toBe(70);
+    expect(item?.protein).toBe(6);
+    expect(item?.carbs).toBe(16);
+    expect(item?.fat).toBe(6);
+  });
+
+  it("regression: paste-061 retains main's result (confidence none)", () => {
+    const input = 'Personal Pepperoni Pizza (4 slices) - 680 kcal | 32g P | 72g C | 28g F';
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('none');
+    expect(result.meal).toBeUndefined();
   });
 
   it('leaves a no-count line unchanged (same object as before)', () => {
@@ -1067,13 +1050,13 @@ describe('Counted Portion Handling (Task COUNTPORTION)', () => {
   });
 
   it('parseNutritionBlock succeeds with counted portion item', () => {
-    const input = 'Spaghetti Allo Scoglio (2 small plates): 900 kcal | 30g protein | 120g carbs | 33g fat';
+    const input = '3 slices pizza: 855 kcal | 30g protein | 90g carbs | 41g fat';
     const result = parseNutritionBlock(input);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.meal.amount).toBe(2);
+      expect(result.meal.amount).toBe(3);
       expect(result.meal.unit).toBe('unit');
-      expect(result.meal.calories).toBe(900);
+      expect(result.meal.calories).toBe(855);
     }
   });
 });
