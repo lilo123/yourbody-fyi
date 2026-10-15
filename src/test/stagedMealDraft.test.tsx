@@ -447,7 +447,111 @@ Dietary Fiber 0g`;
     expect(sessionStorage.getItem(workoutMirrorKey)).not.toBeNull();
   });
 
+  it('8. restored-after-auth draft shows its quota warning', async () => {
+    const mealWithQuota: StagedMeal = {
+      ...sampleAiMeal,
+      quota: {
+        used: 8,
+        remaining: 2,
+        limit: 10,
+        period: 'day',
+        resetsAt: '2026-10-15T00:00:00Z',
+      },
+    };
+
+    saveStagedMealDraft('test-user-id', todayStr, mealWithQuota);
+    expect(sessionStorage.getItem(getStagedMealStorageKey('test-user-id'))).not.toBeNull();
+
+    renderComponent();
+
+    // 1. Staged meal card is restored after auth resolves
+    await waitFor(() => {
+      expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+    });
+
+    // 2. Discard staged meal to reveal the input and verify aiQuota was restored
+    const discardBtn = screen.getByLabelText('Discard staged meal');
+    await act(async () => {
+      fireEvent.click(discardBtn);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('staged-meal-card')).toBeNull();
+    });
+
+    // 3. Quota warning is displayed with restored draft's quota details
+    await waitFor(() => {
+      const warning = screen.getByTestId('ai-quota-warning');
+      expect(warning).toBeDefined();
+      expect(warning.textContent).toContain('2 of 10 left today');
+    });
+  });
+
   describe('stagedMealDraft utility robustness & boundary rejections', () => {
+    it('setItem throws on first call -> stored draft has no photoUrl', () => {
+      const storageKey = getStagedMealStorageKey('test-user-id');
+      const mealWithPhoto: StagedMeal = {
+        ...sampleAiMeal,
+        photoUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD...',
+      };
+
+      const originalSetItem = Storage.prototype.setItem;
+      let callCount = 0;
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
+        if (k === storageKey) {
+          callCount += 1;
+          if (callCount === 1) {
+            const quotaErr = new Error('QuotaExceededError');
+            quotaErr.name = 'QuotaExceededError';
+            throw quotaErr;
+          }
+        }
+        return originalSetItem.call(this, k, v);
+      });
+
+      try {
+        saveStagedMealDraft('test-user-id', todayStr, mealWithPhoto);
+        expect(callCount).toBe(2);
+        const restored = loadStagedMealDraft('test-user-id', todayStr);
+        expect(restored).not.toBeNull();
+        expect(restored?.name).toBe(mealWithPhoto.name);
+        expect(restored?.items).toEqual(mealWithPhoto.items);
+        expect(restored?.photoUrl).toBeUndefined();
+      } finally {
+        setItemSpy.mockRestore();
+      }
+    });
+
+    it('throws always -> key removed (old draft gone)', () => {
+      const storageKey = getStagedMealStorageKey('test-user-id');
+      // Pre-seed an existing draft
+      saveStagedMealDraft('test-user-id', todayStr, sampleAiMeal);
+      expect(sessionStorage.getItem(storageKey)).not.toBeNull();
+
+      const originalSetItem = Storage.prototype.setItem;
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
+        if (k === storageKey) {
+          const quotaErr = new Error('QuotaExceededError');
+          quotaErr.name = 'QuotaExceededError';
+          throw quotaErr;
+        }
+        return originalSetItem.call(this, k, v);
+      });
+
+      try {
+        const newMeal: StagedMeal = {
+          ...sampleAiMeal,
+          name: 'New Failing Meal',
+          photoUrl: 'data:image/jpeg;base64,large...',
+        };
+        saveStagedMealDraft('test-user-id', todayStr, newMeal);
+        // Key must be removed so stale draft does not resurrect
+        expect(sessionStorage.getItem(storageKey)).toBeNull();
+        expect(loadStagedMealDraft('test-user-id', todayStr)).toBeNull();
+      } finally {
+        setItemSpy.mockRestore();
+      }
+    });
     it('swallows corrupted JSON without crashing and cleans up the key', () => {
       const storageKey = getStagedMealStorageKey('test-user-id');
       sessionStorage.setItem(storageKey, '{ invalid: json }');
