@@ -12,6 +12,53 @@
 /
   ! Cache-Control
   Cache-Control: public, max-age=0, must-revalidate
+  Link: <https://www.yourbody.fyi/>; rel="canonical"
+
+/terms
+  Link: <https://www.yourbody.fyi/terms>; rel="canonical"
+
+/privacy
+  Link: <https://www.yourbody.fyi/privacy>; rel="canonical"
+
+/refunds
+  Link: <https://www.yourbody.fyi/refunds>; rel="canonical"
+
+# Signed-in app routes: Disallow search indexing
+/workout
+  X-Robots-Tag: noindex
+
+/workout/*
+  X-Robots-Tag: noindex
+
+/nutrition
+  X-Robots-Tag: noindex
+
+/nutrition/*
+  X-Robots-Tag: noindex
+
+/history
+  X-Robots-Tag: noindex
+
+/history/*
+  X-Robots-Tag: noindex
+
+/exercises
+  X-Robots-Tag: noindex
+
+/exercises/*
+  X-Robots-Tag: noindex
+
+/coach
+  X-Robots-Tag: noindex
+
+/coach/*
+  X-Robots-Tag: noindex
+
+/settings
+  X-Robots-Tag: noindex
+
+/settings/*
+  X-Robots-Tag: noindex
 
 /*.html
   ! Cache-Control
