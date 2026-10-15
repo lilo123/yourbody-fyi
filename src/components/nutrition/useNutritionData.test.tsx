@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { useNutritionData } from './useNutritionData';
+import { useNutritionData, useMealUpdateToast } from './useNutritionData';
 import { supabase } from '../../lib/supabase';
 import * as toastHook from '../../hooks/useToast';
 import { getDayBounds, localCivilToUtcMs, isWithinDayBounds } from '../../utils/date';
@@ -970,6 +970,48 @@ describe('useNutritionData (src/components/nutrition/useNutritionData.ts)', () =
       });
       expect(mockShowToast).toHaveBeenCalledWith(
         expect.objectContaining({ detail: '+251 kcal' })
+      );
+    });
+
+    it('useMealUpdateToast triggers Updated toast with undo callback and matching copy', () => {
+      const mockShowToast = vi.fn();
+      vi.spyOn(toastHook, 'useToast').mockReturnValue({
+        show: mockShowToast,
+        dismiss: vi.fn(),
+        activeToast: null,
+        offset: undefined,
+        setOffset: vi.fn(),
+      });
+
+      const { result } = renderHook(() => useMealUpdateToast());
+      const onUndo = vi.fn();
+
+      act(() => {
+        result.current(
+          { name: 'Chicken Salad', calories: 420 },
+          {
+            variant: 'updated',
+            dishName: 'Chicken Salad',
+            calories: 420,
+            onUndo,
+          }
+        );
+      });
+
+      expect(mockShowToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'undo',
+          verb: 'Updated',
+          subject: 'Chicken Salad',
+          detail: '420 kcal',
+          durationMs: 5000,
+          onUndo,
+          undoAriaLabel: 'Undo update Chicken Salad',
+          testId: 'quick-log-toast',
+          subjectTestId: 'toast-dish-text',
+          undoBtnTestId: 'toast-undo-btn',
+          undoSpanTestId: 'undo-add-favorite-btn',
+        })
       );
     });
   });

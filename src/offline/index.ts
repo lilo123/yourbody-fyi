@@ -104,33 +104,23 @@ export {
   type OverlayNutritionLogsOptions,
 } from './overlay';
 
-// AI Queue
+// Legacy AI Queue Rescue
 export {
-  enqueueAiItem,
-  listAiItems,
-  discardAiItem,
-  markReviewed,
-  deleteAfterLog,
-  resetStuckAnalyzingItems,
-  startAiQueueProcessor,
-  subscribeToAiQueue,
-  notifyAiQueueChanged,
-  getCachedAiQueue,
-  runWithAiMutex,
-  AiPhotoTooLargeError,
-  MAX_PHOTO_BASE64_BYTES,
-  AI_RATE_LIMIT_MS,
-  DEFAULT_429_RETRY_AFTER_SECONDS,
-  MIN_BACKOFF_MS,
-  MAX_BACKOFF_MS,
-} from './aiQueue';
+  rescueLegacyAiQueue,
+  readLegacyAiQueueLeftovers,
+  deleteLegacyAiQueueItems,
+  getLegacyAiQueueItems,
+  type ReadLegacyAiQueueResult,
+  type RescueLegacyAiQueueOptions,
+} from './aiRescue';
 
 // Hooks
 export {
   usePendingOps,
   useOutboxSummary,
-  useAiQueue,
   useOverlaidNutritionLogs,
+  useAiRescue,
+  type UseAiRescueOptions,
 } from './hooks';
 
 // Update safety blocker & helpers

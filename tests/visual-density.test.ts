@@ -183,7 +183,12 @@ const FIXTURE_1_ITEM = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function setupPageAndLogin(page: Page) {
+interface SetupOptions {
+  customDishes?: typeof FIXTURE_CUSTOM_DISHES;
+}
+
+async function setupPageAndLogin(page: Page, options: SetupOptions = {}) {
+  const customDishes = options.customDishes ?? FIXTURE_CUSTOM_DISHES;
   page.on('dialog', async (d) => {
     await d.accept().catch(() => {});
   });
@@ -211,6 +216,11 @@ async function setupPageAndLogin(page: Page) {
     });
   });
 
+  let resolveCustomDishesAnswered: () => void = () => {};
+  const customDishesAnswered = new Promise<void>((resolve) => {
+    resolveCustomDishesAnswered = resolve;
+  });
+
   await page.route('**/rest/v1/custom_dishes*', async (route) => {
     if (route.request().method() === 'OPTIONS') {
       await route.fulfill({
@@ -229,14 +239,14 @@ async function setupPageAndLogin(page: Page) {
 
     if (acceptHeader.includes('vnd.pgrst.object+json') || (idParam && idParam.startsWith('eq.'))) {
       const id = idParam ? idParam.replace('eq.', '') : '';
-      const dish = FIXTURE_CUSTOM_DISHES.find((d) => d.id === id) || FIXTURE_CUSTOM_DISHES[0];
+      const dish = customDishes.find((d) => d.id === id) || customDishes[0];
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         headers: {
           'access-control-allow-origin': '*',
         },
-        body: JSON.stringify({ ...dish, custom_dish_items: [] }),
+        body: JSON.stringify(dish ? { ...dish, custom_dish_items: [] } : null),
       });
       return;
     }
@@ -246,10 +256,13 @@ async function setupPageAndLogin(page: Page) {
       contentType: 'application/json',
       headers: {
         'access-control-allow-origin': '*',
-        'content-range': `0-${FIXTURE_CUSTOM_DISHES.length - 1}/${FIXTURE_CUSTOM_DISHES.length}`,
+        ...(customDishes.length > 0
+          ? { 'content-range': `0-${customDishes.length - 1}/${customDishes.length}` }
+          : { 'content-range': '*/0' }),
       },
-      body: JSON.stringify(FIXTURE_CUSTOM_DISHES),
+      body: JSON.stringify(customDishes),
     });
+    resolveCustomDishesAnswered();
   });
 
   await page.goto('/login');
@@ -259,6 +272,9 @@ async function setupPageAndLogin(page: Page) {
   await page.waitForURL('**/workout');
   await page.goto('/nutrition');
   await page.waitForSelector("text=Today's Nutrition");
+  if (options.customDishes !== undefined) {
+    await customDishesAnswered;
+  }
 }
 
 // The Quick Log section renders its header (and an empty state) before the
@@ -266,6 +282,36 @@ async function setupPageAndLogin(page: Page) {
 // Measure only after the first row is attached and visible.
 async function waitForFavoriteRows(section: Locator) {
   await expect(section.locator('[data-testid^="favorite-row-"]').first()).toBeVisible();
+}
+
+async function waitForLogButtonStable(page: Page) {
+  await page.evaluate(() => {
+    delete (window as unknown as { __logBtnStableState?: unknown }).__logBtnStableState;
+  });
+  await page.waitForFunction(
+    () => {
+      const btn = document.querySelector('form button[type="submit"]');
+      if (!btn) return false;
+      const rect = btn.getBoundingClientRect();
+      const w = window as unknown as {
+        __logBtnStableState?: { y: number; count: number };
+      };
+      if (!w.__logBtnStableState) {
+        w.__logBtnStableState = { y: rect.y, count: 0 };
+        return false;
+      }
+      const diff = Math.abs(rect.y - w.__logBtnStableState.y);
+      if (diff < 0.5) {
+        w.__logBtnStableState.count++;
+      } else {
+        w.__logBtnStableState.y = rect.y;
+        w.__logBtnStableState.count = 0;
+      }
+      return w.__logBtnStableState.count >= 2;
+    },
+    null,
+    { timeout: 5000, polling: 'raf' }
+  );
 }
 
 // Check helper: Staged card meal-type select chevron geometry
@@ -1435,10 +1481,15 @@ test.describe('Surface C: Manual entry form', () => {
     });
     await setupPageAndLogin(page);
 
+    const quickLogSection = page.locator('section').filter({ hasText: 'Quick Log Favorites' });
+    await expect(quickLogSection).toBeVisible();
+    await waitForFavoriteRows(quickLogSection);
+
     const manualBtn = page.locator('button:has-text("Manual Entry")');
     await manualBtn.click();
     formLocator = page.locator('form').filter({ hasText: 'Manual Macro Logging' });
     await expect(formLocator).toBeVisible();
+    await waitForLogButtonStable(page);
   });
 
   test.afterAll(async () => {
@@ -1446,6 +1497,7 @@ test.describe('Surface C: Manual entry form', () => {
   });
 
   test('C: Log button reachable', async () => {
+    await waitForLogButtonStable(page);
     const navLocator = page.locator('nav').filter({ has: page.locator('[data-testid="nav-nutrition"]') });
     const logBtnLocator = formLocator.locator('button[type="submit"]');
 
@@ -1502,6 +1554,77 @@ test.describe('Surface C: Manual entry form', () => {
       `When scrolled: Log button bottom (${scrolled.logBtnBottom}px) exceeds bottom-nav top (${scrolled.navTop}px)`
     ).toBeLessThanOrEqual(scrolled.navTop);
     expect(scrolled.logBtnTop, `When scrolled: Log button top (${scrolled.logBtnTop}px) < 0`).toBeGreaterThanOrEqual(0);
+  });
+
+  test('C: Log button reachable with empty favorites', async ({ browser }) => {
+    const emptyPage = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 1,
+    });
+    try {
+      await setupPageAndLogin(emptyPage, { customDishes: [] });
+      await expect(emptyPage.locator('text=No saved custom dishes yet')).toBeVisible();
+
+      const manualBtn = emptyPage.locator('button:has-text("Manual Entry")');
+      await manualBtn.click();
+      const emptyFormLocator = emptyPage.locator('form').filter({ hasText: 'Manual Macro Logging' });
+      await expect(emptyFormLocator).toBeVisible();
+      await waitForLogButtonStable(emptyPage);
+
+      const navLocator = emptyPage.locator('nav').filter({ has: emptyPage.locator('[data-testid="nav-nutrition"]') });
+      const logBtnLocator = emptyFormLocator.locator('button[type="submit"]');
+
+      // 1. Measure at rest
+      const navBoxAtRest = (await navLocator.boundingBox())!;
+      const logBoxAtRest = (await logBtnLocator.boundingBox())!;
+
+      const atRest = {
+        navTop: Math.round(navBoxAtRest.y * 10) / 10,
+        logBtnTop: Math.round(logBoxAtRest.y * 10) / 10,
+        logBtnBottom: Math.round((logBoxAtRest.y + logBoxAtRest.height) * 10) / 10,
+        reachable: logBoxAtRest.y + logBoxAtRest.height <= navBoxAtRest.y && logBoxAtRest.y >= 0,
+      };
+
+      // 2. Measure after scrolling page to bottom
+      await emptyPage.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await waitForScrollPosition(emptyPage, 'bottom');
+      await expect(logBtnLocator).toBeVisible();
+      await expect(navLocator).toBeVisible();
+
+      const navBoxScrolled = (await navLocator.boundingBox())!;
+      const logBoxScrolled = (await logBtnLocator.boundingBox())!;
+
+      const scrolled = {
+        navTop: Math.round(navBoxScrolled.y * 10) / 10,
+        logBtnTop: Math.round(logBoxScrolled.y * 10) / 10,
+        logBtnBottom: Math.round((logBoxScrolled.y + logBoxScrolled.height) * 10) / 10,
+        reachable: logBoxScrolled.y + logBoxScrolled.height <= navBoxScrolled.y && logBoxScrolled.y >= 0,
+      };
+
+      const measurements = {
+        test: 'C: Log button reachable with empty favorites',
+        surface: 'C',
+        atRest,
+        scrolled,
+      };
+      console.log(JSON.stringify(measurements));
+
+      // Assert reachable at rest
+      expect(
+        atRest.logBtnBottom,
+        `At rest: Log button bottom (${atRest.logBtnBottom}px) exceeds bottom-nav top (${atRest.navTop}px)`
+      ).toBeLessThanOrEqual(atRest.navTop);
+      expect(atRest.logBtnTop, `At rest: Log button top (${atRest.logBtnTop}px) < 0`).toBeGreaterThanOrEqual(0);
+
+      // Assert reachable when scrolled
+      expect(
+        scrolled.logBtnBottom,
+        `When scrolled: Log button bottom (${scrolled.logBtnBottom}px) exceeds bottom-nav top (${scrolled.navTop}px)`
+      ).toBeLessThanOrEqual(scrolled.navTop);
+      expect(scrolled.logBtnTop, `When scrolled: Log button top (${scrolled.logBtnTop}px) < 0`).toBeGreaterThanOrEqual(0);
+    } finally {
+      await emptyPage.close();
+    }
   });
 
   test('C: font >= 12px', async () => {
@@ -8473,217 +8596,7 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
     }
   });
 
-  test('Density: PendingReviewList with 3 items (queued/ready/failed) fits 320px without overflow, >=44px tap targets, and toast/pill layering contract intact', async ({ browser }) => {
-    const context = await browser.newContext({
-      viewport: { width: 320, height: 844 },
-      deviceScaleFactor: 1,
-    });
-    const page = await context.newPage();
-    let athleteUserId = '';
 
-    try {
-      await page.goto('/login');
-      await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
-      await page.fill('input[type="password"]', 'password123');
-      await page.click('button[type="submit"]');
-      await page.waitForURL('**/workout');
-
-      athleteUserId = await page.evaluate(() => {
-        const authKey = Object.keys(localStorage).find((k) => k.includes('auth-token'));
-        const session = authKey ? JSON.parse(localStorage.getItem(authKey) || '{}') : null;
-        return session?.user?.id || '';
-      });
-      expect(athleteUserId, 'athlete userId must be present').toBeTruthy();
-
-      const dbName = `yourbody-offline-${athleteUserId}`;
-
-      // Wait for the app to create the per-user IndexedDB
-      await page.waitForFunction(async (name) => {
-        return new Promise<boolean>((resolve) => {
-          const req = indexedDB.open(name);
-          req.onsuccess = () => {
-            const db = req.result;
-            const ready = db.objectStoreNames.contains('aiq');
-            db.close();
-            resolve(ready);
-          };
-          req.onerror = () => resolve(false);
-        });
-      }, dbName);
-
-      // Seed 3 items in aiq store: queued, ready, failed
-      await page.evaluate(
-        async ({ name, userId }) => {
-          const req = indexedDB.open(name);
-          const db: IDBDatabase = await new Promise((resolve, reject) => {
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-          });
-
-          const tx = db.transaction(['aiq'], 'readwrite');
-          const store = tx.objectStore('aiq');
-          const now = new Date();
-          const today = now.toISOString().slice(0, 10);
-          const iso = now.toISOString();
-
-          store.put({
-            id: 'density-aiq-queued',
-            userId,
-            kind: 'text',
-            text: '2 boiled eggs and black coffee',
-            capturedAt: iso,
-            captureDate: today,
-            status: 'queued',
-            attempts: 0,
-            nextAttemptAt: Date.now() + 60000,
-          });
-
-          store.put({
-            id: 'density-aiq-ready',
-            userId,
-            kind: 'photo',
-            capturedAt: iso,
-            captureDate: today,
-            status: 'ready',
-            result: {
-              name: 'Grilled Salmon Bowl',
-              calories: 450,
-              protein: 42,
-              carbs: 35,
-              fat: 15,
-              fiber: 4,
-              items: [
-                { name: 'Salmon', calories: 250, protein: 35, carbs: 0, fat: 12, fiber: 0, quantity: 1, unit: 'fillet' },
-                { name: 'Rice', calories: 200, protein: 7, carbs: 35, fat: 3, fiber: 4, quantity: 1, unit: 'cup' },
-              ],
-            },
-            attempts: 1,
-            nextAttemptAt: 0,
-          });
-
-          store.put({
-            id: 'density-aiq-failed',
-            userId,
-            kind: 'text',
-            text: 'Unrecognized query text',
-            capturedAt: iso,
-            captureDate: today,
-            status: 'failed',
-            attempts: 3,
-            nextAttemptAt: 0,
-            lastError: 'NON_FOOD_DETECTED: No food items found',
-          });
-
-          await new Promise((resolve, reject) => {
-            tx.oncomplete = () => {
-              db.close();
-              resolve(undefined);
-            };
-            tx.onerror = () => {
-              db.close();
-              reject(tx.error);
-            };
-          });
-        },
-        { name: dbName, userId: athleteUserId }
-      );
-
-      // Block write requests
-      await page.route('**/rest/v1/nutrition_logs*', (route) => {
-        if (['POST', 'PATCH', 'DELETE'].includes(route.request().method())) {
-          return route.abort('internetdisconnected');
-        }
-        return route.continue();
-      });
-
-      await page.goto('/nutrition');
-      await page.waitForLoadState('domcontentloaded');
-
-      const list = page.locator('[data-testid="pending-review-list"]');
-      await expect(list).toBeVisible({ timeout: 10000 });
-
-      // Title & Counts
-      await expect(page.locator('[data-testid="pending-review-title"]')).toHaveText('Pending Review (3)');
-      const countsEl = page.locator('[data-testid="pending-review-counts"]');
-      await expect(countsEl).toContainText('1 ready');
-      await expect(countsEl).toContainText('1 queued');
-      await expect(countsEl).toContainText('1 failed');
-
-      // Check horizontal clipping / overflow
-      const listClipped = await list.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
-      expect(listClipped, 'PendingReviewList must not horizontally overflow at 320px').toBe(false);
-
-      // Verify tap targets >= 44px on action buttons
-      const reviewBtn = page.locator('[data-testid="review-aiq-item-density-aiq-ready"]');
-      await expect(reviewBtn).toBeVisible();
-      const reviewBox = await reviewBtn.boundingBox();
-      expect(reviewBox, 'Review button bounding box exists').not.toBeNull();
-      expect(reviewBox!.height, `Review button height (${reviewBox!.height}px) >= 44px`).toBeGreaterThanOrEqual(44);
-
-      const retryBtn = page.locator('[data-testid="retry-aiq-item-density-aiq-failed"]');
-      await expect(retryBtn).toBeVisible();
-      const retryBox = await retryBtn.boundingBox();
-      expect(retryBox, 'Retry button bounding box exists').not.toBeNull();
-      expect(retryBox!.height, `Retry button height (${retryBox!.height}px) >= 44px`).toBeGreaterThanOrEqual(44);
-
-      const manualBtn = page.locator('[data-testid="manual-aiq-item-density-aiq-failed"]');
-      await expect(manualBtn).toBeVisible();
-      const manualBox = await manualBtn.boundingBox();
-      expect(manualBox, 'Enter manually button bounding box exists').not.toBeNull();
-      expect(manualBox!.height, `Enter manually button height (${manualBox!.height}px) >= 44px`).toBeGreaterThanOrEqual(44);
-
-      const discardBtn = page.locator('[data-testid="discard-aiq-item-density-aiq-failed"]');
-      await expect(discardBtn).toBeVisible();
-      const discardBox = await discardBtn.boundingBox();
-      expect(discardBox, 'Discard button bounding box exists').not.toBeNull();
-      expect(discardBox!.height, `Discard button height (${discardBox!.height}px) >= 44px`).toBeGreaterThanOrEqual(44);
-
-      // Bottom nav renders at bottom of viewport
-      const nav = page.locator('nav').filter({ has: page.locator('[data-testid="nav-nutrition"]') });
-      await expect(nav).toBeVisible();
-      const navRect = await nav.boundingBox();
-      const listRect = await list.boundingBox();
-      expect(navRect, 'navRect exists').not.toBeNull();
-      expect(listRect, 'listRect exists').not.toBeNull();
-    } finally {
-      let cleanupErr: unknown = null;
-      try {
-        if (athleteUserId && !page.isClosed()) {
-          await page.evaluate(async (uid) => {
-            const dbName = `yourbody-offline-${uid}`;
-            const openReq = indexedDB.open(dbName);
-            await new Promise<void>((resolve, reject) => {
-              openReq.onsuccess = () => {
-                const db = openReq.result;
-                if (db.objectStoreNames.contains('aiq')) {
-                  const tx = db.transaction(['aiq'], 'readwrite');
-                  tx.objectStore('aiq').clear();
-                  tx.oncomplete = () => {
-                    db.close();
-                    resolve();
-                  };
-                  tx.onerror = () => {
-                    db.close();
-                    reject(tx.error);
-                  };
-                } else {
-                  db.close();
-                  resolve();
-                }
-              };
-              openReq.onerror = () => reject(openReq.error);
-            });
-          }, athleteUserId);
-        }
-      } catch (err: unknown) {
-        cleanupErr = err;
-      }
-      await context.close();
-      if (cleanupErr) {
-        throw cleanupErr;
-      }
-    }
-  });
 
   test('Density: StagedMealCard with Parsed locally badge + Analyze with AI instead fits 320px without overflow, >=44px tap targets, and toast/pill layering contract intact', async ({ browser }) => {
     const context = await browser.newContext({

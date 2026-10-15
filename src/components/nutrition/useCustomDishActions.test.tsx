@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
@@ -34,11 +34,17 @@ describe('useCustomDishActions', () => {
     } as any);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
   it('stages a single-component dish into a staged meal with calculated macros and updates use_count', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 8, 0));
     const setStagedMeal = vi.fn();
     const setDishFetchError = vi.fn();
     const dish: CustomDish = {
@@ -245,7 +251,89 @@ describe('useCustomDishActions', () => {
     expect(mockUpdate).toHaveBeenCalledWith({ use_count: 1 });
   });
 
+  it('infers Dinner when staging a non-meal-word dish ("Chicken bowl") at 19:00', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 19, 0));
+
+    const setStagedMeal = vi.fn();
+    const dish: CustomDish = {
+      id: 'dish-chicken-bowl-stage',
+      user_id: 'user-123',
+      name: 'Chicken bowl',
+      calories: 500,
+      protein: 40,
+      carbs: 50,
+      fat: 10,
+      fiber: 4,
+      kind: 'food',
+      use_count: 1,
+    };
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          setStagedMeal,
+          fetchDishDetail: vi.fn().mockResolvedValue(null),
+          mutation: { mutate: vi.fn() },
+        }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await result.current.handleStageCustomDish(dish);
+    });
+
+    expect(setStagedMeal).toHaveBeenCalledTimes(1);
+    const stagedArg = setStagedMeal.mock.calls[0][0];
+    expect(stagedArg.name).toBe('Chicken bowl');
+    expect(stagedArg.mealType).toBe('Dinner');
+  });
+
+  it('infers Breakfast from meal word when staging a dish named "Breakfast" at 19:00', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 19, 0));
+
+    const setStagedMeal = vi.fn();
+    const dish: CustomDish = {
+      id: 'dish-breakfast-stage',
+      user_id: 'user-123',
+      name: 'Breakfast',
+      calories: 350,
+      protein: 20,
+      carbs: 30,
+      fat: 12,
+      fiber: 3,
+      kind: 'food',
+      use_count: 2,
+    };
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          setStagedMeal,
+          fetchDishDetail: vi.fn().mockResolvedValue(null),
+          mutation: { mutate: vi.fn() },
+        }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await result.current.handleStageCustomDish(dish);
+    });
+
+    expect(setStagedMeal).toHaveBeenCalledTimes(1);
+    const stagedArg = setStagedMeal.mock.calls[0][0];
+    expect(stagedArg.name).toBe('Breakfast');
+    expect(stagedArg.mealType).toBe('Breakfast');
+  });
+
   it('directly quick-logs custom dish when nothing is staged with exact mutation payload, date, use_count and toast', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 8, 0));
     const mutate = vi.fn().mockImplementation((_payload, options) => {
       options?.onSuccess?.();
     });
@@ -315,6 +403,84 @@ describe('useCustomDishActions', () => {
     });
 
     expect(triggerToast).toHaveBeenCalledWith(dish);
+  });
+
+  it('infers Dinner when quick-logging a non-meal-word dish ("Chicken bowl") directly at 19:00', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 19, 0));
+
+    const mutate = vi.fn();
+    const dish: CustomDish = {
+      id: 'dish-chicken-bowl-direct',
+      user_id: 'user-123',
+      name: 'Chicken bowl',
+      calories: 500,
+      protein: 40,
+      carbs: 50,
+      fat: 10,
+      fiber: 4,
+      kind: 'food',
+      use_count: 5,
+    };
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          setStagedMeal: vi.fn(),
+          mutation: { mutate },
+        }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.handleQuickLogCustomDishDirect(dish);
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.food_name).toBe('Chicken bowl');
+    expect(payload.meal_type).toBe('Dinner');
+  });
+
+  it('infers Breakfast from meal word when quick-logging a dish named "Breakfast" directly at 19:00', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 19, 0));
+
+    const mutate = vi.fn();
+    const dish: CustomDish = {
+      id: 'dish-breakfast-direct',
+      user_id: 'user-123',
+      name: 'Breakfast',
+      calories: 350,
+      protein: 20,
+      carbs: 30,
+      fat: 12,
+      fiber: 3,
+      kind: 'food',
+      use_count: 2,
+    };
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          setStagedMeal: vi.fn(),
+          mutation: { mutate },
+        }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.handleQuickLogCustomDishDirect(dish);
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.food_name).toBe('Breakfast');
+    expect(payload.meal_type).toBe('Breakfast');
   });
 
   it('sets dish fetch error with retry callback when detail fetching fails and clears error on next attempt', async () => {

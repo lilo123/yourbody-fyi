@@ -1,5 +1,6 @@
 import { useSyncExternalStore, useEffect, useCallback, useRef } from 'react';
 import { isDbClosedError } from './db';
+import { readLegacyAiQueueLeftovers, deleteLegacyAiQueueItems } from './aiRescue';
 import {
   subscribeToOutbox,
   getOutboxOps,
@@ -8,9 +9,8 @@ import {
   hasCachedOpsForUser,
 } from './outbox';
 import { getActiveUserId } from './flusher';
-import { subscribeToAiQueue, listAiItems, getCachedAiQueue } from './aiQueue';
 import { applyPendingToNutritionLogs, type OverlayNutritionLogsOptions } from './overlay';
-import type { OutboxOp, OutboxSummary, AiQueueState } from './types';
+import type { OutboxOp, OutboxSummary } from './types';
 
 const EMPTY_OPS: OutboxOp[] = [];
 const DEFAULT_SUMMARY: OutboxSummary = {
@@ -95,42 +95,60 @@ export function useOutboxSummary(userId?: string): OutboxSummary {
   );
 }
 
-const DEFAULT_AI_QUEUE_STATE: AiQueueState = {
-  items: [],
-  counts: { queued: 0, analyzing: 0, ready: 0, failed: 0, total: 0 },
-  isAnalyzing: false,
-};
+export interface UseAiRescueOptions {
+  targetUserId: string;
+  stagedMeal: unknown;
+  nlInput: string;
+  setNlInput: (text: string) => void;
+}
 
 /**
- * Hook to track AI queue items and summary counts for a user.
+ * Rescues legacy queued AI items from the offline IndexedDB store 'aiq'
+ * into the meal text input for the signed-in user.
+ *
+ * Invariants:
+ * 1. Never overwrite user-typed text or a restored staged draft.
+ * 2. Two-step safe commit: read -> (if still mounted and canRescue()) set the input -> THEN delete
+ *    exactly the ids whose text was written. Otherwise delete nothing.
  */
-export function useAiQueue(userId?: string): AiQueueState {
-  const target = userId || getActiveUserId() || '';
+export function useAiRescue({
+  targetUserId,
+  stagedMeal,
+  nlInput,
+  setNlInput,
+}: UseAiRescueOptions): void {
+  const stagedMealRef = useRef(stagedMeal);
+  stagedMealRef.current = stagedMeal;
+  const nlInputRef = useRef(nlInput);
+  nlInputRef.current = nlInput;
 
   useEffect(() => {
-    let active = true;
-    if (target) {
-      listAiItems(target).catch((e) => {
-        // Closed-DB errors in this read-cache prewarm are expected at unmount/teardown.
-        if (!active || isDbClosedError(e)) return;
-        console.warn('[aiQueue] useAiQueue background fetch failed', e);
-      });
-    }
-    return () => {
-      active = false;
+    if (!targetUserId) return;
+    let isCancelled = false;
+
+    const canRescue = () => {
+      return !stagedMealRef.current && !nlInputRef.current.trim();
     };
-  }, [target]);
 
-  const subscribe = useCallback(
-    (onStoreChange: () => void) => subscribeToAiQueue(onStoreChange, target),
-    [target]
-  );
+    if (!canRescue()) return;
 
-  return useSyncExternalStore(
-    subscribe,
-    () => (target ? getCachedAiQueue(target) : DEFAULT_AI_QUEUE_STATE),
-    () => DEFAULT_AI_QUEUE_STATE
-  );
+    void readLegacyAiQueueLeftovers(targetUserId).then(async (result) => {
+      if (isCancelled || !result) return;
+      if (!canRescue()) return;
+
+      // 1. Set the input first
+      setNlInput(result.text);
+
+      // 2. THEN delete exactly the ids whose text was written
+      if (!isCancelled) {
+        await deleteLegacyAiQueueItems(targetUserId, result.ids);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [targetUserId, setNlInput]);
 }
 
 /**

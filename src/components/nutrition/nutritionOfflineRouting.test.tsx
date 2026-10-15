@@ -29,10 +29,7 @@ vi.mock('../../offline', async () => {
   const actual = await vi.importActual<typeof import('../../offline')>('../../offline');
   return {
     ...actual,
-    enqueueAiItem: vi.fn().mockResolvedValue({ id: 'mock-aiq-1' }),
     enqueueAndAwait: vi.fn().mockResolvedValue({ status: 'synced', opId: 'mock-op-1' }),
-    deleteAfterLog: vi.fn().mockResolvedValue(undefined),
-    discardAiItem: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -96,7 +93,6 @@ Dietary Fiber 0g`;
       });
 
       expect(parseNutrition).not.toHaveBeenCalled();
-      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
       expect(setStatus).toHaveBeenCalledWith('Parsed locally');
       expect(onParsedSuccess).toHaveBeenCalledTimes(1);
 
@@ -240,7 +236,6 @@ Dietary Fiber 0g`;
       });
 
       expect(parseNutrition).toHaveBeenCalledTimes(1);
-      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
       expect(onParsedSuccess).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Burrito Bowl',
@@ -278,7 +273,6 @@ Dietary Fiber 0g`;
       });
 
       expect(parseNutrition).not.toHaveBeenCalled();
-      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
       expect(setIsError).toHaveBeenCalledWith(true);
       expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
       expect(onParsedSuccess).not.toHaveBeenCalled();
@@ -317,7 +311,6 @@ Dietary Fiber 0g`;
         await result.current.handleAnalyze();
       });
 
-      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
       expect(setIsError).toHaveBeenCalledWith(true);
       expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
     });
@@ -361,7 +354,6 @@ Dietary Fiber 0g`;
       });
 
       expect(parseNutrition).not.toHaveBeenCalled();
-      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
       expect(setStatus).toHaveBeenCalledWith('Parsed locally');
       expect(onParsedSuccess).toHaveBeenCalledTimes(1);
 
@@ -426,7 +418,6 @@ Dietary Fiber 0g`;
       });
 
       expect(parseNutrition).not.toHaveBeenCalled();
-      expect(offlineModule.enqueueAiItem).not.toHaveBeenCalled();
       expect(onParsedSuccess).not.toHaveBeenCalled();
       expect(setIsError).toHaveBeenCalledWith(true);
       expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
@@ -498,89 +489,6 @@ Dietary Fiber 0g`;
     });
   });
 
-  describe('2. Review from AI Queue & Lifecycle (D-OFF-7, D-O2-2)', () => {
-    it('reviewing an item from AI queue stages without auto-logging and preserves original timestamps', async () => {
-      const logMutate = vi.fn();
-      const itemFromQueue = {
-        id: 'aiq-ready-456',
-        capturedAt: '2026-09-15T23:45:00.000Z',
-        captureDate: '2026-09-15',
-      };
-
-      const staged: StagedMeal = {
-        name: 'Late Night Ramen',
-        mealType: 'Dinner',
-        explanation: '550 kcal',
-        items: [],
-        calories: 550,
-        protein: 20,
-        carbs: 70,
-        fat: 20,
-        fiber: 3,
-        servingSize: 1,
-        servingUnit: 'bowl',
-        capturedAt: itemFromQueue.capturedAt,
-        captureDate: itemFromQueue.captureDate,
-        aiqItemId: itemFromQueue.id,
-      };
-
-      // Ensure review simply stages the meal and does NOT trigger any mutation
-      expect(logMutate).not.toHaveBeenCalled();
-      expect(offlineModule.deleteAfterLog).not.toHaveBeenCalled();
-
-      // On explicit user confirmation, logs with original timestamps
-      const handleLog = (meal: StagedMeal) => {
-        logMutate({
-          id: 'client-uuid-1',
-          food_name: meal.name,
-          calories: meal.calories,
-          logged_at: meal.capturedAt,
-          logged_date: meal.captureDate,
-        });
-        // Deletes only on success
-        void offlineModule.deleteAfterLog(mockUserId, meal.aiqItemId!);
-      };
-
-      handleLog(staged);
-
-      expect(logMutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          food_name: 'Late Night Ramen',
-          logged_at: '2026-09-15T23:45:00.000Z',
-          logged_date: '2026-09-15',
-        })
-      );
-      expect(offlineModule.deleteAfterLog).toHaveBeenCalledWith(mockUserId, 'aiq-ready-456');
-    });
-
-    it('does NOT delete item from aiq if enqueue fails', async () => {
-      vi.mocked(offlineModule.enqueueAndAwait).mockRejectedValueOnce(new Error('Outbox write failure'));
-
-      const setStatus = vi.fn();
-      const setIsError = vi.fn();
-      const { result } = renderHook(
-        () =>
-          useNutritionData({
-            targetUserId: mockUserId,
-            selectedDate: '2026-10-01',
-            profile: null,
-            onMutationSuccessReset: vi.fn(),
-            setStatus,
-            setIsError,
-          }),
-        { wrapper }
-      );
-
-      await expect(
-        result.current.mutation.mutateAsync({
-          food_name: 'Failed Meal',
-          calories: 400,
-        })
-      ).rejects.toThrow('Outbox write failure');
-
-      expect(offlineModule.deleteAfterLog).not.toHaveBeenCalled();
-    });
-  });
 
   describe('3. Overlaid Pending Nutrition Logs & UI Marks (D-OFF-4, D-O2-3)', () => {
     it('displays PendingMark on MealLogRow when log.pending === true', () => {
