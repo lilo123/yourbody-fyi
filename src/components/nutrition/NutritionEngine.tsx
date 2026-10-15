@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import type { NutritionLog, CustomDish } from '../../types/database';
 import { getLocalDateStr, formatLocalTimestamp } from '../../utils/date';
@@ -79,7 +79,8 @@ export const NutritionEngine: React.FC = () => {
   });
 
   const [dishFetchError, setDishFetchError] = useState<{ message: string; retry: () => void } | null>(null);
-  const { show: showToast, dismiss: dismissToast } = useToast();
+  const { show: showToast, dismiss: dismissToast, activeToast: contextActiveToast } = useToast();
+  const contextActiveToastRef = useRef(contextActiveToast); contextActiveToastRef.current = contextActiveToast;
   useToastOffset(isTimerActive ? (stagedMeal ? 190 : 148) : stagedMeal ? 128 : undefined);
 
   // Deferred delete for NutritionLog (6s window with UndoToast)
@@ -223,14 +224,7 @@ export const NutritionEngine: React.FC = () => {
     return () => {
       markFormDirty('manual-meal-form', false);
     };
-  }, [
-    showManualForm,
-    manualMealForm.manualDishName,
-    manualMealForm.manualCalories,
-    manualMealForm.manualProtein,
-    manualMealForm.manualCarbs,
-    manualMealForm.manualFat,
-  ]);
+  }, [showManualForm, manualMealForm.manualDishName, manualMealForm.manualCalories, manualMealForm.manualProtein, manualMealForm.manualCarbs, manualMealForm.manualFat]);
 
   // Owner safety rule: rescue legacy queued AI leftovers into meal text input
   // Never overwrite user-typed text or a restored staged draft
@@ -275,7 +269,9 @@ export const NutritionEngine: React.FC = () => {
 
   const handleLogStagedMeal = (e?: React.MouseEvent | React.UIEvent) => {
     if (!stagedMeal) return;
-    dismissToast();
+    if (contextActiveToastRef.current?.testId !== 'status-message') {
+      dismissToast();
+    }
     decideFocusRestore(e);
     const items = stagedMeal.items.map(stagedToItem);
     const totals = sumItems(items);
