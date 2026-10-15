@@ -439,4 +439,44 @@ describe('ManualMealForm', () => {
       expect(result.current.manualFiber).toBe('');
     });
   });
+
+  describe('scrollIntoView on open', () => {
+    it('opening Manual Entry calls scrollIntoView once; closing does not', () => {
+      const scrollSpy = vi.fn();
+      Element.prototype.scrollIntoView = scrollSpy;
+
+      const { rerender, props } = renderForm({ show: false });
+      expect(scrollSpy).not.toHaveBeenCalled();
+
+      rerender(<ManualMealForm {...props} show={true} />);
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'end' });
+
+      rerender(<ManualMealForm {...props} show={false} />);
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('respects prefers-reduced-motion when scrolling on open', () => {
+      const scrollSpy = vi.fn();
+      Element.prototype.scrollIntoView = scrollSpy;
+
+      window.matchMedia = vi.fn().mockImplementation((query) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+
+      const { rerender, props } = renderForm({ show: false });
+      expect(scrollSpy).not.toHaveBeenCalled();
+
+      rerender(<ManualMealForm {...props} show={true} />);
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'auto', block: 'end' });
+    });
+  });
 });

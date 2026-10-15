@@ -183,7 +183,12 @@ const FIXTURE_1_ITEM = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function setupPageAndLogin(page: Page) {
+interface SetupOptions {
+  customDishes?: typeof FIXTURE_CUSTOM_DISHES;
+}
+
+async function setupPageAndLogin(page: Page, options: SetupOptions = {}) {
+  const customDishes = options.customDishes ?? FIXTURE_CUSTOM_DISHES;
   page.on('dialog', async (d) => {
     await d.accept().catch(() => {});
   });
@@ -211,6 +216,11 @@ async function setupPageAndLogin(page: Page) {
     });
   });
 
+  let resolveCustomDishesAnswered: () => void = () => {};
+  const customDishesAnswered = new Promise<void>((resolve) => {
+    resolveCustomDishesAnswered = resolve;
+  });
+
   await page.route('**/rest/v1/custom_dishes*', async (route) => {
     if (route.request().method() === 'OPTIONS') {
       await route.fulfill({
@@ -229,14 +239,14 @@ async function setupPageAndLogin(page: Page) {
 
     if (acceptHeader.includes('vnd.pgrst.object+json') || (idParam && idParam.startsWith('eq.'))) {
       const id = idParam ? idParam.replace('eq.', '') : '';
-      const dish = FIXTURE_CUSTOM_DISHES.find((d) => d.id === id) || FIXTURE_CUSTOM_DISHES[0];
+      const dish = customDishes.find((d) => d.id === id) || customDishes[0];
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         headers: {
           'access-control-allow-origin': '*',
         },
-        body: JSON.stringify({ ...dish, custom_dish_items: [] }),
+        body: JSON.stringify(dish ? { ...dish, custom_dish_items: [] } : null),
       });
       return;
     }
@@ -246,10 +256,13 @@ async function setupPageAndLogin(page: Page) {
       contentType: 'application/json',
       headers: {
         'access-control-allow-origin': '*',
-        'content-range': `0-${FIXTURE_CUSTOM_DISHES.length - 1}/${FIXTURE_CUSTOM_DISHES.length}`,
+        ...(customDishes.length > 0
+          ? { 'content-range': `0-${customDishes.length - 1}/${customDishes.length}` }
+          : { 'content-range': '*/0' }),
       },
-      body: JSON.stringify(FIXTURE_CUSTOM_DISHES),
+      body: JSON.stringify(customDishes),
     });
+    resolveCustomDishesAnswered();
   });
 
   await page.goto('/login');
@@ -259,6 +272,9 @@ async function setupPageAndLogin(page: Page) {
   await page.waitForURL('**/workout');
   await page.goto('/nutrition');
   await page.waitForSelector("text=Today's Nutrition");
+  if (options.customDishes !== undefined) {
+    await customDishesAnswered;
+  }
 }
 
 // The Quick Log section renders its header (and an empty state) before the
@@ -266,6 +282,36 @@ async function setupPageAndLogin(page: Page) {
 // Measure only after the first row is attached and visible.
 async function waitForFavoriteRows(section: Locator) {
   await expect(section.locator('[data-testid^="favorite-row-"]').first()).toBeVisible();
+}
+
+async function waitForLogButtonStable(page: Page) {
+  await page.evaluate(() => {
+    delete (window as unknown as { __logBtnStableState?: unknown }).__logBtnStableState;
+  });
+  await page.waitForFunction(
+    () => {
+      const btn = document.querySelector('form button[type="submit"]');
+      if (!btn) return false;
+      const rect = btn.getBoundingClientRect();
+      const w = window as unknown as {
+        __logBtnStableState?: { y: number; count: number };
+      };
+      if (!w.__logBtnStableState) {
+        w.__logBtnStableState = { y: rect.y, count: 0 };
+        return false;
+      }
+      const diff = Math.abs(rect.y - w.__logBtnStableState.y);
+      if (diff < 0.5) {
+        w.__logBtnStableState.count++;
+      } else {
+        w.__logBtnStableState.y = rect.y;
+        w.__logBtnStableState.count = 0;
+      }
+      return w.__logBtnStableState.count >= 2;
+    },
+    null,
+    { timeout: 5000, polling: 'raf' }
+  );
 }
 
 // Check helper: Staged card meal-type select chevron geometry
@@ -1435,10 +1481,15 @@ test.describe('Surface C: Manual entry form', () => {
     });
     await setupPageAndLogin(page);
 
+    const quickLogSection = page.locator('section').filter({ hasText: 'Quick Log Favorites' });
+    await expect(quickLogSection).toBeVisible();
+    await waitForFavoriteRows(quickLogSection);
+
     const manualBtn = page.locator('button:has-text("Manual Entry")');
     await manualBtn.click();
     formLocator = page.locator('form').filter({ hasText: 'Manual Macro Logging' });
     await expect(formLocator).toBeVisible();
+    await waitForLogButtonStable(page);
   });
 
   test.afterAll(async () => {
@@ -1446,6 +1497,7 @@ test.describe('Surface C: Manual entry form', () => {
   });
 
   test('C: Log button reachable', async () => {
+    await waitForLogButtonStable(page);
     const navLocator = page.locator('nav').filter({ has: page.locator('[data-testid="nav-nutrition"]') });
     const logBtnLocator = formLocator.locator('button[type="submit"]');
 
@@ -1502,6 +1554,77 @@ test.describe('Surface C: Manual entry form', () => {
       `When scrolled: Log button bottom (${scrolled.logBtnBottom}px) exceeds bottom-nav top (${scrolled.navTop}px)`
     ).toBeLessThanOrEqual(scrolled.navTop);
     expect(scrolled.logBtnTop, `When scrolled: Log button top (${scrolled.logBtnTop}px) < 0`).toBeGreaterThanOrEqual(0);
+  });
+
+  test('C: Log button reachable with empty favorites', async ({ browser }) => {
+    const emptyPage = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 1,
+    });
+    try {
+      await setupPageAndLogin(emptyPage, { customDishes: [] });
+      await expect(emptyPage.locator('text=No saved custom dishes yet')).toBeVisible();
+
+      const manualBtn = emptyPage.locator('button:has-text("Manual Entry")');
+      await manualBtn.click();
+      const emptyFormLocator = emptyPage.locator('form').filter({ hasText: 'Manual Macro Logging' });
+      await expect(emptyFormLocator).toBeVisible();
+      await waitForLogButtonStable(emptyPage);
+
+      const navLocator = emptyPage.locator('nav').filter({ has: emptyPage.locator('[data-testid="nav-nutrition"]') });
+      const logBtnLocator = emptyFormLocator.locator('button[type="submit"]');
+
+      // 1. Measure at rest
+      const navBoxAtRest = (await navLocator.boundingBox())!;
+      const logBoxAtRest = (await logBtnLocator.boundingBox())!;
+
+      const atRest = {
+        navTop: Math.round(navBoxAtRest.y * 10) / 10,
+        logBtnTop: Math.round(logBoxAtRest.y * 10) / 10,
+        logBtnBottom: Math.round((logBoxAtRest.y + logBoxAtRest.height) * 10) / 10,
+        reachable: logBoxAtRest.y + logBoxAtRest.height <= navBoxAtRest.y && logBoxAtRest.y >= 0,
+      };
+
+      // 2. Measure after scrolling page to bottom
+      await emptyPage.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await waitForScrollPosition(emptyPage, 'bottom');
+      await expect(logBtnLocator).toBeVisible();
+      await expect(navLocator).toBeVisible();
+
+      const navBoxScrolled = (await navLocator.boundingBox())!;
+      const logBoxScrolled = (await logBtnLocator.boundingBox())!;
+
+      const scrolled = {
+        navTop: Math.round(navBoxScrolled.y * 10) / 10,
+        logBtnTop: Math.round(logBoxScrolled.y * 10) / 10,
+        logBtnBottom: Math.round((logBoxScrolled.y + logBoxScrolled.height) * 10) / 10,
+        reachable: logBoxScrolled.y + logBoxScrolled.height <= navBoxScrolled.y && logBoxScrolled.y >= 0,
+      };
+
+      const measurements = {
+        test: 'C: Log button reachable with empty favorites',
+        surface: 'C',
+        atRest,
+        scrolled,
+      };
+      console.log(JSON.stringify(measurements));
+
+      // Assert reachable at rest
+      expect(
+        atRest.logBtnBottom,
+        `At rest: Log button bottom (${atRest.logBtnBottom}px) exceeds bottom-nav top (${atRest.navTop}px)`
+      ).toBeLessThanOrEqual(atRest.navTop);
+      expect(atRest.logBtnTop, `At rest: Log button top (${atRest.logBtnTop}px) < 0`).toBeGreaterThanOrEqual(0);
+
+      // Assert reachable when scrolled
+      expect(
+        scrolled.logBtnBottom,
+        `When scrolled: Log button bottom (${scrolled.logBtnBottom}px) exceeds bottom-nav top (${scrolled.navTop}px)`
+      ).toBeLessThanOrEqual(scrolled.navTop);
+      expect(scrolled.logBtnTop, `When scrolled: Log button top (${scrolled.logBtnTop}px) < 0`).toBeGreaterThanOrEqual(0);
+    } finally {
+      await emptyPage.close();
+    }
   });
 
   test('C: font >= 12px', async () => {

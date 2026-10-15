@@ -1,7 +1,8 @@
-import React, { memo, useId, useState } from 'react';
+import React, { memo, useId, useState, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { CompressedImage } from '../../utils/imageCompression';
 import { MacroInputsGrid } from './MacroInputsGrid';
+import { getScrollBehavior } from './nutritionEngineHelpers';
 
 export interface ManualMealFormProps {
   show: boolean;
@@ -69,6 +70,19 @@ export const ManualMealForm: React.FC<ManualMealFormProps> = memo(({
 
   const [prevShow, setPrevShow] = useState(show);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+  const prevShowRef = useRef(false);
+
+  useEffect(() => {
+    const wasOpen = prevShowRef.current;
+    prevShowRef.current = show;
+    if (show && !wasOpen) {
+      const behavior = getScrollBehavior();
+      if (submitButtonRef.current && typeof submitButtonRef.current.scrollIntoView === 'function') {
+        submitButtonRef.current.scrollIntoView({ behavior, block: 'end' });
+      }
+    }
+  }, [show]);
 
   if (prevShow !== show) {
     setPrevShow(show);
@@ -337,9 +351,10 @@ export const ManualMealForm: React.FC<ManualMealFormProps> = memo(({
           Cancel
         </button>
         <button
+          ref={submitButtonRef}
           type="submit"
           disabled={isPending}
-          className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold py-3 min-h-[44px] rounded-xl uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95 transition disabled:opacity-50"
+          className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold py-3 min-h-[44px] rounded-xl uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95 transition disabled:opacity-50 scroll-mb-24"
         >
           {isPending ? 'Logging...' : 'Log Meal'}
         </button>
