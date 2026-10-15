@@ -11,6 +11,7 @@ import {
   normalizeItems,
 } from '../../utils/itemModel';
 import { fetchDishDetail as defaultFetchDishDetail } from './useNutritionData';
+import { inferMealType } from './inferMealType';
 import {
   buildStagedItem,
   recomputeStagedTotals,
@@ -183,7 +184,7 @@ export function useCustomDishActions({
 
       setStagedMeal({
         name: dish.name,
-        mealType: 'Breakfast',
+        mealType: inferMealType(dish.name, new Date()),
         explanation:
           items.length > 1 ? explanation : `${formatCalories(tot.calories)} kcal (${dish.name})`,
         items,
@@ -337,7 +338,7 @@ export function useCustomDishActions({
         carbs: roundTo1Decimal(dish.carbs),
         fat: roundTo1Decimal(dish.fat),
         fiber: roundTo1Decimal(dish.fiber),
-        meal_type: 'Breakfast',
+        meal_type: inferMealType(dish.name, new Date()),
         serving_size: servingSize,
         serving_unit: servingUnit,
         logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),

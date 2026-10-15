@@ -130,7 +130,9 @@ export function useNutritionData({
   setIsError,
 }: UseNutritionDataOptions) {
   const queryClient = useQueryClient();
-  const { show: showToast } = useToast();
+  const { show: showToast, dismiss: dismissGlobalToast, activeToast: contextActiveToast } = useToast();
+  const contextActiveToastRef = useRef(contextActiveToast);
+  contextActiveToastRef.current = contextActiveToast;
 
   const targetCalories = profile?.target_calories || 2200;
   const targetProtein = profile?.target_protein || 160;
@@ -334,7 +336,7 @@ export function useNutritionData({
           pendingLogIdResolveRef.current = null;
         }
       }
-      if (!isQuickLog) {
+      if (!isQuickLog && contextActiveToastRef.current?.testId !== 'status-message') {
         showToast({ message: 'Saved', kind: 'success' });
       }
       setStatus('');
@@ -348,6 +350,7 @@ export function useNutritionData({
     },
     onError: (error: Error) => {
       console.error(error);
+      dismissGlobalToast();
       setStatus('Failed to save log: ' + error.message);
       setIsError(true);
     },
