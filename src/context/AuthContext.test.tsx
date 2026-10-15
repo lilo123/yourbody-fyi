@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../test/supabaseBuilderMock';
 import type { UserProfile } from '../types/database';
 import * as offlineModule from '../offline';
+import { NUTRITION_PARSER_MODE_KEY } from '../hooks/useNutritionParserMode';
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
@@ -98,6 +99,11 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    sessionStorage.clear();
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: true,
+    });
   });
 
   it('1. synchronously hydrates user and profile from localStorage on initial render', () => {
@@ -244,6 +250,95 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
     expect(localStorage.getItem('unrelated_app_key')).toBe('preserve_me');
     expect(screen.getByTestId('auth-user-id').textContent).toBe('none');
     expect(screen.getByTestId('auth-profile-username').textContent).toBe('none');
+  });
+
+  it('4b. SIGNED_OUT auth event removes staged drafts + parser mode key AND leaves active session and rq cache untouched', async () => {
+    const userId = mockProfile.id;
+    localStorage.setItem('yourbody_user', JSON.stringify(mockProfile));
+    localStorage.setItem(NUTRITION_PARSER_MODE_KEY, 'regex');
+    localStorage.setItem(`yourbody_active_session_${userId}`, JSON.stringify({ activeWorkoutId: 'w-123' }));
+    localStorage.setItem('yourbody_view_mode', 'coach');
+    localStorage.setItem('yourbody_auto_rest_timer', 'true');
+    localStorage.setItem('unrelated_app_key', 'preserve_me');
+
+    sessionStorage.setItem(`yourbody_staged_meal_draft_${userId}`, JSON.stringify({ name: 'Oats' }));
+    sessionStorage.setItem('unrelated_session_key', 'preserve_session_val');
+
+    // Populate IndexedDB with rq read cache
+    const db = await offlineModule.getOfflineDb(userId);
+    await db.put('rq', { clientState: { mutations: [], queries: [] }, timestamp: Date.now() }, 'persisted-query-cache');
+    expect(await db.get('rq', 'persisted-query-cache')).toBeDefined();
+
+    let authStateCallback: any = null;
+    (supabase.auth.onAuthStateChange as any).mockImplementation((cb: any) => {
+      authStateCallback = cb;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-user-id').textContent).toBe(userId);
+    });
+
+    // Simulate session expiry / remote logout triggering SIGNED_OUT event
+    await act(async () => {
+      authStateCallback('SIGNED_OUT', null);
+    });
+
+    // yourbody_user and parser mode key are removed
+    expect(localStorage.getItem('yourbody_user')).toBeNull();
+    expect(localStorage.getItem(NUTRITION_PARSER_MODE_KEY)).toBeNull();
+
+    // User-scoped workout session key and other preferences are LEFT UNTOUCHED
+    expect(localStorage.getItem(`yourbody_active_session_${userId}`)).not.toBeNull();
+    expect(localStorage.getItem('yourbody_view_mode')).toBe('coach');
+    expect(localStorage.getItem('yourbody_auto_rest_timer')).toBe('true');
+    expect(localStorage.getItem('unrelated_app_key')).toBe('preserve_me');
+
+    // Staged meal draft cleared from sessionStorage, unrelated session key preserved
+    expect(sessionStorage.getItem(`yourbody_staged_meal_draft_${userId}`)).toBeNull();
+    expect(sessionStorage.getItem('unrelated_session_key')).toBe('preserve_session_val');
+
+    // rq cache in IndexedDB is LEFT UNTOUCHED
+    expect(await db.get('rq', 'persisted-query-cache')).toBeDefined();
+
+    expect(screen.getByTestId('auth-user-id').textContent).toBe('none');
+    expect(screen.getByTestId('auth-profile-username').textContent).toBe('none');
+  });
+
+  it('4c. offline cached-user behaviour is unchanged when offline and getSession fails', async () => {
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: false,
+    });
+
+    localStorage.setItem('yourbody_user', JSON.stringify(mockProfile));
+    localStorage.setItem('yourbody_nutrition_parser_mode', 'regex');
+
+    (supabase.auth.getSession as any).mockResolvedValue({
+      data: { session: null },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    // Initial render keeps cached user and parser mode while offline
+    expect(screen.getByTestId('auth-user-id').textContent).toBe(mockProfile.id);
+    expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+    expect(localStorage.getItem('yourbody_user')).not.toBeNull();
+    expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBe('regex');
   });
 
   it('5. re-fetches user profile successfully on refreshProfile()', async () => {
