@@ -184,53 +184,20 @@ export type EnqueueAndAwaitResult =
   | { status: 'synced'; opId: string }
   | { status: 'queued'; opId: string };
 
-export type AiQueueItemStatus = 'queued' | 'analyzing' | 'ready' | 'failed';
-export type AiQueueItemKind = 'text' | 'photo';
-
-export interface AiQueuePhoto {
-  base64: string;
-  mime: string;
-}
-
-export interface AiQueueItem {
+export interface LegacyAiQueueItem {
   id: string;
-  userId: string;
-  kind: AiQueueItemKind;
+  userId?: string;
+  kind?: string;
   text?: string;
-  photo?: AiQueuePhoto;
-  capturedAt: string; // ISO instant with offset
-  captureDate: string; // civil date in user timezone
-  mealType?: string;
-  status: AiQueueItemStatus;
-  result?: unknown;
-  attempts: number;
-  nextAttemptAt: number; // timestamp ms
+  photo?: unknown;
+  capturedAt?: string;
+  captureDate?: string;
+  status?: string;
+  attempts?: number;
+  nextAttemptAt?: number;
   lastError?: string;
-}
-
-export interface EnqueueAiItemInput {
-  id?: string;
-  userId: string;
-  kind: AiQueueItemKind;
-  text?: string;
-  photo?: AiQueuePhoto;
-  capturedAt: string;
-  captureDate: string;
-  mealType?: string;
-}
-
-export interface AiQueueCounts {
-  queued: number;
-  analyzing: number;
-  ready: number;
-  failed: number;
-  total: number;
-}
-
-export interface AiQueueState {
-  items: AiQueueItem[];
-  counts: AiQueueCounts;
-  isAnalyzing: boolean;
+  result?: unknown;
+  [key: string]: unknown;
 }
 
 export interface OfflineDBSchema extends DBSchema {
@@ -257,7 +224,7 @@ export interface OfflineDBSchema extends DBSchema {
   };
   aiq: {
     key: string; // item id
-    value: AiQueueItem;
+    value: LegacyAiQueueItem;
     indexes: {
       status: string;
       capturedAt: string;

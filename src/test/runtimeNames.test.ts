@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { AUTH_STORAGE_PREFIX } from '../context/AuthContext';
 import { getOfflineDbName } from '../offline/db';
 import { getOutboxLockName } from '../offline/flusher';
-import { getAiQueueLockName } from '../offline/aiQueue';
 import { BROADCAST_CHANNEL_NAME } from '../offline/outbox';
 
 const OLD_BRAND = 'cybergym'; // check-brand: allow
@@ -25,11 +24,6 @@ describe('Runtime brand identifier invariants (D-YB-4)', () => {
     expect(lockName.toLowerCase()).not.toContain(OLD_BRAND);
   });
 
-  it('asserts AI queue lock name builder produces yourbody-aiq-<uid>', () => {
-    const lockName = getAiQueueLockName('test-user-42');
-    expect(lockName).toBe('yourbody-aiq-test-user-42');
-    expect(lockName.toLowerCase()).not.toContain(OLD_BRAND);
-  });
 
   it('asserts outbox BroadcastChannel name is yourbody_outbox_channel', () => {
     expect(BROADCAST_CHANNEL_NAME).toBe('yourbody_outbox_channel');

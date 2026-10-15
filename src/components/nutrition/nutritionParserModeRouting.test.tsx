@@ -11,10 +11,7 @@ vi.mock('./parseNutrition', () => ({
 }));
 
 vi.mock('../../offline', () => ({
-  enqueueAiItem: vi.fn(),
   enqueueAndAwait: vi.fn(),
-  deleteAfterLog: vi.fn(),
-  discardAiItem: vi.fn(),
 }));
 
 describe('Nutrition parser mode routing (Auto, Always AI, On-device only)', () => {

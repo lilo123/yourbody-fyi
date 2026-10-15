@@ -31,7 +31,7 @@ To ensure strict data privacy and isolation on multi-user and shared devices, th
 | `outbox` | KeyPath: `opId`<br>Indices: `seq` (unique), `userId`, `state` | Monotonically ordered mutations queued for sequential replay to Supabase. | `src/offline/outbox.ts` |
 | `idmap` | KeyPath: `clientWorkoutId` | Maps client-generated workout UUIDs to server-canonical IDs when reconciling existing sessions. | `src/offline/idmap.ts` |
 | `meta` | Key-value store | Internal synchronization timestamps, schema versions, and queue configurations. | `src/offline/db.ts` |
-| `aiq` | KeyPath: `id`<br>Indices: `status`, `capturedAt` | Legacy queue for nutritional prompts and meal photos from older clients awaiting replay. | `src/offline/aiQueue.ts` |
+| `aiq` | KeyPath: `id`<br>Indices: `status`, `capturedAt` | Legacy offline AI store; items are rescued into meal input upon load. | `src/offline/aiRescue.ts` |
 
 ### Multi-User Isolation Guarantee
 
@@ -143,7 +143,6 @@ Service workers downloaded in the background must not trigger unplanned page rel
 
 - **Hard Blockers** (Disallow reload immediately):
   - Outbox synchronization currently in-flight (`getSyncingStatus() === true`).
-  - Offline AI analysis currently executing (`aiQueue.isAnalyzing === true`).
   - An accessible modal dialog is currently open (`[role="dialog"][aria-modal="true"]`).
   - Registered custom blockers reporting blocking state.
 
@@ -171,14 +170,12 @@ For rapid dietary logging without network overhead, the app provides a determini
 - **Strict Grammar Rejection**: Automatically rejects prose, conversational multi-item descriptions, ambiguous numbers, or conflicting duplicate lines.
 - **Staging UI**: Successfully parsed local items are displayed in `StagedMealCard` with a `"Parsed locally"` badge. When online, an `"Analyze with AI instead"` button allows delegating to Gemini.
 
-### Online-Only AI Meal Parsing & Legacy Queue Replay (`src/offline/aiQueue.ts`)
+### Online-Only AI Meal Parsing & Legacy Queue Rescue (`src/offline/aiRescue.ts`)
 
 AI meal parsing (both natural language text analysis and photo recognition) is strictly online-only:
 - **Offline Behavior**: When the browser is offline, natural language submit and photo capture actions are disabled, displaying an accessible hint: `"AI needs a connection: use quick log"`. New AI capture requests are not enqueued to IndexedDB while offline.
 - **Local Fallback**: Deterministic local nutrition block parsing (`src/lib/nutrition/localParse.ts`) and quick/manual logging remain fully operational offline.
-- **Legacy Replay Compatibility**: Existing items already queued in the `aiq` store by previous client versions continue to replay sequentially upon reconnection under `navigator.locks.request('yourbody-aiq-<userId>')` with a rate limit of <= 12 requests per minute (minimum 5-second spacing). Replay is maintained for backwards compatibility and is scheduled for removal in a subsequent release.
-- HTTP 429 responses are respected by extracting `Retry-After` headers without depleting retry quotas.
-- Upon successful analysis of legacy items, the processed result is saved and the raw photo data is removed from IndexedDB in the same database transaction.
+- **Legacy Leftover Rescue**: The legacy replay queue processor has been removed. Any legacy queued AI items remaining on the device in `aiq` are safely rescued on load into the meal text input (joining multiple items with blank lines) and deleted from the queue, so the user can review or parse them again without losing any saved text. If the user already typed text or has a restored staged draft, leftovers are kept for a subsequent load.
 
 ---
 
@@ -198,4 +195,3 @@ To prevent irreconcilable conflicts, certain complex administrative and relation
 
 - **WebKit 7-Day Storage Eviction**: iOS Safari can purge client-side IndexedDB databases if the user does not open the web application for 7 consecutive days while the device is under storage pressure.
 - **Client Clock Skew**: Offline creation timestamps rely on the device's system clock. Significant device clock inaccuracy may cause logged sets or meals to appear out of order relative to server-recorded entries.
-- **Local Storage Pressure**: High volumes of queued photos (up to 4 MB each) stored in `aiq` can elevate local storage usage if a device remains offline for extended periods. Photos are purged immediately upon successful server processing.

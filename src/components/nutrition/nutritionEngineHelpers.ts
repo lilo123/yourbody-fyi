@@ -224,8 +224,6 @@ export interface StagedMeal {
   capturedAt?: string;
   /** Original civil capture date from AI queue */
   captureDate?: string;
-  /** AI queue item ID if staged from AI queue */
-  aiqItemId?: string;
   /** Lines skipped during rule-based parsing */
   skippedLines?: string[];
   /** Modifiers detected during rule-based parsing */

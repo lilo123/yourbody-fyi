@@ -38,7 +38,7 @@ The client provides seamless offline functionality for workout and nutrition tra
   - `outbox`: Monotonically ordered pending mutation operations (`opId`, indexed by `seq`, `userId`, `state`).
   - `idmap`: Mapping table translating client-generated temporary UUIDs to server-confirmed database UUIDs (`src/offline/idmap.ts`).
   - `meta`: Synchronization checkpoints and sequence tracking counters.
-  - `aiq`: Offline AI queue storing pending meal parses with image payloads and capture timestamps (`src/offline/aiQueue.ts:40-120`).
+  - `aiq`: Legacy offline AI queue store on device; legacy items rescued into meal input upon load (`src/offline/aiRescue.ts`).
 
 ### Outbox Lifecycle and Concurrency
 - **Optimistic State Updates**: Mutations update local state and query caches immediately while enqueueing an operation record into the `outbox` store (`src/offline/outbox.ts:28-150`).
@@ -58,7 +58,7 @@ The client provides seamless offline functionality for workout and nutrition tra
   - **`always_ai`**: Routes text input to online Edge AI when connected; falls back to on-device parsing when offline (`src/components/nutrition/useNutritionAi.ts:231-268`).
   - **`on_device`**: Exclusively parses on device without invoking serverless Edge AI; falls back to manual entry with prefilled macros if parsing fails (`src/components/nutrition/useNutritionAi.ts:201-230`).
   - **Meal Photos**: Photo analysis always requires network connectivity and online Edge AI execution (`src/components/nutrition/useNutritionAi.ts:199-200, 312-318`).
-- **Offline AI Queue**: When offline, meal analysis requests can be queued in the `aiq` IndexedDB store and processed sequentially upon reconnection (`src/offline/aiQueue.ts:40-120`, `src/App.tsx:185-207`).
+- **Legacy AI Queue Rescue**: Offline AI parsing queue has been removed; AI requires a connection. Any legacy leftovers in `aiq` are automatically rescued into the meal input on load (`src/offline/aiRescue.ts`).
 
 ## Serverless Edge AI Budgets & Model Fallback Chain
 

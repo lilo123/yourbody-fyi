@@ -20,10 +20,7 @@ vi.mock('../../components/nutrition/parseNutrition', () => ({
 }));
 
 vi.mock('../../offline', () => ({
-  enqueueAiItem: vi.fn(),
   enqueueAndAwait: vi.fn(),
-  deleteAfterLog: vi.fn(),
-  discardAiItem: vi.fn(),
 }));
 
 /**

@@ -13,7 +13,7 @@ import { UpdateBanner } from './pwa/UpdateBanner';
 import { recordLastRoute, getLastRoute } from './pwa/lastRoute';
 import { SyncToastBridge } from './components/sync/SyncToastBridge';
 import { useOfflinePrefetch } from './offline-prefetch';
-import { registerOutboxUpdateBlocker, startAiQueueProcessor } from './offline';
+import { registerOutboxUpdateBlocker } from './offline';
 import { registerUpdateBlocker } from './pwa/updateSafety';
 import { shouldShowLanding } from './utils/routeDecision';
 import { hasLoggedFirstActivity, onFirstLogRecorded } from './pwa/installPromptEarly';
@@ -178,29 +178,6 @@ function AppLayout() {
     };
   }, [user, canLoadPrompt]);
 
-  // Start/stop AI queue processor for signed-in user
-  useEffect(() => {
-    if (!user?.id) return;
-    return startAiQueueProcessor({
-      userId: user.id,
-      analyze: async (item) => {
-        const { parseNutrition } = await import('./components/nutrition/parseNutrition');
-        return await parseNutrition({
-          text: item.text,
-          photo: item.photo
-            ? {
-                base64: item.photo.base64,
-                dataUrl: `data:${item.photo.mime};base64,${item.photo.base64}`,
-                mimeType: item.photo.mime,
-                sizeBytes: 0,
-                width: 0,
-                height: 0,
-              }
-            : null,
-        });
-      },
-    });
-  }, [user?.id]);
   const location = useLocation();
   const onHistory = location.pathname === '/history';
 

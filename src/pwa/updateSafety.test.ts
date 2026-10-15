@@ -9,7 +9,6 @@ import {
   resetUpdateSafetyForTesting,
 } from './updateSafety';
 import * as outboxModule from '../offline/outbox';
-import * as aiQueueModule from '../offline/aiQueue';
 
 describe('PWA updateSafety per D-YB2-3', () => {
   const userId = '00000000-0000-4000-8000-000000000001';
@@ -217,19 +216,6 @@ describe('PWA updateSafety per D-YB2-3', () => {
       }
     });
 
-    it('returns hard blocker when AI queue is analyzing', () => {
-      vi.spyOn(aiQueueModule, 'getCachedAiQueue').mockReturnValue({
-        items: [],
-        counts: { queued: 0, analyzing: 1, ready: 0, failed: 0, total: 1 },
-        isAnalyzing: true,
-      });
-
-      const result = evaluateUpdateSafety({ userId });
-      expect(result.status).toBe('hard');
-      if (result.status === 'hard') {
-        expect(result.reason).toBe('AI analysis in progress');
-      }
-    });
 
     it('returns hard blocker when another modal dialog is open', () => {
       const modal = document.createElement('div');
