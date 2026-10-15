@@ -137,15 +137,21 @@ jobs:
         run: |
           supabase functions deploy --use-api
 
-      - name: Trigger frontend deployment and await rollout
+      - name: Trigger Cloudflare Pages deployment and await rollout
         # A manual redeploy of an older ref leaves the frontend on main.
         if: github.ref == 'refs/heads/main'
         env:
-          VERCEL_DEPLOY_HOOK_PROD: ${{ secrets.VERCEL_DEPLOY_HOOK_PROD }}
+          CLOUDFLARE_DEPLOY_HOOK_URL: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}
         run: |
-          if [ -n "$VERCEL_DEPLOY_HOOK_PROD" ]; then
-            echo "Triggering Vercel deployment hook..."
-            curl -sS -X POST "$VERCEL_DEPLOY_HOOK_PROD"
+          if [ -z "$CLOUDFLARE_DEPLOY_HOOK_URL" ]; then
+            echo "::error::CLOUDFLARE_DEPLOY_HOOK_URL is not configured"
+            exit 1
+          fi
+
+          echo "Triggering Cloudflare Pages deployment hook..."
+          if ! curl -sS -f -o /dev/null -X POST "$CLOUDFLARE_DEPLOY_HOOK_URL"; then
+            echo "::error::Cloudflare Pages deploy hook request failed"
+            exit 1
           fi
 
           START_TIME=$(date +%s)
@@ -166,18 +172,18 @@ jobs:
             sleep 15
           done
 
-      - name: Trigger Cloudflare Pages deployment (optional)
+      - name: Trigger Vercel deployment (optional)
         if: github.ref == 'refs/heads/main'
         env:
-          CLOUDFLARE_DEPLOY_HOOK_URL: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}
+          VERCEL_DEPLOY_HOOK_PROD: ${{ secrets.VERCEL_DEPLOY_HOOK_PROD }}
         run: |
-          if [ -n "$CLOUDFLARE_DEPLOY_HOOK_URL" ]; then
-            echo "Triggering Cloudflare Pages deployment hook..."
-            # Vercel remains the primary host, so a failure here only warns.
-            curl -sS -f -o /dev/null -X POST "$CLOUDFLARE_DEPLOY_HOOK_URL" \
-              || echo "::warning::Cloudflare Pages deploy hook request failed"
+          if [ -z "$VERCEL_DEPLOY_HOOK_PROD" ]; then
+            echo "::warning::VERCEL_DEPLOY_HOOK_PROD is not configured; skipping Vercel deploy hook."
           else
-            echo "CLOUDFLARE_DEPLOY_HOOK_URL not configured; skipping Cloudflare Pages deploy hook."
+            echo "Triggering Vercel deployment hook..."
+            # Cloudflare Pages is now the primary host; Vercel remains a 7-day rollback so a failure here only warns.
+            curl -sS -f -o /dev/null -X POST "$VERCEL_DEPLOY_HOOK_PROD" \
+              || echo "::warning::Vercel deploy hook request failed"
           fi
 
       - name: Install Playwright Chromium browser

@@ -785,6 +785,34 @@ describe('ComponentRow', () => {
     expect(nameEl.textContent).toBe(item.name);
   });
 
+  it('toggles full item name expansion on click with aria-expanded and line-clamp-2 toggle', async () => {
+    const user = userEvent.setup();
+    const item = component({
+      name: 'Polpo Croccante with roasted potatoes, capers, olives and a lemon herb dressing',
+    });
+    render(<ComponentRow item={item} reference={item} onChange={() => {}} />);
+
+    const nameBtn = screen.getByTestId('component-name');
+    expect(nameBtn.tagName).toBe('BUTTON');
+    expect(nameBtn).toHaveAttribute('type', 'button');
+    expect(nameBtn).toHaveAttribute('aria-expanded', 'false');
+    expect(nameBtn.className).toContain('line-clamp-2');
+    expect(nameBtn).toHaveTextContent(item.name);
+    // Accessible name is exactly the item name with no extra visible copy or aria-label
+    expect(screen.getByRole('button', { name: item.name })).toBe(nameBtn);
+
+    // Click to expand
+    await user.click(nameBtn);
+    expect(nameBtn).toHaveAttribute('aria-expanded', 'true');
+    expect(nameBtn.className).not.toContain('line-clamp-2');
+    expect(nameBtn).toHaveTextContent(item.name);
+
+    // Click again to collapse
+    await user.click(nameBtn);
+    expect(nameBtn).toHaveAttribute('aria-expanded', 'false');
+    expect(nameBtn.className).toContain('line-clamp-2');
+  });
+
   it('applies minmax responsive grid template and whitespace-nowrap on macro cells', () => {
     const item = component();
     render(<ComponentRow item={item} reference={item} onChange={() => {}} />);

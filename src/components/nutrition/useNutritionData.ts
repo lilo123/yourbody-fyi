@@ -34,7 +34,7 @@ import {
 } from '../../utils/date';
 import { nutritionDayKey } from '../../utils/nutritionDayKey';
 import { roundTo1Decimal, calculateRemainingFuel, formatCalories } from '../../utils/nutrition';
-import { useToast } from '../../hooks/useToast';
+import { useToast, type ToastOptions } from '../../hooks/useToast';
 import { restTimerStore } from '../../utils/restTimerStore';
 import {
   itemsForPersist,
@@ -76,6 +76,48 @@ export interface UseNutritionDataOptions {
   onMutationSuccessReset: () => void;
   setStatus: (s: string) => void;
   setIsError: (e: boolean) => void;
+}
+
+export interface MealUpdatedToastOptions {
+  variant?: 'logged' | 'added' | 'updated';
+  dishName?: string;
+  calories?: number;
+  onUndo?: () => Promise<void> | void;
+}
+
+export function showMealUpdatedToast(
+  showToast: (options: ToastOptions) => void,
+  dish: { name: string; calories: number | null },
+  options?: MealUpdatedToastOptions
+) {
+  const dishName = options?.dishName || dish.name;
+  const calories = roundTo1Decimal(options?.calories ?? dish.calories ?? 0);
+  showToast({
+    kind: 'undo',
+    verb: 'Updated',
+    subject: dishName,
+    detail: `${formatCalories(calories)} kcal`,
+    durationMs: 5000,
+    onUndo: options?.onUndo,
+    undoAriaLabel: `Undo update ${dishName}`,
+    testId: 'quick-log-toast',
+    subjectTestId: 'toast-dish-text',
+    undoBtnTestId: 'toast-undo-btn',
+    undoSpanTestId: 'undo-add-favorite-btn',
+  });
+}
+
+export function useMealUpdateToast(): (
+  dish: { name: string; calories: number | null },
+  options?: MealUpdatedToastOptions
+) => void {
+  const { show: showToast } = useToast();
+  return useCallback(
+    (dish, options) => {
+      showMealUpdatedToast(showToast, dish, options);
+    },
+    [showToast]
+  );
 }
 
 export function useNutritionData({
@@ -496,19 +538,7 @@ export function useNutritionData({
           calories,
           onUndo: options?.onUndo,
         });
-        showToast({
-          kind: 'undo',
-          verb: 'Updated',
-          subject: dishName,
-          detail: `${formatCalories(calories)} kcal`,
-          durationMs: 5000,
-          onUndo: options?.onUndo,
-          undoAriaLabel: `Undo update ${dishName}`,
-          testId: 'quick-log-toast',
-          subjectTestId: 'toast-dish-text',
-          undoBtnTestId: 'toast-undo-btn',
-          undoSpanTestId: 'undo-add-favorite-btn',
-        });
+        showMealUpdatedToast(showToast, dish, options);
         return;
       }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { supabase } from '../../lib/supabase';
-import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
+import { parseNutrition, formatQuotaExceededMessage, TEXT_PARSE_TIMEOUT_MS, VISION_PARSE_TIMEOUT_MS } from './parseNutrition';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -332,5 +332,44 @@ describe('parseNutrition', () => {
     expect(result.source).toBe('rules');
     expect(result.confidence).toBe('lenient');
     expect(result.fallbackReason).toBe('quota_exceeded');
+  });
+
+  it('exports correct timeout constants', () => {
+    expect(TEXT_PARSE_TIMEOUT_MS).toBe(33000);
+    expect(VISION_PARSE_TIMEOUT_MS).toBe(45000);
+  });
+
+  it('enforces 33s timeout for text parse and rejects with timeout error', async () => {
+    vi.useFakeTimers();
+    try {
+      (supabase.functions.invoke as any).mockImplementation(() => new Promise(() => {}));
+      const parsePromise = parseNutrition({ text: 'slow text meal' });
+      const assertion = expect(parsePromise).rejects.toThrow('Edge function timeout after 33s');
+      await vi.advanceTimersByTimeAsync(34000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('enforces 45s timeout for vision/photo parse and rejects with timeout error', async () => {
+    vi.useFakeTimers();
+    try {
+      (supabase.functions.invoke as any).mockImplementation(() => new Promise(() => {}));
+      const mockPhoto = {
+        base64: 'test',
+        dataUrl: 'data:image/jpeg;base64,test',
+        mimeType: 'image/jpeg',
+        sizeBytes: 100,
+        width: 10,
+        height: 10,
+      };
+      const parsePromise = parseNutrition({ photo: mockPhoto });
+      const assertion = expect(parsePromise).rejects.toThrow('Edge function timeout after 45s');
+      await vi.advanceTimersByTimeAsync(46000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

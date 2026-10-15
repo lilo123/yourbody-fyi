@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { roundTo1Decimal } from '../../utils/nutrition';
+import { inferMealType } from './inferMealType';
 
 export interface ManualMealStagedData {
   food_name: string;
@@ -26,9 +27,15 @@ export interface ManualMealPrefill {
 
 export interface UseManualMealFormOptions {
   onStageMeal: (meal: ManualMealStagedData) => void;
+  now?: Date;
+  initialMealType?: string;
 }
 
-export function useManualMealForm({ onStageMeal }: UseManualMealFormOptions) {
+export function useManualMealForm({
+  onStageMeal,
+  now,
+  initialMealType,
+}: UseManualMealFormOptions) {
   // Manual Form Fallback State
   const [manualDishName, setManualDishName] = useState('');
   const [manualCalories, setManualCalories] = useState<number | ''>('');
@@ -36,7 +43,9 @@ export function useManualMealForm({ onStageMeal }: UseManualMealFormOptions) {
   const [manualCarbs, setManualCarbs] = useState<number | ''>('');
   const [manualFat, setManualFat] = useState<number | ''>('');
   const [manualFiber, setManualFiber] = useState<number | ''>('');
-  const [manualMealType, setManualMealType] = useState<string>('Breakfast');
+  const [manualMealType, setManualMealType] = useState<string>(() =>
+    initialMealType ?? inferMealType(undefined, now)
+  );
   const [manualServingSize, setManualServingSize] = useState<number | ''>(1);
   const [manualServingUnit, setManualServingUnit] = useState<string>('serving');
 
@@ -47,6 +56,7 @@ export function useManualMealForm({ onStageMeal }: UseManualMealFormOptions) {
     setManualCarbs('');
     setManualFat('');
     setManualFiber('');
+    setManualMealType(initialMealType ?? inferMealType(undefined, now));
   };
 
   const prefillForm = (prefill: ManualMealPrefill) => {
