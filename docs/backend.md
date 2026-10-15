@@ -25,7 +25,10 @@ erDiagram
 ## Serverless Edge AI (Deno/Gemini)
 
 ### Nutrition Parsing (`parse-nutrition`)
-- **Fallback Chain**: Uses a resilient model fallback sequence: `gemini-3.6-flash` → `gemini-3.5-flash` → `gemini-3.1-flash-lite`.
+- **Execution Budgets**: Overall execution budget of 27 seconds for text (`OVERALL_BUDGET_TEXT_MS = 27000`) and 42 seconds for vision (`OVERALL_BUDGET_VISION_MS = 42000`), deliberately set below client ceilings (30 s text / 45 s vision) so edge function timeouts resolve before client connections terminate.
+- **First Attempt Timeout Cap**: Capped at 12 seconds for text (`FIRST_ATTEMPT_BUDGET_TEXT_MS = 12000`) and 20 seconds for vision (`FIRST_ATTEMPT_BUDGET_VISION_MS = 20000`) to guarantee that a slow primary model does not starve the fallback candidate. Minimum attempt budget is 1.5 seconds (`MIN_ATTEMPT_BUDGET_MS = 1500`).
+- **Fallback Chain**: Bounded to at most `MAX_FALLBACK_MODELS = 2` models. Uses `gemini-3.5-flash-lite` as the primary model (configurable via `GEMINI_MODEL_ID` and `GEMINI_VISION_MODEL_ID`), falling back to `gemini-3.1-flash-lite` upon timeout or model failure.
+- **Sentry Telemetry**: Captures `parse-nutrition AI timeout` (on timeout) or `parse-nutrition AI model error` (on failure) with tags `model_id`, `attempt_count`, `elapsed_ms`, and `kind` (`text` or `vision`). User identifiers, email addresses, and meal descriptions are strictly excluded.
 - Parses conversational diet logs and extracts multi-dish macros securely.
 
 ### API Contracts
