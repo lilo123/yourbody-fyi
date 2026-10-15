@@ -90,7 +90,24 @@ export function saveStagedMealDraft(
     };
     window.sessionStorage.setItem(key, JSON.stringify(envelope));
   } catch {
-    // QuotaExceededError or private browsing restrictions swallowed safely
+    // Retry once without photoUrl to avoid storage QuotaExceededError from large base64 data URLs
+    try {
+      const mealWithoutPhoto = { ...meal };
+      delete mealWithoutPhoto.photoUrl;
+      const envelopeWithoutPhoto: StagedMealDraftEnvelope = {
+        userId,
+        date: todayDateStr,
+        meal: mealWithoutPhoto,
+      };
+      window.sessionStorage.setItem(key, JSON.stringify(envelopeWithoutPhoto));
+    } catch {
+      // If retry without photoUrl also throws, evict key so stale draft does not resurrect
+      try {
+        window.sessionStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+    }
   }
 }
 

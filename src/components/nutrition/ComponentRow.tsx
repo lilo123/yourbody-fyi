@@ -54,6 +54,7 @@ export const ComponentRow: React.FC<ComponentRowProps> = ({
   const [pendingAbsurdEdit, setPendingAbsurdEdit] = useState<NutritionItem | null>(null);
   const [localAnchor, setLocalAnchor] = useState<NutritionItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isNameExpanded, setIsNameExpanded] = useState(false);
 
   const shown = draft ?? (pendingUnit !== null ? '' : String(roundTo1Decimal(item.quantity)));
   const activeUnit = pendingUnit ?? item.unit;
@@ -181,13 +182,16 @@ export const ComponentRow: React.FC<ComponentRowProps> = ({
     >
       {/* LINE 1: Name (left, flex-1, may wrap) + [qty][unit] field and ⋯ (right) */}
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-        <div
+        <button
+          type="button"
           data-testid="component-name"
           title={item.name}
-          className="flex-1 min-w-0 text-sm font-semibold text-white leading-tight break-words line-clamp-2"
+          aria-expanded={isNameExpanded}
+          onClick={() => setIsNameExpanded((prev) => !prev)}
+          className={`flex-1 min-w-0 min-h-[44px] -my-[4.5px] text-left bg-transparent border-0 p-0 text-sm font-semibold text-white leading-tight break-words ${isNameExpanded ? '' : 'line-clamp-2'}`}
         >
           {item.name}
-        </div>
+        </button>
 
         {/* RIGHT (shrink-0): [field: input + UnitChip] + ⋯ OverflowMenu */}
         <div data-testid="component-right-cluster" className="shrink-0 flex items-center gap-1">
