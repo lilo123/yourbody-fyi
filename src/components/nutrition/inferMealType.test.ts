@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   inferMealType,
   isValidMealType,
+  isMealWord,
   canonicalizeMealType,
+  mealTypeCandidate,
   CANONICAL_MEAL_TYPES,
 } from './inferMealType';
 
@@ -42,10 +44,50 @@ describe('inferMealType unit tests', () => {
       expect(inferMealType(' SNACK ', morningTime)).toBe('Snack');
     });
 
-    it('infers Pre-Workout and Post-Workout if passed', () => {
-      const morningTime = new Date(2026, 9, 15, 8, 0);
-      expect(inferMealType('Pre-Workout', morningTime)).toBe('Pre-Workout');
-      expect(inferMealType('post-workout', morningTime)).toBe('Post-Workout');
+    it('does not match pre-workout or post-workout as name words (falls through to time of day)', () => {
+      const eveningTime = new Date(2026, 9, 15, 19, 0);
+      expect(inferMealType('Pre-Workout', eveningTime)).toBe('Dinner');
+      expect(inferMealType('post-workout', eveningTime)).toBe('Dinner');
+    });
+  });
+
+  describe('isMealWord helper', () => {
+    it('recognizes Breakfast, Lunch, Dinner, Snack', () => {
+      expect(isMealWord('breakfast')).toBe(true);
+      expect(isMealWord('Lunch')).toBe(true);
+      expect(isMealWord('DINNER')).toBe(true);
+      expect(isMealWord('  snack  ')).toBe(true);
+    });
+
+    it('rejects Pre-Workout, Post-Workout, non-meal words, and non-strings', () => {
+      expect(isMealWord('pre-workout')).toBe(false);
+      expect(isMealWord('Post-Workout')).toBe(false);
+      expect(isMealWord('banana')).toBe(false);
+      expect(isMealWord('')).toBe(false);
+      expect(isMealWord(null)).toBe(false);
+      expect(isMealWord(undefined)).toBe(false);
+    });
+  });
+
+  describe('mealTypeCandidate helper', () => {
+    it('extracts leading meal word from raw text header', () => {
+      expect(mealTypeCandidate('Dinner\n1 medium banana 105 kcal', 'Medium Banana')).toBe('Dinner');
+      expect(mealTypeCandidate('dinner:\n1 banana', 'Banana')).toBe('dinner');
+      expect(mealTypeCandidate('LUNCH —\n2 eggs', 'Eggs')).toBe('LUNCH');
+      expect(mealTypeCandidate('Breakfast', 'Meal')).toBe('Breakfast');
+    });
+
+    it('falls back to fallbackName when header line is not a meal word', () => {
+      expect(mealTypeCandidate('1 medium banana 105 kcal', 'Medium Banana')).toBe('Medium Banana');
+      expect(mealTypeCandidate('Pre-Workout\nprotein shake', 'Protein Shake')).toBe('Protein Shake');
+      expect(mealTypeCandidate('', 'Oatmeal')).toBe('Oatmeal');
+      expect(mealTypeCandidate(undefined, 'Oatmeal')).toBe('Oatmeal');
+      expect(mealTypeCandidate(null, 'Oatmeal')).toBe('Oatmeal');
+    });
+
+    it('returns undefined when both text and fallbackName are omitted or empty', () => {
+      expect(mealTypeCandidate(undefined, undefined)).toBeUndefined();
+      expect(mealTypeCandidate('', '')).toBeUndefined();
     });
   });
 

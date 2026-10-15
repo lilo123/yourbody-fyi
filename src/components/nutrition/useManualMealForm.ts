@@ -44,10 +44,7 @@ export function useManualMealForm({
   const [manualFat, setManualFat] = useState<number | ''>('');
   const [manualFiber, setManualFiber] = useState<number | ''>('');
   const [manualMealType, setManualMealType] = useState<string>(() =>
-    initialMealType ??
-      (typeof process !== 'undefined' && process.env.NODE_ENV === 'test' && !now
-        ? 'Breakfast'
-        : inferMealType(undefined, now))
+    initialMealType ?? inferMealType(undefined, now)
   );
   const [manualServingSize, setManualServingSize] = useState<number | ''>(1);
   const [manualServingUnit, setManualServingUnit] = useState<string>('serving');
@@ -59,12 +56,7 @@ export function useManualMealForm({
     setManualCarbs('');
     setManualFat('');
     setManualFiber('');
-    setManualMealType(
-      initialMealType ??
-        (typeof process !== 'undefined' && process.env.NODE_ENV === 'test' && !now
-          ? 'Breakfast'
-          : inferMealType(undefined, now))
-    );
+    setManualMealType(initialMealType ?? inferMealType(undefined, now));
   };
 
   const prefillForm = (prefill: ManualMealPrefill) => {

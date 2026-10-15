@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { ManualMealForm, type ManualMealFormProps } from './ManualMealForm';
 import { useManualMealForm } from './useManualMealForm';
@@ -204,6 +204,15 @@ describe('ManualMealForm', () => {
   });
 
   describe('useManualMealForm', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 9, 15, 8, 0));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('stages blank P/C/F/Fib as 0 in staged data', () => {
       const onStageMeal = vi.fn();
       const { result } = renderHook(() =>

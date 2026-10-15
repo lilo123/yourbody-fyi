@@ -32,6 +32,21 @@ export function isValidMealType(value: unknown): value is CanonicalMealType {
 }
 
 /**
+ * Checks whether a string is one of the 4 recognized meal name words (case-insensitive).
+ * Per owner rule, meal name words are strictly Breakfast, Lunch, Dinner, Snack.
+ */
+export function isMealWord(value?: string | null): boolean {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === 'breakfast' ||
+    normalized === 'lunch' ||
+    normalized === 'dinner' ||
+    normalized === 'snack'
+  );
+}
+
+/**
  * Converts a string to its canonical select option value.
  * Defaults to 'Breakfast' if invalid or unparseable.
  */
@@ -48,11 +63,29 @@ export function canonicalizeMealType(type?: string | null): CanonicalMealType {
 }
 
 /**
+ * Extracts a candidate meal type name from raw input text (if its leading header line
+ * is a recognized meal name word), falling back to fallbackName or undefined.
+ */
+export function mealTypeCandidate(
+  text?: string | null,
+  fallbackName?: string | null
+): string | undefined {
+  if (typeof text === 'string') {
+    const headerLine = text.trim().split('\n')[0]?.trim().replace(/[:\s—–]+$/, '');
+    if (headerLine && isMealWord(headerLine)) {
+      return headerLine;
+    }
+  }
+  return fallbackName?.trim() ? fallbackName : undefined;
+}
+
+/**
  * Infers the default meal type for a staged meal.
  *
  * Rules:
- * 1. If the staged meal name is a meal word (Breakfast / Lunch / Dinner / Snack, case-insensitive, trimmed;
- *    such as a "Dinner" header line from a paste), use it (return the canonical select value).
+ * 1. If the staged meal name is a recognized meal word (Breakfast / Lunch / Dinner / Snack,
+ *    case-insensitive, trimmed; such as a "Dinner" header line from a paste), use it
+ *    (return the canonical select value).
  * 2. Else by the user's LOCAL hour of `now`:
  *    - 00:00 - 10:59 -> Breakfast
  *    - 11:00 - 15:59 -> Lunch
@@ -66,8 +99,6 @@ export function inferMealType(name?: string | null, now?: Date | null): Canonica
     if (trimmed === 'lunch') return 'Lunch';
     if (trimmed === 'dinner') return 'Dinner';
     if (trimmed === 'snack') return 'Snack';
-    if (trimmed === 'pre-workout') return 'Pre-Workout';
-    if (trimmed === 'post-workout') return 'Post-Workout';
   }
 
   const currentDate = now instanceof Date && !isNaN(now.getTime()) ? now : new Date();
