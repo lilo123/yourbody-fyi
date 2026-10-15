@@ -11,10 +11,6 @@ vi.mock('./parseNutrition', async (importOriginal) => {
   };
 });
 
-vi.mock('../../offline', () => ({
-  enqueueAiItem: vi.fn(),
-  AiPhotoTooLargeError: class extends Error {},
-}));
 
 describe('useNutritionAi quota exceeded handling', () => {
   const setStatus = vi.fn();

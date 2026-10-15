@@ -8,7 +8,6 @@ import {
   type UpdateSafetyResult,
 } from './updateSafety';
 import { subscribeToOutbox } from '../offline/outbox';
-import { subscribeToAiQueue } from '../offline/aiQueue';
 import { workoutSessionStore } from '../utils/workoutSessionStore';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 
@@ -39,19 +38,12 @@ export const UpdateBanner: React.FC = () => {
       checkSafety();
     });
 
-    const unsubAi = userId
-      ? subscribeToAiQueue(() => {
-          checkSafety();
-        }, userId)
-      : undefined;
-
     const intervalId = setInterval(() => {
       checkSafety();
     }, 1000);
 
     return () => {
       unsubOutbox();
-      if (unsubAi) unsubAi();
       clearInterval(intervalId);
     };
   }, [updateAvailable, userId, checkSafety]);

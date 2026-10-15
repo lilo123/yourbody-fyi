@@ -1,7 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { workoutSessionStore } from '../utils/workoutSessionStore';
 import { getSyncingStatus, getCachedOutboxSummary } from '../offline/outbox';
-import { getCachedAiQueue } from '../offline/aiQueue';
 
 export type SoftItem =
   | { kind: 'workout' }
@@ -102,17 +101,6 @@ export function evaluateUpdateSafety(
     // Ignore outbox status errors
   }
 
-  // 2. Hard: AI parse in flight
-  if (options.userId) {
-    try {
-      const aiQueueState = getCachedAiQueue(options.userId);
-      if (aiQueueState.isAnalyzing) {
-        return { status: 'hard', reason: 'AI analysis in progress' };
-      }
-    } catch {
-      // Ignore AI queue errors
-    }
-  }
 
   // 3. Hard: Another open accessible modal
   const modalReason = checkOpenModal();

@@ -28,9 +28,8 @@ import { useStagedMealAddAi } from './useStagedMealAddAi';
 import { CustomDishesModal } from './CustomDishesModal';
 import { Utensils, AlertCircle, RotateCcw } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
-import { PendingReviewList } from './PendingReviewList';
-import { useAiQueueReview } from './useAiQueueReview';
-import { deleteAfterLog, newId } from '../../offline';
+import { newId, useAiRescue } from '../../offline';
+import { markFormDirty } from '../../pwa/updateSafety';
 import { PARSER_VERSION } from '../../lib/nutrition/localParse';
 import type { AiQuotaInfo } from './parseNutrition';
 
@@ -55,9 +54,7 @@ export const NutritionEngine: React.FC = () => {
   };
 
   // Manual Form Fallback State (stages into StagedMealCard instead of logging directly)
-  const manualMealForm = useManualMealForm({
-    onStageMeal: handleStageManualMeal,
-  });
+  const manualMealForm = useManualMealForm({ onStageMeal: handleStageManualMeal });
 
   const [editingMealLog, setEditingMealLog] = useState<NutritionLog | null>(null);
   const { textareaRef: aiTextareaRef, headingRef: sectionHeadingRef, decideFocusRestore, cardFocusProps } =
@@ -208,13 +205,36 @@ export const NutritionEngine: React.FC = () => {
     setIsError,
   });
 
-  const { aiQueueItems, aiQueueCounts, handleReviewAiItem } = useAiQueueReview({
-    targetUserId,
-    stagedMeal,
-    setStagedMeal,
+  // Mark update-safety dirty forms
+  useEffect(() => {
+    markFormDirty('staged-meal', Boolean(stagedMeal));
+    return () => {
+      markFormDirty('staged-meal', false);
+    };
+  }, [stagedMeal]);
+
+  useEffect(() => {
+    const isManualDirty = Boolean(
+      showManualForm &&
+        (manualMealForm.manualDishName.trim() || manualMealForm.manualCalories ||
+          manualMealForm.manualProtein || manualMealForm.manualCarbs || manualMealForm.manualFat)
+    );
+    markFormDirty('manual-meal-form', isManualDirty);
+    return () => {
+      markFormDirty('manual-meal-form', false);
+    };
+  }, [
     showManualForm,
-    manualMealForm,
-  });
+    manualMealForm.manualDishName,
+    manualMealForm.manualCalories,
+    manualMealForm.manualProtein,
+    manualMealForm.manualCarbs,
+    manualMealForm.manualFat,
+  ]);
+
+  // Owner safety rule: rescue legacy queued AI leftovers into meal text input
+  // Never overwrite user-typed text or a restored staged draft
+  useAiRescue({ targetUserId, stagedMeal, nlInput: ai.nlInput, setNlInput: ai.setNlInput });
 
   const dishModal = useCustomDishModal({
     onSaveDish: (args) => saveCustomDishMutation.mutate(args),
@@ -263,7 +283,6 @@ export const NutritionEngine: React.FC = () => {
     const item0 = items[0];
     const logDate = stagedMeal.captureDate || selectedDate;
     const logTimestamp = stagedMeal.capturedAt || formatLocalTimestamp(selectedDate, undefined, profile?.timezone ?? undefined);
-    const aiqItemId = stagedMeal.aiqItemId;
 
     const logSource: 'device' | 'ai' | 'manual' =
       stagedMeal.source === 'ai'
@@ -291,17 +310,7 @@ export const NutritionEngine: React.FC = () => {
       source: logSource,
       parser_version: PARSER_VERSION,
     };
-    mutation.mutate(payload, {
-      onSuccess: async () => {
-        if (aiqItemId && targetUserId) {
-          try {
-            await deleteAfterLog(targetUserId, aiqItemId);
-          } catch (deleteErr) {
-            console.warn('[NutritionEngine] Failed to delete aiq item after log:', deleteErr);
-          }
-        }
-      },
-    });
+    mutation.mutate(payload);
   };
 
   const { handleSaveStagedAsCustomDish, handleSaveItemAsCustomDish } = useCustomDishSaving({
@@ -471,17 +480,6 @@ export const NutritionEngine: React.FC = () => {
         isPending={mutation.isPending}
       />
 
-      {/* AI Queue Pending Review */}
-      <PendingReviewList
-        userId={targetUserId}
-        items={aiQueueItems}
-        counts={aiQueueCounts}
-        onReviewItem={handleReviewAiItem}
-        onEnterManually={(item) => {
-          setShowManualForm(true);
-          manualMealForm.setManualDishName(item.text || 'Meal Photo');
-        }}
-      />
 
       {/* Logged Meals Timeline */}
       <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-3">
