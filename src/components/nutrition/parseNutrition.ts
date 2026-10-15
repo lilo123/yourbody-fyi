@@ -25,6 +25,7 @@ export interface AiQuotaInfo {
 
 export interface ParseNutritionResult {
   name?: string;
+  mealType?: string;
   explanation?: string;
   items: StagedItem[];
   calories: number;
@@ -296,6 +297,7 @@ export async function parseNutrition({
 
     return {
       name: parsed.name,
+      mealType: parsed.meal_type || parsed.mealType,
       explanation: parsed.explanation,
       items,
       calories: totalCal,

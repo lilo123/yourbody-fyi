@@ -4,6 +4,12 @@ import { formatCalories } from '../../utils/nutrition';
 import { parseNutritionText } from '../../lib/nutrition/localParse';
 import { buildStagedItem, recomputeStagedTotals, type StagedMeal } from './nutritionEngineHelpers';
 import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
+import {
+  inferMealType,
+  isValidMealType,
+  canonicalizeMealType,
+  mealTypeCandidate,
+} from './inferMealType';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
 import type { ManualMealPrefill } from './useManualMealForm';
 import {
@@ -44,9 +50,10 @@ function buildStagedMealFromLocal(
     );
     const totals = recomputeStagedTotals(stagedItems);
     const macroSummary = `Total: ${totals.calories} kcal | ${totals.protein}g P | ${totals.carbs}g C | ${totals.fat}g F | ${totals.fiber}g Fiber`;
+    const mealName = parsed.name || 'Meal';
     return {
-      name: parsed.name || 'Meal',
-      mealType: 'Breakfast',
+      name: mealName,
+      mealType: inferMealType(mealTypeCandidate(text, mealName)),
       explanation: totals.explanation ? `${totals.explanation} | ${macroSummary}` : macroSummary,
       items: stagedItems,
       calories: totals.calories,
@@ -79,9 +86,10 @@ function buildStagedMealFromLocal(
     fiber: parsed.fiber ?? 0,
   });
 
+  const mealName = parsed.name || 'Meal';
   return {
-    name: parsed.name || 'Meal',
-    mealType: 'Breakfast',
+    name: mealName,
+    mealType: inferMealType(mealTypeCandidate(text, mealName)),
     explanation: `${formatCalories(parsed.calories)} kcal (${parsed.name || 'Meal'})`,
     items: [stagedItem],
     calories: parsed.calories,
@@ -362,9 +370,16 @@ export function useNutritionAi({
         localModifiers = local.modifiers;
       }
 
+      const mealName = parsed.name || textToAnalyze || (selectedPhoto ? 'Meal Photo' : 'Meal');
+      const candidateForMealType = mealTypeCandidate(textToAnalyze, mealName);
+      const existingMealType = parsed.mealType;
+      const mealType = isValidMealType(existingMealType)
+        ? canonicalizeMealType(existingMealType)
+        : inferMealType(candidateForMealType);
+
       const meal = {
-        name: parsed.name || textToAnalyze || (selectedPhoto ? 'Meal Photo' : 'Meal'),
-        mealType: 'Breakfast',
+        name: mealName,
+        mealType,
         explanation:
           parsed.explanation ||
           parsed.items
