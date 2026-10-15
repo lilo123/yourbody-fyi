@@ -46,7 +46,6 @@ import { convertPortion, type CanonicalUnit } from '../../utils/unitConverter';
 import { roundTo1Decimal, formatCalories } from '../../utils/nutrition';
 import { sumItems, scaleItem, scaleItemToQuantity, type NutritionItem } from '../../utils/itemModel';
 import type { ManualMealStagedData } from './useManualMealForm';
-import { inferMealType } from './inferMealType';
 
 export interface StagedItem {
   id: string;
@@ -535,7 +534,7 @@ export function buildStagedMealFromManualData(
 
   return {
     name: data.food_name,
-    mealType: data.meal_type || inferMealType(data.food_name),
+    mealType: data.meal_type || 'Breakfast',
     explanation: `${formatCalories(data.calories)} kcal (${data.food_name})`,
     items: [item],
     calories: data.calories,

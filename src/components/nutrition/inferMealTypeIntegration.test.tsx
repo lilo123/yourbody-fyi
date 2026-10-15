@@ -14,6 +14,7 @@ import {
   type StagedMeal,
 } from './nutritionEngineHelpers';
 import { parseNutrition } from './parseNutrition';
+import { inferMealType } from './inferMealType';
 
 vi.mock('./parseNutrition', () => ({
   parseNutrition: vi.fn(),
@@ -367,37 +368,99 @@ describe('Meal type inference integration', () => {
       expect(staged.name).toBe('Dinner');
       expect(staged.mealType).toBe('Dinner');
     });
+
+    it('infers meal type from header line of user input when AI returns food name without mealType', async () => {
+      const mockAiResult = {
+        name: 'Medium Banana',
+        items: [
+          buildStagedItem({
+            name: 'Medium Banana',
+            portion: '1 medium',
+            quantity: 118,
+            unit: 'g',
+            calories: 105,
+            protein: 1.3,
+            carbs: 27,
+            fat: 0.3,
+            fiber: 3.1,
+          }),
+        ],
+        calories: 105,
+        protein: 1.3,
+        carbs: 27,
+        fat: 0.3,
+        fiber: 3.1,
+        servingSize: 118,
+        servingUnit: 'g',
+        source: 'ai' as const,
+        confidence: 'exact' as const,
+      };
+
+      vi.mocked(parseNutrition).mockResolvedValueOnce(mockAiResult as any);
+
+      const onParsedSuccess = vi.fn();
+      const { result } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus: vi.fn(),
+          setIsError: vi.fn(),
+          onParsedSuccess,
+          onFallbackToManual: vi.fn(),
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleAnalyze({
+          overrideText: 'Dinner\n1 medium banana 105 kcal',
+          forceAi: true,
+        });
+      });
+
+      expect(onParsedSuccess).toHaveBeenCalledTimes(1);
+      const staged = onParsedSuccess.mock.calls[0][0] as StagedMeal;
+      expect(staged.name).toBe('Medium Banana');
+      expect(staged.mealType).toBe('Dinner');
+    });
   });
 
   describe('manual meal form time-of-day defaulting', () => {
-    it('defaults manual meal type by time of day', () => {
+    it('defaults manual meal type by time of day via initialMealType / now', () => {
       vi.useFakeTimers();
 
       // At 19:00 -> Dinner
       vi.setSystemTime(new Date(2026, 9, 15, 19, 0));
       const { result: dinnerForm } = renderHook(() =>
-        useManualMealForm({ onStageMeal: vi.fn() })
+        useManualMealForm({ onStageMeal: vi.fn(), now: new Date() })
       );
       expect(dinnerForm.current.manualMealType).toBe('Dinner');
+
+      // Also test explicit initialMealType with inferMealType
+      const { result: explicitForm } = renderHook(() =>
+        useManualMealForm({
+          onStageMeal: vi.fn(),
+          initialMealType: inferMealType(undefined, new Date(2026, 9, 15, 19, 0)),
+        })
+      );
+      expect(explicitForm.current.manualMealType).toBe('Dinner');
 
       // At 08:00 -> Breakfast
       vi.setSystemTime(new Date(2026, 9, 15, 8, 0));
       const { result: breakfastForm } = renderHook(() =>
-        useManualMealForm({ onStageMeal: vi.fn() })
+        useManualMealForm({ onStageMeal: vi.fn(), now: new Date() })
       );
       expect(breakfastForm.current.manualMealType).toBe('Breakfast');
 
       // At 13:00 -> Lunch
       vi.setSystemTime(new Date(2026, 9, 15, 13, 0));
       const { result: lunchForm } = renderHook(() =>
-        useManualMealForm({ onStageMeal: vi.fn() })
+        useManualMealForm({ onStageMeal: vi.fn(), now: new Date() })
       );
       expect(lunchForm.current.manualMealType).toBe('Lunch');
 
       // At 23:00 -> Snack
       vi.setSystemTime(new Date(2026, 9, 15, 23, 0));
       const { result: snackForm } = renderHook(() =>
-        useManualMealForm({ onStageMeal: vi.fn() })
+        useManualMealForm({ onStageMeal: vi.fn(), now: new Date() })
       );
       expect(snackForm.current.manualMealType).toBe('Snack');
     });
