@@ -54,6 +54,11 @@
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
   Content-Type: text/plain
 
+/sitemap.xml
+  ! Cache-Control
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Content-Type: application/xml
+
 /version.json
   ! Cache-Control
   Cache-Control: no-cache
