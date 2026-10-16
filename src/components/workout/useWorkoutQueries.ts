@@ -123,20 +123,6 @@ export function clearTemplateDetailCache(templateId?: string): void {
   }
 }
 
-export function invalidateTemplateDetail(
-  templateId?: string,
-  queryClient?: QueryClient
-): void {
-  clearTemplateDetailCache(templateId);
-  if (queryClient) {
-    if (templateId) {
-      void queryClient.invalidateQueries({ queryKey: routineTemplateDetailQueryKey(templateId) });
-    } else {
-      void queryClient.invalidateQueries({ queryKey: [ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX] });
-    }
-  }
-}
-
 // Clear memory cache on sign-out
 if (typeof supabase?.auth?.onAuthStateChange === 'function') {
   supabase.auth.onAuthStateChange((event) => {

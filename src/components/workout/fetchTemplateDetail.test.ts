@@ -3,9 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import {
   fetchTemplateDetail,
   clearTemplateDetailCache,
-  invalidateTemplateDetail,
   routineTemplateDetailQueryKey,
-  ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX,
   OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS,
   type RoutineTemplateDetail,
 } from './useWorkoutQueries';
@@ -222,44 +220,6 @@ describe('fetchTemplateDetail offline resilience and caching', () => {
     await expect(fetchTemplateDetail('template-uncached-err', queryClient)).rejects.toThrow(
       'Network error: connection reset'
     );
-  });
-
-  it('save/delete invalidates', async () => {
-    const mockDetail: RoutineTemplateDetail = {
-      id: 'template-to-invalidate',
-      exercises: [
-        {
-          id: 'te-inv',
-          template_id: 'template-to-invalidate',
-          exercise_id: 'ex-inv',
-          order_index: 0,
-          target_sets: 3,
-          target_reps: 10,
-          exercise: { name: 'Incline Bench' },
-        },
-      ],
-    };
-
-    queryClient.setQueryData(
-      routineTemplateDetailQueryKey('template-to-invalidate'),
-      mockDetail
-    );
-
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
-
-    // Invalidate specific template
-    invalidateTemplateDetail('template-to-invalidate', queryClient);
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: routineTemplateDetailQueryKey('template-to-invalidate'),
-    });
-
-    // Invalidate all templates
-    invalidateTemplateDetail(undefined, queryClient);
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: [ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX],
-    });
   });
 
   it('offline + no cache rejects within a short bound (fake timers)', async () => {
