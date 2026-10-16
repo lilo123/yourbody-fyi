@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
-interface FaqItem {
+export interface FaqItem {
   question: string;
   answer: string;
 }
 
-const FAQ_ITEMS: readonly FaqItem[] = [
+export const FAQ_ITEMS: readonly FaqItem[] = [
   {
     question: 'Does it work in a gym with no signal?',
     answer:
