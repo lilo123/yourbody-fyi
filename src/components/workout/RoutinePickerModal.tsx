@@ -116,15 +116,10 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
     (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
   );
 
-  const handleClose = () => {
-    if (isSelecting) return;
-    onClose();
-  };
-
   return (
     <AccessibleModal
       isOpen={isOpen}
-      onClose={handleClose}
+      onClose={onClose}
       titleId="routine-picker-modal-title"
       overlayTestId="routine-picker-modal"
       overlayClassName="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
@@ -137,10 +132,9 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
         </h3>
         <button
           type="button"
-          onClick={handleClose}
-          disabled={isSelecting}
+          onClick={onClose}
           aria-label="Close dialog"
-          className="text-zinc-400 hover:text-white text-xs font-bold p-1 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer touch-manipulation disabled:opacity-50"
+          className="text-zinc-400 hover:text-white text-xs font-bold p-1 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
         >
           Close
         </button>

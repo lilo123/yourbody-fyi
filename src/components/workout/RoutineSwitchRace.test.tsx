@@ -364,4 +364,140 @@ describe('Routine Switch Race Conditions', () => {
       expect(screen.queryByTestId('routine-picker-modal')).not.toBeInTheDocument();
     });
   });
+
+  it('select X with a pending fetch, press Close -> modal closes, old exercises unchanged, resolving X later changes nothing', async () => {
+    let resolveX!: (detail: any) => void;
+    const pendingPromiseX = new Promise((resolve) => {
+      resolveX = resolve;
+    });
+
+    mockFetchTemplateDetail.mockImplementation((templateId: string) => {
+      if (templateId === 'tpl-custom-workout-a') {
+        return pendingPromiseX;
+      }
+      return Promise.resolve(null);
+    });
+
+    renderWorkout();
+
+    // 1. Initial routine on Friday is "Pull, Hamstring, & Core - Reduced" with "Lat Pull Down"
+    expect(await screen.findByText('Lat Pull Down')).toBeInTheDocument();
+
+    // 2. Open picker modal
+    const routineBtn = screen.getByTestId('routine-select-btn');
+    fireEvent.click(routineBtn);
+    expect(screen.getByTestId('routine-picker-modal')).toBeInTheDocument();
+
+    // 3. Click custom template X ("Workout A")
+    const customOption = await screen.findByRole('button', {
+      name: /Workout A \(Push, Quads & Core\)/i,
+    });
+    fireEvent.click(customOption);
+
+    // Modal stays open while fetch is pending
+    expect(screen.getByTestId('routine-picker-modal')).toBeInTheDocument();
+
+    // 4. Press Close button while fetch is pending
+    const closeBtn = screen.getByRole('button', { name: 'Close dialog' });
+    fireEvent.click(closeBtn);
+
+    // Modal closes immediately
+    expect(screen.queryByTestId('routine-picker-modal')).not.toBeInTheDocument();
+
+    // Old exercises remain unchanged
+    expect(screen.getByText('Lat Pull Down')).toBeInTheDocument();
+    expect(screen.queryByText('Incline Bench Press')).not.toBeInTheDocument();
+
+    // 5. Late resolution of X occurs
+    await act(async () => {
+      resolveX({
+        id: 'tpl-custom-workout-a',
+        exercises: [
+          {
+            id: 'te-1',
+            template_id: 'tpl-custom-workout-a',
+            exercise_id: 'ex-incline-bench',
+            order_index: 0,
+            target_sets: 3,
+            target_reps: 8,
+            exercise: { name: 'Incline Bench Press' },
+          },
+        ],
+      });
+    });
+
+    // Old exercises STILL unchanged: X was canceled, so late response is discarded
+    expect(screen.getByText('Lat Pull Down')).toBeInTheDocument();
+    expect(screen.queryByText('Incline Bench Press')).not.toBeInTheDocument();
+  });
+
+  it('cancelRoutineSelection in useWorkoutSession discards pending fetch resolution', async () => {
+    let resolveX!: (val: any) => void;
+    const promiseX = new Promise((resolve) => {
+      resolveX = resolve;
+    });
+
+    mockFetchTemplateDetail.mockImplementation(() => promiseX);
+
+    const mockExercises: Exercise[] = [
+      { id: 'ex-x', name: 'Exercise X', body_parts: ['Chest'], is_master: true },
+    ];
+
+    const templateX: RoutineTemplate = {
+      id: 'tpl-x',
+      user_id: testUserId,
+      name: 'Routine X',
+      is_master: false,
+      assigned_to: null,
+      created_at: '2026-01-01',
+    };
+
+    const { result } = renderHook(() =>
+      useWorkoutSession({
+        targetUserId: testUserId,
+        exercises: mockExercises,
+        exercisesFetched: true,
+        customTemplates: [templateX],
+        templatesFetched: true,
+        userLogs: [],
+        logsFetched: true,
+      })
+    );
+
+    const initialRoutine = result.current.activeRoutineName;
+
+    // Start selecting X
+    let selectPromiseX: Promise<void> | undefined;
+    act(() => {
+      selectPromiseX = result.current.handleSelectRoutine('Routine X', templateX);
+    });
+
+    // Cancel selection while in flight
+    act(() => {
+      result.current.cancelRoutineSelection();
+    });
+
+    // Resolve X later
+    await act(async () => {
+      resolveX({
+        id: 'tpl-x',
+        exercises: [
+          {
+            id: 'te-x',
+            template_id: 'tpl-x',
+            exercise_id: 'ex-x',
+            order_index: 0,
+            target_sets: 3,
+            target_reps: 10,
+            exercise: { name: 'Exercise X' },
+          },
+        ],
+      });
+      await selectPromiseX;
+    });
+
+    // Routine remains initial, X was discarded
+    expect(result.current.activeRoutineName).toBe(initialRoutine);
+    expect(result.current.activeExercises).not.toContain('Exercise X');
+  });
 });

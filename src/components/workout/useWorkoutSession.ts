@@ -183,6 +183,10 @@ export function useWorkoutSession({
     setExpandedExercises,
   });
 
+  const cancelRoutineSelection = useCallback(() => {
+    routineSelectionSeqRef.current++;
+  }, []);
+
   const handleSelectRoutine = async (routineName: string, selectedTemplate?: RoutineTemplate) => {
     const seq = ++routineSelectionSeqRef.current;
     manualSelectionDateRef.current = workoutDate;
@@ -550,6 +554,7 @@ export function useWorkoutSession({
     collapseCompleted,
     toggleAllAccordions,
     handleSelectRoutine,
+    cancelRoutineSelection,
     handleReloadScheduledRoutine,
     handleAddExercise,
     addExercises,
