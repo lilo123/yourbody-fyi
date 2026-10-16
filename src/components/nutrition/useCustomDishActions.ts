@@ -6,10 +6,12 @@ import { formatLocalTimestamp } from '../../utils/date';
 import { formatCalories, roundTo1Decimal } from '../../utils/nutrition';
 import { newId } from '../../offline';
 import { PARSER_VERSION } from '../../lib/nutrition/localParse';
+import { queryKeys } from '../../lib/queryKeys';
 import {
   itemsForPersist,
   itemsFromLegacyIngredients,
   normalizeItems,
+  type NutritionItem,
 } from '../../utils/itemModel';
 import { fetchDishDetail as defaultFetchDishDetail } from './useNutritionData';
 import { inferMealType } from './inferMealType';
@@ -50,6 +52,26 @@ export interface UseCustomDishActionsOptions {
   triggerToast?: (dish: CustomDish | { name: string; calories: number | null }, options?: any) => void;
 }
 
+export interface QuickLogMutationPayload {
+  id: string;
+  food_name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  meal_type: string;
+  serving_size: number;
+  serving_unit: string;
+  logged_at: string;
+  logged_date: string;
+  items?: NutritionItem[] | null;
+  notes: string | null;
+  source: 'manual';
+  parser_version: string;
+  incrementDishId?: string;
+}
+
 export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | null): StagedItem[] {
   const stored =
     normalizeItems(detail?.items ?? dish.items) ?? itemsFromLegacyIngredients(dish.id, dish.name, detail?.ingredients);
@@ -82,6 +104,47 @@ export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | 
     ];
   }
   return items;
+}
+
+/**
+ * Resolves the serving size and unit for a custom dish.
+ * Single-item food dishes use the dish's own amount and unit (e.g. 40 g).
+ * Multi-item dishes or recipes remain 1 serving.
+ */
+export function resolveCustomDishServing(
+  dish: CustomDish,
+  detail?: CustomDishDetail | null
+): { servingSize: number; servingUnit: string } {
+  let servingSize = 1;
+  let servingUnit = 'serving';
+  if (dish.kind === 'food') {
+    const items = detail?.items ?? dish.items;
+    if (items && items.length > 1) {
+      return { servingSize: 1, servingUnit: 'serving' };
+    }
+    if (
+      dish.serving_quantity != null &&
+      Number.isFinite(Number(dish.serving_quantity)) &&
+      Number(dish.serving_quantity) > 0 &&
+      dish.serving_unit
+    ) {
+      servingSize = roundTo1Decimal(Number(dish.serving_quantity));
+      servingUnit = dish.serving_unit;
+    } else if (items && items.length === 1) {
+      const single = items[0];
+      if (
+        single &&
+        single.quantity != null &&
+        Number.isFinite(Number(single.quantity)) &&
+        Number(single.quantity) > 0 &&
+        single.unit
+      ) {
+        servingSize = roundTo1Decimal(Number(single.quantity));
+        servingUnit = single.unit;
+      }
+    }
+  }
+  return { servingSize, servingUnit };
 }
 
 export function useCustomDishActions({
@@ -138,7 +201,7 @@ export function useCustomDishActions({
           .from('custom_dishes')
           .update({ use_count: (dish.use_count ?? 0) + 1 })
           .eq('id', dish.id);
-        queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
       } catch (err: unknown) {
         console.warn('[useCustomDishActions] Failed to increment custom dish use count:', err);
       }
@@ -183,6 +246,7 @@ export function useCustomDishActions({
 
       const items = buildItemsFromDish(dish, detail);
       const { explanation, ...tot } = recomputeStagedTotals(items);
+      const { servingSize, servingUnit } = resolveCustomDishServing(dish, detail);
 
       setStagedMeal({
         name: dish.name,
@@ -191,8 +255,8 @@ export function useCustomDishActions({
           items.length > 1 ? explanation : `${formatCalories(tot.calories)} kcal (${dish.name})`,
         items,
         ...tot,
-        servingSize: 1,
-        servingUnit: 'serving',
+        servingSize,
+        servingUnit,
         notes: dish.notes ?? null,
       });
 
@@ -252,7 +316,10 @@ export function useCustomDishActions({
               servingSize: mergedItems[0].quantity,
               servingUnit: mergedItems[0].unit,
             }
-          : {}),
+          : {
+              servingSize: 1,
+              servingUnit: 'serving',
+            }),
       };
 
       latestStagedMealRef.current = nextStagedMeal;
@@ -320,13 +387,18 @@ export function useCustomDishActions({
       let detail: CustomDishDetail | null = null;
       const hasDirectItems = Array.isArray(dish.items) && dish.items.length > 0;
       if (!hasDirectItems) {
-        const cachedList = queryClient.getQueryData<CustomDish[]>(['custom_dishes', targetUserId]);
-        const foundInList = cachedList?.find((d) => d.id === dish.id);
-        if (foundInList && ((foundInList as any).items !== undefined || (foundInList as any).ingredients !== undefined)) {
-          detail = foundInList as CustomDishDetail;
-        }
-        if (!detail) {
-          const cachedFull = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', targetUserId, 'full']);
+        const cachedList = queryClient.getQueryData<CustomDishDetail[]>(
+          queryKeys.customDishes.byUser(targetUserId)
+        );
+        const foundInList = cachedList?.find(
+          (d) => d.id === dish.id && (d.items !== undefined || d.ingredients !== undefined)
+        );
+        if (foundInList) {
+          detail = foundInList;
+        } else {
+          const cachedFull = queryClient.getQueryData<CustomDishDetail[]>(
+            queryKeys.customDishes.fullByUser(targetUserId)
+          );
           detail = cachedFull?.find((d) => d.id === dish.id) ?? null;
         }
       }
@@ -335,50 +407,50 @@ export function useCustomDishActions({
       const items = stagedItems.map(stagedToItem);
       const isMultiItem = items.length > 1;
       const { explanation: _explanation, ...tot } = recomputeStagedTotals(stagedItems);
+      const { servingSize, servingUnit } = resolveCustomDishServing(dish, detail);
 
-      let servingSize = 1;
-      let servingUnit = 'serving';
-      if (dish.kind === 'food') {
-        if (dish.serving_quantity != null && Number(dish.serving_quantity) > 0 && dish.serving_unit) {
-          servingSize = roundTo1Decimal(Number(dish.serving_quantity));
-          servingUnit = dish.serving_unit;
-        } else if (dish.items && dish.items.length === 1) {
-          const single = dish.items[0];
-          if (single && single.quantity != null && single.quantity > 0 && single.unit) {
-            servingSize = roundTo1Decimal(single.quantity);
-            servingUnit = single.unit;
+      const payload: QuickLogMutationPayload = isMultiItem
+        ? {
+            id: clientLogId,
+            food_name: dish.name,
+            calories: roundTo1Decimal(tot.calories),
+            protein: roundTo1Decimal(tot.protein),
+            carbs: roundTo1Decimal(tot.carbs),
+            fat: roundTo1Decimal(tot.fat),
+            fiber: roundTo1Decimal(tot.fiber),
+            meal_type: inferMealType(dish.name, new Date()),
+            serving_size: servingSize,
+            serving_unit: servingUnit,
+            logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
+            logged_date: selectedDate,
+            items: itemsForPersist(items),
+            notes: dish.notes ?? null,
+            source: 'manual',
+            parser_version: PARSER_VERSION,
+            incrementDishId: dish.id,
           }
-        }
-      }
+        : {
+            id: clientLogId,
+            food_name: dish.name,
+            calories: roundTo1Decimal(dish.calories),
+            protein: roundTo1Decimal(dish.protein),
+            carbs: roundTo1Decimal(dish.carbs),
+            fat: roundTo1Decimal(dish.fat),
+            fiber: roundTo1Decimal(dish.fiber),
+            meal_type: inferMealType(dish.name, new Date()),
+            serving_size: servingSize,
+            serving_unit: servingUnit,
+            logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
+            logged_date: selectedDate,
+            notes: dish.notes ?? null,
+            source: 'manual',
+            parser_version: PARSER_VERSION,
+            incrementDishId: dish.id,
+          };
 
-      const dishCalories = dish.calories != null ? roundTo1Decimal(dish.calories) : tot.calories;
-      const dishProtein = dish.protein != null ? roundTo1Decimal(dish.protein) : tot.protein;
-      const dishCarbs = dish.carbs != null ? roundTo1Decimal(dish.carbs) : tot.carbs;
-      const dishFat = dish.fat != null ? roundTo1Decimal(dish.fat) : tot.fat;
-      const dishFiber = dish.fiber != null ? roundTo1Decimal(dish.fiber) : tot.fiber;
-
-      const payload: Record<string, any> = {
-        id: clientLogId,
-        food_name: dish.name,
-        calories: dishCalories,
-        protein: dishProtein,
-        carbs: dishCarbs,
-        fat: dishFat,
-        fiber: dishFiber,
-        meal_type: inferMealType(dish.name, new Date()),
-        serving_size: servingSize,
-        serving_unit: servingUnit,
-        logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
-        logged_date: selectedDate,
-        ...(isMultiItem ? { items: itemsForPersist(items) } : {}),
-        notes: dish.notes ?? null,
-        source: 'manual' as const,
-        parser_version: PARSER_VERSION,
-        incrementDishId: dish.id,
-      };
       mutation.mutate(payload, {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
         },
       });
       triggerToast?.(dish);

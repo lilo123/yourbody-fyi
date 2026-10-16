@@ -248,6 +248,7 @@ export const queryKeys = {
   customDishes: {
     all: ['custom_dishes'] as const,
     byUser: (userId: string | null | undefined) => ['custom_dishes', userId] as const,
+    fullByUser: (userId: string | null | undefined) => ['custom_dishes', userId, 'full'] as const,
   },
 
   nutritionLogs: {

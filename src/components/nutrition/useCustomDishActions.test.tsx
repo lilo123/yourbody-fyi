@@ -3,11 +3,14 @@ import { renderHook, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useCustomDishActions, buildItemsFromDish } from './useCustomDishActions';
-import { stagedToItem } from './nutritionEngineHelpers';
+import { stagedToItem, type StagedMeal } from './nutritionEngineHelpers';
 import type { CustomDish, CustomDishDetail } from '../../types/database';
 import { isWithinDayBounds } from '../../utils/date';
 import { supabase } from '../../lib/supabase';
 import { PARSER_VERSION } from '../../lib/nutrition/localParse';
+import { queryKeys } from '../../lib/queryKeys';
+import { sumItems } from '../../utils/itemModel';
+import { roundTo1Decimal } from '../../utils/nutrition';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -116,8 +119,8 @@ describe('useCustomDishActions', () => {
     expect(stagedArg.fat).toBe(3);
     expect(stagedArg.fiber).toBe(4);
     expect(stagedArg.notes).toBe('Steel cut oats');
-    expect(stagedArg.servingSize).toBe(1);
-    expect(stagedArg.servingUnit).toBe('serving');
+    expect(stagedArg.servingSize).toBe(40);
+    expect(stagedArg.servingUnit).toBe('g');
 
     // use_count update
     expect(supabase.from).toHaveBeenCalledWith('custom_dishes');
@@ -202,6 +205,8 @@ describe('useCustomDishActions', () => {
     expect(stagedArg.fat).toBe(12);
     expect(stagedArg.fiber).toBe(5);
     expect(stagedArg.explanation).toBeDefined();
+    expect(stagedArg.servingSize).toBe(1);
+    expect(stagedArg.servingUnit).toBe('serving');
 
     expect(mockUpdate).toHaveBeenCalledWith({ use_count: 11 });
     expect(mockUpdateEq).toHaveBeenCalledWith('id', 'dish-multi-1');
@@ -540,14 +545,21 @@ describe('useCustomDishActions', () => {
       { wrapper }
     );
 
-    await act(async () => {
-      await result.current.handleQuickLogCustomDishDirect(multiItemDish);
+    act(() => {
+      result.current.handleQuickLogCustomDishDirect(multiItemDish);
     });
 
     expect(mutate).toHaveBeenCalledTimes(1);
     const payload = mutate.mock.calls[0][0];
 
     expect(payload.food_name).toBe('Chicken and Rice');
+    expect(payload.calories).toBe(550);
+    expect(payload.protein).toBe(45);
+    expect(payload.carbs).toBe(60);
+    expect(payload.fat).toBe(12);
+    expect(payload.fiber).toBe(4);
+    expect(payload.serving_size).toBe(1);
+    expect(payload.serving_unit).toBe('serving');
     expect(payload.items).toHaveLength(2);
     expect(payload.items).toEqual([
       {
@@ -630,6 +642,168 @@ describe('useCustomDishActions', () => {
     expect('items' in payload).toBe(false);
   });
 
+  it('single-item dish payload is identical to main payload with exact 16 keys and no items property (even with null calories)', () => {
+    const mutate = vi.fn();
+    const singleItemDishWithNulls: CustomDish = {
+      id: 'dish-single-nulls',
+      user_id: 'user-123',
+      name: 'Black Coffee',
+      calories: null as unknown as number,
+      protein: null as unknown as number,
+      carbs: null as unknown as number,
+      fat: null as unknown as number,
+      fiber: null as unknown as number,
+      kind: 'food',
+      use_count: 2,
+      serving_quantity: 250,
+      serving_unit: 'ml',
+      notes: null,
+      items: [
+        {
+          id: 'item-coffee',
+          name: 'Black Coffee',
+          quantity: 250,
+          unit: 'ml',
+          displayPortion: '250ml',
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          fiber: 0,
+        },
+      ],
+    };
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          timeZone: 'UTC',
+          setStagedMeal: vi.fn(),
+          mutation: { mutate },
+        }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.handleQuickLogCustomDishDirect(singleItemDishWithNulls);
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0];
+
+    const expectedKeys = [
+      'id',
+      'food_name',
+      'calories',
+      'protein',
+      'carbs',
+      'fat',
+      'fiber',
+      'meal_type',
+      'serving_size',
+      'serving_unit',
+      'logged_at',
+      'logged_date',
+      'notes',
+      'source',
+      'parser_version',
+      'incrementDishId',
+    ];
+    expect(Object.keys(payload).sort()).toEqual(expectedKeys.sort());
+    expect('items' in payload).toBe(false);
+
+    expect(payload.calories).toBe(0);
+    expect(payload.protein).toBe(0);
+    expect(payload.carbs).toBe(0);
+    expect(payload.fat).toBe(0);
+    expect(payload.fiber).toBe(0);
+    expect(payload.serving_size).toBe(250);
+    expect(payload.serving_unit).toBe('ml');
+    expect(payload.source).toBe('manual');
+    expect(payload.food_name).toBe('Black Coffee');
+    expect(payload.incrementDishId).toBe('dish-single-nulls');
+  });
+
+  it('no-detail dish payload is identical to main payload with exact 16 keys and no items property', () => {
+    const mutate = vi.fn();
+    const dishNoDetail: CustomDish = {
+      id: 'dish-no-detail',
+      user_id: 'user-123',
+      name: 'Apple',
+      calories: 95,
+      protein: 0.5,
+      carbs: 25,
+      fat: 0.3,
+      fiber: 4.4,
+      kind: 'food',
+      use_count: 10,
+      serving_quantity: 1,
+      serving_unit: 'medium apple',
+      notes: 'Honeycrisp',
+    };
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          timeZone: 'UTC',
+          setStagedMeal: vi.fn(),
+          mutation: { mutate },
+        }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.handleQuickLogCustomDishDirect(dishNoDetail);
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0];
+
+    const expectedKeys = [
+      'id',
+      'food_name',
+      'calories',
+      'protein',
+      'carbs',
+      'fat',
+      'fiber',
+      'meal_type',
+      'serving_size',
+      'serving_unit',
+      'logged_at',
+      'logged_date',
+      'notes',
+      'source',
+      'parser_version',
+      'incrementDishId',
+    ];
+    expect(Object.keys(payload).sort()).toEqual(expectedKeys.sort());
+    expect('items' in payload).toBe(false);
+
+    expect(payload).toEqual({
+      id: expect.any(String),
+      food_name: 'Apple',
+      calories: 95,
+      protein: 0.5,
+      carbs: 25,
+      fat: 0.3,
+      fiber: 4.4,
+      meal_type: expect.any(String),
+      serving_size: 1,
+      serving_unit: 'medium apple',
+      logged_at: expect.any(String),
+      logged_date: '2026-10-15',
+      notes: 'Honeycrisp',
+      source: 'manual',
+      parser_version: expect.any(String),
+      incrementDishId: 'dish-no-detail',
+    });
+  });
+
   it('quick-logging a dish without direct items retrieves cached detail and attaches items when multi-item', () => {
     const mutate = vi.fn();
     const dishSummary: CustomDish = {
@@ -675,7 +849,7 @@ describe('useCustomDishActions', () => {
       ],
     };
 
-    queryClient.setQueryData(['custom_dishes', 'user-123', 'full'], [mockDetail]);
+    queryClient.setQueryData(queryKeys.customDishes.fullByUser('user-123'), [mockDetail]);
 
     const { result } = renderHook(
       () =>
@@ -2543,6 +2717,117 @@ describe('useCustomDishActions', () => {
       expect(nextMeal.items[0].quantity).toBe(300);
       expect(nextMeal.servingSize).toBe(300);
       expect(nextMeal.servingUnit).toBe('g');
+    });
+
+    it('stages-then-logs and 1-tap-logs the same single-item dish and asserts identical logged rows', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 9, 15, 12, 0));
+
+      let capturedStagedMeal: StagedMeal | null = null;
+      const setStagedMeal = vi.fn((meal: StagedMeal | null) => {
+        capturedStagedMeal = meal;
+      });
+      const mutate = vi.fn();
+
+      const dish: CustomDish = {
+        id: 'dish-whey-single',
+        user_id: 'user-123',
+        name: 'Whey Protein Powder',
+        calories: 140,
+        protein: 30,
+        carbs: 2,
+        fat: 1,
+        fiber: 0,
+        kind: 'food',
+        use_count: 5,
+        serving_quantity: 40,
+        serving_unit: 'g',
+        notes: 'Post-workout scoop',
+      };
+
+      const dishDetail: CustomDishDetail = {
+        ...dish,
+        items: [
+          {
+            id: 'item-whey-1',
+            name: 'Whey Protein Powder',
+            quantity: 40,
+            unit: 'g',
+            displayPortion: '40 g',
+            calories: 140,
+            protein: 30,
+            carbs: 2,
+            fat: 1,
+            fiber: 0,
+          },
+        ],
+      };
+
+      const fetchDishDetail = vi.fn().mockResolvedValue(dishDetail);
+
+      const { result } = renderHook(
+        () =>
+          useCustomDishActions({
+            targetUserId: 'user-123',
+            selectedDate: '2026-10-15',
+            setStagedMeal,
+            fetchDishDetail,
+            mutation: { mutate },
+          }),
+        { wrapper }
+      );
+
+      // 1-tap quick log path
+      act(() => {
+        result.current.handleQuickLogCustomDishDirect(dish);
+      });
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const quickLogPayload = mutate.mock.calls[0][0];
+
+      // Staging path
+      await act(async () => {
+        await result.current.handleStageCustomDish(dish);
+      });
+
+      expect(setStagedMeal).toHaveBeenCalled();
+      expect(capturedStagedMeal).not.toBeNull();
+
+      // Simulate logging the staged meal via the exact staging log transform
+      const staged = capturedStagedMeal!;
+      const stagedItems = staged.items.map(stagedToItem);
+      const totals = sumItems(stagedItems);
+      const isSingle = stagedItems.length <= 1;
+      const targetItem = isSingle && stagedItems[0] ? stagedItems[0] : totals;
+
+      const stagedLogPayload = {
+        food_name: staged.name,
+        serving_size: Number(staged.servingSize) || 1,
+        serving_unit: staged.servingUnit || 'serving',
+        calories: roundTo1Decimal(targetItem.calories),
+        protein: roundTo1Decimal(targetItem.protein),
+        carbs: roundTo1Decimal(targetItem.carbs),
+        fat: roundTo1Decimal(targetItem.fat),
+        fiber: roundTo1Decimal(targetItem.fiber),
+        meal_type: staged.mealType,
+      };
+
+      // Assert identical logged rows (name, quantity, unit, kcal, macros, meal type)
+      expect(stagedLogPayload.food_name).toBe(quickLogPayload.food_name);
+      expect(stagedLogPayload.serving_size).toBe(quickLogPayload.serving_size);
+      expect(stagedLogPayload.serving_unit).toBe(quickLogPayload.serving_unit);
+      expect(stagedLogPayload.calories).toBe(quickLogPayload.calories);
+      expect(stagedLogPayload.protein).toBe(quickLogPayload.protein);
+      expect(stagedLogPayload.carbs).toBe(quickLogPayload.carbs);
+      expect(stagedLogPayload.fat).toBe(quickLogPayload.fat);
+      expect(stagedLogPayload.fiber).toBe(quickLogPayload.fiber);
+      expect(stagedLogPayload.meal_type).toBe(quickLogPayload.meal_type);
+
+      // Explicit assertion on the single-item amount/unit
+      expect(stagedLogPayload.serving_size).toBe(40);
+      expect(stagedLogPayload.serving_unit).toBe('g');
+      expect(quickLogPayload.serving_size).toBe(40);
+      expect(quickLogPayload.serving_unit).toBe('g');
     });
   });
 });

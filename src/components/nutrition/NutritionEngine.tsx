@@ -7,7 +7,7 @@ import { roundTo1Decimal, calculateRemainingFuel } from '../../utils/nutrition';
 import { itemsForPersist, sumItems, type NutritionItem } from '../../utils/itemModel';
 import { MealLogRow } from './MealLogRow';
 import { NutrientBreakdownModal, type BreakdownNutrient } from './NutrientBreakdownModal';
-import { stagedToItem, recomputeStagedTotals, buildStagedMealFromManualData, useStagedCardFocus, type StagedMeal } from './nutritionEngineHelpers';
+import { stagedToItem, withSyncedServing, buildStagedMealFromManualData, useStagedCardFocus, type StagedMeal } from './nutritionEngineHelpers';
 import { loadStagedMealDraft } from './stagedMealDraft';
 import { useStagedMealDraft } from './useStagedMealDraft';
 import { Skeleton } from '../common/Skeleton';
@@ -253,7 +253,7 @@ export const NutritionEngine: React.FC = () => {
           }
         : it
     );
-    setStagedMeal({ ...stagedMeal, items: updatedItems, ...recomputeStagedTotals(updatedItems) });
+    setStagedMeal(withSyncedServing(stagedMeal, updatedItems));
   };
 
   const handleDeleteItem = (itemId: string) => {
@@ -264,7 +264,7 @@ export const NutritionEngine: React.FC = () => {
       clearDraft();
       return;
     }
-    setStagedMeal({ ...stagedMeal, items: updatedItems, ...recomputeStagedTotals(updatedItems) });
+    setStagedMeal(withSyncedServing(stagedMeal, updatedItems));
   };
 
   const handleLogStagedMeal = (e?: React.MouseEvent | React.UIEvent) => {
