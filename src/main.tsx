@@ -31,6 +31,10 @@ export const queryClient = new QueryClient({
 
 setupQueryDefaults(queryClient);
 
+if (typeof document !== 'undefined' && document.documentElement.classList.contains('hide-prerender')) {
+  document.getElementById('prerender')?.remove();
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

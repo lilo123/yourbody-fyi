@@ -10,6 +10,7 @@ import { LandingFooter } from './LandingFooter';
 
 export const LandingView: React.FC = () => {
   useEffect(() => {
+    document.getElementById('prerender')?.remove();
     const script = document.createElement('script');
     script.type = 'application/ld+json';
     script.setAttribute('data-testid', 'faq-json-ld');

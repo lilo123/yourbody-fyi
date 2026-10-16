@@ -4,6 +4,10 @@ import { LegalLayout } from './LegalLayout';
 import { Sparkles, HeartPulse, ShieldCheck } from 'lucide-react';
 
 export const TermsPage: React.FC = () => {
+  React.useEffect(() => {
+    document.getElementById('prerender')?.remove();
+  }, []);
+
   return (
     <LegalLayout
       title="Terms of Service"

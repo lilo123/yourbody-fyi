@@ -126,3 +126,8 @@
 .safe-area-pb {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
 }
+
+/* Prerender guard rule: hide prerender container on app routes, signed-in, or standalone */
+html.hide-prerender #prerender {
+  display: none !important;
+}

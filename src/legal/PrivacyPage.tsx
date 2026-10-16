@@ -3,6 +3,10 @@ import { LegalLayout } from './LegalLayout';
 import { Shield, Database, Lock, EyeOff, Server } from 'lucide-react';
 
 export const PrivacyPage: React.FC = () => {
+  React.useEffect(() => {
+    document.getElementById('prerender')?.remove();
+  }, []);
+
   return (
     <LegalLayout
       title="Privacy Policy"

@@ -205,7 +205,12 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
-          globIgnores: ['**/Landing*'],
+          globIgnores: [
+            '**/Landing*',
+            '**/terms.html',
+            '**/privacy.html',
+            '**/refunds.html',
+          ],
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/robots\.txt$/, /^\/sitemap\.xml$/, /^\/version\.json$/],
           cleanupOutdatedCaches: true,
