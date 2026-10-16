@@ -296,13 +296,16 @@ Deno.test("shared nutritionParser: property test 1 - exact kcal appears in text"
   for (const fixture of NUTRITION_CORPUS_FIXTURES) {
     const result = parseNutritionText(fixture.input);
     if (result.confidence === "exact" && result.meal?.calories !== undefined) {
-      const kcalNumber = result.meal.calories;
+      const kcalNumber = result.meal.calorieCorrection
+        ? result.meal.calorieCorrection.stated
+        : result.meal.calories;
       const rawInput = fixture.input;
       if (result.meal.items && result.meal.items.length > 1) {
         // In multi-item meals, every item's kcal appears in input, or the total appears
-        const itemsAppear = result.meal.items.every((item) =>
-          appearsInText(item.calories, rawInput)
-        );
+        const itemsAppear = result.meal.items.every((item) => {
+          const itemKcal = item.calorieCorrection ? item.calorieCorrection.stated : item.calories;
+          return appearsInText(itemKcal, rawInput);
+        });
         const totalAppears = appearsInText(kcalNumber, rawInput);
         assertEquals(
           itemsAppear || totalAppears,
@@ -440,19 +443,19 @@ Deno.test("shared nutritionParser: property test 3 - thousands separators never 
   assertNotEquals(deResult.meal?.calories, 1);
 });
 
-Deno.test("shared nutritionParser: '1,000' and '1.000' with 0 macros yield KCAL_INCONSISTENT (never 1 kcal)", () => {
-  // If '1,000' were mistakenly parsed as 1 kcal, 0 macros would be consistent (|0 - 1| <= 60),
-  // but correctly parsed as 1000 kcal, |0 - 1000| > 250 triggers KCAL_INCONSISTENT.
+Deno.test("shared nutritionParser: '1,000' and '1.000' with 0 macros yield computed 0 kcal + warning (never 1 kcal)", () => {
   const commaInput = "Protein Shake\nCalories: 1,000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g";
   const commaResult = parseNutritionText(commaInput);
-  assertEquals(commaResult.confidence, "none");
-  assertEquals(commaResult.reason, "KCAL_INCONSISTENT");
+  assertEquals(commaResult.confidence, "exact");
+  assertEquals(commaResult.meal?.calories, 0);
+  assertEquals(commaResult.meal?.calorieCorrection, { computed: 0, stated: 1000 });
 
   // Same for European period separator '1.000'
   const periodInput = "Protein Shake\nCalories: 1.000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g";
   const periodResult = parseNutritionText(periodInput);
-  assertEquals(periodResult.confidence, "none");
-  assertEquals(periodResult.reason, "KCAL_INCONSISTENT");
+  assertEquals(periodResult.confidence, "exact");
+  assertEquals(periodResult.meal?.calories, 0);
+  assertEquals(periodResult.meal?.calorieCorrection, { computed: 0, stated: 1000 });
 });
 
 Deno.test("shared nutritionParser: open-ended estimates ('800+', '50+') never yield exact grade", () => {

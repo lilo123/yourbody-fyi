@@ -526,7 +526,7 @@ Fat: 28g`,
     why: 'two foods with numbers (multi-line)',
     input: `Chicken breast: 200 kcal, 30g protein, 0g carbs, 5g fat
 White rice: 150 kcal, 3g protein, 35g carbs, 1g fat`,
-    expectedReason: 'SECOND_CALORIES_LINE',
+    expectedReason: 'MULTIPLE_FOODS',
   },
   {
     why: 'two foods with numbers (single line)',
@@ -652,18 +652,6 @@ Carbs 40g
 Fat 8g
 Calories 200`,
     expectedReason: 'SECOND_CALORIES_LINE',
-  },
-
-  // Kcal consistency
-  {
-    why: 'inconsistent kcal: too low (>25% and >60 kcal off)',
-    input: 'Calories: 100, Protein: 30g, Carbs: 40g, Fat: 8g',
-    expectedReason: 'KCAL_INCONSISTENT',
-  },
-  {
-    why: 'inconsistent kcal: too high (>25% and >60 kcal off)',
-    input: 'Calories: 700, Protein: 30g, Carbs: 40g, Fat: 8g',
-    expectedReason: 'KCAL_INCONSISTENT',
   },
 
   // Numeric bounds
@@ -872,10 +860,6 @@ White rice: 150 kcal, 3g protein, 35g carbs, 1g fat`,
       input: 'Calories: 350, Protein: 30g, Carbs: 40g, Fat: 8g with rice',
     },
     {
-      label: 'Inconsistent kcal (100 kcal for 30P 40C 8F)',
-      input: 'Calories: 100, Protein: 30g, Carbs: 40g, Fat: 8g',
-    },
-    {
       label: 'Name line containing digits',
       input: `Chicken 123
 Calories: 350
@@ -1060,4 +1044,67 @@ describe('Counted Portion Handling (Task COUNTPORTION)', () => {
     }
   });
 });
+
+describe('Mismatched Calories Handling (Owner Rule)', () => {
+  it('parses single-food text with too-low calories and sets computed value + calorieCorrection', () => {
+    // 30P, 40C, 8F = 4*30 + 4*40 + 9*8 = 120 + 160 + 72 = 352 kcal (stated was 100)
+    const result = parseNutritionText('Calories: 100, Protein: 30g, Carbs: 40g, Fat: 8g');
+    expect(result.confidence).toBe('exact');
+    expect(result.meal?.calories).toBe(352);
+    expect(result.meal?.calorieCorrection).toEqual({ computed: 352, stated: 100 });
+  });
+
+  it('parses single-food text with too-high calories and sets computed value + calorieCorrection', () => {
+    // 30P, 40C, 8F = 352 kcal (stated was 700)
+    const result = parseNutritionText('Calories: 700, Protein: 30g, Carbs: 40g, Fat: 8g');
+    expect(result.confidence).toBe('exact');
+    expect(result.meal?.calories).toBe(352);
+    expect(result.meal?.calorieCorrection).toEqual({ computed: 352, stated: 700 });
+  });
+
+  it('parses 2-line food text on device when calories match macros (179 kcal)', () => {
+    const text = `Herb Roasted Chicken Breast: protein 40.5 g, carbs 10g, fat 11.2 g, 263 kcal calories
+Steamed Jasmine Rice:  protein 3.2 g, carbs 38.5 g, fat 1.4 g, 179 kcal calories`;
+    const result = parseNutritionText(text);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal).toBeDefined();
+    expect(result.meal?.items).toHaveLength(2);
+    expect(result.meal?.calories).toBe(442);
+    expect(result.meal?.items?.[0].calories).toBe(263);
+    expect(result.meal?.items?.[0].calorieCorrection).toBeUndefined();
+    expect(result.meal?.items?.[1].calories).toBe(179);
+    expect(result.meal?.items?.[1].calorieCorrection).toBeUndefined();
+  });
+
+  it('parses 2-line food text on device with mismatched calories (79 kcal), computing calories and setting warning', () => {
+    const text = `Herb Roasted Chicken Breast: protein 40.5 g, carbs 10g, fat 11.2 g, 263 kcal calories
+Steamed Jasmine Rice:  protein 3.2 g, carbs 38.5 g, fat 1.4 g, 79 kcal calories`;
+    const result = parseNutritionText(text);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal).toBeDefined();
+    expect(result.meal?.items).toHaveLength(2);
+    expect(result.meal?.calories).toBe(442);
+    expect(result.meal?.items?.[0].calories).toBe(263);
+    expect(result.meal?.items?.[0].calorieCorrection).toBeUndefined();
+    // Rice calories computed from 3.2P 38.5C 1.4F = 179.4 -> 179
+    expect(result.meal?.items?.[1].calories).toBe(179);
+    expect(result.meal?.items?.[1].calorieCorrection).toEqual({ computed: 179, stated: 79 });
+  });
+
+  it('parses first line alone on device (263 kcal)', () => {
+    const line1 = 'Herb Roasted Chicken Breast: protein 40.5 g, carbs 10g, fat 11.2 g, 263 kcal calories';
+    const result = parseNutritionText(line1);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal?.calories).toBe(263);
+  });
+
+  it('parses 1,000 kcal with 0 macros as computed 0 kcal with warning (never 1 kcal)', () => {
+    const input = 'Protein Shake\nCalories: 1,000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g';
+    const result = parseNutritionText(input);
+    expect(result.confidence).toBe('exact');
+    expect(result.meal?.calories).toBe(0);
+    expect(result.meal?.calorieCorrection).toEqual({ computed: 0, stated: 1000 });
+  });
+});
+
 
