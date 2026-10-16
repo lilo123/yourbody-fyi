@@ -36,9 +36,16 @@ const removePrerender = () => {
   document.getElementById('prerender')?.remove();
 };
 
+const removePrerenderIfRootPopulated = () => {
+  const root = document.getElementById('root');
+  if (root && root.childElementCount > 0) {
+    removePrerender();
+  }
+};
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('error', removePrerender);
-  window.addEventListener('unhandledrejection', removePrerender);
+  window.addEventListener('error', removePrerenderIfRootPopulated);
+  window.addEventListener('unhandledrejection', removePrerenderIfRootPopulated);
 }
 
 if (typeof document !== 'undefined') {

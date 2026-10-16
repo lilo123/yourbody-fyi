@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -111,9 +111,48 @@ describe('Prerender Output and Configuration', () => {
       // Exact Supabase auth key regex excluding PKCE code-verifier
       expect(guardContent).toContain('AUTH_KEY_REGEX = /^sb-[a-zA-Z0-9_.-]+-auth-token$/');
       // Fail-safe listeners and bounded timeout
-      expect(guardContent).toContain("window.addEventListener('error', removePrerender)");
-      expect(guardContent).toContain("window.addEventListener('unhandledrejection', removePrerender)");
+      expect(guardContent).toContain("window.addEventListener('error', removePrerenderIfRootPopulated)");
+      expect(guardContent).toContain("window.addEventListener('unhandledrejection', removePrerenderIfRootPopulated)");
+      expect(guardContent).toContain('root.childElementCount > 0');
       expect(guardContent).toContain('8000');
+    });
+
+    it('fail-safe timeout: leaves #prerender intact when JS blocked / #root empty after 10s, removes when #root mounted', () => {
+      vi.useFakeTimers();
+      const prerender = document.createElement('div');
+      prerender.id = 'prerender';
+      prerender.innerHTML = '<h1>Static Content</h1>';
+      const root = document.createElement('div');
+      root.id = 'root';
+      document.body.appendChild(prerender);
+      document.body.appendChild(root);
+
+      const removePrerenderIfRootPopulated = () => {
+        const r = document.getElementById('root');
+        if (r && r.childElementCount > 0) {
+          document.getElementById('prerender')?.remove();
+        }
+      };
+
+      // Case 1: JS blocked / chunks never loaded -> #root stays empty
+      setTimeout(removePrerenderIfRootPopulated, 8000);
+      vi.advanceTimersByTime(10000);
+      // Prerender must stay in the DOM so static copy stays readable
+      expect(document.getElementById('prerender')).not.toBeNull();
+      expect(document.getElementById('prerender')?.textContent).toContain('Static Content');
+
+      // Case 2: App mounted into #root (child elements present) but never removed #prerender
+      const child = document.createElement('div');
+      child.textContent = 'Mounted App';
+      root.appendChild(child);
+
+      setTimeout(removePrerenderIfRootPopulated, 8000);
+      vi.advanceTimersByTime(8000);
+      // Prerender must now be removed because #root has rendered content
+      expect(document.getElementById('prerender')).toBeNull();
+
+      vi.useRealTimers();
+      root.remove();
     });
 
     it('defines html.hide-prerender #prerender rule in src/index.css', () => {

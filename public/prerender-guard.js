@@ -40,13 +40,22 @@
       if (el) el.remove();
     };
 
-    // Fail-safe listeners: if early JS error occurs before mount, drop prerender so #root is visible
-    window.addEventListener('error', removePrerender);
-    window.addEventListener('unhandledrejection', removePrerender);
+    var removePrerenderIfRootPopulated = function () {
+      var root = document.getElementById('root');
+      if (root && root.childElementCount > 0) {
+        removePrerender();
+      }
+    };
 
-    // Fail-safe bounded timeout: 8s after DOMContentLoaded
+    // Fail-safe listeners: if early JS error occurs after #root has rendered content,
+    // drop prerender so #root is visible. If #root is empty (e.g. JS blocked/failed before mount),
+    // keep prerender visible so static copy stays readable.
+    window.addEventListener('error', removePrerenderIfRootPopulated);
+    window.addEventListener('unhandledrejection', removePrerenderIfRootPopulated);
+
+    // Fail-safe bounded timeout: 8s after DOMContentLoaded, remove prerender ONLY if #root has mounted content
     var scheduleTimeout = function () {
-      setTimeout(removePrerender, 8000);
+      setTimeout(removePrerenderIfRootPopulated, 8000);
     };
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', scheduleTimeout);
