@@ -405,6 +405,26 @@ export function recomputeStagedTotals(items: StagedItem[]) {
   };
 }
 
+/**
+ * Synchronizes meal totals and serving size/unit when staged items change.
+ * Single-item meals take the item's own quantity and unit (e.g. 60 g).
+ * Multi-item meals default to 1 serving.
+ */
+export function withSyncedServing(meal: StagedMeal, items: StagedItem[]): StagedMeal {
+  const totals = recomputeStagedTotals(items);
+  const single = items.length === 1 ? items[0] : null;
+  return {
+    ...meal,
+    items,
+    ...totals,
+    ...(single && single.quantity > 0
+      ? { servingSize: single.quantity, servingUnit: single.unit }
+      : single === null
+        ? { servingSize: 1, servingUnit: 'serving' }
+        : {}),
+  };
+}
+
 /** Allowed range for the whole-meal scale factor. */
 export const MIN_MEAL_SCALE = 0.01;
 export const MAX_MEAL_SCALE = 20;

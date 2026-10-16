@@ -596,6 +596,109 @@ describe('NutritionEngine', () => {
     });
   });
 
+  it('stages a 40 g dish, edits to 60 g, and logs with servingSize 60 g and scaled macros', async () => {
+    const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'custom_dishes') {
+        return createSupabaseBuilder('custom_dishes', {
+          resolver: (builder: any) => {
+            if (builder.projection === 'id, items, ingredients, kind, notes') {
+              return {
+                id: 'dish-whey-40',
+                name: 'Whey Protein',
+                calories: 140,
+                protein: 30,
+                carbs: 2,
+                fat: 1,
+                fiber: 0,
+                kind: 'food',
+                items: [
+                  {
+                    id: 'item-whey',
+                    name: 'Whey Protein',
+                    quantity: 40,
+                    unit: 'g',
+                    displayPortion: '40 g',
+                    calories: 140,
+                    protein: 30,
+                    carbs: 2,
+                    fat: 1,
+                    fiber: 0,
+                  },
+                ],
+                ingredients: null,
+                notes: null,
+              };
+            }
+            return [
+              {
+                id: 'dish-whey-40',
+                name: 'Whey Protein',
+                calories: 140,
+                protein: 30,
+                carbs: 2,
+                fat: 1,
+                fiber: 0,
+                kind: 'food',
+                serving_quantity: 40,
+                serving_unit: 'g',
+              },
+            ];
+          },
+        });
+      }
+      const b = createSupabaseBuilder(table, { data: [], error: null });
+      if (table === 'nutrition_logs') {
+        b.insert = mockInsert;
+      }
+      return b;
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('Whey Protein')).toBeDefined();
+    });
+
+    // Stage the dish by clicking the card in Quick Log Favorites
+    fireEvent.click(screen.getByText('Whey Protein'));
+
+    // Wait for staged card to appear
+    await waitFor(() => {
+      expect(screen.getByTestId('staged-meal-card')).toBeInTheDocument();
+    });
+
+    const quantityInputs = screen.getAllByTestId('component-quantity-input') as HTMLInputElement[];
+    expect(quantityInputs[0].value).toBe('40');
+
+    // Edit quantity from 40 to 60
+    fireEvent.change(quantityInputs[0], { target: { value: '60' } });
+    fireEvent.blur(quantityInputs[0]);
+
+    await waitFor(() => {
+      expect(quantityInputs[0].value).toBe('60');
+    });
+
+    // Log the staged meal
+    const logBtn = screen.getByRole('button', { name: /Log Meal/i });
+    fireEvent.click(logBtn);
+
+    await waitFor(() => {
+      expect(mockInsert).toHaveBeenCalled();
+    });
+
+    const payload = mockInsert.mock.calls[0][0][0];
+    expect(payload.food_name).toBe('Whey Protein');
+    expect(payload.serving_size).toBe(60);
+    expect(payload.serving_unit).toBe('g');
+    // Macros scaled proportionally: 140 * 60 / 40 = 210 kcal, 30 * 60 / 40 = 45 P, 2 * 60 / 40 = 3 C, 1 * 60 / 40 = 1.5 F
+    expect(payload.calories).toBe(210);
+    expect(payload.protein).toBe(45);
+    expect(payload.carbs).toBe(3);
+    expect(payload.fat).toBe(1.5);
+    expect(payload.fiber).toBe(0);
+  });
+
   it('allows manual entry logging when toggled', async () => {
     const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
     (supabase.from as any).mockImplementation((table: string) => {
