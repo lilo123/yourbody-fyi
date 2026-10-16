@@ -3,7 +3,9 @@ import { QueryClient } from '@tanstack/react-query';
 import {
   fetchTemplateDetail,
   clearTemplateDetailCache,
+  invalidateTemplateDetail,
   routineTemplateDetailQueryKey,
+  ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX,
   OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS,
   type RoutineTemplateDetail,
 } from './useWorkoutQueries';
@@ -107,6 +109,157 @@ describe('fetchTemplateDetail offline resilience and caching', () => {
     expect(
       queryClient.getQueryData(routineTemplateDetailQueryKey('template-online-1'))
     ).toEqual(mockDetail);
+  });
+
+  it('online: edited template returns the fresh detail (network-first)', async () => {
+    const oldDetail: RoutineTemplateDetail = {
+      id: 'template-edited-1',
+      exercises: [
+        {
+          id: 'te-old',
+          template_id: 'template-edited-1',
+          exercise_id: 'ex-bench',
+          order_index: 0,
+          target_sets: 3,
+          target_reps: 10,
+          exercise: { name: 'Bench Press' },
+        },
+      ],
+    };
+
+    const freshDetail: RoutineTemplateDetail = {
+      id: 'template-edited-1',
+      exercises: [
+        {
+          id: 'te-new',
+          template_id: 'template-edited-1',
+          exercise_id: 'ex-bench',
+          order_index: 0,
+          target_sets: 5,
+          target_reps: 12,
+          exercise: { name: 'Bench Press' },
+        },
+      ],
+    };
+
+    // Pre-seed cache with stale data
+    queryClient.setQueryData(
+      routineTemplateDetailQueryKey('template-edited-1'),
+      oldDetail
+    );
+
+    Object.defineProperty(navigator, 'onLine', {
+      value: true,
+      configurable: true,
+      writable: true,
+    });
+
+    const maybeSingleMock = vi.fn().mockResolvedValue({
+      data: freshDetail,
+      error: null,
+    });
+    const limitMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
+    const eqMock = vi.fn().mockReturnValue({ limit: limitMock });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+
+    vi.spyOn(supabase, 'from').mockReturnValue({
+      select: selectMock,
+    } as any);
+
+    // Online call must bypass stale cache and return fresh network response
+    const result = await fetchTemplateDetail('template-edited-1', queryClient);
+
+    expect(result).toEqual(freshDetail);
+    expect(result?.exercises[0].target_sets).toBe(5);
+    expect(result?.exercises[0].target_reps).toBe(12);
+    expect(
+      queryClient.getQueryData(routineTemplateDetailQueryKey('template-edited-1'))
+    ).toEqual(freshDetail);
+  });
+
+  it('online network error falls back to cached detail', async () => {
+    const cachedDetail: RoutineTemplateDetail = {
+      id: 'template-fallback-1',
+      exercises: [
+        {
+          id: 'te-fallback',
+          template_id: 'template-fallback-1',
+          exercise_id: 'ex-press',
+          order_index: 0,
+          target_sets: 4,
+          target_reps: 8,
+          exercise: { name: 'Overhead Press' },
+        },
+      ],
+    };
+
+    queryClient.setQueryData(
+      routineTemplateDetailQueryKey('template-fallback-1'),
+      cachedDetail
+    );
+
+    Object.defineProperty(navigator, 'onLine', {
+      value: true,
+      configurable: true,
+      writable: true,
+    });
+
+    // Mock network failure
+    const maybeSingleMock = vi.fn().mockRejectedValue(new Error('Network error: connection reset'));
+    const limitMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
+    const eqMock = vi.fn().mockReturnValue({ limit: limitMock });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+
+    vi.spyOn(supabase, 'from').mockReturnValue({
+      select: selectMock,
+    } as any);
+
+    // Should fall back to cached detail on network failure
+    const result = await fetchTemplateDetail('template-fallback-1', queryClient);
+    expect(result).toEqual(cachedDetail);
+
+    // Uncached query with network failure still throws error
+    await expect(fetchTemplateDetail('template-uncached-err', queryClient)).rejects.toThrow(
+      'Network error: connection reset'
+    );
+  });
+
+  it('save/delete invalidates', async () => {
+    const mockDetail: RoutineTemplateDetail = {
+      id: 'template-to-invalidate',
+      exercises: [
+        {
+          id: 'te-inv',
+          template_id: 'template-to-invalidate',
+          exercise_id: 'ex-inv',
+          order_index: 0,
+          target_sets: 3,
+          target_reps: 10,
+          exercise: { name: 'Incline Bench' },
+        },
+      ],
+    };
+
+    queryClient.setQueryData(
+      routineTemplateDetailQueryKey('template-to-invalidate'),
+      mockDetail
+    );
+
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    // Invalidate specific template
+    invalidateTemplateDetail('template-to-invalidate', queryClient);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: routineTemplateDetailQueryKey('template-to-invalidate'),
+    });
+
+    // Invalidate all templates
+    invalidateTemplateDetail(undefined, queryClient);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: [ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX],
+    });
   });
 
   it('offline + no cache rejects within a short bound (fake timers)', async () => {

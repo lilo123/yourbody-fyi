@@ -102,14 +102,11 @@ export interface FetchTemplateDetailOptions {
   timeoutMs?: number;
 }
 
-let activeWorkoutQueryClient: QueryClient | null = null;
-
-export function setActiveWorkoutQueryClient(client: QueryClient | null): void {
-  activeWorkoutQueryClient = client;
-}
-
-export const DEFAULT_TEMPLATE_DETAIL_TIMEOUT_MS = 5000;
-export const OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS = 1500;
+export const DEFAULT_TEMPLATE_DETAIL_ONLINE_TIMEOUT_MS = 15000;
+export const DEFAULT_TEMPLATE_DETAIL_OFFLINE_TIMEOUT_MS = 1500;
+// Deprecated alias for backwards compatibility
+export const DEFAULT_TEMPLATE_DETAIL_TIMEOUT_MS = DEFAULT_TEMPLATE_DETAIL_ONLINE_TIMEOUT_MS;
+export const OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS = DEFAULT_TEMPLATE_DETAIL_OFFLINE_TIMEOUT_MS;
 export const ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX = 'routine_template_detail';
 
 export function routineTemplateDetailQueryKey(templateId: string) {
@@ -118,8 +115,49 @@ export function routineTemplateDetailQueryKey(templateId: string) {
 
 const templateDetailMemoryCache = new Map<string, RoutineTemplateDetail>();
 
-export function clearTemplateDetailCache(): void {
-  templateDetailMemoryCache.clear();
+export function clearTemplateDetailCache(templateId?: string): void {
+  if (templateId) {
+    templateDetailMemoryCache.delete(templateId);
+  } else {
+    templateDetailMemoryCache.clear();
+  }
+}
+
+export function invalidateTemplateDetail(
+  templateId?: string,
+  queryClient?: QueryClient
+): void {
+  clearTemplateDetailCache(templateId);
+  if (queryClient) {
+    if (templateId) {
+      void queryClient.invalidateQueries({ queryKey: routineTemplateDetailQueryKey(templateId) });
+    } else {
+      void queryClient.invalidateQueries({ queryKey: [ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX] });
+    }
+  }
+}
+
+// Clear memory cache on sign-out
+if (typeof supabase?.auth?.onAuthStateChange === 'function') {
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') {
+      clearTemplateDetailCache();
+    }
+  });
+}
+
+async function fetchTemplateDetailFromNetwork(templateId: string): Promise<RoutineTemplateDetail | null> {
+  // payload-gate: detail-fetch — template exercises and targets for resolved routine
+  const { data, error } = await supabase
+    .from('routine_templates')
+    .select(
+      'id, exercises:template_exercises(id, template_id, exercise_id, order_index, target_sets, target_reps, exercise:exercises(name))'
+    )
+    .eq('id', templateId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as RoutineTemplateDetail | null) ?? null;
 }
 
 export async function fetchTemplateDetail(
@@ -131,7 +169,7 @@ export async function fetchTemplateDetail(
   const client =
     optionsOrClient && 'getQueryData' in optionsOrClient
       ? (optionsOrClient as QueryClient)
-      : (optionsOrClient as FetchTemplateDetailOptions)?.queryClient ?? activeWorkoutQueryClient;
+      : (optionsOrClient as FetchTemplateDetailOptions)?.queryClient;
 
   const customTimeout =
     optionsOrClient && !('getQueryData' in optionsOrClient)
@@ -139,22 +177,24 @@ export async function fetchTemplateDetail(
       : undefined;
 
   const key = routineTemplateDetailQueryKey(templateId);
-
-  if (client) {
-    const cached = client.getQueryData<RoutineTemplateDetail>(key);
-    if (cached !== undefined) {
-      return cached;
-    }
-  }
-
-  const memoryCached = templateDetailMemoryCache.get(templateId);
-  if (memoryCached !== undefined) {
-    return memoryCached;
-  }
-
   const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+  // 1. Offline path: cache-first
+  if (isOffline) {
+    if (client) {
+      const cached = client.getQueryData<RoutineTemplateDetail>(key);
+      if (cached !== undefined) return cached;
+    }
+    const memCached = templateDetailMemoryCache.get(templateId);
+    if (memCached !== undefined) return memCached;
+  }
+
+  // 2. Network attempt (online: network-first, offline: uncached fast-fail)
   const timeoutMs =
-    customTimeout ?? (isOffline ? OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS : DEFAULT_TEMPLATE_DETAIL_TIMEOUT_MS);
+    customTimeout ??
+    (isOffline
+      ? DEFAULT_TEMPLATE_DETAIL_OFFLINE_TIMEOUT_MS
+      : DEFAULT_TEMPLATE_DETAIL_ONLINE_TIMEOUT_MS);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -163,22 +203,11 @@ export async function fetchTemplateDetail(
     }, timeoutMs);
   });
 
-  const networkPromise = (async (): Promise<RoutineTemplateDetail | null> => {
-    // payload-gate: detail-fetch — template exercises and targets for resolved routine
-    const { data, error } = await supabase
-      .from('routine_templates')
-      .select(
-        'id, exercises:template_exercises(id, template_id, exercise_id, order_index, target_sets, target_reps, exercise:exercises(name))'
-      )
-      .eq('id', templateId)
-      .limit(1)
-      .maybeSingle();
-    if (error) throw error;
-    return (data as RoutineTemplateDetail | null) ?? null;
-  })();
-
   try {
-    const detail = await Promise.race([networkPromise, timeoutPromise]);
+    const detail = await Promise.race([
+      fetchTemplateDetailFromNetwork(templateId),
+      timeoutPromise,
+    ]);
     if (detail) {
       if (client) {
         client.setQueryData(key, detail);
@@ -186,6 +215,17 @@ export async function fetchTemplateDetail(
       templateDetailMemoryCache.set(templateId, detail);
     }
     return detail;
+  } catch (error) {
+    // When online and network fails or times out, fall back to cached detail if available
+    if (!isOffline) {
+      if (client) {
+        const cached = client.getQueryData<RoutineTemplateDetail>(key);
+        if (cached !== undefined) return cached;
+      }
+      const memCached = templateDetailMemoryCache.get(templateId);
+      if (memCached !== undefined) return memCached;
+    }
+    throw error;
   } finally {
     if (timer !== null) {
       clearTimeout(timer);
@@ -609,10 +649,6 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
     const scheduled = rawTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
     return scheduled ? scheduled.id : null;
   }, [rawTemplates, rawTemplatesFetched, todaySets, logsFetched, workoutDate, currentDayAbbr]);
-
-  useEffect(() => {
-    setActiveWorkoutQueryClient(queryClient);
-  }, [queryClient]);
 
   const { data: templateDetail, isFetched: detailFetched } = useQuery({
     queryKey: routineTemplateDetailQueryKey(resolvedTemplateId || ''),
