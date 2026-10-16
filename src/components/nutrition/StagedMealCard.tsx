@@ -275,13 +275,13 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
         </div>
       </div>
 
-      {/* Parse provenance banner */}
+      {/* Row B: Parse provenance badge & compact secondary action */}
       {(stagedMeal.source === 'local' || stagedMeal.source === 'rules' || stagedMeal.source === 'ai') && (
         <div className="flex flex-col gap-0.5 border-b border-zinc-800 pb-0.5 pt-0">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 min-h-[32px]">
             <span
               data-testid="parsed-locally-badge"
-              className={`inline-flex items-center gap-1 px-2.5 py-0 rounded-full text-xs font-bold leading-tight ${
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold leading-tight shrink-0 ${
                 stagedMeal.source === 'ai'
                   ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
                   : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
@@ -295,9 +295,9 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                 data-testid="analyze-with-ai-instead-btn"
                 onClick={onAnalyzeWithAiInstead}
                 disabled={isAnalyzing}
-                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/50 transition min-h-[44px] touch-manipulation disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-2 text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 active:bg-cyan-500/20 rounded-lg transition motion-reduce:transition-none min-h-[44px] touch-manipulation disabled:opacity-50 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 -my-1.5"
               >
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                 <span>Analyze with AI instead</span>
               </button>
             )}

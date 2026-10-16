@@ -1925,6 +1925,210 @@ describe('Scale chip on the staged card', () => {
     const btn = screen.getByTestId('analyze-with-ai-instead-btn');
     expect(btn).toBeDisabled();
   });
+
+  describe('staged meal card unified compact header layout', () => {
+    it('renders multi-item on-device card with Row A, Row B, and Row C in correct order', () => {
+      const meal: StagedMeal = {
+        name: 'Herb Roasted Chicken & Rice',
+        mealType: 'Dinner',
+        explanation: '451 kcal',
+        calories: 451,
+        protein: 43.8,
+        carbs: 40.2,
+        fat: 12.8,
+        fiber: 0.7,
+        servingSize: 1,
+        servingUnit: 'serving',
+        source: 'rules',
+        items: [
+          {
+            id: 'item-1',
+            name: 'Herb Roasted Chicken Breast',
+            portion: '145 g',
+            portionMultiplier: 1,
+            quantity: 145,
+            unit: 'g',
+            calories: 263,
+            protein: 40.5,
+            carbs: 0,
+            fat: 11.2,
+            fiber: 0,
+            baseQuantity: 145,
+            baseCalories: 263,
+            baseProtein: 40.5,
+            baseCarbs: 0,
+            baseFat: 11.2,
+            baseFiber: 0,
+          },
+          {
+            id: 'item-2',
+            name: 'Steamed Jasmine Rice',
+            portion: '125 g',
+            portionMultiplier: 1,
+            quantity: 125,
+            unit: 'g',
+            calories: 179,
+            protein: 3.2,
+            carbs: 38.5,
+            fat: 1.4,
+            fiber: 0.5,
+            baseQuantity: 125,
+            baseCalories: 179,
+            baseProtein: 3.2,
+            baseCarbs: 38.5,
+            baseFat: 1.4,
+            baseFiber: 0.5,
+          },
+          {
+            id: 'item-3',
+            name: 'Hot Sauce (Sriracha)',
+            portion: '8 g',
+            portionMultiplier: 1,
+            quantity: 8,
+            unit: 'g',
+            calories: 9,
+            protein: 0.1,
+            carbs: 1.7,
+            fat: 0.2,
+            fiber: 0.2,
+            baseQuantity: 8,
+            baseCalories: 9,
+            baseProtein: 0.1,
+            baseCarbs: 1.7,
+            baseFat: 0.2,
+            baseFiber: 0.2,
+          },
+        ],
+      };
+
+      render(
+        <StagedMealCard
+          {...baseProps}
+          stagedMeal={meal}
+          onUpdateStagedMeal={vi.fn()}
+          onAnalyzeWithAiInstead={vi.fn()}
+        />
+      );
+
+      // Row A elements
+      const nameInput = screen.getByTestId('dish-name-input');
+      const mealTypeSelect = screen.getByLabelText('Meal type');
+      expect(nameInput).toBeInTheDocument();
+      expect(mealTypeSelect).toBeInTheDocument();
+
+      // Row B elements
+      const deviceBadge = screen.getByTestId('parsed-locally-badge');
+      const aiInsteadBtn = screen.getByTestId('analyze-with-ai-instead-btn');
+      expect(deviceBadge).toHaveTextContent('Device');
+      expect(aiInsteadBtn).toHaveTextContent('Analyze with AI instead');
+      // Verify ghost button styling (no bulky bordered block)
+      expect(aiInsteadBtn.className).toContain('text-cyan-400');
+      expect(aiInsteadBtn.className).toContain('min-h-[44px]');
+      expect(aiInsteadBtn.className).not.toContain('bg-cyan-950/60');
+
+      // Row C elements
+      const breakdownHeader = screen.getByTestId('breakdown-header');
+      const scaleBtn = screen.getByTestId('meal-scale-button');
+      const addBtn = screen.getByTestId('add-item-button');
+      expect(breakdownHeader).toBeInTheDocument();
+      expect(screen.getByText(/Itemized Breakdown \(3\)/i)).toBeInTheDocument();
+      expect(scaleBtn).toBeInTheDocument();
+      expect(addBtn).toBeInTheDocument();
+
+      // Verify DOM order: Row A before Row B before Row C
+      expect(nameInput.compareDocumentPosition(deviceBadge)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(deviceBadge.compareDocumentPosition(breakdownHeader)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(scaleBtn.compareDocumentPosition(addBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it('renders single-item AI card with Row A, Row B, and Row C (hiding breakdown label and AI button)', () => {
+      const meal: StagedMeal = {
+        name: 'Chicken Broth with White Meat Chicken',
+        mealType: 'Dinner',
+        explanation: '260 kcal',
+        calories: 260,
+        protein: 43,
+        carbs: 3,
+        fat: 8.5,
+        fiber: 0,
+        servingSize: 1,
+        servingUnit: 'unit',
+        source: 'ai',
+        items: [
+          {
+            id: 'item-1',
+            name: 'Chicken Broth with White Meat Chicken',
+            portion: '1 unit',
+            portionMultiplier: 1,
+            quantity: 1,
+            unit: 'unit',
+            calories: 260,
+            protein: 43,
+            carbs: 3,
+            fat: 8.5,
+            fiber: 0,
+            baseQuantity: 1,
+            baseCalories: 260,
+            baseProtein: 43,
+            baseCarbs: 3,
+            baseFat: 8.5,
+            baseFiber: 0,
+          },
+        ],
+      };
+
+      render(
+        <StagedMealCard
+          {...baseProps}
+          stagedMeal={meal}
+          onUpdateStagedMeal={vi.fn()}
+          onAnalyzeWithAiInstead={vi.fn()}
+        />
+      );
+
+      // Row A
+      const nameInput = screen.getByTestId('dish-name-input');
+      const mealTypeSelect = screen.getByLabelText('Meal type');
+      expect(nameInput).toBeInTheDocument();
+      expect(mealTypeSelect).toBeInTheDocument();
+
+      // Row B
+      const aiBadge = screen.getByTestId('parsed-locally-badge');
+      expect(aiBadge).toHaveTextContent('AI');
+      expect(screen.queryByTestId('analyze-with-ai-instead-btn')).toBeNull();
+
+      // Row C
+      const breakdownHeader = screen.getByTestId('breakdown-header');
+      const scaleBtn = screen.getByTestId('meal-scale-button');
+      const addBtn = screen.getByTestId('add-item-button');
+      expect(breakdownHeader).toBeInTheDocument();
+      expect(screen.queryByText(/Itemized Breakdown/i)).toBeNull();
+      expect(scaleBtn).toBeInTheDocument();
+      expect(addBtn).toBeInTheDocument();
+
+      // Verify DOM order: Row A before Row B before Row C
+      expect(nameInput.compareDocumentPosition(aiBadge)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(aiBadge.compareDocumentPosition(breakdownHeader)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(scaleBtn.compareDocumentPosition(addBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it('positions Scale chip and + Add as siblings in Row C sharing right-aligned baseline', () => {
+      const meal = makeMultiItemMeal();
+      render(
+        <StagedMealCard
+          {...baseProps}
+          stagedMeal={meal}
+          onUpdateStagedMeal={vi.fn()}
+          onAnalyzeWithAiInstead={vi.fn()}
+        />
+      );
+
+      const scaleBtn = screen.getByTestId('meal-scale-button');
+      const addBtn = screen.getByTestId('add-item-button');
+      expect(scaleBtn.parentElement).toBe(addBtn.parentElement);
+      expect(scaleBtn.parentElement?.className).toContain('flex items-center gap-1');
+    });
+  });
 });
 
 
