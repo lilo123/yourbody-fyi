@@ -74,6 +74,8 @@ test.describe('Production Smoke Suite', () => {
       }
     }
 
+    await expect(routineBtn).toContainText('Workout A', { timeout: 15000 });
+
     const card = page.locator('[data-testid="exercise-card-0"]');
     await expect(card).toBeVisible({ timeout: 15000 });
 
