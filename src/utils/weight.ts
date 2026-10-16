@@ -156,8 +156,15 @@ export function resolveWeightInput(
 ): number | null {
   if (typeof originalLb === 'number' && !isNaN(originalLb)) {
     const prefillStr = String(toDisplayWeight(originalLb, unit));
-    if (typeof draft === 'string' && draft.trim() === prefillStr) {
-      return originalLb;
+    if (typeof draft === 'string') {
+      const trimmed = draft.trim();
+      const normalized =
+        trimmed.includes(',') && !trimmed.includes('.') && (trimmed.match(/,/g) || []).length === 1
+          ? trimmed.replace(',', '.')
+          : trimmed;
+      if (trimmed === prefillStr || normalized === prefillStr) {
+        return originalLb;
+      }
     }
   }
   return parseWeightInput(draft, unit);
@@ -166,6 +173,8 @@ export function resolveWeightInput(
 /**
  * Parses user weight input into canonical storage pounds (lb).
  * Understands "BW" / "0" as bodyweight (0).
+ * Accepts a single comma as the decimal separator (e.g. "72,5" -> 72.5).
+ * Rejects ambiguous inputs (multiple commas, mixed commas and dots).
  * Full precision for kg input (100 kg -> 220.462262185 lb).
  */
 export function parseWeightInput(input: string, unit: WeightUnit = 'lb'): number | null {
@@ -177,7 +186,15 @@ export function parseWeightInput(input: string, unit: WeightUnit = 'lb'): number
     return 0;
   }
 
-  const num = Number(trimmed);
+  let normalized = trimmed;
+  if (normalized.includes(',')) {
+    if ((normalized.match(/,/g) || []).length > 1 || normalized.includes('.')) {
+      return null;
+    }
+    normalized = normalized.replace(',', '.');
+  }
+
+  const num = Number(normalized);
   if (isNaN(num) || num < 0) {
     return null;
   }
