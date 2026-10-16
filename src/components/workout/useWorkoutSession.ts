@@ -25,6 +25,7 @@ import {
 import { useWorkoutAccordion } from './useWorkoutAccordion';
 import { enqueueAndAwait } from '../../offline';
 import { useToast } from '../../hooks/useToast';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 export interface UseWorkoutSessionOptions {
   targetUserId: string;
@@ -48,6 +49,7 @@ export function useWorkoutSession({
 }: UseWorkoutSessionOptions) {
   const queryClient = useContext(QueryClientContext);
   const { show: showToast } = useToast();
+  const isOnline = useOnlineStatus();
   const [workoutDate, setWorkoutDate] = useState<string>(() => {
     const activeSession = workoutSessionStore.getActiveSession(targetUserId);
     if (activeSession && activeSession.workoutDate) {
@@ -266,7 +268,7 @@ export function useWorkoutSession({
               manualSelectionDateRef.current = prevManualDate;
               prevManualSelectionDateRef.current = undefined;
               inFlightRoutineSelectionSeqRef.current = 0;
-              if (seq === routineSelectionSeqRef.current) {
+              if (seq === routineSelectionSeqRef.current && !isOnline) {
                 showToast({ message: 'Available when online' });
               }
             }

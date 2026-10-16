@@ -4,10 +4,17 @@ import { useWorkoutSession } from './useWorkoutSession';
 import { workoutSessionStore } from '../../utils/workoutSessionStore';
 import type { Exercise, RoutineTemplate, WorkoutSet } from '../../types/database';
 
-const { mockFetchTemplateDetail, mockShowToast } = vi.hoisted(() => ({
-  mockFetchTemplateDetail: vi.fn(),
-  mockShowToast: vi.fn(),
-}));
+const { mockFetchTemplateDetail, mockShowToast, getMockIsOnline, setMockIsOnline } = vi.hoisted(() => {
+  let isOnline = true;
+  return {
+    mockFetchTemplateDetail: vi.fn(),
+    mockShowToast: vi.fn(),
+    getMockIsOnline: () => isOnline,
+    setMockIsOnline: (val: boolean) => {
+      isOnline = val;
+    },
+  };
+});
 
 vi.mock('../../hooks/useToast', () => ({
   useToast: () => ({
@@ -17,6 +24,10 @@ vi.mock('../../hooks/useToast', () => ({
     offset: undefined,
     setOffset: vi.fn(),
   }),
+}));
+
+vi.mock('../../hooks/useOnlineStatus', () => ({
+  useOnlineStatus: () => getMockIsOnline(),
 }));
 
 vi.mock('./useWorkoutQueries', async () => {
@@ -50,6 +61,7 @@ describe('useWorkoutSession', () => {
     vi.setSystemTime(new Date('2026-09-06T12:00:00Z'));
     localStorage.clear();
     vi.clearAllMocks();
+    setMockIsOnline(true);
   });
 
   afterEach(() => {
@@ -345,6 +357,7 @@ describe('useWorkoutSession', () => {
   });
 
   it('offline uncached routine selection failure does not clear active exercises or overwrite draft', async () => {
+    setMockIsOnline(false);
     mockFetchTemplateDetail.mockRejectedValue(new Error('Template detail fetch timed out after 50ms'));
 
     const uncachedCustomTemplate: RoutineTemplate = {
@@ -378,7 +391,7 @@ describe('useWorkoutSession', () => {
       await result.current.handleSelectRoutine('Uncached Custom Routine', uncachedCustomTemplate);
     });
 
-    // On detail fetch failure: routine is NOT switched and draft is preserved
+    // On detail fetch failure offline: routine is NOT switched, draft is preserved, and offline toast is shown
     expect(result.current.activeRoutineName).toBe(initialRoutine);
     expect(result.current.activeExercises).toEqual(['Bench Press']);
     expect(workoutSessionStore.getSession(targetUserId, result.current.workoutDate)?.exercises).toEqual(['Bench Press']);
@@ -387,6 +400,7 @@ describe('useWorkoutSession', () => {
   });
 
   it('cache hit offline still switches to the picked routine', async () => {
+    setMockIsOnline(false);
     const cachedCustomTemplate: RoutineTemplate = {
       id: 'tpl-cached',
       user_id: targetUserId,
@@ -440,6 +454,7 @@ describe('useWorkoutSession', () => {
   });
 
   it('online fetch failure behaves the same as offline (no data loss)', async () => {
+    setMockIsOnline(true);
     mockFetchTemplateDetail.mockRejectedValue(new Error('Network error: connection reset'));
 
     const customTemplate: RoutineTemplate = {
@@ -471,12 +486,50 @@ describe('useWorkoutSession', () => {
       await result.current.handleSelectRoutine('Custom Routine Network Error', customTemplate);
     });
 
-    // Online fetch failure preserves active exercises and drafts identical to offline
+    // Online fetch failure preserves active exercises and drafts identical to offline, with no toast online
     expect(result.current.activeRoutineName).toBe(initialRoutine);
     expect(result.current.activeExercises).toEqual(['Bench Press']);
     expect(workoutSessionStore.getSession(targetUserId, result.current.workoutDate)?.exercises).toEqual(['Bench Press']);
     expect(result.current.inputDrafts['Bench Press_1']).toEqual({ weight: '225', reps: undefined });
-    expect(mockShowToast).toHaveBeenCalledWith({ message: 'Available when online' });
+    expect(mockShowToast).not.toHaveBeenCalled();
+  });
+
+  it('online failure with null detail keeps current workout untouched and shows no toast', async () => {
+    setMockIsOnline(true);
+    mockFetchTemplateDetail.mockResolvedValue(null);
+
+    const customTemplate: RoutineTemplate = {
+      id: 'tpl-deleted-online',
+      user_id: targetUserId,
+      name: 'Deleted Custom Routine',
+      days_of_week: ['Mon'],
+      is_master: false,
+      assigned_to: null,
+      created_at: '2026-09-01',
+      exercises: undefined,
+    };
+
+    const { result } = renderHook(() =>
+      useWorkoutSession({
+        ...defaultProps,
+        customTemplates: [customTemplate],
+      })
+    );
+
+    act(() => {
+      result.current.handleAddExercise('Squat');
+    });
+
+    const initialRoutine = result.current.activeRoutineName;
+
+    await act(async () => {
+      await result.current.handleSelectRoutine('Deleted Custom Routine', customTemplate);
+    });
+
+    expect(result.current.activeRoutineName).toBe(initialRoutine);
+    expect(result.current.activeExercises).toEqual(['Squat']);
+    expect(workoutSessionStore.getSession(targetUserId, result.current.workoutDate)?.exercises).toEqual(['Squat']);
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 
   it('selecting a default template fallback switches client-side without fetching', async () => {
