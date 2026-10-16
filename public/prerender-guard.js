@@ -28,6 +28,32 @@
 
     if (hasUser || !isPublic || isStandalone) {
       document.documentElement.classList.add('hide-prerender');
+      try {
+        var style = document.createElement('style');
+        style.textContent = '#prerender { display: none !important; }';
+        (document.head || document.documentElement).appendChild(style);
+      } catch (e) {}
+      var removePrerender = function () {
+        var el = document.getElementById('prerender');
+        if (el) el.remove();
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', removePrerender);
+      } else {
+        removePrerender();
+      }
+      try {
+        if (typeof MutationObserver !== 'undefined') {
+          var observer = new MutationObserver(function () {
+            var el = document.getElementById('prerender');
+            if (el) {
+              el.remove();
+              observer.disconnect();
+            }
+          });
+          observer.observe(document.documentElement, { childList: true, subtree: true });
+        }
+      } catch (e) {}
     }
   } catch (e) {}
 })();
