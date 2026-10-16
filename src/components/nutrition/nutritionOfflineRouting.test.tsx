@@ -638,6 +638,108 @@ Dietary Fiber 0g`;
       expect((supabase as any)[fromProp]).not.toHaveBeenCalledWith('custom_dishes');
     });
 
+    it('quick logging a multi-item dish carries structured items into the offline outbox payload', async () => {
+      const setStatus = vi.fn();
+      const setIsError = vi.fn();
+      const multiDish: CustomDish = {
+        id: 'dish-multi-outbox',
+        user_id: mockUserId,
+        name: 'Salmon & Rice Bowl',
+        calories: 520,
+        protein: 42,
+        carbs: 50,
+        fat: 14,
+        fiber: 3,
+        kind: 'recipe',
+        use_count: 2,
+        items: [
+          {
+            id: 'item-salmon',
+            name: 'Salmon Fillet',
+            quantity: 180,
+            unit: 'g',
+            displayPortion: '180g',
+            calories: 320,
+            protein: 36,
+            carbs: 0,
+            fat: 14,
+            fiber: 0,
+          },
+          {
+            id: 'item-rice',
+            name: 'Brown Rice',
+            quantity: 150,
+            unit: 'g',
+            displayPortion: '150g',
+            calories: 200,
+            protein: 6,
+            carbs: 50,
+            fat: 0,
+            fiber: 3,
+          },
+        ],
+      };
+
+      const { result: dataResult } = renderHook(
+        () =>
+          useNutritionData({
+            targetUserId: mockUserId,
+            selectedDate: '2026-10-01',
+            profile: null,
+            onMutationSuccessReset: vi.fn(),
+            setStatus,
+            setIsError,
+          }),
+        { wrapper }
+      );
+
+      const { result: actionsResult } = renderHook(
+        () =>
+          useCustomDishActions({
+            targetUserId: mockUserId,
+            selectedDate: '2026-10-01',
+            setStagedMeal: vi.fn(),
+            mutation: dataResult.current.mutation,
+          }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await actionsResult.current.handleQuickLogCustomDishDirect(multiDish);
+      });
+
+      // Verify outbox received kind: 'nutrition.log' with items payload
+      expect(offlineModule.enqueueAndAwait).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: mockUserId,
+          kind: 'nutrition.log',
+          payload: expect.objectContaining({
+            food_name: 'Salmon & Rice Bowl',
+            calories: 520,
+            protein: 42,
+            carbs: 50,
+            fat: 14,
+            fiber: 3,
+            incrementDishId: 'dish-multi-outbox',
+            items: expect.arrayContaining([
+              expect.objectContaining({
+                name: 'Salmon Fillet',
+                quantity: 180,
+                unit: 'g',
+                calories: 320,
+              }),
+              expect.objectContaining({
+                name: 'Brown Rice',
+                quantity: 150,
+                unit: 'g',
+                calories: 200,
+              }),
+            ]),
+          }),
+        })
+      );
+    });
+
     it('online stage-then-log increments use_count exactly once at stage time and never in subsequent log', async () => {
       const updateMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) });
       ((supabase as any)[fromProp] as any).mockImplementation((table: string) => {

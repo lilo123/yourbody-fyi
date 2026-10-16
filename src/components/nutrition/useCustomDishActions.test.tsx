@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { useCustomDishActions } from './useCustomDishActions';
+import { useCustomDishActions, buildItemsFromDish } from './useCustomDishActions';
+import { stagedToItem } from './nutritionEngineHelpers';
 import type { CustomDish, CustomDishDetail } from '../../types/database';
 import { isWithinDayBounds } from '../../utils/date';
 import { supabase } from '../../lib/supabase';
@@ -481,6 +482,221 @@ describe('useCustomDishActions', () => {
     const payload = mutate.mock.calls[0][0];
     expect(payload.food_name).toBe('Breakfast');
     expect(payload.meal_type).toBe('Breakfast');
+  });
+
+  it('quick-logging a multi-item custom dish attaches structured items with the same shape as normal log path', async () => {
+    const mutate = vi.fn();
+    const multiItemDish: CustomDish = {
+      id: 'dish-recipe-multi',
+      user_id: 'user-123',
+      name: 'Chicken and Rice',
+      calories: 550,
+      protein: 45,
+      carbs: 60,
+      fat: 12,
+      fiber: 4,
+      kind: 'recipe',
+      use_count: 4,
+      items: [
+        {
+          id: 'item-chicken',
+          name: 'Chicken Breast',
+          quantity: 150,
+          unit: 'g',
+          displayPortion: '150g',
+          calories: 250,
+          protein: 40,
+          carbs: 0,
+          fat: 5,
+          fiber: 0,
+        },
+        {
+          id: 'item-rice',
+          name: 'Jasmine Rice',
+          quantity: 180,
+          unit: 'g',
+          displayPortion: '180g',
+          calories: 300,
+          protein: 5,
+          carbs: 60,
+          fat: 7,
+          fiber: 4,
+        },
+      ],
+    };
+
+    // Reference from normal path: buildItemsFromDish -> stagedToItem
+    const normalStagedItems = buildItemsFromDish(multiItemDish, null);
+    const normalItems = normalStagedItems.map(stagedToItem);
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          setStagedMeal: vi.fn(),
+          mutation: { mutate },
+        }),
+      { wrapper }
+    );
+
+    await act(async () => {
+      await result.current.handleQuickLogCustomDishDirect(multiItemDish);
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0];
+
+    expect(payload.food_name).toBe('Chicken and Rice');
+    expect(payload.items).toHaveLength(2);
+    expect(payload.items).toEqual([
+      {
+        id: expect.any(String),
+        name: normalItems[0].name,
+        quantity: normalItems[0].quantity,
+        unit: normalItems[0].unit,
+        displayPortion: normalItems[0].displayPortion,
+        calories: normalItems[0].calories,
+        protein: normalItems[0].protein,
+        carbs: normalItems[0].carbs,
+        fat: normalItems[0].fat,
+        fiber: normalItems[0].fiber,
+      },
+      {
+        id: expect.any(String),
+        name: normalItems[1].name,
+        quantity: normalItems[1].quantity,
+        unit: normalItems[1].unit,
+        displayPortion: normalItems[1].displayPortion,
+        calories: normalItems[1].calories,
+        protein: normalItems[1].protein,
+        carbs: normalItems[1].carbs,
+        fat: normalItems[1].fat,
+        fiber: normalItems[1].fiber,
+      },
+    ]);
+  });
+
+  it('quick-logging a single-item custom dish leaves payload unchanged without items property', () => {
+    const mutate = vi.fn();
+    const singleItemDish: CustomDish = {
+      id: 'dish-single-whey',
+      user_id: 'user-123',
+      name: 'Whey Protein',
+      calories: 140,
+      protein: 30,
+      carbs: 2,
+      fat: 1,
+      fiber: 0,
+      kind: 'food',
+      use_count: 5,
+      items: [
+        {
+          id: 'item-whey',
+          name: 'Whey Protein',
+          quantity: 40,
+          unit: 'g',
+          displayPortion: '40g',
+          calories: 140,
+          protein: 30,
+          carbs: 2,
+          fat: 1,
+          fiber: 0,
+        },
+      ],
+    };
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          setStagedMeal: vi.fn(),
+          mutation: { mutate },
+        }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.handleQuickLogCustomDishDirect(singleItemDish);
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.food_name).toBe('Whey Protein');
+    expect(payload.serving_size).toBe(40);
+    expect(payload.serving_unit).toBe('g');
+    expect(payload.items).toBeUndefined();
+    expect('items' in payload).toBe(false);
+  });
+
+  it('quick-logging a dish without direct items retrieves cached detail and attaches items when multi-item', () => {
+    const mutate = vi.fn();
+    const dishSummary: CustomDish = {
+      id: 'dish-summary-only',
+      user_id: 'user-123',
+      name: 'Steak & Potatoes',
+      calories: 600,
+      protein: 50,
+      carbs: 45,
+      fat: 20,
+      fiber: 5,
+      kind: 'recipe',
+      use_count: 1,
+    };
+
+    const mockDetail: CustomDishDetail = {
+      ...dishSummary,
+      items: [
+        {
+          id: 'item-steak',
+          name: 'Sirloin Steak',
+          quantity: 200,
+          unit: 'g',
+          displayPortion: '200g',
+          calories: 400,
+          protein: 46,
+          carbs: 0,
+          fat: 18,
+          fiber: 0,
+        },
+        {
+          id: 'item-potatoes',
+          name: 'Mashed Potatoes',
+          quantity: 150,
+          unit: 'g',
+          displayPortion: '150g',
+          calories: 200,
+          protein: 4,
+          carbs: 45,
+          fat: 2,
+          fiber: 5,
+        },
+      ],
+    };
+
+    queryClient.setQueryData(['custom_dishes', 'user-123', 'full'], [mockDetail]);
+
+    const { result } = renderHook(
+      () =>
+        useCustomDishActions({
+          targetUserId: 'user-123',
+          selectedDate: '2026-10-15',
+          setStagedMeal: vi.fn(),
+          mutation: { mutate },
+        }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.handleQuickLogCustomDishDirect(dishSummary);
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const payload = mutate.mock.calls[0][0];
+    expect(payload.items).toHaveLength(2);
+    expect(payload.items[0].name).toBe('Sirloin Steak');
+    expect(payload.items[1].name).toBe('Mashed Potatoes');
   });
 
   it('sets dish fetch error with retry callback when detail fetching fails and clears error on next attempt', async () => {

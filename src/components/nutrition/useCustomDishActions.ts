@@ -7,6 +7,7 @@ import { formatCalories, roundTo1Decimal } from '../../utils/nutrition';
 import { newId } from '../../offline';
 import { PARSER_VERSION } from '../../lib/nutrition/localParse';
 import {
+  itemsForPersist,
   itemsFromLegacyIngredients,
   normalizeItems,
 } from '../../utils/itemModel';
@@ -16,6 +17,7 @@ import {
   buildStagedItem,
   recomputeStagedTotals,
   mergeOrAppendStagedItems,
+  stagedToItem,
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
@@ -315,6 +317,25 @@ export function useCustomDishActions({
       previousStagedMealRef.current = null;
       const clientLogId = newId();
 
+      let detail: CustomDishDetail | null = null;
+      const hasDirectItems = Array.isArray(dish.items) && dish.items.length > 0;
+      if (!hasDirectItems) {
+        const cachedList = queryClient.getQueryData<CustomDish[]>(['custom_dishes', targetUserId]);
+        const foundInList = cachedList?.find((d) => d.id === dish.id);
+        if (foundInList && ((foundInList as any).items !== undefined || (foundInList as any).ingredients !== undefined)) {
+          detail = foundInList as CustomDishDetail;
+        }
+        if (!detail) {
+          const cachedFull = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', targetUserId, 'full']);
+          detail = cachedFull?.find((d) => d.id === dish.id) ?? null;
+        }
+      }
+
+      const stagedItems = buildItemsFromDish(dish, detail);
+      const items = stagedItems.map(stagedToItem);
+      const isMultiItem = items.length > 1;
+      const { explanation: _explanation, ...tot } = recomputeStagedTotals(stagedItems);
+
       let servingSize = 1;
       let servingUnit = 'serving';
       if (dish.kind === 'food') {
@@ -330,19 +351,26 @@ export function useCustomDishActions({
         }
       }
 
-      const payload = {
+      const dishCalories = dish.calories != null ? roundTo1Decimal(dish.calories) : tot.calories;
+      const dishProtein = dish.protein != null ? roundTo1Decimal(dish.protein) : tot.protein;
+      const dishCarbs = dish.carbs != null ? roundTo1Decimal(dish.carbs) : tot.carbs;
+      const dishFat = dish.fat != null ? roundTo1Decimal(dish.fat) : tot.fat;
+      const dishFiber = dish.fiber != null ? roundTo1Decimal(dish.fiber) : tot.fiber;
+
+      const payload: Record<string, any> = {
         id: clientLogId,
         food_name: dish.name,
-        calories: roundTo1Decimal(dish.calories),
-        protein: roundTo1Decimal(dish.protein),
-        carbs: roundTo1Decimal(dish.carbs),
-        fat: roundTo1Decimal(dish.fat),
-        fiber: roundTo1Decimal(dish.fiber),
+        calories: dishCalories,
+        protein: dishProtein,
+        carbs: dishCarbs,
+        fat: dishFat,
+        fiber: dishFiber,
         meal_type: inferMealType(dish.name, new Date()),
         serving_size: servingSize,
         serving_unit: servingUnit,
         logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
         logged_date: selectedDate,
+        ...(isMultiItem ? { items: itemsForPersist(items) } : {}),
         notes: dish.notes ?? null,
         source: 'manual' as const,
         parser_version: PARSER_VERSION,
