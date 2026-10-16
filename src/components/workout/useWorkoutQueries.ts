@@ -1,7 +1,7 @@
 import { useMemo, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContextTypes';
 import type { PrMode } from '../../lib/prComparator';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import type { WorkoutSet, Exercise, RoutineTemplate, TemplateExercise } from '../../types/database';
 import {
@@ -97,18 +97,100 @@ export interface RoutineTemplateDetail {
   exercises: TemplateExercise[];
 }
 
-// payload-gate: detail-fetch — template exercises and targets for resolved routine
-export async function fetchTemplateDetail(templateId: string): Promise<RoutineTemplateDetail | null> {
-  const { data, error } = await supabase
-    .from('routine_templates')
-    .select(
-      'id, exercises:template_exercises(id, template_id, exercise_id, order_index, target_sets, target_reps, exercise:exercises(name))'
-    )
-    .eq('id', templateId)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data as RoutineTemplateDetail | null;
+export interface FetchTemplateDetailOptions {
+  queryClient?: QueryClient;
+  timeoutMs?: number;
+}
+
+let activeWorkoutQueryClient: QueryClient | null = null;
+
+export function setActiveWorkoutQueryClient(client: QueryClient | null): void {
+  activeWorkoutQueryClient = client;
+}
+
+export const DEFAULT_TEMPLATE_DETAIL_TIMEOUT_MS = 5000;
+export const OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS = 1500;
+export const ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX = 'routine_template_detail';
+
+export function routineTemplateDetailQueryKey(templateId: string) {
+  return [ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX, templateId] as const;
+}
+
+const templateDetailMemoryCache = new Map<string, RoutineTemplateDetail>();
+
+export function clearTemplateDetailCache(): void {
+  templateDetailMemoryCache.clear();
+}
+
+export async function fetchTemplateDetail(
+  templateId: string,
+  optionsOrClient?: QueryClient | FetchTemplateDetailOptions
+): Promise<RoutineTemplateDetail | null> {
+  if (!templateId) return null;
+
+  const client =
+    optionsOrClient && 'getQueryData' in optionsOrClient
+      ? (optionsOrClient as QueryClient)
+      : (optionsOrClient as FetchTemplateDetailOptions)?.queryClient ?? activeWorkoutQueryClient;
+
+  const customTimeout =
+    optionsOrClient && !('getQueryData' in optionsOrClient)
+      ? (optionsOrClient as FetchTemplateDetailOptions)?.timeoutMs
+      : undefined;
+
+  const key = routineTemplateDetailQueryKey(templateId);
+
+  if (client) {
+    const cached = client.getQueryData<RoutineTemplateDetail>(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+
+  const memoryCached = templateDetailMemoryCache.get(templateId);
+  if (memoryCached !== undefined) {
+    return memoryCached;
+  }
+
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const timeoutMs =
+    customTimeout ?? (isOffline ? OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS : DEFAULT_TEMPLATE_DETAIL_TIMEOUT_MS);
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`Template detail fetch timed out after ${timeoutMs}ms for ${templateId}`));
+    }, timeoutMs);
+  });
+
+  const networkPromise = (async (): Promise<RoutineTemplateDetail | null> => {
+    // payload-gate: detail-fetch — template exercises and targets for resolved routine
+    const { data, error } = await supabase
+      .from('routine_templates')
+      .select(
+        'id, exercises:template_exercises(id, template_id, exercise_id, order_index, target_sets, target_reps, exercise:exercises(name))'
+      )
+      .eq('id', templateId)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as RoutineTemplateDetail | null) ?? null;
+  })();
+
+  try {
+    const detail = await Promise.race([networkPromise, timeoutPromise]);
+    if (detail) {
+      if (client) {
+        client.setQueryData(key, detail);
+      }
+      templateDetailMemoryCache.set(templateId, detail);
+    }
+    return detail;
+  } finally {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 export const workoutExercisesQueryOptions = {
@@ -528,12 +610,16 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
     return scheduled ? scheduled.id : null;
   }, [rawTemplates, rawTemplatesFetched, todaySets, logsFetched, workoutDate, currentDayAbbr]);
 
+  useEffect(() => {
+    setActiveWorkoutQueryClient(queryClient);
+  }, [queryClient]);
+
   const { data: templateDetail, isFetched: detailFetched } = useQuery({
-    queryKey: ['routine_template_detail', resolvedTemplateId],
+    queryKey: routineTemplateDetailQueryKey(resolvedTemplateId || ''),
     enabled: Boolean(resolvedTemplateId),
     queryFn: async () => {
       if (!resolvedTemplateId) return null;
-      return fetchTemplateDetail(resolvedTemplateId);
+      return fetchTemplateDetail(resolvedTemplateId, queryClient);
     },
   });
 

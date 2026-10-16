@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, useContext } from 'react';
+import { QueryClientContext } from '@tanstack/react-query';
 import type { WorkoutSet, Exercise, RoutineTemplate } from '../../types/database';
 import {
   normalizeDateStr,
@@ -44,6 +45,7 @@ export function useWorkoutSession({
   userLogs,
   logsFetched,
 }: UseWorkoutSessionOptions) {
+  const queryClient = useContext(QueryClientContext);
   const [workoutDate, setWorkoutDate] = useState<string>(() => {
     const activeSession = workoutSessionStore.getActiveSession(targetUserId);
     if (activeSession && activeSession.workoutDate) {
@@ -201,7 +203,7 @@ export function useWorkoutSession({
       let templateExercises = customTpl?.exercises;
       if (customTpl && templateExercises === undefined) {
         try {
-          const detail = await fetchTemplateDetail(customTpl.id);
+          const detail = await fetchTemplateDetail(customTpl.id, queryClient);
           templateExercises = detail?.exercises || [];
         } catch (err) {
           console.error('Failed to fetch template detail for selection:', err);
@@ -256,7 +258,7 @@ export function useWorkoutSession({
     let customWithExercises = customTemplates;
     if (scheduledCustom && (!scheduledCustom.exercises || scheduledCustom.exercises.length === 0)) {
       try {
-        const detail = await fetchTemplateDetail(scheduledCustom.id);
+        const detail = await fetchTemplateDetail(scheduledCustom.id, queryClient);
         if (detail?.exercises) {
           customWithExercises = customTemplates.map((t) =>
             t.id === scheduledCustom.id ? { ...t, exercises: detail.exercises } : t
