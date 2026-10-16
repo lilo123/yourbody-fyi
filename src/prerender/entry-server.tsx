@@ -5,6 +5,8 @@ import LandingView from '../components/landing/LandingView';
 import { TermsPage } from '../legal/TermsPage';
 import { PrivacyPage } from '../legal/PrivacyPage';
 import { RefundsPage } from '../legal/RefundsPage';
+import { Header } from '../components/common/Header';
+import { AuthContext, type AuthContextType } from '../context/AuthContextTypes';
 
 export interface PrerenderRoute {
   path: string;
@@ -44,21 +46,58 @@ export const PRERENDER_ROUTES: PrerenderRoute[] = [
   },
 ];
 
+const noopAsync = async () => {};
+const SIGNED_OUT_AUTH: AuthContextType = {
+  user: null,
+  profile: null,
+  role: 'athlete',
+  viewMode: 'athlete',
+  isCoachMode: false,
+  loading: false,
+  signIn: async () => ({ success: false }),
+  signUp: async () => ({ success: false }),
+  signOut: noopAsync,
+  updateProfile: async () => ({ success: false }),
+  switchRole: noopAsync,
+  refreshProfile: noopAsync,
+  resendConfirmation: async () => ({ success: false }),
+  requestPasswordReset: async () => ({ success: false }),
+  resetPassword: async () => ({ success: false }),
+};
+
 export function renderRoute(path: string): string {
   let element: React.ReactElement;
   switch (path) {
     case '/':
-      element = <LandingView />;
+      element = (
+        <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
+          <LandingView />
+        </div>
+      );
       break;
     case '/terms':
-      element = <TermsPage />;
-      break;
     case '/privacy':
-      element = <PrivacyPage />;
+    case '/refunds': {
+      let content: React.ReactElement;
+      if (path === '/terms') {
+        content = <TermsPage />;
+      } else if (path === '/privacy') {
+        content = <PrivacyPage />;
+      } else {
+        content = <RefundsPage />;
+      }
+      element = (
+        <AuthContext.Provider value={SIGNED_OUT_AUTH}>
+          <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
+            <Header />
+            <main className="flex-1 max-w-xl w-full mx-auto p-4 pb-8">
+              {content}
+            </main>
+          </div>
+        </AuthContext.Provider>
+      );
       break;
-    case '/refunds':
-      element = <RefundsPage />;
-      break;
+    }
     default:
       throw new Error(`Unknown prerender route: ${path}`);
   }

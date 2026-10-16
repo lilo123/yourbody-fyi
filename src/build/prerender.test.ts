@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { renderRoute, PRERENDER_ROUTES } from '../prerender/entry-server';
+import { authStorageKey, AUTH_TOKEN_KEY_REGEX, hasValidAuthToken } from '../lib/supabase';
 
 describe('Prerender Output and Configuration', () => {
   const rootDir = path.resolve(__dirname, '../..');
@@ -34,30 +36,46 @@ describe('Prerender Output and Configuration', () => {
       expect(html).toContain('Is there an app?');
       expect(html).toContain('How does the AI trial work?');
       expect(html).toContain('Can my clients use it for free?');
+
+      // Outer wrapper matches App.tsx layout
+      expect(html).toContain('min-h-[100dvh]');
     });
 
-    it('renders "/terms" containing Terms of Service headings and key sections', () => {
+    it('renders "/terms" containing Terms of Service headings, Header, and main wrapper', () => {
       const html = renderRoute('/terms');
       expect(html).toContain('Terms of Service');
       expect(html).toContain('Health Disclaimer');
       expect(html).toContain('1. Agreement and Operator');
       expect(html).toContain('10. Contact Us');
+
+      // Wrappers matching client App.tsx tree to prevent visual jump
+      expect(html).toContain('Yourbody.fyi');
+      expect(html).toContain('flex-1 max-w-xl w-full mx-auto p-4 pb-8');
+      expect(html).toContain('min-h-[100dvh]');
     });
 
-    it('renders "/privacy" containing Privacy Policy headings and key sections', () => {
+    it('renders "/privacy" containing Privacy Policy headings, Header, and main wrapper', () => {
       const html = renderRoute('/privacy');
       expect(html).toContain('Privacy Policy');
       expect(html).toContain('1. Introduction');
       expect(html).toContain('2. Information We Collect');
       expect(html).toContain('8. Contact Us');
+
+      expect(html).toContain('Yourbody.fyi');
+      expect(html).toContain('flex-1 max-w-xl w-full mx-auto p-4 pb-8');
+      expect(html).toContain('min-h-[100dvh]');
     });
 
-    it('renders "/refunds" containing Refund Policy headings and key sections', () => {
+    it('renders "/refunds" containing Refund Policy headings, Header, and main wrapper', () => {
       const html = renderRoute('/refunds');
       expect(html).toContain('Refund Policy');
       expect(html).toContain('1. Our Refund Philosophy');
       expect(html).toContain('Annual Subscriptions');
       expect(html).toContain('6. How to Request a Refund');
+
+      expect(html).toContain('Yourbody.fyi');
+      expect(html).toContain('flex-1 max-w-xl w-full mx-auto p-4 pb-8');
+      expect(html).toContain('min-h-[100dvh]');
     });
 
     it('defines PRERENDER_ROUTES covering all four public paths', () => {
@@ -90,6 +108,12 @@ describe('Prerender Output and Configuration', () => {
       expect(guardContent).toContain('/privacy');
       expect(guardContent).toContain('/refunds');
       expect(guardContent).toContain('standalone');
+      // Exact Supabase auth key regex excluding PKCE code-verifier
+      expect(guardContent).toContain('AUTH_KEY_REGEX = /^sb-[a-zA-Z0-9_.-]+-auth-token$/');
+      // Fail-safe listeners and bounded timeout
+      expect(guardContent).toContain("window.addEventListener('error', removePrerender)");
+      expect(guardContent).toContain("window.addEventListener('unhandledrejection', removePrerender)");
+      expect(guardContent).toContain('8000');
     });
 
     it('defines html.hide-prerender #prerender rule in src/index.css', () => {
@@ -146,6 +170,78 @@ describe('Prerender Output and Configuration', () => {
       expect(distRefunds).toContain('Refund Policy');
 
       expect(fs.existsSync(path.join(distDir, 'prerender-guard.js'))).toBe(true);
+    });
+
+    it('updates sw.js precache revision for index.html to match final dist/index.html md5', () => {
+      if (!fs.existsSync(distDir)) {
+        return;
+      }
+      const swPath = path.join(distDir, 'sw.js');
+      if (!fs.existsSync(swPath)) {
+        return;
+      }
+
+      const swContent = fs.readFileSync(swPath, 'utf8');
+      const indexHtmlBuffer = fs.readFileSync(path.join(distDir, 'index.html'));
+      const expectedMd5 = crypto.createHash('md5').update(indexHtmlBuffer).digest('hex');
+
+      const match = swContent.match(/\{url:"index\.html",revision:"([a-f0-9]+)"\}/);
+      expect(match).not.toBeNull();
+      expect(match?.[1]).toBe(expectedMd5);
+    });
+  });
+
+  describe('(d) Supabase auth storage key and token validation', () => {
+    it('exports authStorageKey conforming to AUTH_TOKEN_KEY_REGEX', () => {
+      expect(typeof authStorageKey).toBe('string');
+      expect(AUTH_TOKEN_KEY_REGEX.test(authStorageKey)).toBe(true);
+    });
+
+    it('hasValidAuthToken validates session payloads and excludes PKCE code verifiers', () => {
+      const mockStorage: Record<string, string> = {};
+      const fakeStorage = {
+        getItem: (k: string) => mockStorage[k] ?? null,
+        setItem: (k: string, v: string) => {
+          mockStorage[k] = v;
+        },
+        removeItem: (k: string) => {
+          delete mockStorage[k];
+        },
+        clear: () => {
+          for (const k of Object.keys(mockStorage)) delete mockStorage[k];
+        },
+        key: (i: number) => Object.keys(mockStorage)[i] ?? null,
+        get length() {
+          return Object.keys(mockStorage).length;
+        },
+      } as Storage;
+
+      // Empty storage
+      expect(hasValidAuthToken(fakeStorage)).toBe(false);
+
+      // PKCE code verifier key alone (signed out state) must not trigger hasUser
+      fakeStorage.setItem('sb-local-auth-token-code-verifier', 'pkce-verifier-random-string');
+      expect(hasValidAuthToken(fakeStorage)).toBe(false);
+
+      // Invalid / corrupt payload on exact token key
+      fakeStorage.setItem('sb-local-auth-token', 'not-valid-json');
+      expect(hasValidAuthToken(fakeStorage)).toBe(false);
+
+      // Non-auth payload
+      fakeStorage.setItem('sb-local-auth-token', JSON.stringify({ some_other_data: true }));
+      expect(hasValidAuthToken(fakeStorage)).toBe(false);
+
+      // Valid session with access_token
+      fakeStorage.setItem(
+        'sb-local-auth-token',
+        JSON.stringify({ access_token: 'fake-jwt-token', user: { id: 'u123' } })
+      );
+      expect(hasValidAuthToken(fakeStorage)).toBe(true);
+
+      // Cached yourbody_user
+      fakeStorage.clear();
+      fakeStorage.setItem('yourbody_user', JSON.stringify({ id: 'u123', email: 'test@example.com' }));
+      expect(hasValidAuthToken(fakeStorage)).toBe(true);
     });
   });
 });

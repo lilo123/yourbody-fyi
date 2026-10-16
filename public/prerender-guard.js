@@ -4,6 +4,7 @@
     var path = rawPath.toLowerCase().replace(/\/+$/, '').replace(/\.html$/, '') || '/';
     var isPublic = path === '/' || path === '/terms' || path === '/privacy' || path === '/refunds';
     var hasUser = false;
+    var AUTH_KEY_REGEX = /^sb-[a-zA-Z0-9_.-]+-auth-token$/;
     try {
       var raw = localStorage.getItem('yourbody_user');
       if (raw && raw !== 'null' && raw !== 'undefined') {
@@ -11,9 +12,17 @@
       } else {
         for (var i = 0; i < localStorage.length; i++) {
           var k = localStorage.key(i);
-          if (k && k.indexOf('sb-') === 0 && k.indexOf('-auth-token') !== -1) {
-            hasUser = true;
-            break;
+          if (k && AUTH_KEY_REGEX.test(k)) {
+            var val = localStorage.getItem(k);
+            if (val) {
+              try {
+                var parsed = JSON.parse(val);
+                if (parsed && (parsed.access_token || parsed.user)) {
+                  hasUser = true;
+                  break;
+                }
+              } catch (e) {}
+            }
           }
         }
       }
@@ -26,6 +35,25 @@
       );
     } catch (e) {}
 
+    var removePrerender = function () {
+      var el = document.getElementById('prerender');
+      if (el) el.remove();
+    };
+
+    // Fail-safe listeners: if early JS error occurs before mount, drop prerender so #root is visible
+    window.addEventListener('error', removePrerender);
+    window.addEventListener('unhandledrejection', removePrerender);
+
+    // Fail-safe bounded timeout: 8s after DOMContentLoaded
+    var scheduleTimeout = function () {
+      setTimeout(removePrerender, 8000);
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', scheduleTimeout);
+    } else {
+      scheduleTimeout();
+    }
+
     if (hasUser || !isPublic || isStandalone) {
       document.documentElement.classList.add('hide-prerender');
       try {
@@ -33,10 +61,6 @@
         style.textContent = '#prerender { display: none !important; }';
         (document.head || document.documentElement).appendChild(style);
       } catch (e) {}
-      var removePrerender = function () {
-        var el = document.getElementById('prerender');
-        if (el) el.remove();
-      };
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', removePrerender);
       } else {
