@@ -203,7 +203,7 @@ export function useWorkoutSession({
       let templateExercises = customTpl?.exercises;
       if (customTpl && templateExercises === undefined) {
         try {
-          const detail = await fetchTemplateDetail(customTpl.id, queryClient);
+          const detail = await fetchTemplateDetail(customTpl.id, { queryClient, userId: targetUserId });
           templateExercises = detail?.exercises || [];
         } catch (err) {
           console.error('Failed to fetch template detail for selection:', err);
@@ -258,7 +258,7 @@ export function useWorkoutSession({
     let customWithExercises = customTemplates;
     if (scheduledCustom && (!scheduledCustom.exercises || scheduledCustom.exercises.length === 0)) {
       try {
-        const detail = await fetchTemplateDetail(scheduledCustom.id, queryClient);
+        const detail = await fetchTemplateDetail(scheduledCustom.id, { queryClient, userId: targetUserId });
         if (detail?.exercises) {
           customWithExercises = customTemplates.map((t) =>
             t.id === scheduledCustom.id ? { ...t, exercises: detail.exercises } : t

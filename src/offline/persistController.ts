@@ -109,6 +109,26 @@ export async function initPersistForUser(
   });
 }
 
+export type PersistUserSwitchListener = () => void;
+const persistUserSwitchListeners = new Set<PersistUserSwitchListener>();
+
+export function onPersistUserSwitch(listener: PersistUserSwitchListener): () => void {
+  persistUserSwitchListeners.add(listener);
+  return () => {
+    persistUserSwitchListeners.delete(listener);
+  };
+}
+
+function notifyPersistUserSwitch(): void {
+  for (const listener of persistUserSwitchListeners) {
+    try {
+      listener();
+    } catch (e) {
+      console.warn('[persistController] userSwitchListener error:', e);
+    }
+  }
+}
+
 /**
  * Stop persisting cache to IndexedDB and unsubscribe event listeners.
  */
@@ -128,6 +148,7 @@ export function stopPersisting(): void {
   currentPersistingUserId = null;
   currentPersistingQueryClient = null;
   setActiveUserForFlusher(null);
+  notifyPersistUserSwitch();
 }
 
 /**

@@ -21,7 +21,10 @@ import {
   pendingSetsBefore,
   onSynced,
   offlineFallback,
+  onPersistUserSwitch,
+  getCurrentPersistingUserId,
 } from '../../offline';
+import { queryKeys } from '../../lib/queryKeys';
 import { useWorkoutPendingOps } from './useWorkoutPendingOps';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { invalidateWorkoutDerived } from '../../lib/invalidate';
@@ -100,6 +103,7 @@ export interface RoutineTemplateDetail {
 export interface FetchTemplateDetailOptions {
   queryClient?: QueryClient;
   timeoutMs?: number;
+  userId?: string | null;
 }
 
 export const DEFAULT_TEMPLATE_DETAIL_ONLINE_TIMEOUT_MS = 15000;
@@ -109,28 +113,36 @@ export const DEFAULT_TEMPLATE_DETAIL_TIMEOUT_MS = DEFAULT_TEMPLATE_DETAIL_ONLINE
 export const OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS = DEFAULT_TEMPLATE_DETAIL_OFFLINE_TIMEOUT_MS;
 export const ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX = 'routine_template_detail';
 
-export function routineTemplateDetailQueryKey(templateId: string) {
-  return [ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX, templateId] as const;
+export function routineTemplateDetailQueryKey(templateId: string | null | undefined) {
+  return queryKeys.routineTemplateDetail.byId(templateId);
 }
 
 const templateDetailMemoryCache = new Map<string, RoutineTemplateDetail>();
 
-export function clearTemplateDetailCache(templateId?: string): void {
+function getTemplateDetailCacheKey(templateId: string, userId?: string | null): string {
+  return `${userId || 'anon'}:${templateId}`;
+}
+
+export function clearTemplateDetailCache(templateId?: string, userId?: string | null): void {
   if (templateId) {
-    templateDetailMemoryCache.delete(templateId);
+    if (userId !== undefined) {
+      templateDetailMemoryCache.delete(getTemplateDetailCacheKey(templateId, userId));
+    } else {
+      for (const key of templateDetailMemoryCache.keys()) {
+        if (key.endsWith(`:${templateId}`) || key === templateId) {
+          templateDetailMemoryCache.delete(key);
+        }
+      }
+    }
   } else {
     templateDetailMemoryCache.clear();
   }
 }
 
-// Clear memory cache on sign-out
-if (typeof supabase?.auth?.onAuthStateChange === 'function') {
-  supabase.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') {
-      clearTemplateDetailCache();
-    }
-  });
-}
+// Clear memory cache when persistController resets on user switch or sign-out
+onPersistUserSwitch(() => {
+  clearTemplateDetailCache();
+});
 
 async function fetchTemplateDetailFromNetwork(templateId: string): Promise<RoutineTemplateDetail | null> {
   // payload-gate: detail-fetch — template exercises and targets for resolved routine
@@ -162,7 +174,15 @@ export async function fetchTemplateDetail(
       ? (optionsOrClient as FetchTemplateDetailOptions)?.timeoutMs
       : undefined;
 
-  const key = routineTemplateDetailQueryKey(templateId);
+  const targetUserId =
+    optionsOrClient && !('getQueryData' in optionsOrClient)
+      ? (optionsOrClient as FetchTemplateDetailOptions)?.userId
+      : undefined;
+
+  const effectiveUserId = targetUserId ?? getCurrentPersistingUserId();
+  const memCacheKey = getTemplateDetailCacheKey(templateId, effectiveUserId);
+
+  const key = queryKeys.routineTemplateDetail.byId(templateId);
   const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
   // 1. Offline path: cache-first
@@ -171,7 +191,7 @@ export async function fetchTemplateDetail(
       const cached = client.getQueryData<RoutineTemplateDetail>(key);
       if (cached !== undefined) return cached;
     }
-    const memCached = templateDetailMemoryCache.get(templateId);
+    const memCached = templateDetailMemoryCache.get(memCacheKey);
     if (memCached !== undefined) return memCached;
   }
 
@@ -198,7 +218,7 @@ export async function fetchTemplateDetail(
       if (client) {
         client.setQueryData(key, detail);
       }
-      templateDetailMemoryCache.set(templateId, detail);
+      templateDetailMemoryCache.set(memCacheKey, detail);
     }
     return detail;
   } catch (error) {
@@ -208,7 +228,7 @@ export async function fetchTemplateDetail(
         const cached = client.getQueryData<RoutineTemplateDetail>(key);
         if (cached !== undefined) return cached;
       }
-      const memCached = templateDetailMemoryCache.get(templateId);
+      const memCached = templateDetailMemoryCache.get(memCacheKey);
       if (memCached !== undefined) return memCached;
     }
     throw error;
@@ -637,11 +657,11 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
   }, [rawTemplates, rawTemplatesFetched, todaySets, logsFetched, workoutDate, currentDayAbbr]);
 
   const { data: templateDetail, isFetched: detailFetched } = useQuery({
-    queryKey: routineTemplateDetailQueryKey(resolvedTemplateId || ''),
+    queryKey: queryKeys.routineTemplateDetail.byId(resolvedTemplateId),
     enabled: Boolean(resolvedTemplateId),
     queryFn: async () => {
       if (!resolvedTemplateId) return null;
-      return fetchTemplateDetail(resolvedTemplateId, queryClient);
+      return fetchTemplateDetail(resolvedTemplateId, { queryClient, userId: targetUserId });
     },
   });
 

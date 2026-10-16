@@ -8,6 +8,8 @@ import {
   type RoutineTemplateDetail,
 } from './useWorkoutQueries';
 import { supabase } from '../../lib/supabase';
+import { queryKeys } from '../../lib/queryKeys';
+import { stopPersisting } from '../../offline/persistController';
 
 describe('fetchTemplateDetail offline resilience and caching', () => {
   let queryClient: QueryClient;
@@ -327,5 +329,108 @@ describe('fetchTemplateDetail offline resilience and caching', () => {
     await vi.advanceTimersByTimeAsync(650);
 
     await expect(pendingPromise).rejects.toThrow(/timed out after 600ms/i);
+  });
+
+  it('user A caches a detail, switch to user B, B gets no cached detail offline', async () => {
+    const mockDetail: RoutineTemplateDetail = {
+      id: 'template-user-isolation',
+      exercises: [
+        {
+          id: 'te-iso',
+          template_id: 'template-user-isolation',
+          exercise_id: 'ex-squat',
+          order_index: 0,
+          target_sets: 3,
+          target_reps: 5,
+          exercise: { name: 'Squat' },
+        },
+      ],
+    };
+
+    // User A fetches online, caching the detail in queryClient and memory cache
+    Object.defineProperty(navigator, 'onLine', {
+      value: true,
+      configurable: true,
+      writable: true,
+    });
+
+    const maybeSingleMock = vi.fn().mockResolvedValue({
+      data: mockDetail,
+      error: null,
+    });
+    const limitMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
+    const eqMock = vi.fn().mockReturnValue({ limit: limitMock });
+    const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
+
+    vi.spyOn(supabase, 'from').mockReturnValue({
+      select: selectMock,
+    } as any);
+
+    const resultA = await fetchTemplateDetail('template-user-isolation', {
+      queryClient,
+      userId: 'user-A',
+    });
+    expect(resultA).toEqual(mockDetail);
+
+    // Offline: User A can read the cached detail
+    Object.defineProperty(navigator, 'onLine', {
+      value: false,
+      configurable: true,
+      writable: true,
+    });
+
+    const cachedA = await fetchTemplateDetail('template-user-isolation', {
+      queryClient,
+      userId: 'user-A',
+    });
+    expect(cachedA).toEqual(mockDetail);
+
+    // Switch to user B (triggers stopPersisting and queryClient.clear)
+    stopPersisting();
+    queryClient.clear();
+
+    // User B attempts to read the same template detail offline with no network
+    const networkFailMock = vi.fn().mockRejectedValue(new Error('Offline: network unavailable'));
+    const limitFailMock = vi.fn().mockReturnValue({ maybeSingle: networkFailMock });
+    const eqFailMock = vi.fn().mockReturnValue({ limit: limitFailMock });
+    const selectFailMock = vi.fn().mockReturnValue({ eq: eqFailMock });
+
+    vi.spyOn(supabase, 'from').mockReturnValue({
+      select: selectFailMock,
+    } as any);
+
+    // B gets no cached detail offline (fails fast / throws)
+    await expect(
+      fetchTemplateDetail('template-user-isolation', {
+        queryClient,
+        userId: 'user-B',
+        timeoutMs: 100,
+      })
+    ).rejects.toThrow();
+
+    // Also verify queryClient has no cached entry for user B
+    expect(
+      queryClient.getQueryData(queryKeys.routineTemplateDetail.byId('template-user-isolation'))
+    ).toBeUndefined();
+
+    // Memory-only fetch for User B also has no cache
+    await expect(
+      fetchTemplateDetail('template-user-isolation', {
+        userId: 'user-B',
+        timeoutMs: 50,
+      })
+    ).rejects.toThrow();
+  });
+
+  it('falsy-id key matches queryKeys.routineTemplateDetail.byId', () => {
+    expect(routineTemplateDetailQueryKey(null)).toEqual(
+      queryKeys.routineTemplateDetail.byId(null)
+    );
+    expect(routineTemplateDetailQueryKey(undefined)).toEqual(
+      queryKeys.routineTemplateDetail.byId(undefined)
+    );
+    expect(routineTemplateDetailQueryKey('')).toEqual(
+      queryKeys.routineTemplateDetail.byId('')
+    );
   });
 });
