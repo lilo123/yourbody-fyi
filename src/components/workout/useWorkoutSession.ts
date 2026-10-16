@@ -24,6 +24,7 @@ import {
 } from './useWorkoutSessionHelpers';
 import { useWorkoutAccordion } from './useWorkoutAccordion';
 import { enqueueAndAwait } from '../../offline';
+import { useToast } from '../../hooks/useToast';
 
 export interface UseWorkoutSessionOptions {
   targetUserId: string;
@@ -46,6 +47,7 @@ export function useWorkoutSession({
   logsFetched,
 }: UseWorkoutSessionOptions) {
   const queryClient = useContext(QueryClientContext);
+  const { show: showToast } = useToast();
   const [workoutDate, setWorkoutDate] = useState<string>(() => {
     const activeSession = workoutSessionStore.getActiveSession(targetUserId);
     if (activeSession && activeSession.workoutDate) {
@@ -254,10 +256,21 @@ export function useWorkoutSession({
         if (customTpl && templateExercises === undefined) {
           try {
             const detail = await fetchTemplateDetail(customTpl.id, { queryClient, userId: targetUserId });
-            templateExercises = detail?.exercises || [];
+            if (!detail) {
+              throw new Error('Template detail unavailable');
+            }
+            templateExercises = detail.exercises || [];
           } catch (err) {
             console.error('Failed to fetch template detail for selection:', err);
-            templateExercises = [];
+            if (inFlightRoutineSelectionSeqRef.current === seq) {
+              manualSelectionDateRef.current = prevManualDate;
+              prevManualSelectionDateRef.current = undefined;
+              inFlightRoutineSelectionSeqRef.current = 0;
+              if (seq === routineSelectionSeqRef.current) {
+                showToast({ message: 'Available when online' });
+              }
+            }
+            return;
           }
         }
 
