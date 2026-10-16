@@ -45,6 +45,8 @@ export const WorkoutEngine: React.FC = () => {
   })();
 
   const [showRoutineModal, setShowRoutineModal] = useState(false);
+  const [isSelectingRoutine, setIsSelectingRoutine] = useState(false);
+  const routineSelectSeqRef = useRef(0);
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
 
   // Dialog States
@@ -105,9 +107,17 @@ export const WorkoutEngine: React.FC = () => {
     logsFetched,
   });
 
-  const handleSelectRoutine = useCallback((routineName: string, template?: RoutineTemplate) => {
-    setShowRoutineModal(false);
-    selectRoutineInternal(routineName, template);
+  const handleSelectRoutine = useCallback(async (routineName: string, template?: RoutineTemplate) => {
+    const seq = ++routineSelectSeqRef.current;
+    setIsSelectingRoutine(true);
+    try {
+      await selectRoutineInternal(routineName, template);
+    } finally {
+      if (seq === routineSelectSeqRef.current) {
+        setIsSelectingRoutine(false);
+        setShowRoutineModal(false);
+      }
+    }
   }, [selectRoutineInternal]);
 
   // URL Query Parameters Handling (URL-1, URL-2)
@@ -406,7 +416,11 @@ export const WorkoutEngine: React.FC = () => {
 
       <RoutinePickerModal
         isOpen={showRoutineModal}
-        onClose={() => setShowRoutineModal(false)}
+        onClose={() => {
+          if (!isSelectingRoutine) {
+            setShowRoutineModal(false);
+          }
+        }}
         onReloadScheduledRoutine={handleRequestReload}
         onSelectRoutine={handleSelectRoutine}
         activeRoutineName={activeRoutineName}
@@ -415,6 +429,7 @@ export const WorkoutEngine: React.FC = () => {
         defaultTemplates={availableRoutines.defaults}
         exercises={exercises}
         targetUserId={targetUserId}
+        isSelecting={isSelectingRoutine}
       />
 
       {activeRoutineName === 'Rest Day' ? (
@@ -550,37 +565,19 @@ export const WorkoutEngine: React.FC = () => {
 
       {/* Workout Dialogs, Sheets & Undo Toasts */}
       <WorkoutDialogs
-        isEditSheetOpen={isEditSheetOpen}
-        editingSet={editingSet}
-        exercises={exercises}
-        targetUserId={targetUserId}
-        onCloseEditSheet={handleCloseEditSheet}
-        onSavedEditSet={handleSavedEditSet}
-        onDeleteRequested={handleDeleteRequested}
-        removeSheetState={removeSheetState}
-        onCloseRemoveSheet={handleCloseRemoveSheet}
-        onConfirmRemoveAndDelete={handleConfirmRemoveAndDelete}
-        onKeepSetsAndCollapse={handleKeepSetsAndCollapse}
-        isDeletingSet={deleteSetMutation.isPending}
-        isFinishReviewOpen={isFinishReviewOpen}
-        onCloseFinishReview={() => setIsFinishReviewOpen(false)}
-        pendingReviewSets={pendingReviewSets}
-        onConfirmFinishWithSets={handleConfirmFinishWithSets}
-        onFinishWithoutSets={handleFinishWithoutSets}
+        isEditSheetOpen={isEditSheetOpen} editingSet={editingSet} exercises={exercises} targetUserId={targetUserId}
+        onCloseEditSheet={handleCloseEditSheet} onSavedEditSet={handleSavedEditSet} onDeleteRequested={handleDeleteRequested}
+        removeSheetState={removeSheetState} onCloseRemoveSheet={handleCloseRemoveSheet}
+        onConfirmRemoveAndDelete={handleConfirmRemoveAndDelete} onKeepSetsAndCollapse={handleKeepSetsAndCollapse}
+        isDeletingSet={deleteSetMutation.isPending} isFinishReviewOpen={isFinishReviewOpen}
+        onCloseFinishReview={() => setIsFinishReviewOpen(false)} pendingReviewSets={pendingReviewSets}
+        onConfirmFinishWithSets={handleConfirmFinishWithSets} onFinishWithoutSets={handleFinishWithoutSets}
         isSubmittingFinishReview={batchLogSetsMutation.isPending}
-        isClearConfirmOpen={isClearConfirmOpen}
-        onCancelClearConfirm={() => setIsClearConfirmOpen(false)}
-        onConfirmClearWorkout={handleConfirmClearWorkout}
-        isReloadConfirmOpen={isReloadConfirmOpen}
-        onCancelReloadConfirm={() => setIsReloadConfirmOpen(false)}
-        onConfirmReloadRoutine={handleConfirmReloadRoutine}
-        exerciseRemovalToast={exerciseRemovalToast}
-        deleteToast={deleteToast}
-        isExercisePickerOpen={isExercisePickerOpen}
-        onCloseExercisePicker={() => setIsExercisePickerOpen(false)}
-        onAddExercisesFromPicker={handleAddExercisesFromPicker}
-        activeExerciseNames={activeExercises}
-        userLogs={userLogs}
+        isClearConfirmOpen={isClearConfirmOpen} onCancelClearConfirm={() => setIsClearConfirmOpen(false)} onConfirmClearWorkout={handleConfirmClearWorkout}
+        isReloadConfirmOpen={isReloadConfirmOpen} onCancelReloadConfirm={() => setIsReloadConfirmOpen(false)} onConfirmReloadRoutine={handleConfirmReloadRoutine}
+        exerciseRemovalToast={exerciseRemovalToast} deleteToast={deleteToast}
+        isExercisePickerOpen={isExercisePickerOpen} onCloseExercisePicker={() => setIsExercisePickerOpen(false)}
+        onAddExercisesFromPicker={handleAddExercisesFromPicker} activeExerciseNames={activeExercises} userLogs={userLogs}
       />
     </div>
   );

@@ -67,6 +67,7 @@ export function useWorkoutSession({
   const resolvedKeyRef = useRef<string | null>(null);
   const manualSelectionDateRef = useRef<string | null>(null);
   const lastTargetUserRef = useRef<string>(targetUserId);
+  const routineSelectionSeqRef = useRef<number>(0);
 
   const todaySets = useMemo(() => {
     return userLogs.filter((s) => normalizeDateStr(s.workout_date) === workoutDate);
@@ -80,6 +81,7 @@ export function useWorkoutSession({
   useEffect(() => {
     if (lastTargetUserRef.current !== targetUserId) {
       lastTargetUserRef.current = targetUserId;
+      routineSelectionSeqRef.current++;
       workoutSessionStore.flushPendingWrites();
       setInputDrafts({});
       setActiveExercises([]);
@@ -182,6 +184,7 @@ export function useWorkoutSession({
   });
 
   const handleSelectRoutine = async (routineName: string, selectedTemplate?: RoutineTemplate) => {
+    const seq = ++routineSelectionSeqRef.current;
     manualSelectionDateRef.current = workoutDate;
 
     let resolvedExList: string[] = [];
@@ -189,6 +192,7 @@ export function useWorkoutSession({
     let resolvedReps: Record<string, number> = {};
 
     if (routineName === 'Rest Day' || routineName === 'Free Workout') {
+      if (seq !== routineSelectionSeqRef.current) return;
       setActiveRoutineName(routineName);
       setActiveExercises([]);
       setTargetSetCounts({});
@@ -209,6 +213,8 @@ export function useWorkoutSession({
         }
       }
 
+      if (seq !== routineSelectionSeqRef.current) return;
+
       const extracted = extractTemplateDetails(customTpl, defTpl, templateExercises, exercises);
       resolvedExList = extracted.resolvedExList;
       resolvedTargets = extracted.resolvedTargets;
@@ -221,6 +227,8 @@ export function useWorkoutSession({
       if (resolvedExList.length > 0) setExpandedExercises(new Set([resolvedExList[0]]));
       else setExpandedExercises(new Set());
     }
+
+    if (seq !== routineSelectionSeqRef.current) return;
 
     workoutSessionStore.updateRoutine(
       targetUserId,
@@ -247,6 +255,7 @@ export function useWorkoutSession({
   };
 
   const handleReloadScheduledRoutine = async () => {
+    const seq = ++routineSelectionSeqRef.current;
     workoutSessionStore.deleteSession(targetUserId, workoutDate);
     manualSelectionDateRef.current = null;
     resolvedKeyRef.current = null;
@@ -266,6 +275,8 @@ export function useWorkoutSession({
         console.error('Failed to fetch scheduled template detail on reload:', err);
       }
     }
+
+    if (seq !== routineSelectionSeqRef.current) return;
 
     const resolved = resolveRoutineAndExercises(
       workoutDate,

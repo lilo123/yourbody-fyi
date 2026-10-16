@@ -19,6 +19,7 @@ export interface RoutinePickerModalProps {
   defaultTemplates: typeof DEFAULT_WORKOUT_TEMPLATES;
   exercises: Exercise[];
   targetUserId?: string;
+  isSelecting?: boolean;
 }
 
 export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
@@ -32,6 +33,7 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
   defaultTemplates,
   exercises,
   targetUserId,
+  isSelecting,
 }) => {
   const {
     data,
@@ -114,10 +116,15 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
     (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
   );
 
+  const handleClose = () => {
+    if (isSelecting) return;
+    onClose();
+  };
+
   return (
     <AccessibleModal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       titleId="routine-picker-modal-title"
       overlayTestId="routine-picker-modal"
       overlayClassName="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
@@ -130,15 +137,19 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
         </h3>
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleClose}
+          disabled={isSelecting}
           aria-label="Close dialog"
-          className="text-zinc-400 hover:text-white text-xs font-bold p-1 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
+          className="text-zinc-400 hover:text-white text-xs font-bold p-1 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer touch-manipulation disabled:opacity-50"
         >
           Close
         </button>
       </div>
 
-      <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+      <div
+        className="space-y-2 max-h-[60vh] overflow-y-auto pr-1"
+        aria-busy={isSelecting || undefined}
+      >
         <button
           type="button"
           onClick={onReloadScheduledRoutine}
