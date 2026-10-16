@@ -165,6 +165,7 @@ export const SetRow: React.FC<SetRowProps> = memo((props) => {
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
+              if (isMutating) return;
               onCommitSet(exName, setIndex, ghost);
               focusNextPendingSet(exIndex, rowIdx);
             }
