@@ -207,7 +207,7 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
           globIgnores: ['**/Landing*'],
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/robots\.txt$/, /^\/sitemap\.xml$/, /^\/version\.json$/, /^\/llms\.txt$/],
+          navigateFallbackDenylist: [/^\/robots\.txt$/, /^\/sitemap\.xml$/, /^\/version\.json$/],
           cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         },
