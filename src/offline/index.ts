@@ -90,6 +90,8 @@ export {
   stopPersisting,
   clearUserReadCache,
   getCurrentPersistingUserId,
+  onPersistUserSwitch,
+  type PersistUserSwitchListener,
 } from './persistController';
 
 // Offline fallback
