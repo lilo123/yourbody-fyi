@@ -2092,27 +2092,93 @@ describe('Scale chip on the staged card', () => {
       expect(nameInput).toBeInTheDocument();
       expect(mealTypeSelect).toBeInTheDocument();
 
-      // Row B
-      const aiBadge = screen.getByTestId('parsed-locally-badge');
-      expect(aiBadge).toHaveTextContent('AI');
-      expect(screen.queryByTestId('analyze-with-ai-instead-btn')).toBeNull();
-
-      // Row C
+      // Unified action row (badge + Scale + Add on the SAME row, no divider)
       const breakdownHeader = screen.getByTestId('breakdown-header');
+      const aiBadge = screen.getByTestId('parsed-locally-badge');
       const scaleBtn = screen.getByTestId('meal-scale-button');
       const addBtn = screen.getByTestId('add-item-button');
-      expect(breakdownHeader).toBeInTheDocument();
-      expect(screen.queryByText(/Itemized Breakdown/i)).toBeNull();
-      expect(scaleBtn).toBeInTheDocument();
-      expect(addBtn).toBeInTheDocument();
 
-      // Verify DOM order: Row A before Row B before Row C
-      expect(nameInput.compareDocumentPosition(aiBadge)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-      expect(aiBadge.compareDocumentPosition(breakdownHeader)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(breakdownHeader).toBeInTheDocument();
+      expect(aiBadge).toHaveTextContent('AI');
+      expect(screen.queryByTestId('analyze-with-ai-instead-btn')).toBeNull();
+      expect(screen.queryByText(/Itemized Breakdown/i)).toBeNull();
+
+      expect(breakdownHeader).toContainElement(aiBadge);
+      expect(breakdownHeader).toContainElement(scaleBtn);
+      expect(breakdownHeader).toContainElement(addBtn);
+
+      // Verify DOM order: Name input before unified header, Badge before Scale, Scale before Add
+      expect(nameInput.compareDocumentPosition(breakdownHeader)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(aiBadge.compareDocumentPosition(scaleBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(scaleBtn.compareDocumentPosition(addBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });
 
-    it('positions Scale chip and + Add as siblings in Row C sharing right-aligned baseline', () => {
+    it('renders single-item on-device meal with unified [Device] ... [Scale] [+ Add] row and right-aligned AI button on next line', () => {
+      const meal: StagedMeal = {
+        name: 'Greek Yogurt Bowl',
+        mealType: 'Breakfast',
+        explanation: '130 kcal (Greek Yogurt Bowl)',
+        calories: 130,
+        protein: 15,
+        carbs: 9,
+        fat: 3.5,
+        fiber: 0,
+        servingSize: 170,
+        servingUnit: 'g',
+        source: 'local',
+        items: [
+          {
+            id: 'item-1',
+            name: 'Greek Yogurt',
+            portion: '170 g',
+            portionMultiplier: 1,
+            quantity: 170,
+            unit: 'g',
+            calories: 130,
+            protein: 15,
+            carbs: 9,
+            fat: 3.5,
+            fiber: 0,
+            baseQuantity: 170,
+            baseCalories: 130,
+            baseProtein: 15,
+            baseCarbs: 9,
+            baseFat: 3.5,
+            baseFiber: 0,
+          },
+        ],
+      };
+
+      render(
+        <StagedMealCard
+          {...baseProps}
+          stagedMeal={meal}
+          onUpdateStagedMeal={vi.fn()}
+          onAnalyzeWithAiInstead={vi.fn()}
+        />
+      );
+
+      expect(screen.getByTestId('dish-name-input')).toBeInTheDocument();
+
+      const breakdownHeader = screen.getByTestId('breakdown-header');
+      const deviceBadge = screen.getByTestId('parsed-locally-badge');
+      const scaleBtn = screen.getByTestId('meal-scale-button');
+      const addBtn = screen.getByTestId('add-item-button');
+      expect(deviceBadge).toHaveTextContent('Device');
+      expect(breakdownHeader).toContainElement(deviceBadge);
+      expect(breakdownHeader).toContainElement(scaleBtn);
+      expect(breakdownHeader).toContainElement(addBtn);
+
+      const aiBtn = screen.getByTestId('analyze-with-ai-instead-btn');
+      expect(aiBtn).toBeInTheDocument();
+      expect(aiBtn.parentElement?.className).toContain('justify-end');
+
+      expect(deviceBadge.compareDocumentPosition(scaleBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(scaleBtn.compareDocumentPosition(addBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(breakdownHeader.compareDocumentPosition(aiBtn)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it('positions Scale chip and + Add as siblings sharing right-aligned baseline', () => {
       const meal = makeMultiItemMeal();
       render(
         <StagedMealCard
