@@ -126,3 +126,23 @@
 .safe-area-pb {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
 }
+
+/* Prerender out-of-flow layout rule: while #prerender exists, keep #root out of flow and invisible */
+#prerender ~ #root {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  visibility: hidden;
+}
+
+/* Prerender guard rule: hide prerender container on app routes, signed-in, or standalone */
+html.hide-prerender #prerender {
+  display: none !important;
+}
+
+html.hide-prerender #prerender ~ #root {
+  position: static !important;
+  visibility: visible !important;
+}
+
