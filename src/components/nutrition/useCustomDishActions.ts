@@ -67,10 +67,17 @@ export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | 
   );
 
   if (items.length === 0) {
+    const { servingSize, servingUnit } = resolveCustomDishServing(dish, detail);
+    const portion =
+      servingUnit === 'serving' && servingSize === 1
+        ? '1 serving'
+        : `${servingSize} ${servingUnit}`;
     items = [
       buildStagedItem({
         name: dish.name,
-        portion: '1 serving',
+        portion,
+        quantity: servingSize,
+        unit: servingUnit as any,
         calories: dish.calories,
         protein: dish.protein,
         carbs: dish.carbs,
