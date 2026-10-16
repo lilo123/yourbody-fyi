@@ -31,8 +31,26 @@ export const queryClient = new QueryClient({
 
 setupQueryDefaults(queryClient);
 
-if (typeof document !== 'undefined' && document.documentElement.classList.contains('hide-prerender')) {
-  document.getElementById('prerender')?.remove();
+if (typeof document !== 'undefined') {
+  const rawPath = (window.location && window.location.pathname) || '/';
+  const normPath = rawPath.toLowerCase().replace(/\/+$/, '').replace(/\.html$/, '') || '/';
+  const isPub = normPath === '/' || normPath === '/terms' || normPath === '/privacy' || normPath === '/refunds';
+  const hasUser = (() => {
+    try {
+      if (localStorage.getItem('yourbody_user')) return true;
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  })();
+
+  if (!isPub || hasUser || document.documentElement.classList.contains('hide-prerender')) {
+    document.getElementById('prerender')?.remove();
+  }
 }
 
 createRoot(document.getElementById('root')!).render(
