@@ -1925,6 +1925,39 @@ describe('Scale chip on the staged card', () => {
     const btn = screen.getByTestId('analyze-with-ai-instead-btn');
     expect(btn).toBeDisabled();
   });
+
+  it('renders calorieCorrection warning and disappears when cleared after edit', () => {
+    const mealWithCorrection: StagedMeal = {
+      ...makeStagedMeal(),
+      items: [
+        {
+          ...makeStagedMeal().items[0],
+          calorieCorrection: { computed: 179, stated: 79 },
+        },
+      ],
+    };
+
+    const { rerender } = render(
+      <StagedMealCard {...baseProps} stagedMeal={mealWithCorrection} onUpdateStagedMeal={vi.fn()} />
+    );
+
+    const warning = screen.getByTestId('item-calorie-correction-warning');
+    expect(warning).toHaveTextContent('Calories set to 179 from protein, carbs and fat (you entered 79).');
+
+    const mealAfterEdit: StagedMeal = {
+      ...mealWithCorrection,
+      items: [
+        {
+          ...mealWithCorrection.items[0],
+          calorieCorrection: undefined,
+        },
+      ],
+    };
+
+    rerender(<StagedMealCard {...baseProps} stagedMeal={mealAfterEdit} onUpdateStagedMeal={vi.fn()} />);
+    expect(screen.queryByTestId('item-calorie-correction-warning')).toBeNull();
+  });
 });
+
 
 

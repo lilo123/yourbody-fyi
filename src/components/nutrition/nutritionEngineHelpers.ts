@@ -142,6 +142,7 @@ export function reanchorStagedItem(item: StagedItem, next: NutritionItem): Stage
     baseFat: f,
     baseFiber: fib,
     portionMultiplier: 1,
+    calorieCorrection: undefined,
   };
 }
 
@@ -194,6 +195,7 @@ export function updateStagedItemNutrition(
     baseQuantity,
     portionMultiplier: 1,
     userOverridden: true,
+    calorieCorrection: undefined,
   };
 }
 
@@ -499,6 +501,7 @@ export function scaleStagedMeal(meal: StagedMeal, nextScale: number): StagedMeal
         carbs: roundTo1Decimal(direct.carbs),
         fat: roundTo1Decimal(direct.fat),
         fiber: roundTo1Decimal(direct.fiber),
+        calorieCorrection: undefined,
       };
     }
     const q = roundQuantity(it.quantity * ratio);
@@ -512,6 +515,7 @@ export function scaleStagedMeal(meal: StagedMeal, nextScale: number): StagedMeal
       carbs: roundTo1Decimal(scaled.carbs),
       fat: roundTo1Decimal(scaled.fat),
       fiber: roundTo1Decimal(scaled.fiber),
+      calorieCorrection: undefined,
     };
   });
 

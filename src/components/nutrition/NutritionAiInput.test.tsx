@@ -720,6 +720,64 @@ describe('NutritionAiInput live regions and accessibility', () => {
       expect(getUnparseableMessage('Unreadable line: foo')).toContain("Can't read this on your device");
       expect(getUnparseableMessage(undefined)).toContain("Can't read this on your device");
     });
+
+    it('clears error status banner on a successful retry', () => {
+      const onAnalyze = vi.fn();
+      const { rerender } = render(
+        <NutritionAiInput
+          {...defaultProps({
+            status: 'AI service unavailable',
+            isError: true,
+            onAnalyze,
+          })}
+        />
+      );
+
+      const retryBtn = screen.getByTestId('retry-analysis-button');
+      fireEvent.click(retryBtn);
+      expect(onAnalyze).toHaveBeenCalledTimes(1);
+
+      rerender(
+        <NutritionAiInput
+          {...defaultProps({
+            status: '',
+            isError: false,
+            onAnalyze,
+          })}
+        />
+      );
+      expect(screen.queryByTestId('status-message')).toBeNull();
+    });
+
+    it('clears error status banner on a new successful Analyze', () => {
+      const onAnalyze = vi.fn();
+      const { rerender } = render(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: 'Chicken Breast\nCalories: 200\nProtein: 30g\nCarbs: 0g\nFat: 5g',
+            status: 'Previous error message',
+            isError: true,
+            onAnalyze,
+          })}
+        />
+      );
+
+      const analyzeBtn = screen.getByTestId('analyze-meal-button');
+      fireEvent.click(analyzeBtn);
+      expect(onAnalyze).toHaveBeenCalledTimes(1);
+
+      rerender(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: '',
+            status: '',
+            isError: false,
+            onAnalyze,
+          })}
+        />
+      );
+      expect(screen.queryByTestId('status-message')).toBeNull();
+    });
   });
 });
 

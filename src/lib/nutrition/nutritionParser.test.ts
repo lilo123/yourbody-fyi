@@ -994,5 +994,26 @@ describe('Seeded Property Tests', () => {
       expect(result.meal?.carbs).toBe(12);
       expect(result.meal?.fat).toBe(32);
     });
+
+    it('parses markdown table with cumulative row discrepancy, correcting rows and setting calorieCorrection', () => {
+      const table = [
+        '| Food | Calories | Protein | Carbs | Fat |',
+        '| --- | --- | --- | --- | --- |',
+        '| Item A | 140 kcal | 10g | 10g | 0g |',
+        '| Item B | 140 kcal | 10g | 10g | 0g |',
+        '| Item C | 140 kcal | 10g | 10g | 0g |',
+      ].join('\n');
+      const result = parseNutritionText(table);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.items).toHaveLength(3);
+      expect(result.meal?.calories).toBe(240);
+      expect(result.meal?.protein).toBe(30);
+      expect(result.meal?.carbs).toBe(30);
+      expect(result.meal?.fat).toBe(0);
+      for (const it of result.meal?.items ?? []) {
+        expect(it.calories).toBe(80);
+        expect(it.calorieCorrection).toEqual({ computed: 80, stated: 140 });
+      }
+    });
   });
 });

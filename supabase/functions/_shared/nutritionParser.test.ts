@@ -647,3 +647,25 @@ Deno.test("shared nutritionParser: Format C - grams-only macro breakdown partial
   assertEquals(result.meal?.carbs, 12);
   assertEquals(result.meal?.fat, 32);
 });
+
+Deno.test("shared nutritionParser: markdown table with cumulative row discrepancy corrects rows and sets calorieCorrection", () => {
+  const table = [
+    "| Food | Calories | Protein | Carbs | Fat |",
+    "| --- | --- | --- | --- | --- |",
+    "| Item A | 140 kcal | 10g | 10g | 0g |",
+    "| Item B | 140 kcal | 10g | 10g | 0g |",
+    "| Item C | 140 kcal | 10g | 10g | 0g |",
+  ].join("\n");
+  const result = parseNutritionText(table);
+  assertEquals(result.confidence, "exact");
+  assertEquals(result.meal?.items?.length, 3);
+  assertEquals(result.meal?.calories, 240);
+  assertEquals(result.meal?.protein, 30);
+  assertEquals(result.meal?.carbs, 30);
+  assertEquals(result.meal?.fat, 0);
+  for (const it of result.meal?.items ?? []) {
+    assertEquals(it.calories, 80);
+    assertEquals(it.calorieCorrection, { computed: 80, stated: 140 });
+  }
+});
+

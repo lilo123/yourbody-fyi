@@ -526,7 +526,7 @@ Fat: 28g`,
     why: 'two foods with numbers (multi-line)',
     input: `Chicken breast: 200 kcal, 30g protein, 0g carbs, 5g fat
 White rice: 150 kcal, 3g protein, 35g carbs, 1g fat`,
-    expectedReason: 'MULTIPLE_FOODS',
+    expectedReason: 'SECOND_CALORIES_LINE',
   },
   {
     why: 'two foods with numbers (single line)',
@@ -1063,8 +1063,8 @@ describe('Mismatched Calories Handling (Owner Rule)', () => {
   });
 
   it('parses 2-line food text on device when calories match macros (179 kcal)', () => {
-    const text = `Herb Roasted Chicken Breast: protein 40.5 g, carbs 10g, fat 11.2 g, 263 kcal calories
-Steamed Jasmine Rice:  protein 3.2 g, carbs 38.5 g, fat 1.4 g, 179 kcal calories`;
+    const text = `* Herb Roasted Chicken Breast: protein 40.5 g, carbs 10g, fat 11.2 g, 263 kcal calories
+* Steamed Jasmine Rice:  protein 3.2 g, carbs 38.5 g, fat 1.4 g, 179 kcal calories`;
     const result = parseNutritionText(text);
     expect(result.confidence).toBe('exact');
     expect(result.meal).toBeDefined();
@@ -1077,8 +1077,8 @@ Steamed Jasmine Rice:  protein 3.2 g, carbs 38.5 g, fat 1.4 g, 179 kcal calories
   });
 
   it('parses 2-line food text on device with mismatched calories (79 kcal), computing calories and setting warning', () => {
-    const text = `Herb Roasted Chicken Breast: protein 40.5 g, carbs 10g, fat 11.2 g, 263 kcal calories
-Steamed Jasmine Rice:  protein 3.2 g, carbs 38.5 g, fat 1.4 g, 79 kcal calories`;
+    const text = `* Herb Roasted Chicken Breast: protein 40.5 g, carbs 10g, fat 11.2 g, 263 kcal calories
+* Steamed Jasmine Rice:  protein 3.2 g, carbs 38.5 g, fat 1.4 g, 79 kcal calories`;
     const result = parseNutritionText(text);
     expect(result.confidence).toBe('exact');
     expect(result.meal).toBeDefined();

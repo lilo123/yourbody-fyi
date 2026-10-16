@@ -1627,7 +1627,7 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     }
   }
 
-  const sumCal = roundToOneDecimal(items.reduce((total, it) => total + it.calories, 0));
+  let sumCal = roundToOneDecimal(items.reduce((total, it) => total + it.calories, 0));
   const sumP = roundToOneDecimal(items.reduce((total, it) => total + it.protein, 0));
   const sumC = roundToOneDecimal(items.reduce((total, it) => total + it.carbs, 0));
   const sumF = roundToOneDecimal(items.reduce((total, it) => total + it.fat, 0));
@@ -1637,17 +1637,25 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
   if (sumFib > 0) foundMacros.push('fiber');
 
   // Table-level calorie consistency check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
+  // When cumulative row discrepancies exceed table tolerance, apply computed 4/4/9 calories
+  // and attach calorieCorrection per row with discrepancy; parent total = items sum.
   const expectedMealKcal = 4 * sumP + 4 * sumC + 9 * sumF;
   const mealDiscrepancy = Math.abs(expectedMealKcal - sumCal);
   const maxMealAllowedDiscrepancy = Math.max(60, 0.25 * sumCal);
   if (mealDiscrepancy > maxMealAllowedDiscrepancy) {
-    return {
-      confidence: 'none',
-      reason: 'KCAL_INCONSISTENT',
-      skippedLines: [],
-      modifiers: [],
-      foundMacros,
-    };
+    for (const it of items) {
+      const expKcal = Math.round(4 * it.protein + 4 * it.carbs + 9 * it.fat);
+      if (expKcal !== it.calories) {
+        if (!it.calorieCorrection) {
+          it.calorieCorrection = {
+            computed: expKcal,
+            stated: Math.round(it.calories),
+          };
+        }
+        it.calories = expKcal;
+      }
+    }
+    sumCal = roundToOneDecimal(items.reduce((total, it) => total + it.calories, 0));
   }
 
   // Totals vs items: within 5% or 30 kcal (whichever is larger) items win silently; beyond that grade lenient
@@ -1888,9 +1896,7 @@ function tryParseMultiItemBlock(rawLines: string[]): NutritionParseResult | null
     declaredCalories !== undefined ||
     declaredServingSize !== undefined ||
     hasBreakdownHeader ||
-    hadBulletedOrNumberedItem ||
-    items.length >= 2 ||
-    (items.length >= 1 && skippedLines.some((line) => /(?:calories?|kcal|cals?|protein|carbs?|fat)\b/i.test(line)))
+    hadBulletedOrNumberedItem
   );
 
   if (!hasStructuredMarker) {
