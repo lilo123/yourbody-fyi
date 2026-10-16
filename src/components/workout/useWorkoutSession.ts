@@ -66,7 +66,10 @@ export function useWorkoutSession({
 
   const resolvedKeyRef = useRef<string | null>(null);
   const manualSelectionDateRef = useRef<string | null>(null);
+  const prevManualSelectionDateRef = useRef<string | null | undefined>(undefined);
+  const inFlightRoutineSelectionSeqRef = useRef<number>(0);
   const lastTargetUserRef = useRef<string>(targetUserId);
+  const routineSelectionSeqRef = useRef<number>(0);
 
   const todaySets = useMemo(() => {
     return userLogs.filter((s) => normalizeDateStr(s.workout_date) === workoutDate);
@@ -80,6 +83,9 @@ export function useWorkoutSession({
   useEffect(() => {
     if (lastTargetUserRef.current !== targetUserId) {
       lastTargetUserRef.current = targetUserId;
+      routineSelectionSeqRef.current++;
+      prevManualSelectionDateRef.current = undefined;
+      inFlightRoutineSelectionSeqRef.current = 0;
       workoutSessionStore.flushPendingWrites();
       setInputDrafts({});
       setActiveExercises([]);
@@ -181,72 +187,151 @@ export function useWorkoutSession({
     setExpandedExercises,
   });
 
+  const cancelRoutineSelection = useCallback(() => {
+    routineSelectionSeqRef.current++;
+    if (prevManualSelectionDateRef.current !== undefined) {
+      manualSelectionDateRef.current = prevManualSelectionDateRef.current;
+      prevManualSelectionDateRef.current = undefined;
+    }
+    inFlightRoutineSelectionSeqRef.current = 0;
+  }, []);
+
+  const isFirstWorkoutDateRef = useRef<boolean>(true);
+  useEffect(() => {
+    if (isFirstWorkoutDateRef.current) {
+      isFirstWorkoutDateRef.current = false;
+      return;
+    }
+    cancelRoutineSelection();
+  }, [workoutDate, cancelRoutineSelection]);
+
+  useEffect(() => {
+    return () => {
+      routineSelectionSeqRef.current++;
+      if (prevManualSelectionDateRef.current !== undefined) {
+        manualSelectionDateRef.current = prevManualSelectionDateRef.current;
+        prevManualSelectionDateRef.current = undefined;
+      }
+      inFlightRoutineSelectionSeqRef.current = 0;
+    };
+  }, []);
+
   const handleSelectRoutine = async (routineName: string, selectedTemplate?: RoutineTemplate) => {
+    const seq = ++routineSelectionSeqRef.current;
+    const prevManualDate = prevManualSelectionDateRef.current !== undefined
+      ? prevManualSelectionDateRef.current
+      : manualSelectionDateRef.current;
+    prevManualSelectionDateRef.current = prevManualDate;
+    inFlightRoutineSelectionSeqRef.current = seq;
     manualSelectionDateRef.current = workoutDate;
 
     let resolvedExList: string[] = [];
     let resolvedTargets: Record<string, number> = {};
     let resolvedReps: Record<string, number> = {};
 
-    if (routineName === 'Rest Day' || routineName === 'Free Workout') {
-      setActiveRoutineName(routineName);
-      setActiveExercises([]);
-      setTargetSetCounts({});
-      setTargetRepCounts({});
-      setExpandedExercises(new Set());
-    } else {
-      const customTpl = selectedTemplate || findMatchingTemplate(customTemplates, routineName);
-      const defTpl = findMatchingTemplate(DEFAULT_WORKOUT_TEMPLATES, routineName);
-
-      let templateExercises = customTpl?.exercises;
-      if (customTpl && templateExercises === undefined) {
-        try {
-          const detail = await fetchTemplateDetail(customTpl.id);
-          templateExercises = detail?.exercises || [];
-        } catch (err) {
-          console.error('Failed to fetch template detail for selection:', err);
-          templateExercises = [];
+    try {
+      if (routineName === 'Rest Day' || routineName === 'Free Workout') {
+        if (seq !== routineSelectionSeqRef.current) {
+          if (inFlightRoutineSelectionSeqRef.current === seq) {
+            manualSelectionDateRef.current = prevManualDate;
+            prevManualSelectionDateRef.current = undefined;
+            inFlightRoutineSelectionSeqRef.current = 0;
+          }
+          return;
         }
+        setActiveRoutineName(routineName);
+        setActiveExercises([]);
+        setTargetSetCounts({});
+        setTargetRepCounts({});
+        setExpandedExercises(new Set());
+      } else {
+        const customTpl = selectedTemplate || findMatchingTemplate(customTemplates, routineName);
+        const defTpl = findMatchingTemplate(DEFAULT_WORKOUT_TEMPLATES, routineName);
+
+        let templateExercises = customTpl?.exercises;
+        if (customTpl && templateExercises === undefined) {
+          try {
+            const detail = await fetchTemplateDetail(customTpl.id);
+            templateExercises = detail?.exercises || [];
+          } catch (err) {
+            console.error('Failed to fetch template detail for selection:', err);
+            templateExercises = [];
+          }
+        }
+
+        if (seq !== routineSelectionSeqRef.current) {
+          if (inFlightRoutineSelectionSeqRef.current === seq) {
+            manualSelectionDateRef.current = prevManualDate;
+            prevManualSelectionDateRef.current = undefined;
+            inFlightRoutineSelectionSeqRef.current = 0;
+          }
+          return;
+        }
+
+        const extracted = extractTemplateDetails(customTpl, defTpl, templateExercises, exercises);
+        resolvedExList = extracted.resolvedExList;
+        resolvedTargets = extracted.resolvedTargets;
+        resolvedReps = extracted.resolvedReps;
+
+        setActiveRoutineName(routineName);
+        setActiveExercises(resolvedExList);
+        setTargetSetCounts(resolvedTargets);
+        setTargetRepCounts(resolvedReps);
+        if (resolvedExList.length > 0) setExpandedExercises(new Set([resolvedExList[0]]));
+        else setExpandedExercises(new Set());
       }
 
-      const extracted = extractTemplateDetails(customTpl, defTpl, templateExercises, exercises);
-      resolvedExList = extracted.resolvedExList;
-      resolvedTargets = extracted.resolvedTargets;
-      resolvedReps = extracted.resolvedReps;
+      if (seq !== routineSelectionSeqRef.current) {
+        if (inFlightRoutineSelectionSeqRef.current === seq) {
+          manualSelectionDateRef.current = prevManualDate;
+          prevManualSelectionDateRef.current = undefined;
+          inFlightRoutineSelectionSeqRef.current = 0;
+        }
+        return;
+      }
 
-      setActiveRoutineName(routineName);
-      setActiveExercises(resolvedExList);
-      setTargetSetCounts(resolvedTargets);
-      setTargetRepCounts(resolvedReps);
-      if (resolvedExList.length > 0) setExpandedExercises(new Set([resolvedExList[0]]));
-      else setExpandedExercises(new Set());
-    }
+      manualSelectionDateRef.current = workoutDate;
+      if (inFlightRoutineSelectionSeqRef.current === seq) {
+        prevManualSelectionDateRef.current = undefined;
+        inFlightRoutineSelectionSeqRef.current = 0;
+      }
 
-    workoutSessionStore.updateRoutine(
-      targetUserId,
-      workoutDate,
-      routineName,
-      resolvedExList,
-      resolvedTargets,
-      resolvedReps
-    );
+      workoutSessionStore.updateRoutine(
+        targetUserId,
+        workoutDate,
+        routineName,
+        resolvedExList,
+        resolvedTargets,
+        resolvedReps
+      );
 
-    if (todaySets.length > 0 && todaySets[0].workout_id) {
-      const workoutRef = todaySets[0].workout_id;
-      enqueueAndAwait({
-        userId: targetUserId,
-        kind: 'workout.rename',
-        payload: {
-          workoutRef,
-          name: routineName,
-        },
-      }).catch((err: unknown) => {
-        console.error('Failed to update workout name:', err);
-      });
+      if (todaySets.length > 0 && todaySets[0].workout_id) {
+        const workoutRef = todaySets[0].workout_id;
+        enqueueAndAwait({
+          userId: targetUserId,
+          kind: 'workout.rename',
+          payload: {
+            workoutRef,
+            name: routineName,
+          },
+        }).catch((err: unknown) => {
+          console.error('Failed to update workout name:', err);
+        });
+      }
+    } catch (err) {
+      if (inFlightRoutineSelectionSeqRef.current === seq) {
+        manualSelectionDateRef.current = prevManualDate;
+        prevManualSelectionDateRef.current = undefined;
+        inFlightRoutineSelectionSeqRef.current = 0;
+      }
+      throw err;
     }
   };
 
   const handleReloadScheduledRoutine = async () => {
+    const seq = ++routineSelectionSeqRef.current;
+    prevManualSelectionDateRef.current = undefined;
+    inFlightRoutineSelectionSeqRef.current = 0;
     workoutSessionStore.deleteSession(targetUserId, workoutDate);
     manualSelectionDateRef.current = null;
     resolvedKeyRef.current = null;
@@ -266,6 +351,8 @@ export function useWorkoutSession({
         console.error('Failed to fetch scheduled template detail on reload:', err);
       }
     }
+
+    if (seq !== routineSelectionSeqRef.current) return;
 
     const resolved = resolveRoutineAndExercises(
       workoutDate,
@@ -539,6 +626,7 @@ export function useWorkoutSession({
     collapseCompleted,
     toggleAllAccordions,
     handleSelectRoutine,
+    cancelRoutineSelection,
     handleReloadScheduledRoutine,
     handleAddExercise,
     addExercises,
