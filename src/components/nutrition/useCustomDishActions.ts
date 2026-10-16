@@ -292,7 +292,10 @@ export function useCustomDishActions({
               servingSize: mergedItems[0].quantity,
               servingUnit: mergedItems[0].unit,
             }
-          : {}),
+          : {
+              servingSize: 1,
+              servingUnit: 'serving',
+            }),
       };
 
       latestStagedMealRef.current = nextStagedMeal;
