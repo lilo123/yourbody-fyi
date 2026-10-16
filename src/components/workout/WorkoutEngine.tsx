@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
-import type { RoutineTemplate } from '../../types/database';
 import {
   computeGhostSets,
   getExerciseBenchmarks,
@@ -13,6 +12,7 @@ import { toDisplayWeight } from '../../utils/weight';
 import { Layers, Plus, Check, AlertCircle, RotateCcw } from 'lucide-react';
 import { useWorkoutQueries } from './useWorkoutQueries';
 import { useWorkoutSession } from './useWorkoutSession';
+import { useRoutineSelection } from './useRoutineSelection';
 import { useWorkoutMutations } from './useWorkoutMutations';
 import { WorkoutHeader } from './WorkoutHeader';
 import { RoutinePickerModal } from './RoutinePickerModal';
@@ -44,7 +44,6 @@ export const WorkoutEngine: React.FC = () => {
     return Number.isFinite(parsed) && parsed >= 15 && parsed <= 600 ? parsed : 90;
   })();
 
-  const [showRoutineModal, setShowRoutineModal] = useState(false);
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
 
   // Dialog States
@@ -86,6 +85,7 @@ export const WorkoutEngine: React.FC = () => {
     collapseCompleted,
     toggleAllAccordions,
     handleSelectRoutine: selectRoutineInternal,
+    cancelRoutineSelection,
     handleReloadScheduledRoutine: reloadScheduledRoutineInternal,
     addExercises: addExercisesInternal,
     moveExercise,
@@ -105,10 +105,13 @@ export const WorkoutEngine: React.FC = () => {
     logsFetched,
   });
 
-  const handleSelectRoutine = useCallback((routineName: string, template?: RoutineTemplate) => {
-    setShowRoutineModal(false);
-    selectRoutineInternal(routineName, template);
-  }, [selectRoutineInternal]);
+  const {
+    showRoutineModal,
+    setShowRoutineModal,
+    isSelectingRoutine,
+    handleSelectRoutine,
+    handleCloseRoutineModal,
+  } = useRoutineSelection({ selectRoutineInternal, cancelRoutineSelection, workoutDate });
 
   // URL Query Parameters Handling (URL-1, URL-2)
   const { syncDateToUrl } = useWorkoutUrlParams({
@@ -406,7 +409,7 @@ export const WorkoutEngine: React.FC = () => {
 
       <RoutinePickerModal
         isOpen={showRoutineModal}
-        onClose={() => setShowRoutineModal(false)}
+        onClose={handleCloseRoutineModal}
         onReloadScheduledRoutine={handleRequestReload}
         onSelectRoutine={handleSelectRoutine}
         activeRoutineName={activeRoutineName}
@@ -415,6 +418,7 @@ export const WorkoutEngine: React.FC = () => {
         defaultTemplates={availableRoutines.defaults}
         exercises={exercises}
         targetUserId={targetUserId}
+        isSelecting={isSelectingRoutine}
       />
 
       {activeRoutineName === 'Rest Day' ? (

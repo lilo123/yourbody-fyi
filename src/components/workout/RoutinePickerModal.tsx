@@ -19,6 +19,7 @@ export interface RoutinePickerModalProps {
   defaultTemplates: typeof DEFAULT_WORKOUT_TEMPLATES;
   exercises: Exercise[];
   targetUserId?: string;
+  isSelecting?: boolean;
 }
 
 export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
@@ -32,6 +33,7 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
   defaultTemplates,
   exercises,
   targetUserId,
+  isSelecting,
 }) => {
   const {
     data,
@@ -138,7 +140,10 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
         </button>
       </div>
 
-      <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+      <div
+        className="space-y-2 max-h-[60vh] overflow-y-auto pr-1"
+        aria-busy={isSelecting || undefined}
+      >
         <button
           type="button"
           onClick={onReloadScheduledRoutine}
