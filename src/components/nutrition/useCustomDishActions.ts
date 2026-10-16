@@ -82,6 +82,47 @@ export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | 
   return items;
 }
 
+/**
+ * Resolves the serving size and unit for a custom dish.
+ * Single-item food dishes use the dish's own amount and unit (e.g. 40 g).
+ * Multi-item dishes or recipes remain 1 serving.
+ */
+export function resolveCustomDishServing(
+  dish: CustomDish,
+  detail?: CustomDishDetail | null
+): { servingSize: number; servingUnit: string } {
+  let servingSize = 1;
+  let servingUnit = 'serving';
+  if (dish.kind === 'food') {
+    const items = detail?.items ?? dish.items;
+    if (items && items.length > 1) {
+      return { servingSize: 1, servingUnit: 'serving' };
+    }
+    if (
+      dish.serving_quantity != null &&
+      Number.isFinite(Number(dish.serving_quantity)) &&
+      Number(dish.serving_quantity) > 0 &&
+      dish.serving_unit
+    ) {
+      servingSize = roundTo1Decimal(Number(dish.serving_quantity));
+      servingUnit = dish.serving_unit;
+    } else if (items && items.length === 1) {
+      const single = items[0];
+      if (
+        single &&
+        single.quantity != null &&
+        Number.isFinite(Number(single.quantity)) &&
+        Number(single.quantity) > 0 &&
+        single.unit
+      ) {
+        servingSize = roundTo1Decimal(Number(single.quantity));
+        servingUnit = single.unit;
+      }
+    }
+  }
+  return { servingSize, servingUnit };
+}
+
 export function useCustomDishActions({
   targetUserId,
   selectedDate,
@@ -181,6 +222,7 @@ export function useCustomDishActions({
 
       const items = buildItemsFromDish(dish, detail);
       const { explanation, ...tot } = recomputeStagedTotals(items);
+      const { servingSize, servingUnit } = resolveCustomDishServing(dish, detail);
 
       setStagedMeal({
         name: dish.name,
@@ -189,8 +231,8 @@ export function useCustomDishActions({
           items.length > 1 ? explanation : `${formatCalories(tot.calories)} kcal (${dish.name})`,
         items,
         ...tot,
-        servingSize: 1,
-        servingUnit: 'serving',
+        servingSize,
+        servingUnit,
         notes: dish.notes ?? null,
       });
 
@@ -315,20 +357,7 @@ export function useCustomDishActions({
       previousStagedMealRef.current = null;
       const clientLogId = newId();
 
-      let servingSize = 1;
-      let servingUnit = 'serving';
-      if (dish.kind === 'food') {
-        if (dish.serving_quantity != null && Number(dish.serving_quantity) > 0 && dish.serving_unit) {
-          servingSize = roundTo1Decimal(Number(dish.serving_quantity));
-          servingUnit = dish.serving_unit;
-        } else if (dish.items && dish.items.length === 1) {
-          const single = dish.items[0];
-          if (single && single.quantity != null && single.quantity > 0 && single.unit) {
-            servingSize = roundTo1Decimal(single.quantity);
-            servingUnit = single.unit;
-          }
-        }
-      }
+      const { servingSize, servingUnit } = resolveCustomDishServing(dish);
 
       const payload = {
         id: clientLogId,
