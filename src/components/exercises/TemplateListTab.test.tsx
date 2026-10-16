@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TemplateListTab } from './TemplateListTab';
 import { MemoryRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { ToastProvider } from '../../context/ToastContext';
 import { ToastHost } from '../common/ToastHost';
 import { supabase } from '../../lib/supabase';
@@ -137,6 +137,7 @@ describe('TemplateListTab - Routine Features', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    onlineManager.setOnline(true);
   });
 
   const renderComponent = (props: Partial<Parameters<typeof TemplateListTab>[0]> = {}) => {
@@ -642,6 +643,73 @@ describe('TemplateListTab - Routine Features', () => {
       expect(mockDelete).toHaveBeenCalled();
       expect(mockEq1).toHaveBeenCalledWith('template_id', 'tpl-hidden-1');
       expect(mockEq2).toHaveBeenCalledWith('hidden_by', 'user-athlete-1');
+    });
+
+    it('a hidden or forked master stays hidden after reload', async () => {
+      onlineManager.setOnline(false);
+      vi.mocked(useOnlineStatus).mockReturnValue(false);
+
+      const mockForkOfMaster: RoutineTemplate = {
+        id: 'tpl-fork-1',
+        user_id: 'user-athlete-1',
+        name: 'My Forked Push Routine',
+        is_master: false,
+        source_template_id: 'tpl-master-1',
+        assigned_to: null,
+        days_of_week: ['Mon'],
+        exercises: [],
+      };
+
+      const mockHiddenMaster: RoutineTemplate = {
+        id: 'tpl-hidden-master-1',
+        user_id: 'coach-1',
+        name: 'Hidden Library Routine',
+        is_master: true,
+        assigned_to: null,
+        days_of_week: ['Wed'],
+        exercises: [],
+      };
+
+      // Prime queryClient with persisted catalog and hidden-list data
+      // (The catalog returned from server before going offline excludes hidden & forked masters)
+      queryClient.setQueryData(
+        ['routine_templates', 'user-athlete-1', 'catalog'],
+        [mockForkOfMaster]
+      );
+      queryClient.setQueryData(
+        ['routine_templates', 'user-athlete-1', 'hidden'],
+        [mockHiddenMaster]
+      );
+
+      const rpcSpy = vi.spyOn(supabase, 'rpc');
+      rpcSpy.mockClear();
+
+      // Render while offline
+      const { unmount } = renderComponent();
+
+      // Master templates that are hidden or forked should not appear in the catalog
+      expect(screen.queryByText('Hidden Library Routine')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-hidden-master-1')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-master-1')).toBeNull();
+
+      // Forked template is visible
+      expect(screen.getByText('My Forked Push Routine')).toBeDefined();
+      expect(screen.getByTestId('edit-template-tpl-fork-1')).toBeDefined();
+
+      // Assert no network call was made
+      expect(rpcSpy).not.toHaveBeenCalled();
+
+      // Remount (simulated reload re-reading from persisted cache)
+      unmount();
+      renderComponent();
+
+      // Assert again after remount
+      expect(screen.queryByText('Hidden Library Routine')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-hidden-master-1')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-master-1')).toBeNull();
+      expect(screen.getByText('My Forked Push Routine')).toBeDefined();
+      expect(screen.getByTestId('edit-template-tpl-fork-1')).toBeDefined();
+      expect(rpcSpy).not.toHaveBeenCalled();
     });
   });
 });
