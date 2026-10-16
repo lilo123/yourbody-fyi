@@ -60,6 +60,18 @@
 /settings/*
   X-Robots-Tag: noindex
 
+/login
+  X-Robots-Tag: noindex
+
+/login/*
+  X-Robots-Tag: noindex
+
+/reset-password
+  X-Robots-Tag: noindex
+
+/reset-password/*
+  X-Robots-Tag: noindex
+
 /*.html
   ! Cache-Control
   Cache-Control: public, max-age=0, must-revalidate
@@ -77,6 +89,10 @@
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
 /icons.svg
+  ! Cache-Control
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/og-image.png
   ! Cache-Control
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
