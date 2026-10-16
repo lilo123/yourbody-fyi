@@ -190,8 +190,20 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Cache Playwright browser (Chromium)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}-chromium
+
       - name: Install Playwright browser (Chromium)
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Run E2E tests (Desktop Chrome)
         run: npx playwright test tests/e2e --project='Desktop Chrome' --workers=1
@@ -248,8 +260,20 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Cache Playwright browser (WebKit)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}-webkit
+
       - name: Install Playwright browser (WebKit)
-        run: npx playwright install --with-deps webkit
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps webkit
+          else
+            npx playwright install --with-deps webkit
+          fi
 
       - name: Run E2E tests (Mobile Safari)
         run: npx playwright test tests/e2e --project='Mobile Safari' --workers=1
@@ -293,8 +317,20 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Cache Playwright browser (WebKit)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}-webkit
+
       - name: Install Playwright browser (WebKit)
-        run: npx playwright install --with-deps webkit
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps webkit
+          else
+            npx playwright install --with-deps webkit
+          fi
 
       - name: Run E2E tests (Narrow Safari 320px)
         run: npx playwright test tests/e2e --project='Narrow Safari (320px)' --workers=1
@@ -344,8 +380,20 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Cache Playwright browser (Chromium)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}-chromium
+
       - name: Install Playwright browser (Chromium)
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Run visual density gate
         run: npm run test:density
