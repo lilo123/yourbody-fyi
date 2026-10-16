@@ -4,7 +4,7 @@ import { LegalLayout } from './LegalLayout';
 import { Sparkles, HeartPulse, ShieldCheck } from 'lucide-react';
 
 export const TermsPage: React.FC = () => {
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     document.getElementById('prerender')?.remove();
   }, []);
 

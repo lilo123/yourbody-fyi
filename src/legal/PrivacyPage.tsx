@@ -3,7 +3,7 @@ import { LegalLayout } from './LegalLayout';
 import { Shield, Database, Lock, EyeOff, Server } from 'lucide-react';
 
 export const PrivacyPage: React.FC = () => {
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     document.getElementById('prerender')?.remove();
   }, []);
 

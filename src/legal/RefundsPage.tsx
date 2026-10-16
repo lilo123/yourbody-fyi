@@ -3,7 +3,7 @@ import { LegalLayout } from './LegalLayout';
 import { HelpCircle, CheckCircle, Globe, RefreshCcw } from 'lucide-react';
 
 export const RefundsPage: React.FC = () => {
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     document.getElementById('prerender')?.remove();
   }, []);
 

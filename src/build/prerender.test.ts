@@ -96,6 +96,28 @@ describe('Prerender Output and Configuration', () => {
       const cssContent = fs.readFileSync(indexCssPath, 'utf8');
       expect(cssContent).toMatch(/html\.hide-prerender\s+#prerender\s*\{[^}]*display:\s*none\s*!important/);
     });
+
+    it('defines out-of-flow #prerender ~ #root rule in src/index.css and index.html', () => {
+      const cssContent = fs.readFileSync(indexCssPath, 'utf8');
+      expect(cssContent).toContain('#prerender ~ #root');
+      expect(cssContent).toContain('visibility: hidden');
+
+      const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
+      expect(indexHtml).toContain('#prerender ~ #root');
+      expect(indexHtml).toContain('visibility: hidden');
+    });
+
+    it('removes #prerender via useLayoutEffect across LandingView and legal pages', () => {
+      const landingSrc = fs.readFileSync(path.join(rootDir, 'src/components/landing/LandingView.tsx'), 'utf8');
+      expect(landingSrc).toContain('useLayoutEffect');
+      expect(landingSrc).toContain("document.getElementById('prerender')?.remove()");
+
+      for (const legalFile of ['TermsPage.tsx', 'PrivacyPage.tsx', 'RefundsPage.tsx']) {
+        const legalSrc = fs.readFileSync(path.join(rootDir, 'src/legal', legalFile), 'utf8');
+        expect(legalSrc).toContain('useLayoutEffect');
+        expect(legalSrc).toContain("document.getElementById('prerender')?.remove()");
+      }
+    });
   });
 
   describe('(c) dist/ build artifacts validation (when dist exists)', () => {

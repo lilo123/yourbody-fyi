@@ -95,4 +95,60 @@ test.describe('Prerender Guard & Cold Load Invariants', () => {
     // Verify redirect or app shell behaviour
     await expect(page).toHaveURL(/\/(login|workout)/);
   });
+
+  test('signed-out cold load of / has CLS < 0.05 on desktop and mobile', async ({ page }) => {
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.addInitScript(() => {
+        (window as any).__cls = 0;
+        try {
+          new PerformanceObserver((entryList) => {
+            for (const entry of entryList.getEntries()) {
+              if (!(entry as any).hadRecentInput) {
+                (window as any).__cls += (entry as any).value;
+              }
+            }
+          }).observe({ type: 'layout-shift', buffered: true });
+        } catch {}
+      });
+
+      await page.goto('/');
+      await page.waitForFunction(() => !document.getElementById('prerender'), { timeout: 15000 });
+      await page.waitForTimeout(300);
+
+      const cls = await page.evaluate(() => (window as any).__cls);
+      expect(cls).toBeLessThan(0.05);
+    }
+  });
+
+  test('signed-out cold load of /terms has CLS < 0.05 on desktop and mobile', async ({ page }) => {
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.addInitScript(() => {
+        (window as any).__cls = 0;
+        try {
+          new PerformanceObserver((entryList) => {
+            for (const entry of entryList.getEntries()) {
+              if (!(entry as any).hadRecentInput) {
+                (window as any).__cls += (entry as any).value;
+              }
+            }
+          }).observe({ type: 'layout-shift', buffered: true });
+        } catch {}
+      });
+
+      await page.goto('/terms');
+      await page.waitForFunction(() => !document.getElementById('prerender'), { timeout: 15000 });
+      await page.waitForTimeout(300);
+
+      const cls = await page.evaluate(() => (window as any).__cls);
+      expect(cls).toBeLessThan(0.05);
+    }
+  });
 });

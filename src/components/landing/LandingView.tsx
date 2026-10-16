@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect } from 'react';
 import { InAppBrowserBanner } from '../common/InAppBrowserBanner';
 import { LandingHeader } from './LandingHeader';
 import { HeroSection } from './HeroSection';
@@ -9,8 +9,11 @@ import { FaqSection, FAQ_ITEMS } from './FaqSection';
 import { LandingFooter } from './LandingFooter';
 
 export const LandingView: React.FC = () => {
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.getElementById('prerender')?.remove();
+  }, []);
+
+  useEffect(() => {
     const script = document.createElement('script');
     script.type = 'application/ld+json';
     script.setAttribute('data-testid', 'faq-json-ld');
