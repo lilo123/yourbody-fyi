@@ -111,10 +111,7 @@ export const WorkoutEngine: React.FC = () => {
     isSelectingRoutine,
     handleSelectRoutine,
     handleCloseRoutineModal,
-  } = useRoutineSelection({
-    selectRoutineInternal,
-    cancelRoutineSelection,
-  });
+  } = useRoutineSelection({ selectRoutineInternal, cancelRoutineSelection, workoutDate });
 
   // URL Query Parameters Handling (URL-1, URL-2)
   const { syncDateToUrl } = useWorkoutUrlParams({

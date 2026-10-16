@@ -500,4 +500,132 @@ describe('Routine Switch Race Conditions', () => {
     expect(result.current.activeRoutineName).toBe(initialRoutine);
     expect(result.current.activeExercises).not.toContain('Exercise X');
   });
+
+  it('cancelling an in-flight routine selection restores manualSelectionDateRef so auto-resolution remains enabled', async () => {
+    let resolveX!: (val: any) => void;
+    const promiseX = new Promise((resolve) => {
+      resolveX = resolve;
+    });
+
+    mockFetchTemplateDetail.mockImplementation(() => promiseX);
+
+    const mockExercises: Exercise[] = [
+      { id: 'ex-x', name: 'Exercise X', body_parts: ['Chest'], is_master: true },
+    ];
+
+    const templateX: RoutineTemplate = {
+      id: 'tpl-x',
+      user_id: testUserId,
+      name: 'Routine X',
+      is_master: false,
+      assigned_to: null,
+      created_at: '2026-01-01',
+    };
+
+    const { result } = renderHook(() =>
+      useWorkoutSession({
+        targetUserId: testUserId,
+        exercises: mockExercises,
+        exercisesFetched: true,
+        customTemplates: [templateX],
+        templatesFetched: true,
+        userLogs: [],
+        logsFetched: true,
+      })
+    );
+
+    const initialRoutine = result.current.activeRoutineName;
+
+    // 1. Start selecting Routine X (unresolved fetch)
+    let selectPromiseX: Promise<void> | undefined;
+    act(() => {
+      selectPromiseX = result.current.handleSelectRoutine('Routine X', templateX);
+    });
+
+    // 2. User cancels selection while fetch is in-flight
+    act(() => {
+      result.current.cancelRoutineSelection();
+    });
+
+    // 3. Resolve the stale X fetch
+    await act(async () => {
+      resolveX({
+        id: 'tpl-x',
+        exercises: [],
+      });
+      await selectPromiseX;
+    });
+
+    // Invariant: initial routine is preserved
+    expect(result.current.activeRoutineName).toBe(initialRoutine);
+
+    // 4. Verify auto-resolution is not blocked:
+    // Reload scheduled routine should succeed and re-resolve scheduled routine
+    await act(async () => {
+      await result.current.handleReloadScheduledRoutine();
+    });
+
+    expect(result.current.activeRoutineName).toBe(initialRoutine);
+  });
+
+  it('changing workoutDate during in-flight pick cancels selection, clears busy state, and discards late resolution', async () => {
+    let resolveX!: (detail: any) => void;
+    const pendingPromiseX = new Promise((resolve) => {
+      resolveX = resolve;
+    });
+
+    mockFetchTemplateDetail.mockImplementation((templateId: string) => {
+      if (templateId === 'tpl-custom-workout-a') {
+        return pendingPromiseX;
+      }
+      return Promise.resolve(null);
+    });
+
+    renderWorkout();
+
+    // 1. Initial routine on Friday 2026-10-16 is "Pull, Hamstring, & Core - Reduced"
+    expect(await screen.findByText('Lat Pull Down')).toBeInTheDocument();
+
+    // 2. Open routine modal and click custom template "Workout A"
+    const routineBtn = screen.getByTestId('routine-select-btn');
+    fireEvent.click(routineBtn);
+
+    const customOption = await screen.findByRole('button', {
+      name: /Workout A \(Push, Quads & Core\)/i,
+    });
+    fireEvent.click(customOption);
+
+    // Modal is open with in-flight fetch
+    expect(screen.getByTestId('routine-picker-modal')).toBeInTheDocument();
+
+    // 3. Change workout date to Saturday 2026-10-17 while fetch is in flight
+    const dateInput = screen.getByTestId('workout-date-input');
+    fireEvent.change(dateInput, { target: { value: '2026-10-17' } });
+
+    // 4. Resolve the in-flight fetch for Friday's template
+    await act(async () => {
+      resolveX({
+        id: 'tpl-custom-workout-a',
+        exercises: [
+          {
+            id: 'te-1',
+            template_id: 'tpl-custom-workout-a',
+            exercise_id: 'ex-incline-bench',
+            order_index: 0,
+            target_sets: 3,
+            target_reps: 8,
+            exercise: { name: 'Incline Bench Press' },
+          },
+        ],
+      });
+    });
+
+    // 5. Invariant: The new date (2026-10-17) must NOT receive Friday's "Incline Bench Press"
+    expect(screen.queryByText('Incline Bench Press')).not.toBeInTheDocument();
+
+    // 6. Navigate back to Friday (2026-10-16) and verify Friday's original routine is intact
+    fireEvent.change(dateInput, { target: { value: '2026-10-16' } });
+    expect(await screen.findByText('Lat Pull Down')).toBeInTheDocument();
+    expect(screen.queryByText('Incline Bench Press')).not.toBeInTheDocument();
+  });
 });
