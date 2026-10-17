@@ -218,6 +218,157 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
     });
   });
 
+  it('3b. silently revalidates session upon window focus event', async () => {
+    const getSessionSpy = vi.fn().mockResolvedValue({
+      data: {
+        session: {
+          user: { id: 'refreshed-focus-user-id', email: 'refreshed-focus@yourbody.fyi' },
+        },
+      },
+    });
+    (supabase.auth.getSession as any).mockImplementation(getSessionSpy);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+    });
+
+    const initialCallCount = getSessionSpy.mock.calls.length;
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => {
+      expect(getSessionSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
+    });
+  });
+
+  it('3c. handles rejected getSession during resume/focus refresh without unhandledrejection', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const unhandledRejections: any[] = [];
+    const onUnhandled = (event: PromiseRejectionEvent) => {
+      unhandledRejections.push(event.reason);
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+
+    (supabase.auth.getSession as any).mockResolvedValueOnce({
+      data: {
+        session: {
+          user: { id: 'initial-user-id', email: 'initial@yourbody.fyi' },
+        },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+    });
+
+    // Make next getSession call reject (simulating network failure on resume)
+    (supabase.auth.getSession as any).mockRejectedValue(new Error('Network drop on resume'));
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+
+    try {
+      act(() => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      await waitFor(() => {
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('[AuthContext] Background resume revalidation error:'),
+          expect.any(Error)
+        );
+      });
+
+      expect(unhandledRejections).toHaveLength(0);
+    } finally {
+      warnSpy.mockRestore();
+      window.removeEventListener('unhandledrejection', onUnhandled);
+    }
+  });
+
+  it('3d. handles rejected syncUserTimezone during resume refresh without unhandledrejection', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const unhandledRejections: any[] = [];
+    const onUnhandled = (event: PromiseRejectionEvent) => {
+      unhandledRejections.push(event.reason);
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+
+    (supabase.auth.getSession as any).mockResolvedValue({
+      data: {
+        session: {
+          user: { id: 'mock-user-tz-fail', email: 'tz@yourbody.fyi' },
+        },
+      },
+    });
+
+    // Make timezone update reject directly
+    const updateSpy = vi.fn().mockRejectedValue(new Error('Failed to update timezone table'));
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'users') {
+        const builder = createSupabaseBuilder(table, mockProfile);
+        builder.update = updateSpy;
+        return builder;
+      }
+      return createSupabaseBuilder(table);
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+    });
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+
+    try {
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(unhandledRejections).toHaveLength(0);
+    } finally {
+      warnSpy.mockRestore();
+      window.removeEventListener('unhandledrejection', onUnhandled);
+    }
+  });
+
   it('4. completely cleans up yourbody storage and resets state on signOut()', async () => {
     localStorage.setItem('yourbody_user', JSON.stringify(mockProfile));
     localStorage.setItem('yourbody_view_mode', 'coach');
