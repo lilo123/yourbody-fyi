@@ -1926,6 +1926,62 @@ describe('Scale chip on the staged card', () => {
     expect(btn).toBeDisabled();
   });
 
+  it('renders calorieCorrection warning (lower stated) and disappears when cleared after edit', () => {
+    const mealWithCorrection: StagedMeal = {
+      ...makeStagedMeal(),
+      items: [
+        {
+          ...makeStagedMeal().items[0],
+          calorieCorrection: { computed: 179, stated: 79 },
+        },
+      ],
+    };
+
+    const { rerender } = render(
+      <StagedMealCard {...baseProps} stagedMeal={mealWithCorrection} onUpdateStagedMeal={vi.fn()} />
+    );
+
+    const warning = screen.getByTestId('item-calorie-correction-warning');
+    expect(warning).toHaveTextContent('Calories set to 179 from protein, carbs and fat (you entered 79).');
+
+    const mealAfterEdit: StagedMeal = {
+      ...mealWithCorrection,
+      items: [
+        {
+          ...mealWithCorrection.items[0],
+          calorieCorrection: undefined,
+        },
+      ],
+    };
+
+    rerender(<StagedMealCard {...baseProps} stagedMeal={mealAfterEdit} onUpdateStagedMeal={vi.fn()} />);
+    expect(screen.queryByTestId('item-calorie-correction-warning')).toBeNull();
+  });
+
+  it('renders calorieCorrection warning (higher stated / beer case)', () => {
+    const beerMeal: StagedMeal = {
+      ...makeStagedMeal(),
+      items: [
+        {
+          ...makeStagedMeal().items[0],
+          name: 'Beer',
+          calories: 150,
+          protein: 1.6,
+          carbs: 13,
+          fat: 0,
+          calorieCorrection: { computed: 58, stated: 150 },
+        },
+      ],
+    };
+
+    render(
+      <StagedMealCard {...baseProps} stagedMeal={beerMeal} onUpdateStagedMeal={vi.fn()} />
+    );
+
+    const warning = screen.getByTestId('item-calorie-correction-warning');
+    expect(warning).toHaveTextContent("Calories don't match protein, carbs and fat (about 58 kcal).");
+  });
+
   describe('staged meal card unified compact header layout', () => {
     it('renders multi-item on-device card with Row A, Row B, and Row C in correct order', () => {
       const meal: StagedMeal = {
@@ -2272,5 +2328,6 @@ describe('Scale chip on the staged card', () => {
     });
   });
 });
+
 
 

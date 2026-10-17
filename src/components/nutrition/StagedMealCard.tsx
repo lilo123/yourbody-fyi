@@ -430,6 +430,13 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                   });
                 }}
               />
+              {item.calorieCorrection && (
+                <p data-testid="item-calorie-correction-warning" className="text-xs text-amber-400/90 pt-1 pb-2 px-1">
+                  {item.calorieCorrection.stated < item.calorieCorrection.computed
+                    ? `Calories set to ${item.calorieCorrection.computed} from protein, carbs and fat (you entered ${item.calorieCorrection.stated}).`
+                    : `Calories don't match protein, carbs and fat (about ${item.calorieCorrection.computed} kcal).`}
+                </p>
+              )}
             </div>
           ))}
         </div>
