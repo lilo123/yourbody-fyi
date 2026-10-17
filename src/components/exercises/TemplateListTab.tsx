@@ -8,6 +8,7 @@ import type { Exercise, RoutineTemplate } from '../../types/database';
 import { PlusCircle, RefreshCw, AlertCircle, Pencil, Copy, Trash2, ChevronDown, Play } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
 import { EditTemplateSheet } from './EditTemplateSheet';
+import { HiddenRoutineList } from './HiddenRoutineList';
 import { useDeferredDelete } from '../common/useDeferredDelete';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useToast } from '../../hooks/useToast';
@@ -42,6 +43,8 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState<boolean>(false);
   const [editingTemplate, setEditingTemplate] = useState<RoutineTemplate | null>(null);
   const [isForking, setIsForking] = useState<boolean>(false);
+  const [sourceTemplateId, setSourceTemplateId] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState<boolean>(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
 
@@ -61,6 +64,37 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
       return ((data || []) as unknown) as RoutineTemplate[];
     },
   });
+
+  // Load hidden master templates when toggle is active
+  const { data: hiddenTemplates = [] } = useQuery({
+    queryKey: ['routine_templates', targetUserId || 'self', 'hidden'],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('get_hidden_routine_templates', {
+        p_user_id: targetUserId || undefined,
+      });
+      if (error) throw error;
+      return ((data || []) as unknown) as RoutineTemplate[];
+    },
+    enabled: showHidden,
+  });
+
+  const handleUnhide = async (item: RoutineTemplate) => {
+    if (!isOnline) {
+      setTemplateError('Available when online');
+      return;
+    }
+    setTemplateError(null);
+    try {
+      const { error } = await (supabase.from as any)('routine_template_hides')
+        .delete()
+        .eq('template_id', item.id)
+        .eq('hidden_by', user?.id);
+      if (error) throw error;
+      await invalidateExerciseDomain(queryClient, targetUserId);
+    } catch (err: any) {
+      setTemplateError(err?.message || 'Failed to unhide routine');
+    }
+  };
 
   const exerciseMap = useMemo(() => {
     const map = new Map<string, Exercise>();
@@ -89,15 +123,23 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
       if (!isOnline) {
         throw new Error('Available when online');
       }
-      // 0-row delete: use .select() and treat [] as failure
-      const { data, error } = await supabase
-        .from('routine_templates')
-        .delete()
-        .eq('id', item.id)
-        .select();
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error('Routine template could not be deleted. You may not have permission to modify this template.');
+      if (item.is_master && (!isCoach || Boolean(selectedAthleteId))) {
+        const { error } = await (supabase.from as any)('routine_template_hides').insert({
+          hidden_by: user?.id,
+          template_id: item.id,
+        });
+        if (error) throw error;
+      } else {
+        // 0-row delete: use .select() and treat [] as failure
+        const { data, error } = await supabase
+          .from('routine_templates')
+          .delete()
+          .eq('id', item.id)
+          .select();
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error('Routine template could not be deleted. You may not have permission to modify this template.');
+        }
       }
       await invalidateExerciseDomain(queryClient, targetUserId);
     },
@@ -201,9 +243,11 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
           visibleTemplates.map((tpl) => {
             const isMaster = Boolean(tpl.is_master);
             const isOwner = tpl.user_id === (selectedAthleteId || user?.id);
-            const canEdit = (!isMaster && (isOwner || isCoach)) || (isMaster && isCoach && !selectedAthleteId);
+            const isDirectMasterEdit = isMaster && isCoach && !selectedAthleteId;
+            const isMasterHidable = isMaster && !isDirectMasterEdit;
+            const canEdit = !isMaster ? (isOwner || isCoach) : true;
             const canCustomize = (isMaster && (!isCoach || Boolean(selectedAthleteId))) || (!isMaster && !isOwner && !isCoach);
-            const canDelete = (!isMaster && (isOwner || isCoach)) || (isMaster && isCoach && !selectedAthleteId);
+            const canDelete = !isMaster ? (isOwner || isCoach) : true;
 
             const isExpanded = Boolean(expandedIds[tpl.id]);
             const exerciseCount = tpl.exercises?.length || 0;
@@ -271,7 +315,8 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
                             return;
                           }
                           setEditingTemplate(tpl);
-                          setIsForking(false);
+                          setIsForking(!isDirectMasterEdit && isMaster);
+                          setSourceTemplateId(!isDirectMasterEdit && isMaster ? tpl.id : null);
                           setIsTemplateModalOpen(true);
                         }}
                         disabled={!isOnline}
@@ -293,6 +338,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
                           }
                           setEditingTemplate(tpl);
                           setIsForking(true);
+                          setSourceTemplateId(tpl.id);
                           setIsTemplateModalOpen(true);
                         }}
                         disabled={!isOnline}
@@ -315,19 +361,19 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
                           schedule(tpl, tpl.name);
                           showToast({
                             kind: 'undo',
-                            verb: 'Routine deleted',
+                            verb: isMasterHidable ? 'Hide routine' : 'Routine deleted',
                             subject: tpl.name,
                             onUndo: undo,
                             onCommit: flush,
-                            undoAriaLabel: `Undo delete ${tpl.name}`,
+                            undoAriaLabel: isMasterHidable ? 'Undo' : `Undo delete ${tpl.name}`,
                             durationMs: effectiveDurationMs,
                           });
                         }}
                         disabled={!isOnline}
-                        title={!isOnline ? 'Available when online' : 'Delete'}
+                        title={!isOnline ? 'Available when online' : (isMasterHidable ? 'Hide routine' : 'Delete')}
                         data-testid={`delete-template-${tpl.id}`}
                         className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-zinc-400 hover:text-rose-400 transition touch-manipulation cursor-pointer disabled:opacity-50"
-                        aria-label={`Delete ${tpl.name}`}
+                        aria-label={isMasterHidable ? 'Hide routine' : `Delete ${tpl.name}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -399,7 +445,26 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
         )}
       </div>
 
+      {/* Show Hidden Routines Toggle & List */}
+      <div className="pt-2 flex flex-col items-center gap-2">
+        <button
+          type="button"
+          data-testid="show-hidden-routines-toggle"
+          aria-expanded={showHidden}
+          onClick={() => setShowHidden((prev) => !prev)}
+          className="text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition py-2 px-3 rounded-lg border border-zinc-800 bg-zinc-900/60 touch-manipulation cursor-pointer"
+        >
+          Show hidden routines
+        </button>
+      </div>
 
+      {showHidden && (
+        <HiddenRoutineList
+          hiddenTemplates={hiddenTemplates}
+          isOnline={isOnline}
+          onUnhide={handleUnhide}
+        />
+      )}
 
       {/* Edit Template Sheet */}
       <EditTemplateSheet
@@ -408,9 +473,11 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
         exercises={exercises}
         targetUserId={targetUserId}
         isFork={isForking}
+        sourceTemplateId={sourceTemplateId}
         onClose={() => {
           setIsTemplateModalOpen(false);
           setEditingTemplate(null);
+          setSourceTemplateId(null);
         }}
         onSuccess={async () => {
           await invalidateExerciseDomain(queryClient, targetUserId);

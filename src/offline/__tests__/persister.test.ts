@@ -52,6 +52,8 @@ describe('Cache Persister & Whitelist (§A3, §A9, §D)', () => {
 
     it('allows routine_templates and routine_template_detail', () => {
       expect(shouldDehydrateQuery(createMockQuery(['routine_templates', userId, 'workout']))).toBe(true);
+      expect(shouldDehydrateQuery(createMockQuery(['routine_templates', userId, 'hidden']))).toBe(true);
+      expect(shouldDehydrateQuery(createMockQuery(['routine_templates', userId, 'catalog']))).toBe(true);
       expect(shouldDehydrateQuery(createMockQuery(['routine_template_detail', 'template-1']))).toBe(true);
     });
 

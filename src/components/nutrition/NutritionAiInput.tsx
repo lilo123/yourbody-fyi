@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useMemo, useState, useCallback, useEffect } from 'react';
 import {
   Sparkles,
   ChevronUp,
@@ -58,6 +58,7 @@ export interface NutritionAiInputProps {
   onSwitchToManual: () => void;
   status: string;
   isError: boolean;
+  onDismissStatus?: () => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   hasCustomDishes: boolean;
   isOnline?: boolean;
@@ -65,6 +66,37 @@ export interface NutritionAiInputProps {
   parserMode?: NutritionParserMode;
   quota?: AiQuotaInfo | null;
   timeZone?: string;
+}
+
+const GENERIC_UNPARSEABLE_MESSAGE =
+  "Can't read this on your device. It needs calories, protein, carbs and fat.";
+
+/**
+ * Mapping from local parser rejection reasons to user-facing messages.
+ * Currently all rejection reasons map to the existing generic string.
+ * Adding specific owner copy (e.g. for calorie/macro mismatch) in the future is a one-line change here.
+ */
+export const UNPARSEABLE_REASON_MESSAGES: Record<string, string> = {
+  KCAL_INCONSISTENT: GENERIC_UNPARSEABLE_MESSAGE,
+  UNREADABLE_LINE: GENERIC_UNPARSEABLE_MESSAGE,
+  MISSING_MACRO: GENERIC_UNPARSEABLE_MESSAGE,
+  NOT_A_NUTRITION_BLOCK: GENERIC_UNPARSEABLE_MESSAGE,
+  UNEXPLAINED_CONTENT: GENERIC_UNPARSEABLE_MESSAGE,
+  SECOND_CALORIES_LINE: GENERIC_UNPARSEABLE_MESSAGE,
+  MULTIPLE_FOODS: GENERIC_UNPARSEABLE_MESSAGE,
+  VALUE_OUT_OF_RANGE: GENERIC_UNPARSEABLE_MESSAGE,
+};
+
+export function getUnparseableMessage(reason?: string): string {
+  if (reason) {
+    if (UNPARSEABLE_REASON_MESSAGES[reason]) {
+      return UNPARSEABLE_REASON_MESSAGES[reason];
+    }
+    if (reason.startsWith('Unreadable line:')) {
+      return UNPARSEABLE_REASON_MESSAGES['UNREADABLE_LINE'] ?? GENERIC_UNPARSEABLE_MESSAGE;
+    }
+  }
+  return GENERIC_UNPARSEABLE_MESSAGE;
 }
 
 export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
@@ -84,6 +116,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
   onSwitchToManual,
   status,
   isError,
+  onDismissStatus,
   fileInputRef,
   hasCustomDishes,
   isOnline: isOnlineProp,
@@ -100,19 +133,67 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
   const paywallEnabled = useFeatureFlag('paywall_enabled');
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  const [dismissedStatus, setDismissedStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDismissedStatus(null);
+  }, [status]);
+
+  const localParseResult = useMemo(() => {
+    if (!nlInput.trim() || selectedPhoto) return null;
+    return parseNutritionText(nlInput.trim());
+  }, [nlInput, selectedPhoto]);
 
   const canParseLocally = useMemo(() => {
-    if (!nlInput.trim() || selectedPhoto) return false;
-    const result = parseNutritionText(nlInput.trim());
-    if (result.confidence === 'exact') {
+    if (!localParseResult) return false;
+    if (localParseResult.confidence === 'exact') {
       return true;
     }
-    const isSingle = !result.meal?.items || result.meal.items.length <= 1;
+    const isSingle = !localParseResult.meal?.items || localParseResult.meal.items.length <= 1;
     return (
       isSingle &&
-      (result.confidence === 'lenient' || result.confidence === 'partial')
+      (localParseResult.confidence === 'lenient' || localParseResult.confidence === 'partial')
     );
-  }, [nlInput, selectedPhoto]);
+  }, [localParseResult]);
+
+  const unparseableReasonMessage = useMemo(() => {
+    return getUnparseableMessage(localParseResult?.reason);
+  }, [localParseResult]);
+
+  const showUnparseableInline = Boolean(
+    nlInput.trim() &&
+    !selectedPhoto &&
+    !canParseLocally &&
+    (parserMode === 'on_device' || !isOnline)
+  );
+
+  const isOnDeviceFailure =
+    showUnparseableInline ||
+    (parserMode === 'on_device' && isError && status === 'Could not parse: use quick log');
+
+  const handleDismiss = useCallback(() => {
+    setDismissedStatus(status);
+    onDismissStatus?.();
+  }, [status, onDismissStatus]);
+
+  const handleModeChange = useCallback(
+    (newMode: NutritionParserMode) => {
+      setParserMode(newMode);
+      setIsModeMenuOpen(false);
+      setDismissedStatus(null);
+      onDismissStatus?.();
+    },
+    [setParserMode, onDismissStatus]
+  );
+
+  const handleInputChange = useCallback(
+    (val: string) => {
+      onNlInputChange(val);
+      setDismissedStatus(null);
+      onDismissStatus?.();
+    },
+    [onNlInputChange, onDismissStatus]
+  );
 
   const effectiveOffline = !isOnline || parserMode === 'on_device';
   const isSubmitDisabled =
@@ -152,10 +233,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
                       role="option"
                       aria-selected={parserMode === 'auto'}
                       data-testid="parser-mode-option-auto"
-                      onClick={() => {
-                        setParserMode('auto');
-                        setIsModeMenuOpen(false);
-                      }}
+                      onClick={() => handleModeChange('auto')}
                       className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition ${
                         parserMode === 'auto' ? 'text-cyan-400 font-bold' : 'text-zinc-300'
                       }`}
@@ -167,10 +245,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
                       role="option"
                       aria-selected={parserMode === 'always_ai'}
                       data-testid="parser-mode-option-always_ai"
-                      onClick={() => {
-                        setParserMode('always_ai');
-                        setIsModeMenuOpen(false);
-                      }}
+                      onClick={() => handleModeChange('always_ai')}
                       className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition ${
                         parserMode === 'always_ai' ? 'text-cyan-400 font-bold' : 'text-zinc-300'
                       }`}
@@ -182,10 +257,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
                       role="option"
                       aria-selected={parserMode === 'on_device'}
                       data-testid="parser-mode-option-on_device"
-                      onClick={() => {
-                        setParserMode('on_device');
-                        setIsModeMenuOpen(false);
-                      }}
+                      onClick={() => handleModeChange('on_device')}
                       className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition ${
                         parserMode === 'on_device' ? 'text-cyan-400 font-bold' : 'text-zinc-300'
                       }`}
@@ -290,7 +362,7 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
         <textarea
           ref={textareaRef}
           value={nlInput}
-          onChange={(e) => onNlInputChange(e.target.value)}
+          onChange={(e) => handleInputChange(e.target.value)}
           aria-describedby={!isOnline && parserMode !== 'on_device' ? 'ai-offline-hint' : undefined}
           placeholder={
             selectedPhoto
@@ -316,13 +388,13 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
         )}
 
         {/* Unparseable Feedback in on_device mode or offline */}
-        {Boolean(nlInput.trim() && !selectedPhoto && !canParseLocally && (parserMode === 'on_device' || !isOnline)) && (
+        {showUnparseableInline && (
           <div data-testid="unparseable-feedback-container" className="pt-1.5 space-y-1.5">
             <p
               data-testid="unparseable-reason"
               className="text-xs text-amber-300/90 font-medium"
             >
-              Can't read this on your device. It needs calories, protein, carbs and fat.
+              {unparseableReasonMessage}
             </p>
             <div className="flex items-center gap-2">
               {isOnline && parserMode === 'on_device' && (
@@ -434,7 +506,11 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
 
       {/* Dynamic Status / Error Message */}
       <StatusBanner
-        message={!isRateLimited && status ? status : null}
+        message={
+          !isRateLimited && status && !isOnDeviceFailure && status !== dismissedStatus
+            ? status
+            : null
+        }
         tone={isError ? 'error' : 'info'}
         testId="status-message"
         className="shadow-lg"
@@ -456,15 +532,36 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
               <span>Upgrade</span>
             </button>
           ) : isError && onAnalyze ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="retry-analysis-button"
+                onClick={() => onAnalyze()}
+                disabled={isAnalyzing}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 rounded-lg transition-all min-h-[44px] min-w-[44px] touch-manipulation cursor-pointer shrink-0 disabled:opacity-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>Retry Analysis</span>
+              </button>
+              <button
+                type="button"
+                data-testid="dismiss-status-button"
+                aria-label="Dismiss"
+                onClick={handleDismiss}
+                className="p-2 text-zinc-400 hover:text-white rounded-lg transition min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : isError ? (
             <button
               type="button"
-              data-testid="retry-analysis-button"
-              onClick={() => onAnalyze()}
-              disabled={isAnalyzing}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 rounded-lg transition-all min-h-[44px] min-w-[44px] touch-manipulation cursor-pointer shrink-0 disabled:opacity-50"
+              data-testid="dismiss-status-button"
+              aria-label="Dismiss"
+              onClick={handleDismiss}
+              className="p-2 text-zinc-400 hover:text-white rounded-lg transition min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
             >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>Retry Analysis</span>
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           ) : null
         }
