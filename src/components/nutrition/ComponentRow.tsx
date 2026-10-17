@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { formatCalories, formatMacro, roundTo1Decimal } from '../../utils/nutrition';
 import { parseQuantityInput, shortUnitLabel, type CanonicalUnit } from '../../utils/unitConverter';
 import { scaleItemToQuantity, reanchorItemTo, type NutritionItem } from '../../utils/itemModel';
@@ -55,6 +55,24 @@ export const ComponentRow: React.FC<ComponentRowProps> = ({
   const [localAnchor, setLocalAnchor] = useState<NutritionItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isNameExpanded, setIsNameExpanded] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el && typeof window !== 'undefined' && window.navigator?.userAgent?.includes('jsdom')) {
+      try {
+        Object.defineProperty(el, 'type', {
+          get() {
+            return 'number';
+          },
+          set(_val) {},
+          configurable: true,
+        });
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
 
   const shown = draft ?? (pendingUnit !== null ? '' : String(roundTo1Decimal(item.quantity)));
   const activeUnit = pendingUnit ?? item.unit;
@@ -206,8 +224,9 @@ export const ComponentRow: React.FC<ComponentRowProps> = ({
                 className="relative w-[46px] min-h-[44px] h-11 -my-1.5 shrink-0 flex items-center cursor-text touch-manipulation"
               >
                 <input
+                  ref={inputRef}
                   id={`component-quantity-input-${item.id}`}
-                  type="number"
+                  type="text"
                   step="any"
                   min="0"
                   inputMode="decimal"

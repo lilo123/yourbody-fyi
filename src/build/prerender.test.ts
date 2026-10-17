@@ -83,6 +83,14 @@ describe('Prerender Output and Configuration', () => {
       const paths = PRERENDER_ROUTES.map((r) => r.path);
       expect(paths).toEqual(['/', '/terms', '/privacy', '/refunds']);
     });
+
+    it('renders exactly one h1 per prerendered public route for SEO compliance', () => {
+      for (const route of PRERENDER_ROUTES) {
+        const html = renderRoute(route.path);
+        const h1Matches = html.match(/<h1[\s>]/gi) || [];
+        expect(h1Matches.length, `Expected exactly 1 <h1> in prerender for ${route.path}`).toBe(1);
+      }
+    });
   });
 
   describe('(b) Source files guard tag, placeholder, and CSS rules', () => {

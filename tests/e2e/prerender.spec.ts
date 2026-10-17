@@ -212,4 +212,11 @@ test.describe('Prerender Guard & Cold Load Invariants', () => {
     const prerender = page.locator('#prerender');
     await expect(prerender).not.toBeVisible();
   });
+
+  test('public routes (/, /terms, /privacy, /refunds) each have exactly one h1 heading', async ({ page }) => {
+    for (const route of ['/', '/terms', '/privacy', '/refunds']) {
+      await page.goto(route);
+      await expect(page.locator('h1')).toHaveCount(1);
+    }
+  });
 });

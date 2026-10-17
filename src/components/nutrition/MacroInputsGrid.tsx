@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { KcalMacroHint } from './KcalMacroHint';
+import { DecimalInput } from './DecimalInput';
 
 export interface MacroValues {
   calories: number | '';
@@ -75,16 +76,12 @@ export const MacroInputsGrid: React.FC<MacroInputsGridProps> = memo(({
         >
           Calories <span className="text-amber-400 font-bold">*</span>
         </label>
-        <input
+        <DecimalInput
           id={ids.caloriesId}
-          type="number"
-          step="any"
-          min="0"
-          inputMode="decimal"
           enterKeyHint="next"
           data-testid={`${testIdPrefix}calories-input`}
           value={values.calories}
-          onChange={(e) => onChange.onCaloriesChange(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={onChange.onCaloriesChange}
           placeholder="0"
           aria-invalid={Boolean(errors?.calories)}
           aria-errormessage={errors?.calories ? `${ids.caloriesId}-error` : undefined}
@@ -110,16 +107,12 @@ export const MacroInputsGrid: React.FC<MacroInputsGridProps> = memo(({
         >
           Protein (g)
         </label>
-        <input
+        <DecimalInput
           id={ids.proteinId}
-          type="number"
-          step="any"
-          min="0"
-          inputMode="decimal"
           enterKeyHint="next"
           data-testid={`${testIdPrefix}protein-input`}
           value={values.protein}
-          onChange={(e) => onChange.onProteinChange(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={onChange.onProteinChange}
           placeholder="0"
           aria-invalid={Boolean(errors?.protein)}
           aria-errormessage={errors?.protein ? `${ids.proteinId}-error` : undefined}
@@ -144,16 +137,12 @@ export const MacroInputsGrid: React.FC<MacroInputsGridProps> = memo(({
         >
           Carbs (g)
         </label>
-        <input
+        <DecimalInput
           id={ids.carbsId}
-          type="number"
-          step="any"
-          min="0"
-          inputMode="decimal"
           enterKeyHint="next"
           data-testid={`${testIdPrefix}carbs-input`}
           value={values.carbs}
-          onChange={(e) => onChange.onCarbsChange(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={onChange.onCarbsChange}
           placeholder="0"
           aria-invalid={Boolean(errors?.carbs)}
           aria-errormessage={errors?.carbs ? `${ids.carbsId}-error` : undefined}
@@ -178,16 +167,12 @@ export const MacroInputsGrid: React.FC<MacroInputsGridProps> = memo(({
         >
           Fat (g)
         </label>
-        <input
+        <DecimalInput
           id={ids.fatId}
-          type="number"
-          step="any"
-          min="0"
-          inputMode="decimal"
           enterKeyHint="next"
           data-testid={`${testIdPrefix}fat-input`}
           value={values.fat}
-          onChange={(e) => onChange.onFatChange(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={onChange.onFatChange}
           placeholder="0"
           aria-invalid={Boolean(errors?.fat)}
           aria-errormessage={errors?.fat ? `${ids.fatId}-error` : undefined}
@@ -212,16 +197,12 @@ export const MacroInputsGrid: React.FC<MacroInputsGridProps> = memo(({
         >
           Fiber (g)
         </label>
-        <input
+        <DecimalInput
           id={ids.fiberId}
-          type="number"
-          step="any"
-          min="0"
-          inputMode="decimal"
           enterKeyHint={fiberEnterKeyHint}
           data-testid={`${testIdPrefix}fiber-input`}
           value={values.fiber}
-          onChange={(e) => onChange.onFiberChange(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={onChange.onFiberChange}
           placeholder="0"
           aria-invalid={Boolean(errors?.fiber)}
           aria-errormessage={errors?.fiber ? `${ids.fiberId}-error` : undefined}

@@ -94,6 +94,19 @@ describe('CustomDishEditor', () => {
     expect((onChange.mock.calls[0][0] as NutritionItem[])[0].quantity).toBe(12.5);
   });
 
+  it('accepts decimal comma ("12,5") and rejects ambiguous separators ("1,2,3")', () => {
+    const onChange = vi.fn();
+    render(<CustomDishEditor items={[item()]} onChange={onChange} />);
+
+    fireEvent.change(screen.getByTestId('dish-item-quantity'), { target: { value: '12,5' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].quantity).toBe(12.5);
+
+    // Reject "1,2,3" (clears to 0 rather than accepting ambiguous numeric)
+    onChange.mockClear();
+    fireEvent.change(screen.getByTestId('dish-item-quantity'), { target: { value: '1,2,3' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].quantity).toBe(0);
+  });
+
   it('shows no totals block when there are no components', () => {
     render(<CustomDishEditor items={[]} onChange={() => {}} />);
     expect(screen.queryByTestId('dish-derived-totals')).toBeNull();

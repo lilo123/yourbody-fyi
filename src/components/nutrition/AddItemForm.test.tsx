@@ -162,7 +162,7 @@ describe('AddItemForm', () => {
     });
   });
 
-  it('uses inputMode="decimal" and type="number" with min="0" on numeric fields', () => {
+  it('uses inputMode="decimal" and type="text" with min="0" on numeric fields', () => {
     renderForm();
 
     const numericTestIds = [
@@ -176,10 +176,44 @@ describe('AddItemForm', () => {
     numericTestIds.forEach((testId) => {
       const input = screen.getByTestId(testId);
       expect(input.getAttribute('inputmode')).toBe('decimal');
-      expect(input.getAttribute('type')).toBe('number');
+      expect(input.getAttribute('type')).toBe('text');
       expect(input.getAttribute('min')).toBe('0');
       expect(input.getAttribute('step')).toBe('any');
     });
+  });
+
+  it('accepts decimal comma ("12,5" and sequential "1","2",",","5") and rejects ambiguous separators ("1,2,3")', () => {
+    const onAddItem = vi.fn();
+    renderForm({ onAddItem });
+
+    fireEvent.change(screen.getByTestId('add-item-name-input'), { target: { value: 'Greek Yogurt' } });
+
+    // Sequential typing simulation: "1" -> "12" -> "12," -> "12,5"
+    const qtyInput = screen.getByTestId('add-item-quantity-input');
+    fireEvent.change(qtyInput, { target: { value: '1' } });
+    fireEvent.change(qtyInput, { target: { value: '12' } });
+    fireEvent.change(qtyInput, { target: { value: '12,' } });
+    expect((qtyInput as HTMLInputElement).value).toBe('12,');
+    fireEvent.change(qtyInput, { target: { value: '12,5' } });
+    expect((qtyInput as HTMLInputElement).value).toBe('12,5');
+
+    fireEvent.change(screen.getByTestId('add-item-calories-input'), { target: { value: '100' } });
+    fireEvent.click(screen.getByTestId('submit-add-item-button'));
+
+    expect(onAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Greek Yogurt',
+        quantity: 12.5,
+        calories: 100,
+      })
+    );
+
+    // Reject "1,2,3"
+    onAddItem.mockClear();
+    fireEvent.change(qtyInput, { target: { value: '1,2,3' } });
+    fireEvent.click(screen.getByTestId('submit-add-item-button'));
+    expect(screen.getByTestId('add-item-quantity-error')).toBeDefined();
+    expect(onAddItem).not.toHaveBeenCalled();
   });
 
   it('sets noValidate on the form to prevent native browser popups', () => {
