@@ -980,8 +980,8 @@ test.describe('Surface A: Staged card with 4 items', () => {
     expect(cardBox.y).toBeLessThanOrEqual(firstRowBox.y + 0.5);
     expect(cardBox.y + cardBox.height).toBeGreaterThanOrEqual(actionRowBox.y + actionRowBox.height - 0.5);
 
-    // Height cap assert: <= 480px (tightened from 500px per)
-    expect(cardBox.height).toBeLessThanOrEqual(480);
+    // owner-approved 2026-10-17: 500px so no divider touches content (PR #154)
+    expect(cardBox.height).toBeLessThanOrEqual(500);
   });
 
   test('A: font >= 12px', async () => {
