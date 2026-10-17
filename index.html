@@ -55,10 +55,11 @@
       html.hide-prerender #prerender { display: none !important; }
       html.hide-prerender #prerender ~ #root { position: static !important; visibility: visible !important; }
     </style>
+    <meta name="prerender-route" content="/" />
     <script src="/prerender-guard.js"></script>
   </head>
   <body class="bg-zinc-950 text-zinc-100 antialiased selection:bg-cyan-500/20 selection:text-cyan-300">
-    <div id="prerender"><!--prerender--></div>
+    <div id="prerender" data-prerender-route="/"><!--prerender--></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
