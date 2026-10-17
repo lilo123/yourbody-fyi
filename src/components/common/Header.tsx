@@ -100,9 +100,12 @@ export const Header: React.FC = () => {
               <Zap className="w-3.5 h-3.5 text-zinc-950 fill-zinc-950" />
             </div>
             <div className="min-w-0">
-              <h1 className="font-bold tracking-tight sm:tracking-normal text-sm sm:text-base text-zinc-50 leading-none">
+              <p
+                data-testid="brand-name"
+                className="font-bold tracking-tight sm:tracking-normal text-sm sm:text-base text-zinc-50 leading-none"
+              >
                 Yourbody.fyi
-              </h1>
+              </p>
               <div
                 className={`text-xs font-semibold tracking-normal text-cyan-400/70 mt-0.5 truncate max-[359px]:hidden ${
                   showCoachDashboard ? 'max-[379px]:hidden' : ''

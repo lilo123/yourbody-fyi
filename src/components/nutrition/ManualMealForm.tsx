@@ -2,6 +2,7 @@ import React, { memo, useId, useState, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { CompressedImage } from '../../utils/imageCompression';
 import { MacroInputsGrid } from './MacroInputsGrid';
+import { DecimalInput } from './DecimalInput';
 import { getScrollBehavior } from './nutritionEngineHelpers';
 
 export interface ManualMealFormProps {
@@ -293,15 +294,11 @@ export const ManualMealForm: React.FC<ManualMealFormProps> = memo(({
           >
             Serving Size
           </label>
-          <input
+          <DecimalInput
             id={servingSizeId}
-            type="number"
-            step="any"
-            min="0"
-            inputMode="decimal"
             enterKeyHint="next"
             value={manualServingSize}
-            onChange={(e) => onManualServingSizeChange(e.target.value === '' ? '' : Number(e.target.value))}
+            onChange={onManualServingSizeChange}
             aria-invalid={Boolean(errors.servingSize)}
             aria-errormessage={errors.servingSize ? `${servingSizeId}-error` : undefined}
             className={`w-full bg-zinc-950 border text-white rounded-xl p-2 text-base tabular-nums font-normal outline-none text-center scroll-mb-24 transition ${
