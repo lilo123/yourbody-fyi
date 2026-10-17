@@ -7,7 +7,7 @@ import { roundTo1Decimal, calculateRemainingFuel } from '../../utils/nutrition';
 import { itemsForPersist, sumItems, type NutritionItem } from '../../utils/itemModel';
 import { MealLogRow } from './MealLogRow';
 import { NutrientBreakdownModal, type BreakdownNutrient } from './NutrientBreakdownModal';
-import { stagedToItem, recomputeStagedTotals, buildStagedMealFromManualData, useStagedCardFocus, type StagedMeal } from './nutritionEngineHelpers';
+import { stagedToItem, withSyncedServing, buildStagedMealFromManualData, useStagedCardFocus, type StagedMeal } from './nutritionEngineHelpers';
 import { loadStagedMealDraft } from './stagedMealDraft';
 import { useStagedMealDraft } from './useStagedMealDraft';
 import { Skeleton } from '../common/Skeleton';
@@ -185,6 +185,7 @@ export const NutritionEngine: React.FC = () => {
     onParsedSuccess: (meal) => {
       setStagedMeal(meal);
       setShowManualForm(false);
+      setStatus(''); setIsError(false);
       if (meal.quota) setAiQuota(meal.quota);
       const isDevice = meal.source === 'local' || meal.source === 'rules';
       const quotaSuffix = !isDevice && meal.quota
@@ -250,10 +251,11 @@ export const NutritionEngine: React.FC = () => {
             protein: roundTo1Decimal(next.protein), carbs: roundTo1Decimal(next.carbs),
             fat: roundTo1Decimal(next.fat), fiber: roundTo1Decimal(next.fiber),
             portionMultiplier: it.baseQuantity > 0 ? next.quantity / it.baseQuantity : 1,
+            calorieCorrection: undefined,
           }
         : it
     );
-    setStagedMeal({ ...stagedMeal, items: updatedItems, ...recomputeStagedTotals(updatedItems) });
+    setStagedMeal(withSyncedServing(stagedMeal, updatedItems));
   };
 
   const handleDeleteItem = (itemId: string) => {
@@ -264,7 +266,7 @@ export const NutritionEngine: React.FC = () => {
       clearDraft();
       return;
     }
-    setStagedMeal({ ...stagedMeal, items: updatedItems, ...recomputeStagedTotals(updatedItems) });
+    setStagedMeal(withSyncedServing(stagedMeal, updatedItems));
   };
 
   const handleLogStagedMeal = (e?: React.MouseEvent | React.UIEvent) => {
@@ -433,7 +435,10 @@ export const NutritionEngine: React.FC = () => {
           textareaRef={aiTextareaRef}
           headingRef={sectionHeadingRef}
           nlInput={ai.nlInput}
-          onNlInputChange={ai.setNlInput}
+          onNlInputChange={(val) => {
+            ai.setNlInput(val);
+            if (status || isError) { setStatus(''); setIsError(false); }
+          }}
           selectedPhoto={ai.selectedPhoto}
           onRemovePhoto={ai.handleRemovePhoto}
           onFileChange={ai.handleFileChange}
@@ -450,6 +455,7 @@ export const NutritionEngine: React.FC = () => {
           }}
           status={status}
           isError={isError}
+          onDismissStatus={() => { setStatus(''); setIsError(false); }}
           fileInputRef={ai.fileInputRef}
           hasCustomDishes={displayedCustomDishes.length > 0}
           isQuotaExceeded={ai.isQuotaExceeded}

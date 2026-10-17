@@ -9,8 +9,8 @@ SELECT col_not_null('public', 'routine_templates', 'updated_at', 'routine_templa
 SELECT has_function(
   'public',
   'save_routine_template',
-  ARRAY['uuid', 'text', 'text[]', 'jsonb', 'uuid', 'boolean', 'uuid', 'timestamp with time zone'],
-  'save_routine_template has 8-arg signature including p_expected_updated_at'
+  ARRAY['uuid', 'text', 'text[]', 'jsonb', 'uuid', 'boolean', 'uuid', 'timestamp with time zone', 'uuid'],
+  'save_routine_template has 9-arg signature including p_source_template_id'
 );
 
 -- ============================================================================

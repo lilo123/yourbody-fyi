@@ -17,6 +17,7 @@ import {
   type NutritionParseResult,
   type ParseConfidence,
   type MacroKind,
+  type CalorieCorrection,
 } from '../../../supabase/functions/_shared/nutritionParser.ts';
 
 export type LocalParseRejectReason = NutritionRejectReason;
@@ -48,6 +49,7 @@ export {
   type NutritionParseResult,
   type ParseConfidence,
   type MacroKind,
+  type CalorieCorrection,
 };
 
 const COUNTED_CONTAINER_WORDS = new Set([

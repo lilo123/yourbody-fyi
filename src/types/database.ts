@@ -213,6 +213,7 @@ export interface RoutineTemplate {
   is_master: boolean;
   assigned_to: string | null;
   days_of_week?: string[] | null;
+  source_template_id?: string | null;
   created_at?: string;
   exercises?: TemplateExercise[];
 }

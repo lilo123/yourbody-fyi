@@ -74,6 +74,11 @@ export interface StagedItem {
   fiber: number;
   /** Optional flag indicating user explicitly edited the item's nutrition. */
   userOverridden?: boolean;
+  /** Optional warning when stated calories disagreed with macros beyond tolerance and were computed. */
+  calorieCorrection?: {
+    computed: number;
+    stated: number;
+  };
 }
 
 /** The staged component as the shared level-2 model sees it. */
@@ -137,6 +142,7 @@ export function reanchorStagedItem(item: StagedItem, next: NutritionItem): Stage
     baseFat: f,
     baseFiber: fib,
     portionMultiplier: 1,
+    calorieCorrection: undefined,
   };
 }
 
@@ -189,6 +195,7 @@ export function updateStagedItemNutrition(
     baseQuantity,
     portionMultiplier: 1,
     userOverridden: true,
+    calorieCorrection: undefined,
   };
 }
 
@@ -261,6 +268,7 @@ export function buildStagedItem(raw: {
   quantity?: unknown;
   unit?: unknown;
   portionMultiplier?: unknown;
+  calorieCorrection?: { computed: number; stated: number };
 }): StagedItem {
   const portion = raw.portion || '1 serving';
   const derived = convertPortion(portion);
@@ -308,6 +316,7 @@ export function buildStagedItem(raw: {
     baseFat: base.fat,
     baseFiber: base.fiber,
     ...current,
+    calorieCorrection: raw.calorieCorrection,
   };
 }
 
@@ -405,6 +414,26 @@ export function recomputeStagedTotals(items: StagedItem[]) {
   };
 }
 
+/**
+ * Synchronizes meal totals and serving size/unit when staged items change.
+ * Single-item meals take the item's own quantity and unit (e.g. 60 g).
+ * Multi-item meals default to 1 serving.
+ */
+export function withSyncedServing(meal: StagedMeal, items: StagedItem[]): StagedMeal {
+  const totals = recomputeStagedTotals(items);
+  const single = items.length === 1 ? items[0] : null;
+  return {
+    ...meal,
+    items,
+    ...totals,
+    ...(single && single.quantity > 0
+      ? { servingSize: single.quantity, servingUnit: single.unit }
+      : single === null
+        ? { servingSize: 1, servingUnit: 'serving' }
+        : {}),
+  };
+}
+
 /** Allowed range for the whole-meal scale factor. */
 export const MIN_MEAL_SCALE = 0.01;
 export const MAX_MEAL_SCALE = 20;
@@ -472,6 +501,7 @@ export function scaleStagedMeal(meal: StagedMeal, nextScale: number): StagedMeal
         carbs: roundTo1Decimal(direct.carbs),
         fat: roundTo1Decimal(direct.fat),
         fiber: roundTo1Decimal(direct.fiber),
+        calorieCorrection: undefined,
       };
     }
     const q = roundQuantity(it.quantity * ratio);
@@ -485,6 +515,7 @@ export function scaleStagedMeal(meal: StagedMeal, nextScale: number): StagedMeal
       carbs: roundTo1Decimal(scaled.carbs),
       fat: roundTo1Decimal(scaled.fat),
       fiber: roundTo1Decimal(scaled.fiber),
+      calorieCorrection: undefined,
     };
   });
 
