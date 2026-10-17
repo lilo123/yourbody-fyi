@@ -6,6 +6,7 @@ import {
   getLocalDateStr,
   getDayOfWeekAbbr,
   DEFAULT_WORKOUT_TEMPLATES,
+  DEFAULT_EXERCISES_LIST,
 } from '../../utils/ghostSets';
 import { workoutSessionStore, type SetDraftInput } from '../../utils/workoutSessionStore';
 import {
@@ -23,7 +24,8 @@ import {
   sanitizeDraftValue,
 } from './useWorkoutSessionHelpers';
 import { useWorkoutAccordion } from './useWorkoutAccordion';
-import { enqueueAndAwait } from '../../offline';
+import { enqueueAndAwait, applyPendingToDaySets } from '../../offline';
+import { useWorkoutPendingOps } from './useWorkoutPendingOps';
 import { useToast } from '../../hooks/useToast';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
@@ -70,16 +72,30 @@ export function useWorkoutSession({
     () => initialSession?.inputDrafts ?? {}
   );
 
+  const pendingOps = useWorkoutPendingOps(targetUserId);
+
   const resolvedKeyRef = useRef<string | null>(null);
   const manualSelectionDateRef = useRef<string | null>(null);
   const prevManualSelectionDateRef = useRef<string | null | undefined>(undefined);
   const inFlightRoutineSelectionSeqRef = useRef<number>(0);
   const lastTargetUserRef = useRef<string>(targetUserId);
   const routineSelectionSeqRef = useRef<number>(0);
+  const reResolvedPendingDateRef = useRef<string | null>(null);
 
   const todaySets = useMemo(() => {
-    return userLogs.filter((s) => normalizeDateStr(s.workout_date) === workoutDate);
-  }, [userLogs, workoutDate]);
+    const rawToday = userLogs.filter((s) => normalizeDateStr(s.workout_date) === workoutDate);
+    const overlaid = applyPendingToDaySets(rawToday, pendingOps, workoutDate);
+    return overlaid.map((s) => ({
+      ...s,
+      workout_date: s.workout_date || workoutDate,
+      exercise_name:
+        s.exercise_name ||
+        (s as any).exercise?.name ||
+        exercises.find((e) => e.id === s.exercise_id || e.name === s.exercise_id)?.name ||
+        DEFAULT_EXERCISES_LIST.find((e) => e.id === s.exercise_id || e.name === s.exercise_id)?.name ||
+        s.exercise_id,
+    }));
+  }, [userLogs, pendingOps, workoutDate, exercises]);
 
   const getSetsForExerciseToday = useCallback((exName: string) => {
     return filterSetsForExercise(exName, todaySets, exercises);
@@ -99,6 +115,7 @@ export function useWorkoutSession({
       setTargetRepCounts({});
       resolvedKeyRef.current = null;
       manualSelectionDateRef.current = null;
+      reResolvedPendingDateRef.current = null;
     }
 
     if (!templatesFetched || !logsFetched || !exercisesFetched) return;
@@ -109,9 +126,47 @@ export function useWorkoutSession({
 
     if (manualSelectionDateRef.current === workoutDate) return;
 
+    const hasPendingOpsToday = todaySets.some((s) => (s as any).pending);
+    const canReResolveForPendingOps =
+      hasPendingOpsToday &&
+      reResolvedPendingDateRef.current !== workoutDate &&
+      manualSelectionDateRef.current !== workoutDate &&
+      (activeRoutineName === 'Rest Day' || activeExercises.length === 0);
+
     const resolutionKey = `${targetUserId}_${workoutDate}`;
-    if (resolvedKeyRef.current === resolutionKey) return;
+    if (resolvedKeyRef.current === resolutionKey && !canReResolveForPendingOps) return;
     resolvedKeyRef.current = resolutionKey;
+
+    if (canReResolveForPendingOps) {
+      reResolvedPendingDateRef.current = workoutDate;
+
+      const resolved = resolveRoutineAndExercises(
+        workoutDate,
+        todaySets,
+        customTemplates,
+        exercises
+      );
+
+      const isToday = workoutDate === getLocalDateStr(new Date());
+      if (isToday) {
+        workoutSessionStore.updateRoutine(
+          targetUserId,
+          workoutDate,
+          resolved.routineName,
+          resolved.exercises,
+          resolved.targetSets,
+          resolved.targetReps
+        );
+      }
+
+      setActiveRoutineName(resolved.routineName);
+      setActiveExercises(resolved.exercises);
+      setTargetSetCounts(resolved.targetSets);
+      setTargetRepCounts(resolved.targetReps);
+      setInputDrafts({});
+      setExpandedExercises(resolved.exercises.length > 0 ? new Set([resolved.exercises[0]]) : new Set());
+      return;
+    }
 
     const existingSession = workoutSessionStore.getActiveSession(targetUserId, workoutDate);
     if (existingSession) {
@@ -177,7 +232,7 @@ export function useWorkoutSession({
       setInputDrafts({});
       setExpandedExercises(resolved.exercises.length > 0 ? new Set([resolved.exercises[0]]) : new Set());
     }
-  }, [workoutDate, targetUserId, templatesFetched, logsFetched, exercisesFetched, customTemplates, todaySets, exercises, getSetsForExerciseToday]);
+  }, [workoutDate, targetUserId, templatesFetched, logsFetched, exercisesFetched, customTemplates, todaySets, exercises, getSetsForExerciseToday, activeRoutineName, activeExercises.length]);
 
   const {
     toggleAccordion,
