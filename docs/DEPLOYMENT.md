@@ -136,6 +136,7 @@ Secrets and variables must be configured in GitHub repository settings:
   - New columns are added as nullable or with safe defaults.
   - Columns or tables are deprecated in code before being dropped in future migrations.
   - If a migration contains a bug, deploy a forward fix migration that rectifies the schema.
+  - **Function Privileges:** Default privileges revoke `EXECUTE` on new database functions from `PUBLIC`, `anon`, and `authenticated`. Every new function defined in migrations requires an explicit `GRANT EXECUTE ON FUNCTION ... TO authenticated` (and `TO anon` only if signed-out callers legitimately need it, e.g., read RPCs invoked before sign-in).
 
 ---
 

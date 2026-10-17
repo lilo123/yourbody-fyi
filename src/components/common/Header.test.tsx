@@ -193,15 +193,26 @@ describe('Header connection status badge', () => {
 
   it('satisfies STD-TYP with no banned font weight or family tokens in brand header', () => {
     const { container } = renderHeader();
-    const h1 = container.querySelector('h1');
-    expect(h1?.className).toContain('font-bold');
-    expect(h1?.className).not.toContain('font-' + 'black');
+    const brand = container.querySelector('[data-testid="brand-name"]');
+    expect(brand).not.toBeNull();
+    expect(brand?.className).toContain('font-bold');
+    expect(brand?.className).not.toContain('font-' + 'black');
+    expect(container.querySelector('h1')).toBeNull();
 
-    const tag = container.querySelector('header h1 + div');
+    const tag = container.querySelector('[data-testid="brand-name"] + div');
     expect(tag?.className).toContain('text-xs');
     expect(tag?.className).toContain('font-semibold');
     expect(tag?.className).not.toContain('font-' + 'mono');
     expect(tag?.className).not.toContain('text-[10' + 'px]');
+  });
+
+  it('renders brand logo as non-heading element (zero h1 in header for SEO single-h1 invariant)', () => {
+    const { container } = renderHeader();
+    expect(container.querySelector('h1')).toBeNull();
+    const brand = container.querySelector('[data-testid="brand-name"]');
+    expect(brand).not.toBeNull();
+    expect(brand?.tagName.toLowerCase()).not.toBe('h1');
+    expect(brand?.textContent?.trim()).toBe('Yourbody.fyi');
   });
 
   describe('Header coach-dashboard link visibility matrix', () => {
@@ -455,14 +466,14 @@ describe('Header connection status badge', () => {
   describe('YB3: header polish unit tests', () => {
     it('YB3: Brand name uses text-sm (<sm) and tagline has quieter styling with max-[359px]:hidden', () => {
       const { container } = renderHeader();
-      const h1 = container.querySelector('header h1');
-      expect(h1).not.toBeNull();
-      expect(h1?.className).toContain('text-sm');
-      expect(h1?.className).toContain('font-bold');
-      expect(h1?.className).toContain('text-zinc-50');
-      expect(h1?.className).not.toContain('text-xs');
+      const brand = container.querySelector('[data-testid="brand-name"]');
+      expect(brand).not.toBeNull();
+      expect(brand?.className).toContain('text-sm');
+      expect(brand?.className).toContain('font-bold');
+      expect(brand?.className).toContain('text-zinc-50');
+      expect(brand?.className).not.toContain('text-xs');
 
-      const tagline = container.querySelector('header h1 + div');
+      const tagline = container.querySelector('[data-testid="brand-name"] + div');
       expect(tagline).not.toBeNull();
       expect(tagline?.className).toContain('max-[359px]:hidden');
       expect(tagline?.className).toContain('text-cyan-400/70');

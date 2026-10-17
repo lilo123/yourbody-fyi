@@ -136,24 +136,58 @@ export function convertPortion(portion: string | null | undefined): CanonicalPor
   return giveUp(s.startsWith('-') ? 'negative' : 'unparseable');
 }
 
+export interface ParseDecimalOptions {
+  allowNegative?: boolean;
+  max?: number;
+}
+
+/**
+ * Parses free-text numeric input, accepting a single comma as a decimal separator
+ * (e.g. "12,5" -> 12.5), mirroring the rules of parseWeightInput in src/utils/weight.ts.
+ * Rejects ambiguous inputs (multiple commas, mixed commas and dots, non-finite, negative, or > max).
+ * Returns null for unparseable or out-of-range input.
+ */
+export function parseDecimalInput(
+  raw: string | number | null | undefined,
+  options?: ParseDecimalOptions
+): number | null {
+  if (raw === null || raw === undefined) return null;
+  const allowNegative = options?.allowNegative ?? false;
+  const max = options?.max ?? MAX_QUANTITY;
+
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw)) return null;
+    if (!allowNegative && raw < 0) return null;
+    if (raw > max) return null;
+    return raw;
+  }
+
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+
+  let normalized = trimmed;
+  if (normalized.includes(',')) {
+    if ((normalized.match(/,/g) || []).length > 1 || normalized.includes('.')) {
+      return null;
+    }
+    normalized = normalized.replace(',', '.');
+  }
+
+  const n = Number(normalized);
+  if (!Number.isFinite(n)) return null;
+  if (!allowNegative && n < 0) return null;
+  if (n > max) return null;
+  return n;
+}
+
 /**
  * Guard for the free-text quantity field.
  *
- * A rendered `<input type="number">` already normalises most hostile input
- * before JS sees it — '\u0663', '12.' and '1..5' all arrive as the empty string.
- * '1e3' and '-5' do NOT: they arrive as 1000 and -5. This is the guard for
- * those, and for every non-DOM path (JSON, API, tests) where nothing has been
- * normalised at all.
+ * Accepts a single comma as decimal separator.
  *
  * Returns null when the input cannot be used, so the caller can keep the
  * previous value rather than silently writing 0.
  */
 export function parseQuantityInput(raw: string | number | null | undefined): number | null {
-  if (raw === null || raw === undefined) return null;
-  if (typeof raw === 'string' && raw.trim() === '') return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return null;
-  if (n < 0) return null;
-  if (n > MAX_QUANTITY) return null;
-  return n;
+  return parseDecimalInput(raw, { allowNegative: false, max: MAX_QUANTITY });
 }
