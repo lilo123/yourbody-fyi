@@ -127,6 +127,10 @@ describe('SEO Basics & Structured Data (SEO1A)', () => {
         '/coach/*',
         '/settings',
         '/settings/*',
+        '/login',
+        '/login/*',
+        '/reset-password',
+        '/reset-password/*',
       ];
 
       for (const route of appRoutes) {
@@ -135,13 +139,28 @@ describe('SEO Basics & Structured Data (SEO1A)', () => {
         expect(matchingRule?.headers['x-robots-tag']).toBe('noindex');
       }
 
-      const publicRoutes = ['/', '/terms', '/privacy', '/refunds', '/login'];
+      const publicRoutes = ['/', '/terms', '/privacy', '/refunds'];
       for (const route of publicRoutes) {
         const matchingRule = rules.find((rule) => rule.pathPattern === route);
         if (matchingRule) {
           expect(matchingRule.headers['x-robots-tag']).toBeUndefined();
         }
       }
+    });
+
+    it('configures /og-image.png with stale-while-revalidate Cache-Control and no x-robots-tag', () => {
+      const headersContent = fs.readFileSync(headersPath, 'utf8');
+      const rules = parseHeaders(headersContent);
+
+      const ogRule = rules.find((rule) => rule.pathPattern === '/og-image.png');
+      expect(ogRule).toBeDefined();
+      expect(ogRule?.headers['cache-control']).toBe(
+        'public, max-age=86400, stale-while-revalidate=604800'
+      );
+      expect(ogRule?.headers['x-robots-tag']).toBeUndefined();
+      expect(headersContent).toMatch(
+        /\/og-image\.png\s*\n\s*!\s*Cache-Control\s*\n\s*Cache-Control:\s*public,\s*max-age=86400,\s*stale-while-revalidate=604800/
+      );
     });
 
     it('does not conflict with existing /version.json or /sw.js rules', () => {
