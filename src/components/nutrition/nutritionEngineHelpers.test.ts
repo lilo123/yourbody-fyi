@@ -5,6 +5,8 @@ import {
   stagedReference,
   recomputeStagedTotals,
   updateStagedItemNutrition,
+  reanchorStagedItem,
+  scaleStagedMeal,
   buildStagedMealFromManualData,
   useStagedCardFocus,
   isIdenticalItem,
@@ -1296,4 +1298,84 @@ describe('formatLenientHint', () => {
     expect(hint).toBe('Items add up to 850, total says 650');
   });
 });
+
+describe('calorieCorrection clearing on edit/reanchor/scale', () => {
+  it('updateStagedItemNutrition clears calorieCorrection', () => {
+    const item = buildStagedItem({
+      name: 'Rice',
+      calories: 179,
+      protein: 3.2,
+      carbs: 38.5,
+      fat: 1.4,
+      calorieCorrection: { computed: 179, stated: 79 },
+    });
+    expect(item.calorieCorrection).toEqual({ computed: 179, stated: 79 });
+
+    const updated = updateStagedItemNutrition(item, {
+      calories: 180,
+      protein: 4,
+      carbs: 38,
+      fat: 1.5,
+      fiber: 0,
+    });
+    expect(updated.calorieCorrection).toBeUndefined();
+  });
+
+  it('reanchorStagedItem clears calorieCorrection', () => {
+    const item = buildStagedItem({
+      name: 'Rice',
+      quantity: 150,
+      unit: 'g',
+      calories: 179,
+      protein: 3.2,
+      carbs: 38.5,
+      fat: 1.4,
+      calorieCorrection: { computed: 179, stated: 79 },
+    });
+    expect(item.calorieCorrection).toEqual({ computed: 179, stated: 79 });
+
+    const reanchored = reanchorStagedItem(item, {
+      id: item.id,
+      name: 'Rice',
+      quantity: 200,
+      unit: 'g',
+      calories: 238,
+      protein: 4.2,
+      carbs: 51.3,
+      fat: 1.8,
+      fiber: 0,
+    });
+    expect(reanchored.calorieCorrection).toBeUndefined();
+  });
+
+  it('scaleStagedMeal clears calorieCorrection on items', () => {
+    const item = buildStagedItem({
+      name: 'Rice',
+      quantity: 100,
+      unit: 'g',
+      calories: 179,
+      protein: 3.2,
+      carbs: 38.5,
+      fat: 1.4,
+      calorieCorrection: { computed: 179, stated: 79 },
+    });
+    const meal = {
+      name: 'Lunch',
+      mealType: 'Lunch',
+      explanation: '179 kcal (Rice)',
+      items: [item],
+      calories: 179,
+      protein: 3.2,
+      carbs: 38.5,
+      fat: 1.4,
+      fiber: 0,
+      servingSize: 100,
+      servingUnit: 'g',
+    };
+
+    const scaled = scaleStagedMeal(meal, 1.5);
+    expect(scaled.items[0].calorieCorrection).toBeUndefined();
+  });
+});
+
 

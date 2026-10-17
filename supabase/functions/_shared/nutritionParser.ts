@@ -27,6 +27,11 @@ export type NutritionRejectReason =
   | 'MULTIPLE_FOODS'
   | (string & {});
 
+export interface CalorieCorrection {
+  computed: number;
+  stated: number;
+}
+
 export interface ParsedNutritionItem {
   name: string;
   portion: string;
@@ -36,6 +41,7 @@ export interface ParsedNutritionItem {
   fat: number;
   fiber: number;
   isRange?: boolean;
+  calorieCorrection?: CalorieCorrection;
 }
 
 export interface ParsedNutritionMeal {
@@ -49,6 +55,7 @@ export interface ParsedNutritionMeal {
   fiber?: number;
   items?: ParsedNutritionItem[];
   explanation?: string;
+  calorieCorrection?: CalorieCorrection;
 }
 
 export interface NutritionParseResult {
@@ -811,10 +818,10 @@ function tryMatchMacroToken(rawSegment: string): ExtractedMacroToken | null {
     return { kind: 'kj_only', value: kjVal ?? 0 };
   }
 
-  // Standalone or numFirst calories (e.g. '650 kcal', '650 (kcal)', '520 kcals', '300 cals', '600-700 kcal', '390 cal', '420 CAL')
+  // Standalone or numFirst calories (e.g. '650 kcal', '650 (kcal)', '520 kcals', '300 cals', '600-700 kcal', '390 cal', '420 CAL', '263 kcal calories')
   const numFirstCaloriesMatch = segment.match(
     new RegExp(
-      `^${numOrRange}\\s*(?:\\((?:kcals?|cals?|calories?|cal)\\)|kcals?|cals?|calories?|cal)(?:\\s+\\d+\\s*%)?$`,
+      `^${numOrRange}\\s*(?:\\((?:kcals?|cals?|calories?|cal)\\)|(?:kcals?|cals?|cal)(?:\\s*calories?)?|calories?|cal)(?:\\s+\\d+\\s*%)?$`,
       'i'
     )
   );
@@ -1283,21 +1290,34 @@ function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
   }
 
   // Per-item consistency check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
+  // When stated kcal disagrees beyond tolerance, parse succeeds:
+  // - If stated < computed: calories is set to computed 4/4/9
+  // - If stated > computed: keep stated calories
+  // and calorieCorrection records { computed, stated } for the UI warning.
   const expectedKcal = 4 * itemProtein + 4 * itemCarbs + 9 * itemFat;
   const maxDiscrepancy = Math.max(60, 0.25 * itemCalories);
+  let finalCalories = itemCalories;
+  let calorieCorrection: CalorieCorrection | undefined;
   if (Math.abs(expectedKcal - itemCalories) > maxDiscrepancy) {
-    return null;
+    const computedVal = Math.round(expectedKcal);
+    const statedVal = Math.round(itemCalories);
+    calorieCorrection = {
+      computed: computedVal,
+      stated: statedVal,
+    };
+    finalCalories = statedVal < computedVal ? computedVal : statedVal;
   }
 
   return {
     name: itemName,
     portion,
-    calories: roundToOneDecimal(itemCalories),
+    calories: roundToOneDecimal(finalCalories),
     protein: roundToOneDecimal(itemProtein),
     carbs: roundToOneDecimal(itemCarbs),
     fat: roundToOneDecimal(itemFat),
     fiber: roundToOneDecimal(itemFiber ?? 0),
     isRange: hasRangeToken,
+    calorieCorrection,
   };
 }
 
@@ -1530,24 +1550,27 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     const rowExpectedKcal = 4 * pVal + 4 * cVal + 9 * fVal;
     const rowDiscrepancy = Math.abs(rowExpectedKcal - calVal);
     const maxRowDiscrepancy = Math.max(60, 0.25 * calVal);
+    let finalRowCal = calVal;
+    let rowCalorieCorrection: CalorieCorrection | undefined;
     if (rowDiscrepancy > maxRowDiscrepancy) {
-      return {
-        confidence: 'none',
-        reason: 'KCAL_INCONSISTENT',
-        skippedLines: [row],
-        modifiers: [],
-        foundMacros: ['calories', 'protein', 'carbs', 'fat'],
+      const computedVal = Math.round(rowExpectedKcal);
+      const statedVal = Math.round(calVal);
+      rowCalorieCorrection = {
+        computed: computedVal,
+        stated: statedVal,
       };
+      finalRowCal = statedVal < computedVal ? computedVal : statedVal;
     }
 
     items.push({
       name: itemName,
       portion: '1 serving',
-      calories: roundToOneDecimal(calVal),
+      calories: roundToOneDecimal(finalRowCal),
       protein: roundToOneDecimal(pVal),
       carbs: roundToOneDecimal(cVal),
       fat: roundToOneDecimal(fVal),
       fiber: roundToOneDecimal(fibVal ?? 0),
+      calorieCorrection: rowCalorieCorrection,
     });
   }
 
@@ -1608,7 +1631,7 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     }
   }
 
-  const sumCal = roundToOneDecimal(items.reduce((total, it) => total + it.calories, 0));
+  let sumCal = roundToOneDecimal(items.reduce((total, it) => total + it.calories, 0));
   const sumP = roundToOneDecimal(items.reduce((total, it) => total + it.protein, 0));
   const sumC = roundToOneDecimal(items.reduce((total, it) => total + it.carbs, 0));
   const sumF = roundToOneDecimal(items.reduce((total, it) => total + it.fat, 0));
@@ -1618,17 +1641,29 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
   if (sumFib > 0) foundMacros.push('fiber');
 
   // Table-level calorie consistency check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
+  // When cumulative row discrepancies exceed table tolerance:
+  // - rows where stated < computed are corrected up to computed 4/4/9
+  // - rows where stated > computed keep stated calories
+  // and calorieCorrection is attached per row with discrepancy; parent total = items sum.
   const expectedMealKcal = 4 * sumP + 4 * sumC + 9 * sumF;
   const mealDiscrepancy = Math.abs(expectedMealKcal - sumCal);
   const maxMealAllowedDiscrepancy = Math.max(60, 0.25 * sumCal);
   if (mealDiscrepancy > maxMealAllowedDiscrepancy) {
-    return {
-      confidence: 'none',
-      reason: 'KCAL_INCONSISTENT',
-      skippedLines: [],
-      modifiers: [],
-      foundMacros,
-    };
+    for (const it of items) {
+      const expKcal = Math.round(4 * it.protein + 4 * it.carbs + 9 * it.fat);
+      if (expKcal !== it.calories) {
+        if (!it.calorieCorrection) {
+          it.calorieCorrection = {
+            computed: expKcal,
+            stated: Math.round(it.calories),
+          };
+        }
+        if (it.calories < expKcal) {
+          it.calories = expKcal;
+        }
+      }
+    }
+    sumCal = roundToOneDecimal(items.reduce((total, it) => total + it.calories, 0));
   }
 
   // Totals vs items: within 5% or 30 kcal (whichever is larger) items win silently; beyond that grade lenient
@@ -2731,28 +2766,35 @@ export function parseNutritionText(text: string): NutritionParseResult {
   }
 
   // Kcal Consistency Check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
+  // When stated kcal disagrees beyond tolerance, parse succeeds:
+  // - If stated < computed: calories is set to computed 4/4/9
+  // - If stated > computed: keep stated calories
+  // and calorieCorrection records { computed, stated } for the UI warning.
   const expectedKcal = 4 * protein! + 4 * carbs! + 9 * fat!;
   const kcalDiscrepancy = Math.abs(expectedKcal - calories!);
   const maxAllowedDiscrepancy = Math.max(60, 0.25 * calories!);
+  let finalCalories = calories!;
+  let calorieCorrection: CalorieCorrection | undefined;
   if (kcalDiscrepancy > maxAllowedDiscrepancy) {
-    return {
-      confidence: 'none',
-      reason: 'KCAL_INCONSISTENT',
-      skippedLines,
-      modifiers,
-      foundMacros,
+    const computedVal = Math.round(expectedKcal);
+    const statedVal = Math.round(calories!);
+    calorieCorrection = {
+      computed: computedVal,
+      stated: statedVal,
     };
+    finalCalories = statedVal < computedVal ? computedVal : statedVal;
   }
 
   const meal: ParsedNutritionMeal = {
     name: mealName,
     servingSize: finalServingSize !== undefined ? roundToOneDecimal(finalServingSize) : undefined,
     servingUnit: finalServingUnit,
-    calories: roundToOneDecimal(calories!),
+    calories: roundToOneDecimal(finalCalories),
     protein: roundToOneDecimal(protein!),
     carbs: roundToOneDecimal(carbs!),
     fat: roundToOneDecimal(fat!),
     fiber: fiber !== undefined ? roundToOneDecimal(fiber) : undefined,
+    calorieCorrection,
   };
 
   let hint: string | undefined;

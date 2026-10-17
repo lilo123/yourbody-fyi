@@ -43,6 +43,7 @@ export interface UseTemplateEditorOptions {
   exercises?: Exercise[];
   targetUserId?: string;
   isFork?: boolean;
+  sourceTemplateId?: string | null;
 }
 
 export function useTemplateEditor({
@@ -56,6 +57,7 @@ export function useTemplateEditor({
   exercises = [],
   targetUserId = "",
   isFork = false,
+  sourceTemplateId = null,
 }: UseTemplateEditorOptions) {
   const templateNameId = useId();
   const addExerciseBtnRef = useRef<HTMLButtonElement>(null);
@@ -285,6 +287,11 @@ export function useTemplateEditor({
 
     if (template?.id && !isFork) {
       rpcPayload.p_expected_updated_at = latestUpdatedAt ?? null;
+    }
+
+    const effectiveSourceTemplateId = sourceTemplateId || (template?.is_master ? template.id : null);
+    if (isFork && effectiveSourceTemplateId) {
+      rpcPayload.p_source_template_id = effectiveSourceTemplateId;
     }
 
     try {
