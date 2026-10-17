@@ -22,6 +22,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    if (typeof document !== 'undefined') {
+      document.getElementById('prerender')?.remove();
+    }
     captureException(error, {
       extra: {
         componentStack: errorInfo.componentStack,
@@ -37,6 +40,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render(): ReactNode {
     if (this.state.hasError) {
+      if (typeof document !== 'undefined') {
+        document.getElementById('prerender')?.remove();
+      }
       if (this.props.fallback) {
         return this.props.fallback;
       }

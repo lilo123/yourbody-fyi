@@ -342,8 +342,9 @@ Protein: 30g`;
     expect(outOfRange.reason).toBe('VALUE_OUT_OF_RANGE');
 
     const inconsistent = parseNutritionText('Calories: 800\nProtein: 10g\nCarbs: 10g\nFat: 2g');
-    expect(inconsistent.confidence).toBe('none');
-    expect(inconsistent.reason).toBe('KCAL_INCONSISTENT');
+    expect(inconsistent.confidence).toBe('exact');
+    expect(inconsistent.meal?.calories).toBe(800);
+    expect(inconsistent.meal?.calorieCorrection).toEqual({ computed: 98, stated: 800 });
   });
 });
 
@@ -382,7 +383,7 @@ describe('Acceptance Guards & Property Tests (from PARSER_SPINE.md)', () => {
     { label: 'invalid unit (mg for protein)', input: 'Calories: 350, Protein: 30000mg, Carbs: 40g, Fat: 8g' },
     { label: 'kJ without kcal', input: 'Energy 1470 kJ\nProtein: 30g\nCarbs: 40g\nFat: 8g' },
     { label: 'calories out of range', input: 'Calories: 6000\nProtein: 30g\nCarbs: 40g\nFat: 8g' },
-    { label: 'kcal inconsistent', input: 'Calories: 700\nProtein: 30g\nCarbs: 40g\nFat: 8g' },
+    { label: 'negative calories', input: 'Calories: -100\nProtein: 30g\nCarbs: 40g\nFat: 8g' },
     { label: 'name contains digits', input: 'Protein Bar 2\nCalories: 200\nProtein: 20g\nCarbs: 20g\nFat: 5g' },
     { label: 'name multiple items', input: 'Steak and Salad\nCalories: 450\nProtein: 40g\nCarbs: 10g\nFat: 28g' },
     { label: 'prose conversation', input: 'I had chicken and rice for lunch today' },
@@ -635,12 +636,15 @@ describe('Seeded Property Tests', () => {
     for (const fixture of NUTRITION_CORPUS_FIXTURES) {
       const result = parseNutritionText(fixture.input);
       if (result.confidence === 'exact' && result.meal?.calories !== undefined) {
-        const kcalNumber = result.meal.calories;
+        const kcalNumber = result.meal.calorieCorrection
+          ? result.meal.calorieCorrection.stated
+          : result.meal.calories;
         const rawInput = fixture.input;
         if (result.meal.items && result.meal.items.length > 1) {
-          const itemsAppear = result.meal.items.every((item) =>
-            appearsInText(item.calories, rawInput)
-          );
+          const itemsAppear = result.meal.items.every((item) => {
+            const itemKcal = item.calorieCorrection ? item.calorieCorrection.stated : item.calories;
+            return appearsInText(itemKcal, rawInput);
+          });
           const totalAppears = appearsInText(kcalNumber, rawInput);
           expect(
             itemsAppear || totalAppears,
@@ -775,27 +779,29 @@ describe('Seeded Property Tests', () => {
     expect(deResult.meal?.calories).not.toBe(1);
   });
 
-  it('thousands separators with 0 macros yield KCAL_INCONSISTENT (never 1 kcal)', () => {
+  it('thousands separators with 0 macros yield stated 1000 kcal + warning (never 1 kcal)', () => {
     const commaInput = 'Protein Shake\nCalories: 1,000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g';
     const commaResult = parseNutritionText(commaInput);
-    expect(commaResult.confidence).toBe('none');
-    expect(commaResult.reason).toBe('KCAL_INCONSISTENT');
+    expect(commaResult.confidence).toBe('exact');
+    expect(commaResult.meal?.calories).toBe(1000);
+    expect(commaResult.meal?.calorieCorrection).toEqual({ computed: 0, stated: 1000 });
 
     const periodInput = 'Protein Shake\nCalories: 1.000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g';
     const periodResult = parseNutritionText(periodInput);
-    expect(periodResult.confidence).toBe('none');
-    expect(periodResult.reason).toBe('KCAL_INCONSISTENT');
+    expect(periodResult.confidence).toBe('exact');
+    expect(periodResult.meal?.calories).toBe(1000);
+    expect(periodResult.meal?.calorieCorrection).toEqual({ computed: 0, stated: 1000 });
 
     const blockResultComma = parseNutritionBlock(commaInput);
-    expect(blockResultComma.ok).toBe(false);
-    if (!blockResultComma.ok) {
-      expect(blockResultComma.reason).toBe('KCAL_INCONSISTENT');
+    expect(blockResultComma.ok).toBe(true);
+    if (blockResultComma.ok) {
+      expect(blockResultComma.meal.calories).toBe(1000);
     }
 
     const blockResultPeriod = parseNutritionBlock(periodInput);
-    expect(blockResultPeriod.ok).toBe(false);
-    if (!blockResultPeriod.ok) {
-      expect(blockResultPeriod.reason).toBe('KCAL_INCONSISTENT');
+    expect(blockResultPeriod.ok).toBe(true);
+    if (blockResultPeriod.ok) {
+      expect(blockResultPeriod.meal.calories).toBe(1000);
     }
   });
 
@@ -987,6 +993,48 @@ describe('Seeded Property Tests', () => {
       expect(result.meal?.protein).toBe(38);
       expect(result.meal?.carbs).toBe(12);
       expect(result.meal?.fat).toBe(32);
+    });
+
+    it('parses markdown table with cumulative row discrepancy, keeping stated rows when stated > computed', () => {
+      const table = [
+        '| Food | Calories | Protein | Carbs | Fat |',
+        '| --- | --- | --- | --- | --- |',
+        '| Item A | 140 kcal | 10g | 10g | 0g |',
+        '| Item B | 140 kcal | 10g | 10g | 0g |',
+        '| Item C | 140 kcal | 10g | 10g | 0g |',
+      ].join('\n');
+      const result = parseNutritionText(table);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.items).toHaveLength(3);
+      expect(result.meal?.calories).toBe(420);
+      expect(result.meal?.protein).toBe(30);
+      expect(result.meal?.carbs).toBe(30);
+      expect(result.meal?.fat).toBe(0);
+      for (const it of result.meal?.items ?? []) {
+        expect(it.calories).toBe(140);
+        expect(it.calorieCorrection).toEqual({ computed: 80, stated: 140 });
+      }
+    });
+
+    it('parses markdown table with cumulative row discrepancy where stated < computed, correcting rows up', () => {
+      const table = [
+        '| Food | Calories | Protein | Carbs | Fat |',
+        '| --- | --- | --- | --- | --- |',
+        '| Item A | 30 kcal | 10g | 10g | 0g |',
+        '| Item B | 30 kcal | 10g | 10g | 0g |',
+        '| Item C | 30 kcal | 10g | 10g | 0g |',
+      ].join('\n');
+      const result = parseNutritionText(table);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.items).toHaveLength(3);
+      expect(result.meal?.calories).toBe(240);
+      expect(result.meal?.protein).toBe(30);
+      expect(result.meal?.carbs).toBe(30);
+      expect(result.meal?.fat).toBe(0);
+      for (const it of result.meal?.items ?? []) {
+        expect(it.calories).toBe(80);
+        expect(it.calorieCorrection).toEqual({ computed: 80, stated: 30 });
+      }
     });
   });
 });

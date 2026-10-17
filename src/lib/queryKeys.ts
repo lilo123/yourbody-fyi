@@ -152,6 +152,8 @@ export const queryKeys = {
       ['routine_templates', userId, 'picker'] as const,
     workout: (userId: string | null | undefined) =>
       ['routine_templates', userId, 'workout'] as const,
+    hidden: (userId: string | null | undefined) =>
+      ['routine_templates', userId, 'hidden'] as const,
   },
 
   routineTemplateDetail: {

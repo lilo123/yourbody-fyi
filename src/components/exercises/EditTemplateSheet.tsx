@@ -29,6 +29,7 @@ export interface EditTemplateSheetProps {
   exercises?: Exercise[];
   targetUserId?: string;
   isFork?: boolean;
+  sourceTemplateId?: string | null;
 }
 
 export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
@@ -42,6 +43,7 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
   exercises = [],
   targetUserId = "",
   isFork = false,
+  sourceTemplateId = null,
 }) => {
   const {
     templateNameId,
@@ -83,6 +85,7 @@ export const EditTemplateSheet: React.FC<EditTemplateSheetProps> = ({
     exercises,
     targetUserId,
     isFork,
+    sourceTemplateId,
   });
 
   return (
