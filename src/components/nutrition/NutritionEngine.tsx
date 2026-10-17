@@ -210,7 +210,9 @@ export const NutritionEngine: React.FC = () => {
   // Mark update-safety dirty forms
   useEffect(() => {
     markFormDirty('staged-meal', Boolean(stagedMeal));
-    return () => { markFormDirty('staged-meal', false); };
+    return () => {
+      markFormDirty('staged-meal', false);
+    };
   }, [stagedMeal]);
 
   useEffect(() => {
@@ -260,7 +262,9 @@ export const NutritionEngine: React.FC = () => {
     if (!stagedMeal) return;
     const updatedItems = stagedMeal.items.filter((it) => it.id !== itemId);
     if (updatedItems.length === 0) {
-      decideFocusRestore(); clearDraft(); return;
+      decideFocusRestore();
+      clearDraft();
+      return;
     }
     setStagedMeal(withSyncedServing(stagedMeal, updatedItems));
   };
