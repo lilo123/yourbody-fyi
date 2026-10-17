@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TemplateListTab } from './TemplateListTab';
 import { MemoryRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { ToastProvider } from '../../context/ToastContext';
 import { ToastHost } from '../common/ToastHost';
 import { supabase } from '../../lib/supabase';
@@ -137,6 +137,7 @@ describe('TemplateListTab - Routine Features', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    onlineManager.setOnline(true);
   });
 
   const renderComponent = (props: Partial<Parameters<typeof TemplateListTab>[0]> = {}) => {
@@ -399,6 +400,11 @@ describe('TemplateListTab - Routine Features', () => {
     const tplBuilder = createSupabaseBuilder('routine_templates', { data: [], error: null });
     expect(tplBuilder.tableName).toBe('routine_templates');
     expect(getRecordedTables()).toContain('routine_templates');
+
+    // NO_PROJECTION_APPLIES: routine_template_hides inserts and deletes are mutation-only
+    const hideBuilder = createSupabaseBuilder('routine_template_hides', { data: [], error: null });
+    expect(hideBuilder.tableName).toBe('routine_template_hides');
+    expect(getRecordedTables()).toContain('routine_template_hides');
   });
 
   describe('get_routine_catalog integration', () => {
@@ -451,6 +457,259 @@ describe('TemplateListTab - Routine Features', () => {
       const deleteBtn = screen.getByTestId('delete-template-tpl-push');
       expect(deleteBtn).toBeDisabled();
       expect(deleteBtn.getAttribute('title')).toBe('Available when online');
+    });
+  });
+
+  describe('Master Template Library - Copy-on-Write and Hide/Unhide', () => {
+    const mockMasterTemplate: RoutineTemplate = {
+      id: 'tpl-master-1',
+      user_id: 'coach-1',
+      name: 'Master Hypertrophy Push',
+      is_master: true,
+      assigned_to: null,
+      days_of_week: ['Mon', 'Thu'],
+      exercises: [
+        {
+          id: 'te-m1',
+          template_id: 'tpl-master-1',
+          exercise_id: 'ex-bench',
+          order_index: 0,
+          target_sets: 4,
+          target_reps: 8,
+          exercise: { name: 'Barbell Bench Press' },
+        },
+      ],
+    };
+
+    it('clicking Edit on master opens EditTemplateSheet in fork mode with sourceTemplateId', async () => {
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockMasterTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent();
+
+      const editBtn = await screen.findByTestId('edit-template-tpl-master-1');
+      expect(editBtn).toBeDefined();
+
+      fireEvent.click(editBtn);
+
+      // Sheet opens in fork mode
+      expect(screen.getByTestId('edit-template-modal')).toBeDefined();
+      expect(screen.getByText('Duplicate & Customize Template')).toBeDefined();
+      expect(screen.getByTestId('template-name-input')).toHaveValue('Master Hypertrophy Push');
+    });
+
+    it('clicking Delete on master triggers deferred hide and inserts into routine_template_hides', async () => {
+      vi.useFakeTimers();
+
+      const mockInsert = vi.fn().mockResolvedValue({ data: null, error: null });
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'routine_template_hides') {
+          return { insert: mockInsert } as any;
+        }
+        return {} as any;
+      });
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockMasterTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ deleteTimeoutMs: 6000 });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      const hideBtn = screen.getByTestId('delete-template-tpl-master-1');
+      expect(hideBtn).toBeDefined();
+      expect(hideBtn).toHaveAttribute('aria-label', 'Hide routine');
+
+      fireEvent.click(hideBtn);
+
+      // Card is optimistically hidden
+      expect(screen.queryByTestId('delete-template-tpl-master-1')).toBeNull();
+
+      // Toast shows "Hide routine"
+      expect(screen.getByTestId('toast-dish-text').textContent).toContain('Master Hypertrophy Push');
+
+      // Before expiry: 0 writes
+      expect(mockInsert).not.toHaveBeenCalled();
+
+      // Advance past 6s
+      await act(async () => {
+        vi.advanceTimersByTime(6100);
+      });
+
+      // Insert committed to routine_template_hides
+      expect(mockInsert).toHaveBeenCalledWith({
+        hidden_by: 'user-athlete-1',
+        template_id: 'tpl-master-1',
+      });
+    });
+
+    it('clicking Undo on master hide restores the template and sends 0 insert calls', async () => {
+      vi.useFakeTimers();
+
+      const mockInsert = vi.fn();
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'routine_template_hides') {
+          return { insert: mockInsert } as any;
+        }
+        return {} as any;
+      });
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockMasterTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ deleteTimeoutMs: 6000 });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      const hideBtn = screen.getByTestId('delete-template-tpl-master-1');
+      fireEvent.click(hideBtn);
+
+      expect(screen.queryByTestId('delete-template-tpl-master-1')).toBeNull();
+
+      const undoBtn = screen.getByTestId('toast-undo-btn');
+      fireEvent.click(undoBtn);
+
+      expect(screen.getByTestId('delete-template-tpl-master-1')).toBeDefined();
+
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+
+      expect(mockInsert).not.toHaveBeenCalled();
+    });
+
+    it('toggling "Show hidden routines" displays hidden routines and clicking "Unhide" deletes the hide record', async () => {
+      const mockHiddenMaster: RoutineTemplate = {
+        id: 'tpl-hidden-1',
+        user_id: 'coach-1',
+        name: 'Hidden Master Routine',
+        is_master: true,
+        assigned_to: null,
+      };
+
+      const mockEq2 = vi.fn().mockResolvedValue({ data: null, error: null });
+      const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+      const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 });
+
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'routine_template_hides') {
+          return { delete: mockDelete } as any;
+        }
+        return {} as any;
+      });
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [], error: null });
+        }
+        if (fn === 'get_hidden_routine_templates') {
+          return Promise.resolve({ data: [mockHiddenMaster], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent();
+
+      const toggleBtn = await screen.findByTestId('show-hidden-routines-toggle');
+      expect(toggleBtn.textContent).toBe('Show hidden routines');
+
+      // Click toggle to show hidden routines
+      fireEvent.click(toggleBtn);
+
+      const unhideBtn = await screen.findByTestId('unhide-template-tpl-hidden-1');
+      expect(unhideBtn).toBeDefined();
+      expect(unhideBtn.textContent).toBe('Unhide');
+      expect(screen.getByText('Hidden Master Routine')).toBeDefined();
+
+      // Click Unhide
+      fireEvent.click(unhideBtn);
+
+      expect(mockDelete).toHaveBeenCalled();
+      expect(mockEq1).toHaveBeenCalledWith('template_id', 'tpl-hidden-1');
+      expect(mockEq2).toHaveBeenCalledWith('hidden_by', 'user-athlete-1');
+    });
+
+    it('a hidden or forked master stays hidden after reload', async () => {
+      onlineManager.setOnline(false);
+      vi.mocked(useOnlineStatus).mockReturnValue(false);
+
+      const mockForkOfMaster: RoutineTemplate = {
+        id: 'tpl-fork-1',
+        user_id: 'user-athlete-1',
+        name: 'My Forked Push Routine',
+        is_master: false,
+        source_template_id: 'tpl-master-1',
+        assigned_to: null,
+        days_of_week: ['Mon'],
+        exercises: [],
+      };
+
+      const mockHiddenMaster: RoutineTemplate = {
+        id: 'tpl-hidden-master-1',
+        user_id: 'coach-1',
+        name: 'Hidden Library Routine',
+        is_master: true,
+        assigned_to: null,
+        days_of_week: ['Wed'],
+        exercises: [],
+      };
+
+      // Prime queryClient with persisted catalog and hidden-list data
+      // (The catalog returned from server before going offline excludes hidden & forked masters)
+      queryClient.setQueryData(
+        ['routine_templates', 'user-athlete-1', 'catalog'],
+        [mockForkOfMaster]
+      );
+      queryClient.setQueryData(
+        ['routine_templates', 'user-athlete-1', 'hidden'],
+        [mockHiddenMaster]
+      );
+
+      const rpcSpy = vi.spyOn(supabase, 'rpc');
+      rpcSpy.mockClear();
+
+      // Render while offline
+      const { unmount } = renderComponent();
+
+      // Master templates that are hidden or forked should not appear in the catalog
+      expect(screen.queryByText('Hidden Library Routine')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-hidden-master-1')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-master-1')).toBeNull();
+
+      // Forked template is visible
+      expect(screen.getByText('My Forked Push Routine')).toBeDefined();
+      expect(screen.getByTestId('edit-template-tpl-fork-1')).toBeDefined();
+
+      // Assert no network call was made
+      expect(rpcSpy).not.toHaveBeenCalled();
+
+      // Remount (simulated reload re-reading from persisted cache)
+      unmount();
+      renderComponent();
+
+      // Assert again after remount
+      expect(screen.queryByText('Hidden Library Routine')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-hidden-master-1')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-master-1')).toBeNull();
+      expect(screen.getByText('My Forked Push Routine')).toBeDefined();
+      expect(screen.getByTestId('edit-template-tpl-fork-1')).toBeDefined();
+      expect(rpcSpy).not.toHaveBeenCalled();
     });
   });
 });

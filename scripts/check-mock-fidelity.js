@@ -459,6 +459,11 @@ const SERVICED_QUERIES_REGISTRY = {
       type: 'WILDCARD_MUTATION_RETURN',
       description: 'Bare .select() post-delete row return on routine template deletion',
     },
+    {
+      table: 'routine_template_hides',
+      type: 'NO_PROJECTION_APPLIES',
+      description: 'Mutation-only insert and delete on routine template hides',
+    },
   ],
   'src/components/settings/CoachSettingsCard.test.tsx': [
     {
