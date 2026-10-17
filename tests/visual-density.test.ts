@@ -8706,7 +8706,7 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
           const header = page.locator('header');
           await expect(header).toBeVisible();
 
-          const h1 = page.locator('header h1');
+          const h1 = page.locator('header [data-testid="brand-name"]').or(page.locator('header p')).first();
           await expect(h1).toBeVisible();
 
           const textContent = await h1.textContent();
@@ -9007,7 +9007,7 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
       };
 
       const verifyWordmarkGeometry = async (page: Page, stateDesc: string) => {
-        const h1 = page.locator('header h1');
+        const h1 = page.locator('header [data-testid="brand-name"]').or(page.locator('header p')).first();
         await expect(h1).toBeVisible({ timeout: 5000 });
 
         const metrics = await h1.evaluate((el) => {
@@ -9358,9 +9358,9 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         }
 
         // (e) brand name computed font-size >= 14px and scrollWidth <= clientWidth, no overlap with the first control
-        const h1 = document.querySelector('header h1') as HTMLElement;
+        const h1 = (document.querySelector('header [data-testid="brand-name"]') || document.querySelector('header p') || document.querySelector('header h1')) as HTMLElement;
         if (!h1) {
-          issues.push('Brand name h1 not found');
+          issues.push('Brand name element not found');
         } else {
           const h1Style = window.getComputedStyle(h1);
           const fs = parseFloat(h1Style.fontSize);
@@ -9381,7 +9381,7 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
 
         // (f) tagline either display:none or scrollWidth <= clientWidth
         // Explicitly enforces: at 320px tagline is display:none; at 390px on /workout tagline is visible and not truncated
-        const tagline = document.querySelector('header h1 + div') as HTMLElement;
+        const tagline = (document.querySelector('header [data-testid="brand-name"] + div') || document.querySelector('header p + div') || document.querySelector('header h1 + div')) as HTMLElement;
         if (tagline) {
           const tagStyle = window.getComputedStyle(tagline);
           if (width === 320) {
