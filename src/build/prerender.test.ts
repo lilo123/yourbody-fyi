@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import vm from 'node:vm';
 import { renderRoute, PRERENDER_ROUTES } from '../prerender/entry-server';
 import { authStorageKey, AUTH_TOKEN_KEY_REGEX, hasValidAuthToken } from '../lib/supabase';
 
@@ -191,6 +192,8 @@ describe('Prerender Output and Configuration', () => {
 
       const distIndex = fs.readFileSync(path.join(distDir, 'index.html'), 'utf8');
       expect(distIndex).toContain('id="prerender"');
+      expect(distIndex).toContain('data-prerender-route="/"');
+      expect(distIndex).toMatch(/<meta\s+name=["']prerender-route["']\s+content=["']\/["']/);
       expect(distIndex).toContain('You know your workout. We just help you track it.');
       expect(distIndex).toContain('No frills.');
       expect(distIndex).toContain('Free forever.');
@@ -198,14 +201,20 @@ describe('Prerender Output and Configuration', () => {
 
       const distTerms = fs.readFileSync(path.join(distDir, 'terms.html'), 'utf8');
       expect(distTerms).toContain('id="prerender"');
+      expect(distTerms).toContain('data-prerender-route="/terms"');
+      expect(distTerms).toMatch(/<meta\s+name=["']prerender-route["']\s+content=["']\/terms["']/);
       expect(distTerms).toContain('Terms of Service');
 
       const distPrivacy = fs.readFileSync(path.join(distDir, 'privacy.html'), 'utf8');
       expect(distPrivacy).toContain('id="prerender"');
+      expect(distPrivacy).toContain('data-prerender-route="/privacy"');
+      expect(distPrivacy).toMatch(/<meta\s+name=["']prerender-route["']\s+content=["']\/privacy["']/);
       expect(distPrivacy).toContain('Privacy Policy');
 
       const distRefunds = fs.readFileSync(path.join(distDir, 'refunds.html'), 'utf8');
       expect(distRefunds).toContain('id="prerender"');
+      expect(distRefunds).toContain('data-prerender-route="/refunds"');
+      expect(distRefunds).toMatch(/<meta\s+name=["']prerender-route["']\s+content=["']\/refunds["']/);
       expect(distRefunds).toContain('Refund Policy');
 
       expect(fs.existsSync(path.join(distDir, 'prerender-guard.js'))).toBe(true);
@@ -281,6 +290,190 @@ describe('Prerender Output and Configuration', () => {
       fakeStorage.clear();
       fakeStorage.setItem('yourbody_user', JSON.stringify({ id: 'u123', email: 'test@example.com' }));
       expect(hasValidAuthToken(fakeStorage)).toBe(true);
+    });
+  });
+
+  describe('(e) Prerender route guard logic across routes and auth states', () => {
+    const loadGuard = () => {
+      const code = fs.readFileSync(guardScriptPath, 'utf8');
+      const ctx: any = {
+        module: { exports: {} },
+      };
+      vm.runInNewContext(code, ctx);
+      return ctx.module.exports as {
+        normalizePath: (p?: string) => string;
+        detectPrerenderRoute: () => string;
+        shouldKeepPrerender: (opts: {
+          pathname?: string;
+          prerenderRoute?: string;
+          hasUser?: boolean;
+          isStandalone?: boolean;
+        }) => boolean;
+      };
+    };
+
+    it('normalizePath handles trailing slashes, .html extensions, and maps /index and /index.html to /', () => {
+      const { normalizePath } = loadGuard();
+      expect(normalizePath('/')).toBe('/');
+      expect(normalizePath('')).toBe('/');
+      expect(normalizePath('/index.html')).toBe('/');
+      expect(normalizePath('/index')).toBe('/');
+      expect(normalizePath('/index/')).toBe('/');
+      expect(normalizePath('/terms')).toBe('/terms');
+      expect(normalizePath('/terms/')).toBe('/terms');
+      expect(normalizePath('/terms.html')).toBe('/terms');
+      expect(normalizePath('/privacy')).toBe('/privacy');
+      expect(normalizePath('/privacy/')).toBe('/privacy');
+      expect(normalizePath('/privacy.html')).toBe('/privacy');
+      expect(normalizePath('/refunds')).toBe('/refunds');
+      expect(normalizePath('/refunds/')).toBe('/refunds');
+      expect(normalizePath('/workout')).toBe('/workout');
+      expect(normalizePath('/workout/')).toBe('/workout');
+    });
+
+    it('guard logic for /, /index.html, /terms, /terms/, /privacy, /refunds, /workout (signed-in vs signed-out)', () => {
+      const { shouldKeepPrerender } = loadGuard();
+
+      // Case 1: Landing page document (prerenderRoute = '/')
+      // Signed-out visits to landing routes keep prerender
+      expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/index.html', prerenderRoute: '/', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/index', prerenderRoute: '/', hasUser: false })).toBe(true);
+
+      // Signed-in visits to landing routes hide prerender
+      expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/', hasUser: true })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/index.html', prerenderRoute: '/', hasUser: true })).toBe(false);
+
+      // SW navigateFallback scenario: index.html served at legal or app paths
+      // Mismatch between current pathname and prerenderRoute '/' hides prerender immediately
+      expect(shouldKeepPrerender({ pathname: '/terms', prerenderRoute: '/', hasUser: false })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/terms/', prerenderRoute: '/', hasUser: false })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/privacy', prerenderRoute: '/', hasUser: false })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/refunds', prerenderRoute: '/', hasUser: false })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/workout', prerenderRoute: '/', hasUser: false })).toBe(false);
+
+      // Case 2: Terms document (prerenderRoute = '/terms')
+      expect(shouldKeepPrerender({ pathname: '/terms', prerenderRoute: '/terms', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/terms/', prerenderRoute: '/terms', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/terms', prerenderRoute: '/terms', hasUser: true })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/terms', hasUser: false })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/workout', prerenderRoute: '/terms', hasUser: false })).toBe(false);
+
+      // Case 3: Privacy document (prerenderRoute = '/privacy')
+      expect(shouldKeepPrerender({ pathname: '/privacy', prerenderRoute: '/privacy', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/privacy/', prerenderRoute: '/privacy', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/privacy', prerenderRoute: '/privacy', hasUser: true })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/privacy', hasUser: false })).toBe(false);
+
+      // Case 4: Refunds document (prerenderRoute = '/refunds')
+      expect(shouldKeepPrerender({ pathname: '/refunds', prerenderRoute: '/refunds', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/refunds/', prerenderRoute: '/refunds', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/refunds', prerenderRoute: '/refunds', hasUser: true })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/refunds', hasUser: false })).toBe(false);
+
+      // Case 5: Non-public routes like /workout always hide prerender
+      expect(shouldKeepPrerender({ pathname: '/workout', prerenderRoute: '/workout', hasUser: false })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/workout', prerenderRoute: '/workout', hasUser: true })).toBe(false);
+    });
+
+    it('standalone display mode always hides prerender', () => {
+      const { shouldKeepPrerender } = loadGuard();
+      expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/', hasUser: false, isStandalone: true })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/terms', prerenderRoute: '/terms', hasUser: false, isStandalone: true })).toBe(false);
+    });
+
+    it('executes guard script in DOM environment: hides #prerender on SW fallback (/terms on index.html) and keeps visible on /index.html', () => {
+      const code = fs.readFileSync(guardScriptPath, 'utf8');
+
+      // Scenario A: SW fallback: user on /terms, index.html contains prerender-route="/"
+      {
+        const root = document.createElement('div');
+        root.id = 'root';
+        const prerender = document.createElement('div');
+        prerender.id = 'prerender';
+        prerender.setAttribute('data-prerender-route', '/');
+        prerender.innerHTML = '<h1>Landing Hero</h1>';
+
+        const meta = document.createElement('meta');
+        meta.name = 'prerender-route';
+        meta.content = '/';
+
+        document.head.appendChild(meta);
+        document.body.appendChild(prerender);
+        document.body.appendChild(root);
+        document.documentElement.className = 'dark';
+
+        const mockWindow = {
+          location: { pathname: '/terms' },
+          matchMedia: () => ({ matches: false }),
+          addEventListener: vi.fn(),
+        };
+
+        const ctx: any = {
+          window: mockWindow,
+          document,
+          localStorage: { getItem: () => null, length: 0 },
+          setTimeout,
+          MutationObserver,
+          module: { exports: {} },
+        };
+
+        vm.runInNewContext(code, ctx);
+
+        // Expect hide-prerender applied immediately
+        expect(document.documentElement.classList.contains('hide-prerender')).toBe(true);
+        expect(document.getElementById('prerender')).toBeNull();
+
+        // Clean up DOM
+        meta.remove();
+        root.remove();
+        document.documentElement.className = 'dark';
+      }
+
+      // Scenario B: User loads /index.html on index.html (prerender-route="/")
+      {
+        const root = document.createElement('div');
+        root.id = 'root';
+        const prerender = document.createElement('div');
+        prerender.id = 'prerender';
+        prerender.setAttribute('data-prerender-route', '/');
+        prerender.innerHTML = '<h1>Landing Hero</h1>';
+
+        const meta = document.createElement('meta');
+        meta.name = 'prerender-route';
+        meta.content = '/';
+
+        document.head.appendChild(meta);
+        document.body.appendChild(prerender);
+        document.body.appendChild(root);
+        document.documentElement.className = 'dark';
+
+        const mockWindow = {
+          location: { pathname: '/index.html' },
+          matchMedia: () => ({ matches: false }),
+          addEventListener: vi.fn(),
+        };
+
+        const ctx: any = {
+          window: mockWindow,
+          document,
+          localStorage: { getItem: () => null, length: 0 },
+          setTimeout,
+          MutationObserver,
+          module: { exports: {} },
+        };
+
+        vm.runInNewContext(code, ctx);
+
+        // Prerender must NOT be hidden
+        expect(document.documentElement.classList.contains('hide-prerender')).toBe(false);
+        expect(document.getElementById('prerender')).not.toBeNull();
+
+        meta.remove();
+        prerender.remove();
+        root.remove();
+        document.documentElement.className = 'dark';
+      }
     });
   });
 });
