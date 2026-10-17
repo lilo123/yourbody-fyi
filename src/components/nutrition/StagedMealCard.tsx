@@ -219,6 +219,63 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
       ? formatLenientHint(stagedMeal.skippedLines, stagedMeal.modifiers)
       : null;
 
+  const hasSource = stagedMeal.source === 'local' || stagedMeal.source === 'rules' || stagedMeal.source === 'ai';
+
+  const sourceBadge = hasSource ? (
+    <span
+      data-testid="parsed-locally-badge"
+      className={`inline-flex items-center gap-1 px-2 h-4 rounded-full text-xs font-bold leading-none normal-case shrink-0 ${
+        stagedMeal.source === 'ai'
+          ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+          : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
+      }`}
+    >
+      {stagedMeal.source === 'ai' ? 'AI' : 'Device'}
+    </span>
+  ) : null;
+
+  const analyzeWithAiButton =
+    isOnline && onAnalyzeWithAiInstead && (stagedMeal.source === 'local' || stagedMeal.source === 'rules') ? (
+      <button
+        type="button"
+        data-testid="analyze-with-ai-instead-btn"
+        onClick={onAnalyzeWithAiInstead}
+        disabled={isAnalyzing}
+        className="inline-flex items-center gap-1.5 px-2 text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 active:bg-cyan-500/20 rounded-lg transition motion-reduce:transition-none min-h-[44px] touch-manipulation disabled:opacity-50 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 -my-1.5"
+      >
+        <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+        <span>Analyze with AI instead</span>
+      </button>
+    ) : null;
+
+  const lenientBanner = stagedMeal.confidence === 'lenient' ? (
+    <div
+      data-testid="lenient-fallback-banner"
+      className="flex flex-col gap-0.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1"
+    >
+      <span>Please review macros before logging.</span>
+      {lenientHint && <span data-testid="lenient-hint" className="text-amber-300/80 truncate">{lenientHint}</span>}
+    </div>
+  ) : null;
+
+  const scaleAndAddControls = (
+    <div className="ml-auto flex items-center gap-1">
+      <MealScaleControl scale={stagedMeal.scale ?? 1} onScale={(factor) => onUpdateStagedMeal(scaleStagedMeal(stagedMeal, factor))} />
+      {!isAddingItem && !isComposerOpen && (
+        <button
+          ref={addItemBtnRef}
+          type="button"
+          data-testid="add-item-button"
+          aria-label="Add item"
+          onClick={() => setIsComposerOpen(true)}
+          className="text-cyan-400 hover:text-cyan-300 font-bold text-xs min-h-[40px] h-10 px-2.5 flex items-center justify-center -my-3 rounded-lg transition motion-reduce:transition-none touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          + Add
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div
       ref={cardRef}
@@ -275,46 +332,14 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
         </div>
       </div>
 
-      {/* Parse provenance banner */}
-      {(stagedMeal.source === 'local' || stagedMeal.source === 'rules' || stagedMeal.source === 'ai') && (
+      {/* Row B: Parse provenance badge & compact secondary action (multi-item) */}
+      {isMultiItem && sourceBadge && (
         <div className="flex flex-col gap-0.5 border-b border-zinc-800 pb-0.5 pt-0">
           <div className="flex items-center justify-between gap-2">
-            <span
-              data-testid="parsed-locally-badge"
-              className={`inline-flex items-center gap-1 px-2.5 py-0 rounded-full text-xs font-bold leading-tight ${
-                stagedMeal.source === 'ai'
-                  ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
-                  : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
-              }`}
-            >
-              {stagedMeal.source === 'ai' ? 'AI' : 'Device'}
-            </span>
-            {isOnline && onAnalyzeWithAiInstead && (stagedMeal.source === 'local' || stagedMeal.source === 'rules') && (
-              <button
-                type="button"
-                data-testid="analyze-with-ai-instead-btn"
-                onClick={onAnalyzeWithAiInstead}
-                disabled={isAnalyzing}
-                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/50 transition min-h-[44px] touch-manipulation disabled:opacity-50"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Analyze with AI instead</span>
-              </button>
-            )}
+            {sourceBadge}
+            {analyzeWithAiButton}
           </div>
-          {stagedMeal.confidence === 'lenient' && (
-            <div
-              data-testid="lenient-fallback-banner"
-              className="flex flex-col gap-0.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1"
-            >
-              <span>Please review macros before logging.</span>
-              {lenientHint && (
-                <span data-testid="lenient-hint" className="text-amber-300/80 truncate">
-                  {lenientHint}
-                </span>
-              )}
-            </div>
-          )}
+          {lenientBanner}
         </div>
       )}
 
@@ -338,46 +363,27 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
         </div>
       )}
 
-      {/* Itemized Ingredient Breakdown */}
-      <div
-        className={`space-y-0.5 ${
-          stagedMeal.source === 'local' || stagedMeal.source === 'rules' || stagedMeal.source === 'ai'
-            ? 'pt-0'
-            : 'pt-2.5'
-        }`}
-      >
-        <div
-          data-testid="breakdown-header"
-          className="flex items-center justify-between gap-2 min-w-0 text-xs font-bold uppercase text-zinc-400 tracking-wider"
-        >
-          {isMultiItem ? (
-            <>
-              {/* the short label keeps label + Scale + Add on one line below 390px */}
-              <span className="max-[389px]:hidden">Itemized Breakdown ({stagedMeal.items.length})</span>
-              <span className="hidden max-[389px]:inline">Items ({stagedMeal.items.length})</span>
-            </>
-          ) : (
-            <span className="sr-only">Items</span>
-          )}
-          <div className="ml-auto flex items-center gap-1">
-            <MealScaleControl
-              scale={stagedMeal.scale ?? 1}
-              onScale={(factor) => onUpdateStagedMeal(scaleStagedMeal(stagedMeal, factor))}
-            />
-            {!isAddingItem && !isComposerOpen && (
-              <button
-                ref={addItemBtnRef}
-                type="button"
-                data-testid="add-item-button"
-                aria-label="Add item"
-                onClick={() => setIsComposerOpen(true)}
-                className="text-cyan-400 hover:text-cyan-300 font-bold text-xs min-h-[40px] h-10 px-2.5 flex items-center justify-center -my-3 rounded-lg transition motion-reduce:transition-none touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-              >
-                + Add
-              </button>
-            )}
+      {/* Itemized Ingredient Breakdown / Unified single-item action row */}
+      <div className={`space-y-0.5 ${isMultiItem && sourceBadge ? 'pt-0' : 'pt-2.5'}`}>
+        {isMultiItem ? (
+          <div
+            data-testid="breakdown-header"
+            className="flex items-center justify-between gap-2 min-w-0 text-xs font-bold uppercase text-zinc-400 tracking-wider"
+          >
+            <span className="max-[389px]:hidden">Itemized Breakdown ({stagedMeal.items.length})</span>
+            <span className="hidden max-[389px]:inline">Items ({stagedMeal.items.length})</span>
+            {scaleAndAddControls}
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            <div data-testid="breakdown-header" className="flex items-center justify-between gap-2 min-w-0 text-xs font-bold text-zinc-400 tracking-wider">
+              {sourceBadge ?? <span className="sr-only">Items</span>}
+              {scaleAndAddControls}
+            </div>
+            {analyzeWithAiButton && <div className="flex justify-end pt-0.5">{analyzeWithAiButton}</div>}
+            {lenientBanner}
+          </div>
+        )}
 
         <div className="divide-y divide-zinc-800/80 pt-3.5">
           {stagedMeal.items.map((item) => (
@@ -424,6 +430,13 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                   });
                 }}
               />
+              {item.calorieCorrection && (
+                <p data-testid="item-calorie-correction-warning" className="text-xs text-amber-400/90 pt-1 pb-2 px-1">
+                  {item.calorieCorrection.stated < item.calorieCorrection.computed
+                    ? `Calories set to ${item.calorieCorrection.computed} from protein, carbs and fat (you entered ${item.calorieCorrection.stated}).`
+                    : `Calories don't match protein, carbs and fat (about ${item.calorieCorrection.computed} kcal).`}
+                </p>
+              )}
             </div>
           ))}
         </div>
