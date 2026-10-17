@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { NutritionAiInput, type NutritionAiInputProps } from './NutritionAiInput';
+import { NutritionAiInput, getUnparseableMessage, type NutritionAiInputProps } from './NutritionAiInput';
 
 let mockPaywallEnabled = false;
 vi.mock('../../hooks/useFeatureFlag', () => ({
@@ -614,4 +614,170 @@ describe('NutritionAiInput live regions and accessibility', () => {
       );
     });
   });
+
+  describe('Status banner dismissal, clearing, and failure deduplication', () => {
+    it('clicking dismiss button calls onDismissStatus and hides the status banner', () => {
+      const onDismissStatus = vi.fn();
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            status: 'Something went wrong',
+            isError: true,
+            onDismissStatus,
+          })}
+        />
+      );
+
+      expect(screen.getByTestId('status-message')).toBeInTheDocument();
+      const dismissBtn = screen.getByTestId('dismiss-status-button');
+      expect(dismissBtn).toHaveAttribute('aria-label', 'Dismiss');
+
+      fireEvent.click(dismissBtn);
+      expect(onDismissStatus).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('status-message')).toBeNull();
+    });
+
+    it('typing into input calls onDismissStatus to clear the banner', () => {
+      const onDismissStatus = vi.fn();
+      const onNlInputChange = vi.fn();
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            status: 'Some error message',
+            isError: true,
+            onDismissStatus,
+            onNlInputChange,
+          })}
+        />
+      );
+
+      const textarea = screen.getByRole('textbox');
+      fireEvent.change(textarea, { target: { value: 'New text' } });
+      expect(onNlInputChange).toHaveBeenCalledWith('New text');
+      expect(onDismissStatus).toHaveBeenCalledTimes(1);
+    });
+
+    it('changing parser mode calls onDismissStatus to clear the banner', () => {
+      const onDismissStatus = vi.fn();
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            status: 'Some error message',
+            isError: true,
+            onDismissStatus,
+          })}
+        />
+      );
+
+      // Open mode menu
+      const modeChip = screen.getByTestId('parser-mode-chip');
+      fireEvent.click(modeChip);
+
+      // Select Always AI
+      const alwaysAiOption = screen.getByTestId('parser-mode-option-always_ai');
+      fireEvent.click(alwaysAiOption);
+
+      expect(onDismissStatus).toHaveBeenCalledTimes(1);
+    });
+
+    it('suppresses duplicate red status banner on on-device unparseable failure', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            parserMode: 'on_device',
+            nlInput: 'I had chicken and rice',
+            status: 'Could not parse: use quick log',
+            isError: true,
+          })}
+        />
+      );
+
+      // Inline reason feedback is visible
+      expect(screen.getByTestId('unparseable-feedback-container')).toBeInTheDocument();
+      // Red StatusBanner is suppressed
+      expect(screen.queryByTestId('status-message')).toBeNull();
+    });
+
+    it('verifies unparseable reason mapping produces friendly message', () => {
+      render(
+        <NutritionAiInput
+          {...defaultProps({
+            parserMode: 'on_device',
+            nlInput: 'I had chicken and rice',
+          })}
+        />
+      );
+
+      const reasonElem = screen.getByTestId('unparseable-reason');
+      expect(reasonElem).toHaveTextContent(
+        "Can't read this on your device. It needs calories, protein, carbs and fat."
+      );
+    });
+
+    it('maps all parser failure reasons correctly', () => {
+      expect(getUnparseableMessage('NOT_A_NUTRITION_BLOCK')).toContain("Can't read this on your device");
+      expect(getUnparseableMessage('UNREADABLE_LINE')).toContain("Can't read this on your device");
+      expect(getUnparseableMessage('Unreadable line: foo')).toContain("Can't read this on your device");
+      expect(getUnparseableMessage(undefined)).toContain("Can't read this on your device");
+    });
+
+    it('clears error status banner on a successful retry', () => {
+      const onAnalyze = vi.fn();
+      const { rerender } = render(
+        <NutritionAiInput
+          {...defaultProps({
+            status: 'AI service unavailable',
+            isError: true,
+            onAnalyze,
+          })}
+        />
+      );
+
+      const retryBtn = screen.getByTestId('retry-analysis-button');
+      fireEvent.click(retryBtn);
+      expect(onAnalyze).toHaveBeenCalledTimes(1);
+
+      rerender(
+        <NutritionAiInput
+          {...defaultProps({
+            status: '',
+            isError: false,
+            onAnalyze,
+          })}
+        />
+      );
+      expect(screen.queryByTestId('status-message')).toBeNull();
+    });
+
+    it('clears error status banner on a new successful Analyze', () => {
+      const onAnalyze = vi.fn();
+      const { rerender } = render(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: 'Chicken Breast\nCalories: 200\nProtein: 30g\nCarbs: 0g\nFat: 5g',
+            status: 'Previous error message',
+            isError: true,
+            onAnalyze,
+          })}
+        />
+      );
+
+      const analyzeBtn = screen.getByTestId('analyze-meal-button');
+      fireEvent.click(analyzeBtn);
+      expect(onAnalyze).toHaveBeenCalledTimes(1);
+
+      rerender(
+        <NutritionAiInput
+          {...defaultProps({
+            nlInput: '',
+            status: '',
+            isError: false,
+            onAnalyze,
+          })}
+        />
+      );
+      expect(screen.queryByTestId('status-message')).toBeNull();
+    });
+  });
 });
+

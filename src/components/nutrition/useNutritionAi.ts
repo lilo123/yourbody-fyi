@@ -46,6 +46,7 @@ function buildStagedMealFromLocal(
         carbs: item.carbs,
         fat: item.fat,
         fiber: item.fiber,
+        calorieCorrection: item.calorieCorrection,
       })
     );
     const totals = recomputeStagedTotals(stagedItems);
@@ -84,6 +85,7 @@ function buildStagedMealFromLocal(
     carbs: parsed.carbs,
     fat: parsed.fat,
     fiber: parsed.fiber ?? 0,
+    calorieCorrection: parsed.calorieCorrection,
   });
 
   const mealName = parsed.name || 'Meal';
@@ -193,6 +195,7 @@ export function useNutritionAi({
     isAnalyzingRef.current = true;
     setIsAnalyzing(true);
     setIsError(false);
+    setStatus('');
     setIsRateLimited(false);
     setIsQuotaExceeded(false);
 
@@ -214,6 +217,7 @@ export function useNutritionAi({
         if (localResult.confidence === 'exact' && localResult.meal) {
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
           if (meal) {
+            setIsError(false);
             setStatus('Parsed locally');
             onParsedSuccess(meal);
             return;
@@ -223,6 +227,7 @@ export function useNutritionAi({
         if (localResult.confidence === 'lenient' && isSingle && localResult.meal) {
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'lenient');
           if (meal) {
+            setIsError(false);
             setStatus('Parsed locally');
             onParsedSuccess(meal);
             return;
@@ -245,6 +250,7 @@ export function useNutritionAi({
           if (localResult.confidence === 'exact' && localResult.meal) {
             const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
             if (meal) {
+              setIsError(false);
               setStatus('Parsed locally');
               onParsedSuccess(meal);
               return;
@@ -254,6 +260,7 @@ export function useNutritionAi({
           if (localResult.confidence === 'lenient' && isSingle && localResult.meal) {
             const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'lenient');
             if (meal) {
+              setIsError(false);
               setStatus('Parsed locally');
               onParsedSuccess(meal);
               return;
@@ -283,6 +290,7 @@ export function useNutritionAi({
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'exact');
           if (meal) {
             stopAnalyzing();
+            setIsError(false);
             setStatus('Parsed locally');
             onParsedSuccess(meal);
             return;
@@ -301,6 +309,7 @@ export function useNutritionAi({
           const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'lenient');
           if (meal) {
             stopAnalyzing();
+            setIsError(false);
             setStatus('Parsed locally');
             onParsedSuccess(meal);
             return;
@@ -314,6 +323,7 @@ export function useNutritionAi({
           if (localResult.confidence === 'lenient' && isSingle && localResult.meal) {
             const meal = buildStagedMealFromLocal(textToAnalyze, localResult, 'lenient');
             if (meal) {
+              setIsError(false);
               setStatus('Parsed locally');
               onParsedSuccess(meal);
               return;
