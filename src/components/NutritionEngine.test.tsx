@@ -3348,6 +3348,259 @@ Total Fiber: 1 g`;
     expect(payload.fiber).toBeCloseTo(expectedTotals.fiber, 6);
   });
 
+  describe('custom dish edit staging freshness regression', () => {
+    it('stages edited values (amount, unit, kcal, macros) when custom dish with items is edited and tapped', async () => {
+      let currentDishes = [
+        {
+          id: 'dish-repro-icecream',
+          name: 'Protein Ice Cream',
+          calories: 609,
+          protein: 73.9,
+          carbs: 42,
+          fat: 16.1,
+          fiber: 0,
+          serving_quantity: 1,
+          serving_unit: 'unit',
+          kind: 'food' as const,
+          use_count: 3,
+          created_at: new Date().toISOString(),
+        },
+      ];
+
+      let currentDetail = {
+        id: 'dish-repro-icecream',
+        name: 'Protein Ice Cream',
+        calories: 609,
+        protein: 73.9,
+        carbs: 42,
+        fat: 16.1,
+        fiber: 0,
+        kind: 'food' as const,
+        notes: null,
+        items: [
+          {
+            id: 'item-1',
+            name: 'Protein Ice Cream',
+            quantity: 1,
+            unit: 'unit',
+            displayPortion: '1 unit',
+            calories: 609,
+            protein: 73.9,
+            carbs: 42,
+            fat: 16.1,
+            fiber: 0,
+          },
+        ],
+        ingredients: null,
+      };
+
+      const mockInsert = vi.fn().mockReturnValue({
+        select: vi.fn().mockResolvedValue({ data: [], error: null }),
+      });
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'custom_dishes') {
+          const b = createSupabaseBuilder('custom_dishes', {
+            resolver: (builder: any) => {
+              if (builder.projection === 'id, items, ingredients, kind, notes') {
+                return currentDetail;
+              }
+              return currentDishes;
+            },
+          });
+          (b as any).update = (values: any) => ({
+            eq: (_col: string, id: string) => ({
+              select: async () => {
+                const updatedRow = {
+                  ...currentDetail,
+                  ...values,
+                  id,
+                  serving_quantity: values.items?.[0]?.quantity ?? null,
+                  serving_unit: values.items?.[0]?.unit ?? null,
+                };
+                currentDetail = updatedRow;
+                currentDishes = [
+                  {
+                    id,
+                    name: values.name ?? currentDetail.name,
+                    calories: values.calories,
+                    protein: values.protein,
+                    carbs: values.carbs,
+                    fat: values.fat,
+                    fiber: values.fiber,
+                    kind: values.kind ?? 'food',
+                    serving_quantity: values.items?.[0]?.quantity ?? null,
+                    serving_unit: values.items?.[0]?.unit ?? null,
+                    use_count: 3,
+                    created_at: new Date().toISOString(),
+                  },
+                ];
+                return { data: [updatedRow], error: null };
+              },
+            }),
+          });
+          return b;
+        }
+        const b = createSupabaseBuilder(table, { data: [], error: null });
+        if (table === 'nutrition_logs') {
+          b.insert = mockInsert;
+        }
+        return b;
+      });
+
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('custom-dish-card-dish-repro-icecream')).toBeDefined();
+      });
+
+      // 1. Open edit modal (this caches the initial 609 kcal / 1 unit dish in 'full' cache)
+      fireEvent.click(screen.getByTestId('edit-dish-btn-dish-repro-icecream'));
+      await waitFor(() => {
+        expect(screen.getByText('Edit Custom Dish')).toBeDefined();
+      });
+
+      // 2. Edit quantity to 595, calories to 627, protein to 76
+      const modal = screen.getByTestId('custom-dish-modal');
+      const qtyInput = within(modal).getByPlaceholderText('e.g. 100') as HTMLInputElement;
+      fireEvent.change(qtyInput, { target: { value: '595' } });
+
+      const calInput = within(modal).getByLabelText('Calories') as HTMLInputElement;
+      fireEvent.change(calInput, { target: { value: '627' } });
+
+      // Save dish
+      fireEvent.click(screen.getByText('Save Dish'));
+
+      // Modal closes
+      await waitFor(() => {
+        expect(screen.queryByText('Edit Custom Dish')).toBeNull();
+      });
+
+      // 3. Stage the dish by tapping its row
+      fireEvent.click(screen.getByTestId('custom-dish-card-dish-repro-icecream'));
+
+      // 4. Staged meal card MUST show the edited values (627 kcal, not stale 609 kcal)
+      await waitFor(() => {
+        expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+      });
+
+      const stagedCard = screen.getByTestId('staged-meal-card');
+      expect(stagedCard.textContent).toContain('627 kcal');
+      expect(stagedCard.textContent).not.toContain('609 kcal');
+    });
+
+    it('stages edited values when a custom dish without items is edited and tapped', async () => {
+      let currentDishes = [
+        {
+          id: 'dish-no-items',
+          name: 'Plain Rice',
+          calories: 200,
+          protein: 4,
+          carbs: 45,
+          fat: 0.5,
+          fiber: 1,
+          serving_quantity: null,
+          serving_unit: null,
+          kind: 'food' as const,
+          use_count: 1,
+          created_at: new Date().toISOString(),
+        },
+      ];
+
+      let currentDetail = {
+        id: 'dish-no-items',
+        name: 'Plain Rice',
+        calories: 200,
+        protein: 4,
+        carbs: 45,
+        fat: 0.5,
+        fiber: 1,
+        kind: 'food' as const,
+        notes: null,
+        items: null,
+        ingredients: null,
+      };
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'custom_dishes') {
+          const b = createSupabaseBuilder('custom_dishes', {
+            resolver: (builder: any) => {
+              if (builder.projection === 'id, items, ingredients, kind, notes') {
+                return currentDetail;
+              }
+              return currentDishes;
+            },
+          });
+          (b as any).update = (values: any) => ({
+            eq: (_col: string, id: string) => ({
+              select: async () => {
+                const updatedRow = {
+                  ...currentDetail,
+                  ...values,
+                  id,
+                };
+                currentDetail = updatedRow;
+                currentDishes = [
+                  {
+                    id,
+                    name: values.name ?? currentDetail.name,
+                    calories: values.calories,
+                    protein: values.protein,
+                    carbs: values.carbs,
+                    fat: values.fat,
+                    fiber: values.fiber,
+                    kind: values.kind ?? 'food',
+                    serving_quantity: null,
+                    serving_unit: null,
+                    use_count: 1,
+                    created_at: new Date().toISOString(),
+                  },
+                ];
+                return { data: [updatedRow], error: null };
+              },
+            }),
+          });
+          return b;
+        }
+        return createSupabaseBuilder(table, { data: [], error: null });
+      });
+
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('custom-dish-card-dish-no-items')).toBeDefined();
+      });
+
+      // Open edit modal
+      fireEvent.click(screen.getByTestId('edit-dish-btn-dish-no-items'));
+      await waitFor(() => {
+        expect(screen.getByText('Edit Custom Dish')).toBeDefined();
+      });
+
+      // Edit calories to 250
+      const modal = screen.getByTestId('custom-dish-modal');
+      const calInput = within(modal).getByLabelText('Calories') as HTMLInputElement;
+      fireEvent.change(calInput, { target: { value: '250' } });
+
+      fireEvent.click(screen.getByText('Save Dish'));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Edit Custom Dish')).toBeNull();
+      });
+
+      // Tap row to stage
+      fireEvent.click(screen.getByTestId('custom-dish-card-dish-no-items'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+      });
+
+      const stagedCard = screen.getByTestId('staged-meal-card');
+      expect(stagedCard.textContent).toContain('250 kcal');
+      expect(stagedCard.textContent).not.toContain('200 kcal');
+    });
+  });
+
 
   it('triggers deferred delete from inline Delete button inside edit modal: shows UndoToast, zero delete before 6s expiry, and commits on expiry', async () => {
     vi.useFakeTimers();
