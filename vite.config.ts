@@ -205,9 +205,15 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
-          globIgnores: ['**/Landing*'],
+          globIgnores: [
+            '**/Landing*',
+            '**/terms.html',
+            '**/privacy.html',
+            '**/refunds.html',
+            '**/og-image.png',
+          ],
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/robots\.txt$/, /^\/sitemap\.xml$/, /^\/version\.json$/],
+          navigateFallbackDenylist: [/^\/robots\.txt$/, /^\/sitemap\.xml$/, /^\/version\.json$/, /^\/llms\.txt$/],
           cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         },

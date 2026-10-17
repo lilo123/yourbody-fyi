@@ -1,7 +1,7 @@
 import { useMemo, useContext, useEffect } from 'react';
 import { AuthContext } from '../../context/AuthContextTypes';
 import type { PrMode } from '../../lib/prComparator';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import type { WorkoutSet, Exercise, RoutineTemplate, TemplateExercise } from '../../types/database';
 import {
@@ -21,7 +21,10 @@ import {
   pendingSetsBefore,
   onSynced,
   offlineFallback,
+  onPersistUserSwitch,
+  getCurrentPersistingUserId,
 } from '../../offline';
+import { queryKeys } from '../../lib/queryKeys';
 import { useWorkoutPendingOps } from './useWorkoutPendingOps';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { invalidateWorkoutDerived } from '../../lib/invalidate';
@@ -97,8 +100,52 @@ export interface RoutineTemplateDetail {
   exercises: TemplateExercise[];
 }
 
-// payload-gate: detail-fetch — template exercises and targets for resolved routine
-export async function fetchTemplateDetail(templateId: string): Promise<RoutineTemplateDetail | null> {
+export interface FetchTemplateDetailOptions {
+  queryClient?: QueryClient;
+  timeoutMs?: number;
+  userId?: string | null;
+}
+
+export const DEFAULT_TEMPLATE_DETAIL_ONLINE_TIMEOUT_MS = 15000;
+export const DEFAULT_TEMPLATE_DETAIL_OFFLINE_TIMEOUT_MS = 1500;
+// Deprecated alias for backwards compatibility
+export const DEFAULT_TEMPLATE_DETAIL_TIMEOUT_MS = DEFAULT_TEMPLATE_DETAIL_ONLINE_TIMEOUT_MS;
+export const OFFLINE_TEMPLATE_DETAIL_TIMEOUT_MS = DEFAULT_TEMPLATE_DETAIL_OFFLINE_TIMEOUT_MS;
+export const ROUTINE_TEMPLATE_DETAIL_KEY_PREFIX = 'routine_template_detail';
+
+export function routineTemplateDetailQueryKey(templateId: string | null | undefined) {
+  return queryKeys.routineTemplateDetail.byId(templateId);
+}
+
+const templateDetailMemoryCache = new Map<string, RoutineTemplateDetail>();
+
+function getTemplateDetailCacheKey(templateId: string, userId?: string | null): string {
+  return `${userId || 'anon'}:${templateId}`;
+}
+
+export function clearTemplateDetailCache(templateId?: string, userId?: string | null): void {
+  if (templateId) {
+    if (userId !== undefined) {
+      templateDetailMemoryCache.delete(getTemplateDetailCacheKey(templateId, userId));
+    } else {
+      for (const key of templateDetailMemoryCache.keys()) {
+        if (key.endsWith(`:${templateId}`) || key === templateId) {
+          templateDetailMemoryCache.delete(key);
+        }
+      }
+    }
+  } else {
+    templateDetailMemoryCache.clear();
+  }
+}
+
+// Clear memory cache when persistController resets on user switch or sign-out
+onPersistUserSwitch(() => {
+  clearTemplateDetailCache();
+});
+
+async function fetchTemplateDetailFromNetwork(templateId: string): Promise<RoutineTemplateDetail | null> {
+  // payload-gate: detail-fetch — template exercises and targets for resolved routine
   const { data, error } = await supabase
     .from('routine_templates')
     .select(
@@ -108,7 +155,88 @@ export async function fetchTemplateDetail(templateId: string): Promise<RoutineTe
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return data as RoutineTemplateDetail | null;
+  return (data as RoutineTemplateDetail | null) ?? null;
+}
+
+export async function fetchTemplateDetail(
+  templateId: string,
+  optionsOrClient?: QueryClient | FetchTemplateDetailOptions
+): Promise<RoutineTemplateDetail | null> {
+  if (!templateId) return null;
+
+  const client =
+    optionsOrClient && 'getQueryData' in optionsOrClient
+      ? (optionsOrClient as QueryClient)
+      : (optionsOrClient as FetchTemplateDetailOptions)?.queryClient;
+
+  const customTimeout =
+    optionsOrClient && !('getQueryData' in optionsOrClient)
+      ? (optionsOrClient as FetchTemplateDetailOptions)?.timeoutMs
+      : undefined;
+
+  const targetUserId =
+    optionsOrClient && !('getQueryData' in optionsOrClient)
+      ? (optionsOrClient as FetchTemplateDetailOptions)?.userId
+      : undefined;
+
+  const effectiveUserId = targetUserId ?? getCurrentPersistingUserId();
+  const memCacheKey = getTemplateDetailCacheKey(templateId, effectiveUserId);
+
+  const key = queryKeys.routineTemplateDetail.byId(templateId);
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+  // 1. Offline path: cache-first
+  if (isOffline) {
+    if (client) {
+      const cached = client.getQueryData<RoutineTemplateDetail>(key);
+      if (cached !== undefined) return cached;
+    }
+    const memCached = templateDetailMemoryCache.get(memCacheKey);
+    if (memCached !== undefined) return memCached;
+  }
+
+  // 2. Network attempt (online: network-first, offline: uncached fast-fail)
+  const timeoutMs =
+    customTimeout ??
+    (isOffline
+      ? DEFAULT_TEMPLATE_DETAIL_OFFLINE_TIMEOUT_MS
+      : DEFAULT_TEMPLATE_DETAIL_ONLINE_TIMEOUT_MS);
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`Template detail fetch timed out after ${timeoutMs}ms for ${templateId}`));
+    }, timeoutMs);
+  });
+
+  try {
+    const detail = await Promise.race([
+      fetchTemplateDetailFromNetwork(templateId),
+      timeoutPromise,
+    ]);
+    if (detail) {
+      if (client) {
+        client.setQueryData(key, detail);
+      }
+      templateDetailMemoryCache.set(memCacheKey, detail);
+    }
+    return detail;
+  } catch (error) {
+    // When online and network fails or times out, fall back to cached detail if available
+    if (!isOffline) {
+      if (client) {
+        const cached = client.getQueryData<RoutineTemplateDetail>(key);
+        if (cached !== undefined) return cached;
+      }
+      const memCached = templateDetailMemoryCache.get(memCacheKey);
+      if (memCached !== undefined) return memCached;
+    }
+    throw error;
+  } finally {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 export const workoutExercisesQueryOptions = {
@@ -529,11 +657,11 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
   }, [rawTemplates, rawTemplatesFetched, todaySets, logsFetched, workoutDate, currentDayAbbr]);
 
   const { data: templateDetail, isFetched: detailFetched } = useQuery({
-    queryKey: ['routine_template_detail', resolvedTemplateId],
+    queryKey: queryKeys.routineTemplateDetail.byId(resolvedTemplateId),
     enabled: Boolean(resolvedTemplateId),
     queryFn: async () => {
       if (!resolvedTemplateId) return null;
-      return fetchTemplateDetail(resolvedTemplateId);
+      return fetchTemplateDetail(resolvedTemplateId, { queryClient, userId: targetUserId });
     },
   });
 

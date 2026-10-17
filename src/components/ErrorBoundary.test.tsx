@@ -104,4 +104,20 @@ describe('ErrorBoundary', () => {
     expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
     expect(errorReporting.captureException).toHaveBeenCalledTimes(1);
   });
+
+  it('removes #prerender element from DOM when error boundary catches an error', () => {
+    const prerenderEl = document.createElement('div');
+    prerenderEl.id = 'prerender';
+    document.body.appendChild(prerenderEl);
+
+    expect(document.getElementById('prerender')).not.toBeNull();
+
+    render(
+      <ErrorBoundary>
+        <ThrowError shouldThrow={true} message="Crash before prerender swap" />
+      </ErrorBoundary>
+    );
+
+    expect(document.getElementById('prerender')).toBeNull();
+  });
 });
