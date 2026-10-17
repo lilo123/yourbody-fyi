@@ -142,4 +142,16 @@ describe('GlobalRestTimerPill', () => {
     const { container } = render(<GlobalRestTimerPill />);
     await expectNoA11yViolations(container);
   });
+
+  it('applies mobile 6rem bottom clearance with safe-area and preserves desktop 4.5rem baseline', () => {
+    render(<GlobalRestTimerPill />);
+
+    act(() => {
+      restTimerStore.start(90);
+    });
+
+    const pill = screen.getByTestId('rest-timer-pill');
+    expect(pill.className).toContain('bottom-[calc(6rem+env(safe-area-inset-bottom,0px))]');
+    expect(pill.className).toContain('sm:bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))]');
+  });
 });
