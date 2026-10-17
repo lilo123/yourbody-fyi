@@ -1,9 +1,10 @@
 import React, { useRef, useId } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { formatCalories, formatMacro, roundTo1Decimal } from '../../utils/nutrition';
-import { parseQuantityInput, shortUnitLabel, type CanonicalUnit } from '../../utils/unitConverter';
+import { parseDecimalInput, shortUnitLabel, type CanonicalUnit } from '../../utils/unitConverter';
 import { sumItems, MAX_ITEMS, type NutritionItem } from '../../utils/itemModel';
 import { UnitChip } from './UnitChip';
+import { DecimalInput } from './DecimalInput';
 
 export interface CustomDishEditorProps {
   items: NutritionItem[];
@@ -48,10 +49,10 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({ items, onCha
     onChange(items.map((it, i) => (i === index ? { ...it, ...next } : it)));
   };
 
-  const patchMacro = (index: number, key: (typeof MACRO_FIELDS)[number]['key'], raw: string) => {
+  const patchMacro = (index: number, key: (typeof MACRO_FIELDS)[number]['key'], val: string | number) => {
     // Round to at most 1 decimal place. An unusable entry clears to 0 rather than poisoning the parent sum.
-    const n = Number(raw);
-    patch(index, { [key]: raw === '' ? 0 : Number.isFinite(n) ? Math.max(0, roundTo1Decimal(n)) : 0 } as Partial<NutritionItem>);
+    const n = typeof val === 'number' ? val : (parseDecimalInput(val, { allowNegative: true }) ?? Number(val));
+    patch(index, { [key]: val === '' ? 0 : Number.isFinite(n) ? Math.max(0, roundTo1Decimal(n)) : 0 } as Partial<NutritionItem>);
   };
 
   const remove = (index: number) => {
@@ -143,18 +144,14 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({ items, onCha
                   >
                     Qty
                   </label>
-                  <input
+                  <DecimalInput
                     id={qtyId}
-                    type="number"
-                    step="any"
-                    min="0"
-                    inputMode="decimal"
                     data-testid="dish-item-quantity"
                     aria-label={`Component ${index + 1} quantity`}
                     value={roundTo1Decimal(item.quantity)}
-                    onChange={(e) => {
-                      const parsed = parseQuantityInput(e.target.value);
-                      patch(index, { quantity: parsed != null ? roundTo1Decimal(parsed) : 0 });
+                    onChange={(val) => {
+                      const num = typeof val === 'number' && Number.isFinite(val) ? roundTo1Decimal(val) : 0;
+                      patch(index, { quantity: num });
                     }}
                     className="min-h-[44px] w-full rounded-xl border border-border-interactive bg-zinc-950 p-2 text-center text-base tabular-nums font-bold text-white outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50"
                   />
@@ -181,16 +178,12 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({ items, onCha
                       >
                         {field.label}
                       </label>
-                      <input
+                      <DecimalInput
                         id={macroId}
-                        type="number"
-                        step="any"
-                        min="0"
-                        inputMode={field.mode}
                         data-testid={`dish-item-${field.key}`}
                         aria-label={`Component ${index + 1} ${field.label}`}
                         value={roundTo1Decimal(item[field.key])}
-                        onChange={(e) => patchMacro(index, field.key, e.target.value)}
+                        onChange={(val) => patchMacro(index, field.key, val)}
                         className="min-h-[44px] w-full rounded-xl border border-border-interactive bg-zinc-950 p-2 text-center text-base tabular-nums font-bold text-white outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50"
                       />
                     </div>
