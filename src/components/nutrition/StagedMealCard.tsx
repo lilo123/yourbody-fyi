@@ -224,7 +224,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
   const sourceBadge = hasSource ? (
     <span
       data-testid="parsed-locally-badge"
-      className={`inline-flex items-center gap-1 px-2 h-4 rounded-full text-xs font-bold leading-none shrink-0 ${
+      className={`inline-flex items-center gap-1 px-2 h-4 rounded-full text-xs font-bold leading-none normal-case shrink-0 ${
         stagedMeal.source === 'ai'
           ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
           : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
@@ -376,7 +376,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">
-            <div data-testid="breakdown-header" className="flex items-center justify-between gap-2 min-w-0 text-xs font-bold uppercase text-zinc-400 tracking-wider">
+            <div data-testid="breakdown-header" className="flex items-center justify-between gap-2 min-w-0 text-xs font-bold text-zinc-400 tracking-wider">
               {sourceBadge ?? <span className="sr-only">Items</span>}
               {scaleAndAddControls}
             </div>

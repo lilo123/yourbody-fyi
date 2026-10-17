@@ -2020,6 +2020,8 @@ describe('Scale chip on the staged card', () => {
       const deviceBadge = screen.getByTestId('parsed-locally-badge');
       const aiInsteadBtn = screen.getByTestId('analyze-with-ai-instead-btn');
       expect(deviceBadge).toHaveTextContent('Device');
+      expect(deviceBadge.className).toContain('normal-case');
+      expect(deviceBadge.className).not.toContain('uppercase');
       expect(aiInsteadBtn).toHaveTextContent('Analyze with AI instead');
       // Verify ghost button styling (no bulky bordered block)
       expect(aiInsteadBtn.className).toContain('text-cyan-400');
@@ -2100,6 +2102,8 @@ describe('Scale chip on the staged card', () => {
 
       expect(breakdownHeader).toBeInTheDocument();
       expect(aiBadge).toHaveTextContent('AI');
+      expect(aiBadge.className).toContain('normal-case');
+      expect(aiBadge.className).not.toContain('uppercase');
       expect(screen.queryByTestId('analyze-with-ai-instead-btn')).toBeNull();
       expect(screen.queryByText(/Itemized Breakdown/i)).toBeNull();
 
@@ -2165,6 +2169,8 @@ describe('Scale chip on the staged card', () => {
       const scaleBtn = screen.getByTestId('meal-scale-button');
       const addBtn = screen.getByTestId('add-item-button');
       expect(deviceBadge).toHaveTextContent('Device');
+      expect(deviceBadge.className).toContain('normal-case');
+      expect(deviceBadge.className).not.toContain('uppercase');
       expect(breakdownHeader).toContainElement(deviceBadge);
       expect(breakdownHeader).toContainElement(scaleBtn);
       expect(breakdownHeader).toContainElement(addBtn);
@@ -2193,6 +2199,76 @@ describe('Scale chip on the staged card', () => {
       const addBtn = screen.getByTestId('add-item-button');
       expect(scaleBtn.parentElement).toBe(addBtn.parentElement);
       expect(scaleBtn.parentElement?.className).toContain('flex items-center gap-1');
+    });
+
+    it('preserves "Device" and "AI" casing with normal-case across single-item and multi-item layouts', () => {
+      const singleDeviceMeal: StagedMeal = {
+        name: 'Greek Yogurt',
+        mealType: 'Breakfast',
+        explanation: '130 kcal',
+        calories: 130,
+        protein: 15,
+        carbs: 9,
+        fat: 3.5,
+        fiber: 0,
+        servingSize: 170,
+        servingUnit: 'g',
+        source: 'local',
+        items: [
+          {
+            id: 'item-1',
+            name: 'Greek Yogurt',
+            portion: '170 g',
+            portionMultiplier: 1,
+            quantity: 170,
+            unit: 'g',
+            calories: 130,
+            protein: 15,
+            carbs: 9,
+            fat: 3.5,
+            fiber: 0,
+            baseQuantity: 170,
+            baseCalories: 130,
+            baseProtein: 15,
+            baseCarbs: 9,
+            baseFat: 3.5,
+            baseFiber: 0,
+          },
+        ],
+      };
+
+      const { unmount } = render(
+        <StagedMealCard
+          {...baseProps}
+          stagedMeal={singleDeviceMeal}
+          onUpdateStagedMeal={vi.fn()}
+          onAnalyzeWithAiInstead={vi.fn()}
+        />
+      );
+
+      const singleBadge = screen.getByTestId('parsed-locally-badge');
+      expect(singleBadge).toHaveTextContent('Device');
+      expect(singleBadge.className).toContain('normal-case');
+      expect(singleBadge.className).not.toContain('uppercase');
+      const singleBreakdown = screen.getByTestId('breakdown-header');
+      expect(singleBreakdown.className).not.toContain('uppercase');
+
+      unmount();
+
+      const multiMeal: StagedMeal = { ...makeMultiItemMeal(), source: 'rules' };
+      render(
+        <StagedMealCard
+          {...baseProps}
+          stagedMeal={multiMeal}
+          onUpdateStagedMeal={vi.fn()}
+          onAnalyzeWithAiInstead={vi.fn()}
+        />
+      );
+
+      const multiBadge = screen.getByTestId('parsed-locally-badge');
+      expect(multiBadge).toHaveTextContent('Device');
+      expect(multiBadge.className).toContain('normal-case');
+      expect(multiBadge.className).not.toContain('uppercase');
     });
   });
 });
