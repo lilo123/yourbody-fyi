@@ -428,6 +428,60 @@ Fat: 3.6g`,
       fat: 3.6,
     },
   },
+  {
+    why: 'representative markdown bulleted dessert paste with bold, tilde approximations, and Consumed Weight',
+    input: `* **Protein Ice Cream**
+* **Calories**: ~609 kcal
+* **Protein**: ~45g
+* **Carbohydrates**: ~60g
+* **Fat**: ~21g
+* **Consumed Weight**: ~543g`,
+    expected: {
+      name: 'Protein Ice Cream',
+      servingSize: 543,
+      servingUnit: 'g',
+      calories: 609,
+      protein: 45,
+      carbs: 60,
+      fat: 21,
+    },
+  },
+  {
+    why: 'markdown hyphen bullets with Net Weight in oz and bold numbers',
+    input: `- **Grilled Sirloin Steak**
+- Net Weight: 8oz
+- Calories: **520** kcal
+- Protein: **52g**
+- Carbs: **0g**
+- Fat: **32g**`,
+    expected: {
+      name: 'Grilled Sirloin Steak',
+      servingSize: 8,
+      servingUnit: 'oz',
+      calories: 520,
+      protein: 52,
+      carbs: 0,
+      fat: 32,
+    },
+  },
+  {
+    why: 'markdown unicode dot bullets with Net Weight in ml',
+    input: `• Protein Shake
+• Net Weight: 350ml
+• Calories: 200 kcal
+• Protein: 30g
+• Carbs: 10g
+• Fat: 3g`,
+    expected: {
+      name: 'Protein Shake',
+      servingSize: 350,
+      servingUnit: 'ml',
+      calories: 200,
+      protein: 30,
+      carbs: 10,
+      fat: 3,
+    },
+  },
 ];
 
 interface NegativeTestCase {
@@ -755,6 +809,33 @@ with rice`,
     input: 'I ran 5 miles today and burned 500 calories',
     expectedReason: 'NOT_A_NUTRITION_BLOCK',
   },
+  {
+    why: 'name with dash range (2-3 eggs) must not be stripped wrongly',
+    input: `2-3 eggs
+Calories: 140
+Protein: 12g
+Carbs: 1g
+Fat: 10g`,
+    expectedReason: 'NAME_CONTAINS_DIGITS',
+  },
+  {
+    why: 'bulleted name with dash range (- 2-3 eggs) keeps range and rejects',
+    input: `- 2-3 eggs
+- Calories: 140
+- Protein: 12g
+- Carbs: 1g
+- Fat: 10g`,
+    expectedReason: 'NAME_CONTAINS_DIGITS',
+  },
+  {
+    why: 'asterisk bulleted name with dash range (* 2-3 boiled eggs) rejects',
+    input: `* 2-3 boiled eggs
+* Calories: 140
+* Protein: 12g
+* Carbs: 1g
+* Fat: 10g`,
+    expectedReason: 'NAME_CONTAINS_DIGITS',
+  },
 ];
 
 describe('parseNutritionBlock - Table-Driven Positive Cases', () => {
@@ -1042,6 +1123,539 @@ describe('Counted Portion Handling (Task COUNTPORTION)', () => {
       expect(result.meal.unit).toBe('unit');
       expect(result.meal.calories).toBe(855);
     }
+  });
+});
+
+describe('Markdown formatting and net-weight lines on device (backlog)', () => {
+  // 1. Each markdown form (*, -, •)
+  describe('each markdown bullet form (*, -, •)', () => {
+    it('parses asterisk bulleted single-dish list (*)', () => {
+      const input = [
+        '* Grilled Chicken Breast',
+        '* Calories: 165 kcal',
+        '* Protein: 31g',
+        '* Carbs: 0g',
+        '* Fat: 3.6g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Grilled Chicken Breast');
+        expect(result.meal.calories).toBe(165);
+        expect(result.meal.protein).toBe(31);
+        expect(result.meal.carbs).toBe(0);
+        expect(result.meal.fat).toBe(3.6);
+      }
+    });
+
+    it('parses hyphen bulleted single-dish list (-)', () => {
+      const input = [
+        '- Grilled Chicken Breast',
+        '- Calories: 165 kcal',
+        '- Protein: 31g',
+        '- Carbs: 0g',
+        '- Fat: 3.6g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Grilled Chicken Breast');
+        expect(result.meal.calories).toBe(165);
+        expect(result.meal.protein).toBe(31);
+        expect(result.meal.carbs).toBe(0);
+        expect(result.meal.fat).toBe(3.6);
+      }
+    });
+
+    it('parses unicode dot bulleted single-dish list (•)', () => {
+      const input = [
+        '• Grilled Chicken Breast',
+        '• Calories: 165 kcal',
+        '• Protein: 31g',
+        '• Carbs: 0g',
+        '• Fat: 3.6g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Grilled Chicken Breast');
+        expect(result.meal.calories).toBe(165);
+        expect(result.meal.protein).toBe(31);
+        expect(result.meal.carbs).toBe(0);
+        expect(result.meal.fat).toBe(3.6);
+      }
+    });
+  });
+
+  // 2. Mixed markdown forms
+  describe('mixed markdown bullet forms', () => {
+    it('parses mixed bullet styles across lines (*, -, •)', () => {
+      const input = [
+        '* Whey Protein Isolate',
+        '- Calories: 120 kcal',
+        '• Protein: 25g',
+        '* Carbs: 2g',
+        '- Fat: 1g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Whey Protein Isolate');
+        expect(result.meal.calories).toBe(120);
+        expect(result.meal.protein).toBe(25);
+        expect(result.meal.carbs).toBe(2);
+        expect(result.meal.fat).toBe(1);
+      }
+    });
+
+    it('parses mixed bullets without a meal name line', () => {
+      const input = [
+        '- Calories: 120 kcal',
+        '• Protein: 25g',
+        '* Carbs: 2g',
+        '- Fat: 1g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.calories).toBe(120);
+        expect(result.meal.protein).toBe(25);
+        expect(result.meal.carbs).toBe(2);
+        expect(result.meal.fat).toBe(1);
+      }
+    });
+  });
+
+  // 3. Bold numbers
+  describe('bold numbers and labels', () => {
+    it('parses bold numbers in macro values (**500** kcal, **40** g)', () => {
+      const input = [
+        'Protein Oatmeal',
+        'Calories: **500** kcal',
+        'Protein: **40** g',
+        'Carbs: **60** g',
+        'Fat: **11** g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Protein Oatmeal');
+        expect(result.meal.calories).toBe(500);
+        expect(result.meal.protein).toBe(40);
+        expect(result.meal.carbs).toBe(60);
+        expect(result.meal.fat).toBe(11);
+      }
+    });
+
+    it('parses bold number and unit combined (**500 kcal**, **40g**)', () => {
+      const input = [
+        '- Protein Oatmeal',
+        '- Calories: **500 kcal**',
+        '- Protein: **40g**',
+        '- Carbs: **60g**',
+        '- Fat: **11g**',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.calories).toBe(500);
+        expect(result.meal.protein).toBe(40);
+        expect(result.meal.carbs).toBe(60);
+        expect(result.meal.fat).toBe(11);
+      }
+    });
+
+    it('parses bold label and bold number (**Calories**: **500**)', () => {
+      const input = [
+        '* **Protein Oatmeal**',
+        '* **Calories**: **500** kcal',
+        '* **Protein**: **40** g',
+        '* **Carbohydrates**: **60** g',
+        '* **Fat**: **11** g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Protein Oatmeal');
+        expect(result.meal.calories).toBe(500);
+        expect(result.meal.protein).toBe(40);
+        expect(result.meal.carbs).toBe(60);
+        expect(result.meal.fat).toBe(11);
+      }
+    });
+
+    it('parses underscore bold formatting (__Calories__: __500__ kcal)', () => {
+      const input = [
+        '__Protein Oatmeal__',
+        '__Calories__: __500__ kcal',
+        '__Protein__: __40__ g',
+        '__Carbs__: __60__ g',
+        '__Fat__: __11__ g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Protein Oatmeal');
+        expect(result.meal.calories).toBe(500);
+        expect(result.meal.protein).toBe(40);
+        expect(result.meal.carbs).toBe(60);
+        expect(result.meal.fat).toBe(11);
+      }
+    });
+  });
+
+  // 4. ~ approximations
+  describe('~ and textual approximations', () => {
+    it('parses tilde approximation on calories and macros (~609 kcal, ~45g)', () => {
+      const input = [
+        '* Calories: ~609 kcal',
+        '* Protein: ~45g',
+        '* Carbs: ~60g',
+        '* Fat: ~21g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.calories).toBe(609);
+        expect(result.meal.protein).toBe(45);
+        expect(result.meal.carbs).toBe(60);
+        expect(result.meal.fat).toBe(21);
+      }
+    });
+
+    it('parses tilde approximation on weight lines (~543g)', () => {
+      const input = [
+        '* Greek Yogurt',
+        '* Consumed Weight: ~300g',
+        '* Calories: ~180 kcal',
+        '* Protein: ~30g',
+        '* Carbs: ~10g',
+        '* Fat: ~0g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Greek Yogurt');
+        expect(result.meal.servingSize).toBe(300);
+        expect(result.meal.servingUnit).toBe('g');
+        expect(result.meal.calories).toBe(180);
+      }
+    });
+
+    it('parses textual approximation words (approx 609 kcal, about 45g)', () => {
+      const input = [
+        'Vanilla Shake',
+        'Calories: approx 609 kcal',
+        'Protein: approx. 45g',
+        'Carbs: about 60g',
+        'Fat: ~21g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Vanilla Shake');
+        expect(result.meal.calories).toBe(609);
+        expect(result.meal.protein).toBe(45);
+        expect(result.meal.carbs).toBe(60);
+        expect(result.meal.fat).toBe(21);
+      }
+    });
+  });
+
+  // 5. Net Weight / Consumed Weight with g, oz, ml
+  describe('Net Weight and Consumed Weight with g, oz, ml', () => {
+    it('parses Net Weight with grams (g)', () => {
+      const input = [
+        'Grilled Salmon',
+        'Net Weight: 200g',
+        'Calories: 410 kcal',
+        'Protein: 40g',
+        'Carbs: 0g',
+        'Fat: 26g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.servingSize).toBe(200);
+        expect(result.meal.servingUnit).toBe('g');
+        expect(result.meal.calories).toBe(410);
+      }
+    });
+
+    it('parses Net Weight with ounces (oz)', () => {
+      const input = [
+        'Ribeye Steak',
+        'Net Weight: 7oz',
+        'Calories: 500 kcal',
+        'Protein: 44g',
+        'Carbs: 0g',
+        'Fat: 36g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.servingSize).toBe(7);
+        expect(result.meal.servingUnit).toBe('oz');
+        expect(result.meal.calories).toBe(500);
+      }
+    });
+
+    it('parses Net Weight with milliliters (ml)', () => {
+      const input = [
+        'Almond Milk',
+        'Net Weight: 240ml',
+        'Calories: 60 kcal',
+        'Protein: 2g',
+        'Carbs: 8g',
+        'Fat: 2.5g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.servingSize).toBe(240);
+        expect(result.meal.servingUnit).toBe('ml');
+        expect(result.meal.calories).toBe(60);
+      }
+    });
+
+    it('parses Consumed Weight with grams (g)', () => {
+      const input = [
+        'Greek Yogurt Bowl',
+        'Consumed Weight: 300g',
+        'Calories: 180 kcal',
+        'Protein: 30g',
+        'Carbs: 10g',
+        'Fat: 0g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.servingSize).toBe(300);
+        expect(result.meal.servingUnit).toBe('g');
+        expect(result.meal.calories).toBe(180);
+      }
+    });
+
+    it('parses Consumed Weight with ounces (oz)', () => {
+      const input = [
+        'Sirloin Steak',
+        'Consumed Weight: 8oz',
+        'Calories: 520 kcal',
+        'Protein: 52g',
+        'Carbs: 0g',
+        'Fat: 32g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.servingSize).toBe(8);
+        expect(result.meal.servingUnit).toBe('oz');
+        expect(result.meal.calories).toBe(520);
+      }
+    });
+
+    it('parses Consumed Weight with milliliters (ml)', () => {
+      const input = [
+        'Protein Shake',
+        'Consumed Weight: 330ml',
+        'Calories: 200 kcal',
+        'Protein: 30g',
+        'Carbs: 10g',
+        'Fat: 3g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.servingSize).toBe(330);
+        expect(result.meal.servingUnit).toBe('ml');
+        expect(result.meal.calories).toBe(200);
+      }
+    });
+
+    it('handles spaced units in weight lines (500 g, 8 oz, 250 ml)', () => {
+      const gInput = [
+        'Meal',
+        'Net Weight: 500 g',
+        'Calories: 450 kcal',
+        'Protein: 40g',
+        'Carbs: 50g',
+        'Fat: 10g',
+      ].join('\n');
+      const gResult = parseNutritionBlock(gInput);
+      expect(gResult.ok).toBe(true);
+      if (gResult.ok) {
+        expect(gResult.meal.servingSize).toBe(500);
+        expect(gResult.meal.servingUnit).toBe('g');
+      }
+
+      const ozInput = [
+        'Meal',
+        'Consumed Weight: 8 oz',
+        'Calories: 450 kcal',
+        'Protein: 40g',
+        'Carbs: 50g',
+        'Fat: 10g',
+      ].join('\n');
+      const ozResult = parseNutritionBlock(ozInput);
+      expect(ozResult.ok).toBe(true);
+      if (ozResult.ok) {
+        expect(ozResult.meal.servingSize).toBe(8);
+        expect(ozResult.meal.servingUnit).toBe('oz');
+      }
+
+      const mlInput = [
+        'Meal',
+        'Net Weight: 250 ml',
+        'Calories: 150 kcal',
+        'Protein: 15g',
+        'Carbs: 15g',
+        'Fat: 3g',
+      ].join('\n');
+      const mlResult = parseNutritionBlock(mlInput);
+      expect(mlResult.ok).toBe(true);
+      if (mlResult.ok) {
+        expect(mlResult.meal.servingSize).toBe(250);
+        expect(mlResult.meal.servingUnit).toBe('ml');
+      }
+    });
+
+    it('handles full combinations of markdown bullets, bold labels, bold numbers, tilde approximations, and Net Weight', () => {
+      const input = [
+        '* **Protein Ice Cream**',
+        '* **Net Weight**: ~543g',
+        '* **Calories**: ~609 kcal',
+        '* **Protein**: ~45g',
+        '* **Carbohydrates**: ~60g',
+        '* **Fat**: ~21g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.meal.name).toBe('Protein Ice Cream');
+        expect(result.meal.servingSize).toBe(543);
+        expect(result.meal.servingUnit).toBe('g');
+        expect(result.meal.calories).toBe(609);
+        expect(result.meal.protein).toBe(45);
+        expect(result.meal.carbs).toBe(60);
+        expect(result.meal.fat).toBe(21);
+      }
+    });
+  });
+
+  // 6. Negative cases (dash used as a minus/range must not be stripped wrongly)
+  describe('negative cases: dash as minus or range', () => {
+    it('rejects standalone food name with dash range "2-3 eggs" as non-nutrition block', () => {
+      const result = parseNutritionBlock('2-3 eggs');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe('NOT_A_NUTRITION_BLOCK');
+      }
+    });
+
+    it('rejects "2-3 eggs" before macros due to digits in name', () => {
+      const input = [
+        '2-3 eggs',
+        'Calories: 140',
+        'Protein: 12g',
+        'Carbs: 1g',
+        'Fat: 10g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe('NAME_CONTAINS_DIGITS');
+      }
+    });
+
+    it('preserves dash in range when bullet dash is stripped ("- 2-3 eggs") and rejects', () => {
+      const input = [
+        '- 2-3 eggs',
+        '- Calories: 140',
+        '- Protein: 12g',
+        '- Carbs: 1g',
+        '- Fat: 10g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe('NAME_CONTAINS_DIGITS');
+      }
+    });
+
+    it('preserves dash in range with asterisk bullet ("* 2-3 boiled eggs") and rejects', () => {
+      const input = [
+        '* 2-3 boiled eggs',
+        '* Calories: 140',
+        '* Protein: 12g',
+        '* Carbs: 1g',
+        '* Fat: 10g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe('NAME_CONTAINS_DIGITS');
+      }
+    });
+
+    it('preserves dash in range with unicode bullet ("• 2-3 scrambled eggs") and rejects', () => {
+      const input = [
+        '• 2-3 scrambled eggs',
+        '• Calories: 140',
+        '• Protein: 12g',
+        '• Carbs: 1g',
+        '• Fat: 10g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe('NAME_CONTAINS_DIGITS');
+      }
+    });
+
+    it('rejects calorie range with dash (e.g. 200-300 kcal) from exact block parse', () => {
+      const input = [
+        'Chicken Breast',
+        'Calories: 200-300 kcal',
+        'Protein: 30g',
+        'Carbs: 10g',
+        'Fat: 10g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe('UNEXPLAINED_CONTENT');
+      }
+    });
+
+    it('rejects negative numbers with minus dash (-50 kcal)', () => {
+      const input = [
+        'Chicken Breast',
+        'Calories: -50 kcal',
+        'Protein: 30g',
+        'Carbs: 0g',
+        'Fat: 5g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe('VALUE_OUT_OF_RANGE');
+      }
+    });
+
+    it('rejects negative protein with minus dash (-10g)', () => {
+      const input = [
+        'Chicken Breast',
+        'Calories: 150 kcal',
+        'Protein: -10g',
+        'Carbs: 0g',
+        'Fat: 5g',
+      ].join('\n');
+      const result = parseNutritionBlock(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toBe('VALUE_OUT_OF_RANGE');
+      }
+    });
   });
 });
 
