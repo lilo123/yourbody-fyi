@@ -712,4 +712,180 @@ describe('TemplateListTab - Routine Features', () => {
       expect(rpcSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe('"Reset to original" on Forked Routines', () => {
+    const mockForkedTemplate: RoutineTemplate = {
+      id: 'tpl-forked-1',
+      user_id: 'user-athlete-1',
+      name: 'Custom Push Routine',
+      is_master: false,
+      source_template_id: 'tpl-master-1',
+      assigned_to: null,
+      days_of_week: ['Mon', 'Thu'],
+      exercises: [
+        {
+          id: 'te-f1',
+          template_id: 'tpl-forked-1',
+          exercise_id: 'ex-bench',
+          order_index: 0,
+          target_sets: 4,
+          target_reps: 8,
+          exercise: { name: 'Barbell Bench Press' },
+        },
+      ],
+    };
+
+    it('renders "Reset to original" button on forked routine, but not on non-forked personal routine or master', async () => {
+      const mockMasterTemplate: RoutineTemplate = {
+        id: 'tpl-master-1',
+        user_id: 'coach-1',
+        name: 'Master Push',
+        is_master: true,
+        assigned_to: null,
+      };
+      const mockStandardPersonal: RoutineTemplate = {
+        id: 'tpl-standard-1',
+        user_id: 'user-athlete-1',
+        name: 'My Scratch Routine',
+        is_master: false,
+        source_template_id: null,
+        assigned_to: null,
+      };
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({
+            data: [mockForkedTemplate, mockMasterTemplate, mockStandardPersonal],
+            error: null,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent();
+
+      // Forked routine has "Reset to original" button
+      const resetBtn = await screen.findByTestId('reset-template-tpl-forked-1');
+      expect(resetBtn).toBeDefined();
+      expect(resetBtn.textContent).toContain('Reset to original');
+
+      // Master routine does not have "Reset to original"
+      expect(screen.queryByTestId('reset-template-tpl-master-1')).toBeNull();
+
+      // Non-forked personal routine does not have "Reset to original"
+      expect(screen.queryByTestId('reset-template-tpl-standard-1')).toBeNull();
+    });
+
+    it('clicking "Reset to original" schedules deferred delete and commits delete on expiry', async () => {
+      vi.useFakeTimers();
+
+      const mockDeleteSelect = vi.fn().mockResolvedValue({
+        data: [{ id: 'tpl-forked-1' }],
+        error: null,
+      });
+      const mockEq = vi.fn().mockReturnValue({ select: mockDeleteSelect });
+      const mockDelete = vi.fn().mockReturnValue({ eq: mockEq });
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'routine_templates') {
+          return { delete: mockDelete };
+        }
+        return {};
+      });
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockForkedTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ deleteTimeoutMs: 6000 });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      const resetBtn = screen.getByTestId('reset-template-tpl-forked-1');
+      fireEvent.click(resetBtn);
+
+      // Card is optimistically hidden
+      expect(screen.queryByTestId('reset-template-tpl-forked-1')).toBeNull();
+
+      // Undo toast is displayed with "Routine deleted" verb and routine name
+      expect(screen.getByTestId('quick-log-toast')).toBeDefined();
+      expect(screen.getByTestId('toast-dish-text').textContent).toContain('Custom Push Routine');
+
+      // At 0ms: 0 DELETE calls sent
+      expect(mockDelete).not.toHaveBeenCalled();
+
+      // Advance 5900ms: still 0 DELETE calls
+      act(() => {
+        vi.advanceTimersByTime(5900);
+      });
+      expect(mockDelete).not.toHaveBeenCalled();
+
+      // Advance past 6000ms: delete executed on routine_templates
+      await act(async () => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      expect(mockEq).toHaveBeenCalledWith('id', 'tpl-forked-1');
+      expect(mockDeleteSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('clicking Undo on "Reset to original" restores the forked routine and cancels deletion', async () => {
+      vi.useFakeTimers();
+
+      const mockDelete = vi.fn();
+      vi.mocked(supabase.from).mockImplementation(() => ({ delete: mockDelete }));
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockForkedTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ deleteTimeoutMs: 6000 });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      const resetBtn = screen.getByTestId('reset-template-tpl-forked-1');
+      fireEvent.click(resetBtn);
+
+      expect(screen.queryByTestId('reset-template-tpl-forked-1')).toBeNull();
+
+      const undoBtn = screen.getByTestId('toast-undo-btn');
+      fireEvent.click(undoBtn);
+
+      // Restored
+      expect(screen.getByTestId('reset-template-tpl-forked-1')).toBeDefined();
+
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+
+    it('disables "Reset to original" button when offline', async () => {
+      vi.mocked(useOnlineStatus).mockReturnValue(false);
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockForkedTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent();
+
+      const resetBtn = await screen.findByTestId('reset-template-tpl-forked-1');
+      expect(resetBtn).toBeDisabled();
+      expect(resetBtn.getAttribute('title')).toBe('Available when online');
+    });
+  });
 });
