@@ -11,6 +11,7 @@ import { formatNutritionDayHeader } from './useHistoryData';
 import { AuthContext } from '../../context/AuthContextTypes';
 import { useToast } from '../../hooks/useToast';
 import { shareMacroStory } from '../../utils/macroStoryShare';
+import { PendingMark } from '../sync/PendingMark';
 
 export interface NutritionDaySummary {
   date: string;
@@ -38,6 +39,8 @@ export interface NutritionHistoryTimelineProps {
   pendingDeleteMealId?: string | null;
   // Optional profile targets for story card sharing
   profile?: Partial<UserProfile> | null;
+  // Target date highlight for calendar jump
+  highlightDate?: string;
 }
 
 // Realistic collapsed day-card height estimate derived from 390px/320px browser measurements
@@ -57,6 +60,7 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   onLoadMoreNutrition,
   pendingDeleteMealId,
   profile,
+  highlightDate,
 }) => {
   const auth = React.useContext(AuthContext);
   const { show: showToast } = useToast();
@@ -200,8 +204,35 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   const virtualItems = virtualizer.getVirtualItems();
   const isVirtual = virtualItems.length > 0;
 
-  // Skeleton cards (aria-busy) while initial fetch is pending
-  if (isNutritionPending) {
+  // Scroll to highlightDate day index and focus its card
+  React.useEffect(() => {
+    if (!highlightDate) return;
+    const targetIndex = displayDays.findIndex((day) => day.date === highlightDate);
+
+    if (targetIndex !== -1) {
+      if (typeof virtualizer?.scrollToIndex === 'function') {
+        virtualizer.scrollToIndex(targetIndex, { align: 'center' });
+      }
+      const focusCard = () => {
+        const cardEl = (parentRef.current || document).querySelector(
+          `[data-civil-date="${highlightDate}"]`
+        ) as HTMLElement | null;
+        if (cardEl) {
+          cardEl.focus();
+        }
+      };
+      focusCard();
+      const rafId = requestAnimationFrame(focusCard);
+      const timer = setTimeout(focusCard, 50);
+      return () => {
+        cancelAnimationFrame(rafId);
+        clearTimeout(timer);
+      };
+    }
+  }, [highlightDate, displayDays, virtualizer]);
+
+  // Skeleton cards (aria-busy) while initial fetch is pending or not yet settled (only when nothing to show)
+  if (displayDays.length === 0 && isNutritionPending) {
     return (
       <div data-testid="nutrition-history-skeleton" className="space-y-4">
         <Skeleton variant="card" count={3} ariaLabel="Loading nutrition history..." />
@@ -238,20 +269,31 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   const renderDayCard = (day: NutritionDaySummary) => {
     const { title, subtitle } = formatNutritionDayHeader(day.date, day.meals.length);
     const isExpanded = expandedDates.has(day.date);
+    const isDayPending = day.meals.some((meal) => Boolean((meal as any).pending));
+    const isHighlighted = highlightDate === day.date;
 
     return (
       <div
         key={day.date}
-        className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-4"
+        data-civil-date={day.date}
+        tabIndex={isHighlighted ? 0 : -1}
+        className={`bg-zinc-900/90 border rounded-3xl p-5 shadow-2xl space-y-4 ${
+          isHighlighted
+            ? 'ring-2 ring-cyan-400 border-cyan-400'
+            : 'border-zinc-800/80'
+        }`}
       >
         {/* Date Header & Macro Summary Pills */}
         <div className={`space-y-3 ${isExpanded ? 'border-b border-zinc-800 pb-3' : ''}`}>
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="truncate">{title}</span>
-              </h3>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2 truncate">
+                  <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">{title}</span>
+                </h3>
+                {isDayPending && <PendingMark size="sm" className="shrink-0" />}
+              </div>
               <div className="text-xs text-zinc-400 mt-0.5 truncate">
                 <span>{subtitle}</span>
                 <span className="sr-only">{day.date} • {day.meals.length} {day.meals.length === 1 ? "meal" : "meals"} logged</span>

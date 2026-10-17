@@ -13,6 +13,7 @@ import { ToastProvider } from '../../context/ToastContext';
 import { ToastHost } from '../common/ToastHost';
 import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory, recordedTables } from '../../test/supabaseBuilderMock';
+import { updateUserCache, notifyOutboxChanged, resetOutboxForTesting } from '../../offline/outbox';
 
 /**
  * Edit and Delete now live behind a single overflow trigger (`meal-actions-<id>`)
@@ -153,6 +154,7 @@ describe('HistoryView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMockHistory();
+    resetOutboxForTesting();
     (supabase.auth.getUser as any).mockResolvedValue({ data: { user: { id: 'test-athlete-id' } } });
     (supabase.auth.getSession as any).mockResolvedValue({ data: { session: mockSession } });
     (supabase.auth.onAuthStateChange as any).mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
@@ -2494,6 +2496,58 @@ describe('HistoryView', () => {
       fireEvent.change(searchInput, { target: { value: 'Exercise 0000' } });
       await waitFor(() => {
         expect(screen.getByText('Exercise 0000')).toBeDefined();
+      });
+    });
+
+    it('renders pending offline meals overlaid on the timeline with pending-mark in nutrition domain', async () => {
+      updateUserCache('test-athlete-id', [
+        {
+          opId: 'op-offline-meal-1',
+          userId: 'test-athlete-id',
+          seq: 1,
+          createdAt: '2026-09-02T12:00:00Z',
+          kind: 'nutrition.log',
+          payload: {
+            id: 'meal-offline-1',
+            user_id: 'test-athlete-id',
+            food_name: 'Offline Steak Dinner',
+            calories: 650,
+            protein: 55,
+            carbs: 5,
+            fat: 45,
+            fiber: 1,
+            logged_at: '2026-09-02T19:00:00Z',
+            logged_date: '2026-09-02',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ]);
+      notifyOutboxChanged('test-athlete-id');
+
+      renderComponent();
+
+      // Switch to Nutrition tab
+      fireEvent.click(screen.getByTestId('history-tab-nutrition'));
+
+      let expandBtn: HTMLElement | null = null;
+      await waitFor(() => {
+        const btns = screen.queryAllByTestId(/^expand-day-btn-/);
+        expect(btns.length).toBeGreaterThan(0);
+        expandBtn = screen.queryByTestId('expand-day-btn-2026-09-02') || btns[0];
+        expect(expandBtn).not.toBeNull();
+      });
+
+      const dayCard = expandBtn!.closest('[data-civil-date]');
+      expect(dayCard).not.toBeNull();
+      const pendingMarksOnCard = within(dayCard as HTMLElement).getAllByTestId('pending-mark');
+      expect(pendingMarksOnCard.length).toBeGreaterThanOrEqual(1);
+
+      // Expand the day card to inspect the meal row
+      fireEvent.click(expandBtn!);
+
+      await waitFor(() => {
+        expect(screen.getByText('Offline Steak Dinner')).toBeDefined();
       });
     });
   });
