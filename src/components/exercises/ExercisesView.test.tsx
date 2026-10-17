@@ -368,6 +368,7 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
         ],
         p_user_id: 'a0000000-0000-4000-8000-000000000123',
         p_is_master: false,
+        p_source_template_id: 'tpl-master-1',
       });
     });
   });
@@ -572,8 +573,8 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Templates/i }));
 
     expect(await screen.findByText('Master Power Clean')).toBeDefined();
-    // Coach cannot directly edit master while impersonating an athlete
-    expect(screen.queryByTestId('edit-template-tpl-master-matrix')).toBeNull();
+    // Coach editing master while impersonating an athlete routes through fork mode
+    expect(screen.getByTestId('edit-template-tpl-master-matrix')).toBeDefined();
     // Coach CAN customize/fork master for this specific athlete
     expect(screen.getByTestId('fork-template-tpl-master-matrix')).toBeDefined();
     unmountB();
@@ -586,8 +587,8 @@ describe('ExercisesView - Exercise Isolation & Schedule Days', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Templates/i }));
 
     expect(await screen.findByText('Master Power Clean')).toBeDefined();
-    // Athlete cannot edit master
-    expect(screen.queryByTestId('edit-template-tpl-master-matrix')).toBeNull();
+    // Athlete can edit master via copy-on-write fork mode
+    expect(screen.getByTestId('edit-template-tpl-master-matrix')).toBeDefined();
     // Athlete CAN customize/fork master
     const athleteForkBtn = screen.getByTestId('fork-template-tpl-master-matrix');
     expect(athleteForkBtn).toBeDefined();
