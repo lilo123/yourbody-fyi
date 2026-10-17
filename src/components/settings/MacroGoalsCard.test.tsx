@@ -125,4 +125,84 @@ describe('MacroGoalsCard accessibility', () => {
     expect(assertive!.textContent).toBe('Failed to update goals');
     expect(polite!.textContent).toBe('');
   });
+
+  it('accepts decimal comma ("72,5") and decimal period ("72.5") on converted macro inputs (protein, carbs, fat, fiber)', () => {
+    const setTargetProtein = vi.fn();
+    const setTargetCarbs = vi.fn();
+    const setTargetFat = vi.fn();
+    const setTargetFiber = vi.fn();
+    const onSave = vi.fn((e: React.FormEvent) => e.preventDefault());
+
+    const { rerender } = render(
+      <MacroGoalsCard
+        {...defaultProps}
+        setTargetProtein={setTargetProtein}
+        setTargetCarbs={setTargetCarbs}
+        setTargetFat={setTargetFat}
+        setTargetFiber={setTargetFiber}
+        onSave={onSave}
+      />
+    );
+
+    const calInput = screen.getByLabelText(/calories/i);
+    const proteinInput = screen.getByLabelText(/protein/i);
+    const carbsInput = screen.getByLabelText(/carbs/i);
+    const fatInput = screen.getByLabelText(/^fat/i);
+    const fiberInput = screen.getByLabelText(/fiber/i);
+
+    // Calorie target remains integer-only type="number"
+    expect(calInput.getAttribute('type')).toBe('number');
+
+    // Converted macro inputs are type="text" and inputMode="decimal"
+    expect(proteinInput.getAttribute('type')).toBe('text');
+    expect(carbsInput.getAttribute('type')).toBe('text');
+    expect(fatInput.getAttribute('type')).toBe('text');
+    expect(fiberInput.getAttribute('type')).toBe('text');
+
+    // Test decimal comma "72,5"
+    fireEvent.change(proteinInput, { target: { value: '72,5' } });
+    expect(setTargetProtein).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(carbsInput, { target: { value: '72,5' } });
+    expect(setTargetCarbs).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(fatInput, { target: { value: '72,5' } });
+    expect(setTargetFat).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(fiberInput, { target: { value: '72,5' } });
+    expect(setTargetFiber).toHaveBeenCalledWith(72.5);
+
+    // Test decimal period "72.5"
+    fireEvent.change(proteinInput, { target: { value: '72.5' } });
+    expect(setTargetProtein).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(carbsInput, { target: { value: '72.5' } });
+    expect(setTargetCarbs).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(fatInput, { target: { value: '72.5' } });
+    expect(setTargetFat).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(fiberInput, { target: { value: '72.5' } });
+    expect(setTargetFiber).toHaveBeenCalledWith(72.5);
+
+    // Form submission verifies save handler
+    rerender(
+      <MacroGoalsCard
+        {...defaultProps}
+        targetProtein={72.5}
+        targetCarbs={72.5}
+        targetFat={72.5}
+        targetFiber={72.5}
+        setTargetProtein={setTargetProtein}
+        setTargetCarbs={setTargetCarbs}
+        setTargetFat={setTargetFat}
+        setTargetFiber={setTargetFiber}
+        onSave={onSave}
+      />
+    );
+
+    const saveButton = screen.getByRole('button', { name: /save goals/i });
+    fireEvent.click(saveButton);
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
 });
