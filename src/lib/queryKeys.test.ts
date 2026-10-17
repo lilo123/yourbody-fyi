@@ -241,6 +241,11 @@ describe('React Query Key Registry (src/lib/queryKeys.ts)', () => {
         'custom_dishes',
         'nutri-user-1',
       ]);
+      expect(queryKeys.customDishes.fullByUser(targetUserId)).toEqual([
+        'custom_dishes',
+        'nutri-user-1',
+        'full',
+      ]);
     });
 
     // nutrition_logs
