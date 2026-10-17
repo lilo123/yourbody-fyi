@@ -4,6 +4,40 @@ import { useWorkoutSession } from './useWorkoutSession';
 import { workoutSessionStore } from '../../utils/workoutSessionStore';
 import type { Exercise, RoutineTemplate, WorkoutSet } from '../../types/database';
 
+const { mockFetchTemplateDetail, mockShowToast, getMockIsOnline, setMockIsOnline } = vi.hoisted(() => {
+  let isOnline = true;
+  return {
+    mockFetchTemplateDetail: vi.fn(),
+    mockShowToast: vi.fn(),
+    getMockIsOnline: () => isOnline,
+    setMockIsOnline: (val: boolean) => {
+      isOnline = val;
+    },
+  };
+});
+
+vi.mock('../../hooks/useToast', () => ({
+  useToast: () => ({
+    show: mockShowToast,
+    dismiss: vi.fn(),
+    activeToast: null,
+    offset: undefined,
+    setOffset: vi.fn(),
+  }),
+}));
+
+vi.mock('../../hooks/useOnlineStatus', () => ({
+  useOnlineStatus: () => getMockIsOnline(),
+}));
+
+vi.mock('./useWorkoutQueries', async () => {
+  const actual = await vi.importActual<any>('./useWorkoutQueries');
+  return {
+    ...actual,
+    fetchTemplateDetail: (...args: any[]) => mockFetchTemplateDetail(...args),
+  };
+});
+
 describe('useWorkoutSession', () => {
   const targetUserId = 'user-test-123';
   const mockExercises: Exercise[] = [
@@ -27,6 +61,7 @@ describe('useWorkoutSession', () => {
     vi.setSystemTime(new Date('2026-09-06T12:00:00Z'));
     localStorage.clear();
     vi.clearAllMocks();
+    setMockIsOnline(true);
   });
 
   afterEach(() => {
@@ -320,4 +355,200 @@ describe('useWorkoutSession', () => {
       'Overhead Tricep Cable Pull',
     ]);
   });
+
+  it('offline uncached routine selection failure does not clear active exercises or overwrite draft', async () => {
+    setMockIsOnline(false);
+    mockFetchTemplateDetail.mockRejectedValue(new Error('Template detail fetch timed out after 50ms'));
+
+    const uncachedCustomTemplate: RoutineTemplate = {
+      id: 'tpl-uncached',
+      user_id: targetUserId,
+      name: 'Uncached Custom Routine',
+      days_of_week: ['Mon'],
+      is_master: false,
+      assigned_to: null,
+      created_at: '2026-09-01',
+      exercises: undefined,
+    };
+
+    const { result } = renderHook(() =>
+      useWorkoutSession({
+        ...defaultProps,
+        customTemplates: [uncachedCustomTemplate],
+      })
+    );
+
+    act(() => {
+      result.current.handleAddExercise('Bench Press');
+      result.current.updateDraft('Bench Press', 1, 'weight', '135');
+    });
+
+    const initialRoutine = result.current.activeRoutineName;
+    expect(result.current.activeExercises).toEqual(['Bench Press']);
+    expect(result.current.inputDrafts['Bench Press_1']).toEqual({ weight: '135', reps: undefined });
+
+    await act(async () => {
+      await result.current.handleSelectRoutine('Uncached Custom Routine', uncachedCustomTemplate);
+    });
+
+    // On detail fetch failure offline: routine is NOT switched, draft is preserved, and offline toast is shown
+    expect(result.current.activeRoutineName).toBe(initialRoutine);
+    expect(result.current.activeExercises).toEqual(['Bench Press']);
+    expect(workoutSessionStore.getSession(targetUserId, result.current.workoutDate)?.exercises).toEqual(['Bench Press']);
+    expect(result.current.inputDrafts['Bench Press_1']).toEqual({ weight: '135', reps: undefined });
+    expect(mockShowToast).toHaveBeenCalledWith({ message: 'Available when online' });
+  });
+
+  it('cache hit offline still switches to the picked routine', async () => {
+    setMockIsOnline(false);
+    const cachedCustomTemplate: RoutineTemplate = {
+      id: 'tpl-cached',
+      user_id: targetUserId,
+      name: 'Cached Custom Routine',
+      days_of_week: ['Mon'],
+      is_master: false,
+      assigned_to: null,
+      created_at: '2026-09-01',
+      exercises: undefined,
+    };
+
+    mockFetchTemplateDetail.mockResolvedValue({
+      id: 'tpl-cached',
+      exercises: [
+        {
+          id: 'te-squat',
+          template_id: 'tpl-cached',
+          exercise_id: 'ex-squat',
+          order_index: 0,
+          target_sets: 4,
+          target_reps: 8,
+          exercise: { name: 'Squat' },
+        },
+      ],
+    });
+
+    const { result } = renderHook(() =>
+      useWorkoutSession({
+        ...defaultProps,
+        customTemplates: [cachedCustomTemplate],
+      })
+    );
+
+    act(() => {
+      result.current.handleAddExercise('Bench Press');
+    });
+
+    expect(result.current.activeExercises).toEqual(['Bench Press']);
+
+    await act(async () => {
+      await result.current.handleSelectRoutine('Cached Custom Routine', cachedCustomTemplate);
+    });
+
+    // Offline cache hit successfully switches routine and updates exercises
+    expect(result.current.activeRoutineName).toBe('Cached Custom Routine');
+    expect(result.current.activeExercises).toEqual(['Squat']);
+    expect(result.current.targetSetCounts['Squat']).toBe(4);
+    expect(result.current.targetRepCounts['Squat']).toBe(8);
+    expect(workoutSessionStore.getSession(targetUserId, result.current.workoutDate)?.exercises).toEqual(['Squat']);
+    expect(mockShowToast).not.toHaveBeenCalled();
+  });
+
+  it('online fetch failure behaves the same as offline (no data loss)', async () => {
+    setMockIsOnline(true);
+    mockFetchTemplateDetail.mockRejectedValue(new Error('Network error: connection reset'));
+
+    const customTemplate: RoutineTemplate = {
+      id: 'tpl-custom-error',
+      user_id: targetUserId,
+      name: 'Custom Routine Network Error',
+      days_of_week: ['Mon'],
+      is_master: false,
+      assigned_to: null,
+      created_at: '2026-09-01',
+      exercises: undefined,
+    };
+
+    const { result } = renderHook(() =>
+      useWorkoutSession({
+        ...defaultProps,
+        customTemplates: [customTemplate],
+      })
+    );
+
+    act(() => {
+      result.current.handleAddExercise('Bench Press');
+      result.current.updateDraft('Bench Press', 1, 'weight', '225');
+    });
+
+    const initialRoutine = result.current.activeRoutineName;
+
+    await act(async () => {
+      await result.current.handleSelectRoutine('Custom Routine Network Error', customTemplate);
+    });
+
+    // Online fetch failure preserves active exercises and drafts identical to offline, with no toast online
+    expect(result.current.activeRoutineName).toBe(initialRoutine);
+    expect(result.current.activeExercises).toEqual(['Bench Press']);
+    expect(workoutSessionStore.getSession(targetUserId, result.current.workoutDate)?.exercises).toEqual(['Bench Press']);
+    expect(result.current.inputDrafts['Bench Press_1']).toEqual({ weight: '225', reps: undefined });
+    expect(mockShowToast).not.toHaveBeenCalled();
+  });
+
+  it('online failure with null detail keeps current workout untouched and shows no toast', async () => {
+    setMockIsOnline(true);
+    mockFetchTemplateDetail.mockResolvedValue(null);
+
+    const customTemplate: RoutineTemplate = {
+      id: 'tpl-deleted-online',
+      user_id: targetUserId,
+      name: 'Deleted Custom Routine',
+      days_of_week: ['Mon'],
+      is_master: false,
+      assigned_to: null,
+      created_at: '2026-09-01',
+      exercises: undefined,
+    };
+
+    const { result } = renderHook(() =>
+      useWorkoutSession({
+        ...defaultProps,
+        customTemplates: [customTemplate],
+      })
+    );
+
+    act(() => {
+      result.current.handleAddExercise('Squat');
+    });
+
+    const initialRoutine = result.current.activeRoutineName;
+
+    await act(async () => {
+      await result.current.handleSelectRoutine('Deleted Custom Routine', customTemplate);
+    });
+
+    expect(result.current.activeRoutineName).toBe(initialRoutine);
+    expect(result.current.activeExercises).toEqual(['Squat']);
+    expect(workoutSessionStore.getSession(targetUserId, result.current.workoutDate)?.exercises).toEqual(['Squat']);
+    expect(mockShowToast).not.toHaveBeenCalled();
+  });
+
+  it('selecting a default template fallback switches client-side without fetching', async () => {
+    const { result } = renderHook(() => useWorkoutSession(defaultProps));
+
+    await act(async () => {
+      await result.current.handleSelectRoutine('Push, Quads, & Core - Reduced');
+    });
+
+    expect(result.current.activeRoutineName).toBe('Push, Quads, & Core - Reduced');
+    expect(result.current.activeExercises).toEqual([
+      'Incline Bench Press',
+      'Cable Lateral Raises',
+      'Dips',
+      'Leg Extension Machine',
+      'Overhead Tricep Cable Pull',
+    ]);
+    expect(mockFetchTemplateDetail).not.toHaveBeenCalled();
+    expect(mockShowToast).not.toHaveBeenCalled();
+  });
 });
+
