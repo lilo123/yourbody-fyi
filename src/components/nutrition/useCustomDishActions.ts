@@ -6,9 +6,12 @@ import { formatLocalTimestamp } from '../../utils/date';
 import { formatCalories, roundTo1Decimal } from '../../utils/nutrition';
 import { newId } from '../../offline';
 import { PARSER_VERSION } from '../../lib/nutrition/localParse';
+import { queryKeys } from '../../lib/queryKeys';
 import {
+  itemsForPersist,
   itemsFromLegacyIngredients,
   normalizeItems,
+  type NutritionItem,
 } from '../../utils/itemModel';
 import { fetchDishDetail as defaultFetchDishDetail } from './useNutritionData';
 import { inferMealType } from './inferMealType';
@@ -16,6 +19,7 @@ import {
   buildStagedItem,
   recomputeStagedTotals,
   mergeOrAppendStagedItems,
+  stagedToItem,
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
@@ -46,6 +50,26 @@ export interface UseCustomDishActionsOptions {
   fetchDishDetail?: (dishId: string) => Promise<CustomDishDetail | null>;
   mutation: { mutate: (payload: any, options?: any) => void; isPending?: boolean };
   triggerToast?: (dish: CustomDish | { name: string; calories: number | null }, options?: any) => void;
+}
+
+export interface QuickLogMutationPayload {
+  id: string;
+  food_name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  meal_type: string;
+  serving_size: number;
+  serving_unit: string;
+  logged_at: string;
+  logged_date: string;
+  items?: NutritionItem[] | null;
+  notes: string | null;
+  source: 'manual';
+  parser_version: string;
+  incrementDishId?: string;
 }
 
 export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | null): StagedItem[] {
@@ -184,7 +208,7 @@ export function useCustomDishActions({
           .from('custom_dishes')
           .update({ use_count: (dish.use_count ?? 0) + 1 })
           .eq('id', dish.id);
-        queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
       } catch (err: unknown) {
         console.warn('[useCustomDishActions] Failed to increment custom dish use count:', err);
       }
@@ -367,29 +391,73 @@ export function useCustomDishActions({
       previousStagedMealRef.current = null;
       const clientLogId = newId();
 
-      const { servingSize, servingUnit } = resolveCustomDishServing(dish);
+      let detail: CustomDishDetail | null = null;
+      const hasDirectItems = Array.isArray(dish.items) && dish.items.length > 0;
+      if (!hasDirectItems) {
+        const cachedList = queryClient.getQueryData<CustomDishDetail[]>(
+          queryKeys.customDishes.byUser(targetUserId)
+        );
+        const foundInList = cachedList?.find(
+          (d) => d.id === dish.id && (d.items !== undefined || d.ingredients !== undefined)
+        );
+        if (foundInList) {
+          detail = foundInList;
+        } else {
+          const cachedFull = queryClient.getQueryData<CustomDishDetail[]>(
+            queryKeys.customDishes.fullByUser(targetUserId)
+          );
+          detail = cachedFull?.find((d) => d.id === dish.id) ?? null;
+        }
+      }
 
-      const payload = {
-        id: clientLogId,
-        food_name: dish.name,
-        calories: roundTo1Decimal(dish.calories),
-        protein: roundTo1Decimal(dish.protein),
-        carbs: roundTo1Decimal(dish.carbs),
-        fat: roundTo1Decimal(dish.fat),
-        fiber: roundTo1Decimal(dish.fiber),
-        meal_type: inferMealType(dish.name, new Date()),
-        serving_size: servingSize,
-        serving_unit: servingUnit,
-        logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
-        logged_date: selectedDate,
-        notes: dish.notes ?? null,
-        source: 'manual' as const,
-        parser_version: PARSER_VERSION,
-        incrementDishId: dish.id,
-      };
+      const stagedItems = buildItemsFromDish(dish, detail);
+      const items = stagedItems.map(stagedToItem);
+      const isMultiItem = items.length > 1;
+      const { explanation: _explanation, ...tot } = recomputeStagedTotals(stagedItems);
+      const { servingSize, servingUnit } = resolveCustomDishServing(dish, detail);
+
+      const payload: QuickLogMutationPayload = isMultiItem
+        ? {
+            id: clientLogId,
+            food_name: dish.name,
+            calories: roundTo1Decimal(tot.calories),
+            protein: roundTo1Decimal(tot.protein),
+            carbs: roundTo1Decimal(tot.carbs),
+            fat: roundTo1Decimal(tot.fat),
+            fiber: roundTo1Decimal(tot.fiber),
+            meal_type: inferMealType(dish.name, new Date()),
+            serving_size: servingSize,
+            serving_unit: servingUnit,
+            logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
+            logged_date: selectedDate,
+            items: itemsForPersist(items),
+            notes: dish.notes ?? null,
+            source: 'manual',
+            parser_version: PARSER_VERSION,
+            incrementDishId: dish.id,
+          }
+        : {
+            id: clientLogId,
+            food_name: dish.name,
+            calories: roundTo1Decimal(dish.calories),
+            protein: roundTo1Decimal(dish.protein),
+            carbs: roundTo1Decimal(dish.carbs),
+            fat: roundTo1Decimal(dish.fat),
+            fiber: roundTo1Decimal(dish.fiber),
+            meal_type: inferMealType(dish.name, new Date()),
+            serving_size: servingSize,
+            serving_unit: servingUnit,
+            logged_at: formatLocalTimestamp(selectedDate, undefined, timeZone),
+            logged_date: selectedDate,
+            notes: dish.notes ?? null,
+            source: 'manual',
+            parser_version: PARSER_VERSION,
+            incrementDishId: dish.id,
+          };
+
       mutation.mutate(payload, {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
         },
       });
       triggerToast?.(dish);
