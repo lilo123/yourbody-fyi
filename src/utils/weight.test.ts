@@ -150,6 +150,8 @@ describe('weight utilities (src/utils/weight.ts)', () => {
       expect(resolveWeightInput('BW', 'kg', 0)).toBe(0);
       expect(resolveWeightInput('0', 'kg', 0)).toBe(0);
       expect(resolveWeightInput('', 'kg', 225)).toBeNull();
+      expect(resolveWeightInput('102,1', 'kg', 225)).toBe(225);
+      expect(resolveWeightInput(' 102,1 ', 'kg', 225)).toBe(225);
     });
   });
 
@@ -168,6 +170,36 @@ describe('weight utilities (src/utils/weight.ts)', () => {
     it('parses kg input and converts to canonical lb at full precision', () => {
       const canonicalLb = parseWeightInput('100', 'kg');
       expect(canonicalLb).toBeCloseTo(220.46226218, 5);
+    });
+
+    it('parses single comma decimal separator in lb and kg', () => {
+      expect(parseWeightInput('72,5')).toBe(72.5);
+      expect(parseWeightInput('72,50')).toBe(72.5);
+      expect(parseWeightInput(' 72,5 ')).toBe(72.5);
+      const kgLb = parseWeightInput('72,5', 'kg');
+      expect(kgLb).toBeCloseTo(159.835140, 4);
+    });
+
+    it('mirrors dot behavior for trailing and leading separators', () => {
+      expect(parseWeightInput('72,')).toBe(parseWeightInput('72.'));
+      expect(parseWeightInput('72,')).toBe(72);
+      expect(parseWeightInput('72,', 'kg')).toBe(parseWeightInput('72.', 'kg'));
+
+      expect(parseWeightInput(',5')).toBe(parseWeightInput('.5'));
+      expect(parseWeightInput(',5')).toBe(0.5);
+      expect(parseWeightInput(',5', 'kg')).toBe(parseWeightInput('.5', 'kg'));
+
+      expect(parseWeightInput(',')).toBe(parseWeightInput('.'));
+      expect(parseWeightInput(',')).toBeNull();
+    });
+
+    it('returns null for ambiguous inputs with multiple separators or mixed dot/comma', () => {
+      expect(parseWeightInput('1,234,5')).toBeNull();
+      expect(parseWeightInput('1.234,5')).toBeNull();
+      expect(parseWeightInput('1,234.5')).toBeNull();
+      expect(parseWeightInput(',,')).toBeNull();
+      expect(parseWeightInput(' 72, 5 ')).toBeNull();
+      expect(parseWeightInput('-72,5')).toBeNull();
     });
 
     it('returns null for invalid inputs', () => {
