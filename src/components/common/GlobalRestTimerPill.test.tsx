@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { GlobalRestTimerPill } from './GlobalRestTimerPill';
+import { GlobalRestTimerPill, getStagedActionsAvoidanceOffset } from './GlobalRestTimerPill';
 import { restTimerStore } from '../../utils/restTimerStore';
 import { expectNoA11yViolations } from '../../test/a11y';
 
@@ -153,5 +153,103 @@ describe('GlobalRestTimerPill', () => {
     const pill = screen.getByTestId('rest-timer-pill');
     expect(pill.className).toContain('bottom-[calc(6rem+env(safe-area-inset-bottom,0px))]');
     expect(pill.className).toContain('sm:bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))]');
+  });
+
+  describe('staged actions avoidance', () => {
+    it('returns null when no staged actions element is in DOM', () => {
+      expect(getStagedActionsAvoidanceOffset()).toBeNull();
+    });
+
+    it('returns null on desktop viewports (innerWidth >= 640)', () => {
+      const staged = document.createElement('div');
+      staged.setAttribute('data-testid', 'staged-card-actions');
+      vi.spyOn(staged, 'getBoundingClientRect').mockReturnValue({
+        top: 700,
+        bottom: 748,
+        left: 0,
+        right: 390,
+        width: 390,
+        height: 48,
+        x: 0,
+        y: 700,
+        toJSON: () => {},
+      });
+      document.body.appendChild(staged);
+
+      const originalInnerWidth = window.innerWidth;
+      try {
+        Object.defineProperty(window, 'innerWidth', { value: 768, configurable: true });
+        expect(getStagedActionsAvoidanceOffset()).toBeNull();
+      } finally {
+        Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, configurable: true });
+        document.body.removeChild(staged);
+      }
+    });
+
+    it('calculates offset 8px above staged-card-actions on mobile viewports', () => {
+      const staged = document.createElement('div');
+      staged.setAttribute('data-testid', 'staged-card-actions');
+      vi.spyOn(staged, 'getBoundingClientRect').mockReturnValue({
+        top: 700,
+        bottom: 748,
+        left: 0,
+        right: 390,
+        width: 390,
+        height: 48,
+        x: 0,
+        y: 700,
+        toJSON: () => {},
+      });
+      document.body.appendChild(staged);
+
+      const originalInnerWidth = window.innerWidth;
+      const originalInnerHeight = window.innerHeight;
+      try {
+        Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true });
+        // 844 - 700 + 8 = 152px
+        expect(getStagedActionsAvoidanceOffset()).toBe(152);
+      } finally {
+        Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: originalInnerHeight, configurable: true });
+        document.body.removeChild(staged);
+      }
+    });
+
+    it('dynamically sets inline bottom style when staged actions is present', () => {
+      const staged = document.createElement('div');
+      staged.setAttribute('data-testid', 'staged-card-actions');
+      vi.spyOn(staged, 'getBoundingClientRect').mockReturnValue({
+        top: 700,
+        bottom: 748,
+        left: 0,
+        right: 390,
+        width: 390,
+        height: 48,
+        x: 0,
+        y: 700,
+        toJSON: () => {},
+      });
+      document.body.appendChild(staged);
+
+      const originalInnerWidth = window.innerWidth;
+      const originalInnerHeight = window.innerHeight;
+      try {
+        Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true });
+
+        act(() => {
+          restTimerStore.start(90);
+        });
+
+        render(<GlobalRestTimerPill />);
+        const pill = screen.getByTestId('rest-timer-pill');
+        expect(pill.style.bottom).toBe('152px');
+      } finally {
+        Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: originalInnerHeight, configurable: true });
+        document.body.removeChild(staged);
+      }
+    });
   });
 });

@@ -262,7 +262,7 @@ function AppLayout() {
           <DeferredInstallPrompt />
         </React.Suspense>
       )}
-      <main className={`flex-1 max-w-xl w-full mx-auto p-4 ${user ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]' : 'pb-8'}`}>
+      <main className={`flex-1 max-w-xl w-full mx-auto p-4 ${user ? 'pb-[calc(11rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]' : 'pb-8'}`}>
         <React.Suspense fallback={<LazyFallback />}>
           <Routes>
             <Route path="/" element={<RootRoute />} />

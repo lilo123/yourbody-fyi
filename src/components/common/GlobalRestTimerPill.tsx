@@ -1,6 +1,50 @@
-import React, { useSyncExternalStore } from 'react';
+import React, { useSyncExternalStore, useState, useEffect } from 'react';
 import { Timer, Play, Pause, Square } from 'lucide-react';
 import { restTimerStore } from '../../utils/restTimerStore';
+
+export function getStagedActionsAvoidanceOffset(): number | null {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return null;
+  if (window.innerWidth >= 640) return null;
+
+  const staged = document.querySelector<HTMLElement>('[data-testid="staged-card-actions"]');
+  if (!staged) return null;
+
+  const rect = staged.getBoundingClientRect();
+  const vh = window.innerHeight;
+  if (rect.height <= 0 || rect.top >= vh || rect.bottom <= 0) return null;
+
+  return Math.round(vh - rect.top + 8);
+}
+
+function useStagedActionsAvoidance(): number | null {
+  const [offset, setOffset] = useState<number | null>(() => getStagedActionsAvoidanceOffset());
+
+  useEffect(() => {
+    const update = () => {
+      setOffset(getStagedActionsAvoidanceOffset());
+    };
+
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, { passive: true });
+
+    const observer = new MutationObserver(update);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class'],
+    });
+
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update);
+      observer.disconnect();
+    };
+  }, []);
+
+  return offset;
+}
 
 export const GlobalRestTimerPill: React.FC = () => {
   const state = useSyncExternalStore(
@@ -8,6 +52,7 @@ export const GlobalRestTimerPill: React.FC = () => {
     restTimerStore.getSnapshot,
     restTimerStore.getServerSnapshot
   );
+  const stagedOffset = useStagedActionsAvoidance();
 
   if (!state.isRunning && !state.isPaused) {
     return null;
@@ -15,10 +60,14 @@ export const GlobalRestTimerPill: React.FC = () => {
 
   const mins = Math.floor(state.remainingSeconds / 60);
   const secs = (state.remainingSeconds % 60).toString().padStart(2, '0');
+  const inlineStyle: React.CSSProperties = stagedOffset !== null
+    ? { bottom: `${stagedOffset}px` }
+    : {};
 
   return (
     <div
-      className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-4 right-4 z-[45] max-w-lg mx-auto bg-zinc-900 backdrop-blur-xl border border-cyan-500/50 rounded-2xl p-3 flex items-center justify-between shadow-[0_4px_25px_rgba(6,182,212,0.3)]"
+      style={inlineStyle}
+      className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-4 right-4 z-[45] max-w-lg mx-auto bg-zinc-900 backdrop-blur-xl border border-cyan-500/50 rounded-2xl p-3 flex items-center justify-between shadow-[0_4px_25px_rgba(6,182,212,0.3)] transition-[bottom] duration-150"
       data-testid="rest-timer-pill"
     >
       <div className="flex items-center gap-2.5">
