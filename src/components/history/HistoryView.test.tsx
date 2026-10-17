@@ -14,6 +14,7 @@ import { ToastHost } from '../common/ToastHost';
 import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory, recordedTables } from '../../test/supabaseBuilderMock';
 import { updateUserCache, notifyOutboxChanged, resetOutboxForTesting } from '../../offline/outbox';
+import { setFlusherSessionUser, resetFlusherForTesting } from '../../offline/flusher';
 
 /**
  * Edit and Delete now live behind a single overflow trigger (`meal-actions-<id>`)
@@ -155,6 +156,7 @@ describe('HistoryView', () => {
     vi.clearAllMocks();
     clearMockHistory();
     resetOutboxForTesting();
+    resetFlusherForTesting();
     (supabase.auth.getUser as any).mockResolvedValue({ data: { user: { id: 'test-athlete-id' } } });
     (supabase.auth.getSession as any).mockResolvedValue({ data: { session: mockSession } });
     (supabase.auth.onAuthStateChange as any).mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
@@ -2500,6 +2502,7 @@ describe('HistoryView', () => {
     });
 
     it('renders pending offline meals overlaid on the timeline with pending-mark in nutrition domain', async () => {
+      setFlusherSessionUser('test-athlete-id');
       updateUserCache('test-athlete-id', [
         {
           opId: 'op-offline-meal-1',
@@ -2538,11 +2541,9 @@ describe('HistoryView', () => {
       expect(pendingMarksOnCard.length).toBeGreaterThanOrEqual(1);
 
       // Expand the day card to inspect the meal row
+      fireEvent.click(expandBtn);
+
       await waitFor(() => {
-        const btn = screen.getByTestId('expand-day-btn-2026-09-02');
-        if (btn.getAttribute('aria-expanded') !== 'true') {
-          fireEvent.click(btn);
-        }
         expect(screen.getByText('Offline Steak Dinner')).toBeDefined();
       });
     });
