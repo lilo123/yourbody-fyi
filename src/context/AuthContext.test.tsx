@@ -218,45 +218,7 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
     });
   });
 
-  it('3b. silently revalidates session upon window focus event', async () => {
-    const getSessionSpy = vi.fn().mockResolvedValue({
-      data: {
-        session: {
-          user: { id: 'refreshed-focus-user-id', email: 'refreshed-focus@yourbody.fyi' },
-        },
-      },
-    });
-    (supabase.auth.getSession as any).mockImplementation(getSessionSpy);
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TestConsumer />
-        </AuthProvider>
-      </QueryClientProvider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('auth-loading').textContent).toBe('false');
-    });
-
-    const initialCallCount = getSessionSpy.mock.calls.length;
-
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      get: () => 'visible',
-    });
-
-    act(() => {
-      window.dispatchEvent(new Event('focus'));
-    });
-
-    await waitFor(() => {
-      expect(getSessionSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
-    });
-  });
-
-  it('3c. handles rejected getSession during resume/focus refresh without unhandledrejection', async () => {
+  it('3c. handles rejected getSession during resume refresh without unhandledrejection', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const unhandledRejections: any[] = [];
     const onUnhandled = (event: PromiseRejectionEvent) => {
@@ -294,7 +256,7 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
 
     try {
       act(() => {
-        window.dispatchEvent(new Event('focus'));
+        document.dispatchEvent(new Event('visibilitychange'));
       });
 
       await waitFor(() => {

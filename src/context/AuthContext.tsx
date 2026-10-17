@@ -377,14 +377,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     document.addEventListener('visibilitychange', handleLifecycleResume);
     window.addEventListener('pageshow', handleLifecycleResume);
-    window.addEventListener('focus', handleLifecycleResume);
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleLifecycleResume);
       window.removeEventListener('pageshow', handleLifecycleResume);
-      window.removeEventListener('focus', handleLifecycleResume);
     };
   }, [fetchProfile, syncUserTimezone, markAuthValid]);
 
