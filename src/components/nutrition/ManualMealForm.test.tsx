@@ -183,17 +183,42 @@ describe('ManualMealForm', () => {
     expect(screen.getByText(/Fiber \(g\)/).textContent).not.toContain('*');
   });
 
-  it('uses inputMode="decimal" and type="number" with min="0" on all macro fields', () => {
+  it('uses inputMode="decimal" and type="text" with min="0" on all macro fields', () => {
     renderForm();
 
     const macroTestIds = ['calories-input', 'protein-input', 'carbs-input', 'fat-input', 'fiber-input'];
     macroTestIds.forEach((testId) => {
       const input = screen.getByTestId(testId);
       expect(input.getAttribute('inputmode')).toBe('decimal');
-      expect(input.getAttribute('type')).toBe('number');
+      expect(input.getAttribute('type')).toBe('text');
       expect(input.getAttribute('min')).toBe('0');
       expect(input.getAttribute('step')).toBe('any');
     });
+  });
+
+  it('accepts decimal comma ("12,5" and sequential "1","2",",","5") and rejects ambiguous separators ("1,2,3")', () => {
+    const onManualProteinChange = vi.fn();
+    renderForm({ onManualProteinChange, manualProtein: '' });
+
+    // Sequential typing simulation on protein input: "1" -> "12" -> "12," -> "12,5"
+    const proteinInput = screen.getByTestId('protein-input');
+    fireEvent.change(proteinInput, { target: { value: '1' } });
+    expect(onManualProteinChange).toHaveBeenLastCalledWith(1);
+
+    fireEvent.change(proteinInput, { target: { value: '12' } });
+    expect(onManualProteinChange).toHaveBeenLastCalledWith(12);
+
+    fireEvent.change(proteinInput, { target: { value: '12,' } });
+    expect((proteinInput as HTMLInputElement).value).toBe('12,');
+
+    fireEvent.change(proteinInput, { target: { value: '12,5' } });
+    expect((proteinInput as HTMLInputElement).value).toBe('12,5');
+    expect(onManualProteinChange).toHaveBeenLastCalledWith(12.5);
+
+    // Reject "1,2,3"
+    fireEvent.change(proteinInput, { target: { value: '1,2,3' } });
+    const lastCall = onManualProteinChange.mock.calls[onManualProteinChange.mock.calls.length - 1][0];
+    expect(Number.isNaN(lastCall)).toBe(true);
   });
 
   it('sets noValidate on the form to prevent native browser popups', () => {

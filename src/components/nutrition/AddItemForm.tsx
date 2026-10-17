@@ -2,6 +2,7 @@ import React, { memo, useEffect, useId, useState } from 'react';
 import type { CanonicalUnit } from '../../utils/unitConverter';
 import { roundTo1Decimal } from '../../utils/nutrition';
 import { MacroInputsGrid } from './MacroInputsGrid';
+import { DecimalInput } from './DecimalInput';
 
 export interface AddItemFormData {
   name: string;
@@ -197,16 +198,12 @@ export const AddItemForm: React.FC<AddItemFormProps> = memo(({
           >
             Quantity
           </label>
-          <input
+          <DecimalInput
             id={quantityId}
-            type="number"
-            step="any"
-            min="0"
-            inputMode="decimal"
             enterKeyHint="next"
             data-testid="add-item-quantity-input"
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+            onChange={setQuantity}
             aria-invalid={Boolean(errors.quantity)}
             aria-errormessage={errors.quantity ? `${quantityId}-error` : undefined}
             className={`w-full bg-zinc-900 border text-white rounded-xl p-2 text-base tabular-nums font-semibold outline-none text-center transition min-h-[40px] ${

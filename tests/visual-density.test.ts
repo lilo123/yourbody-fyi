@@ -8040,6 +8040,9 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
       viewport: { width: 320, height: 844 },
       deviceScaleFactor: 1,
     });
+    if (process.env.TEST_CLOCK_OVERRIDE && context.clock) {
+      await context.clock.setFixedTime(new Date(process.env.TEST_CLOCK_OVERRIDE));
+    }
     const page = await context.newPage();
     let athleteUserId = '';
 
@@ -8080,6 +8083,7 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
       }, dbName);
 
       // Open that DB with plain indexedDB.open(name) (no version arg) and put 12 pending ops
+      // (1 workout.ensure + 11 set.create ops) for today
       await page.evaluate(
         async ({ name, userId, exerciseId }) => {
           const req = indexedDB.open(name);
@@ -8090,12 +8094,33 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
 
           const tx = db.transaction(['outbox'], 'readwrite');
           const store = tx.objectStore('outbox');
-          const now = new Date().toISOString();
-          for (let i = 0; i < 12; i++) {
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const day = String(now.getDate()).padStart(2, '0');
+          const today = `${year}-${month}-${day}`;
+          const iso = now.toISOString();
+
+          store.put({
+            opId: 'w4-pending-op-workout',
+            userId,
+            seq: 1,
+            kind: 'workout.ensure',
+            payload: {
+              clientWorkoutId: 'density-w-1',
+              workout_date: today,
+              name: 'Workout A (Push, Quads & Core)',
+            },
+            createdAt: iso,
+            attempts: 0,
+            state: 'pending',
+          });
+
+          for (let i = 0; i < 11; i++) {
             store.put({
               opId: `w4-pending-op-${i + 1}`,
               userId,
-              seq: i + 1,
+              seq: i + 2,
               kind: 'set.create',
               payload: {
                 id: `w4-pending-set-${i + 1}`,
@@ -8105,9 +8130,9 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
                 reps: 5,
                 set_index: i + 1,
                 set_type: 'working',
-                created_at: now,
+                created_at: iso,
               },
-              createdAt: now,
+              createdAt: iso,
               attempts: 0,
               state: 'pending',
             });
@@ -8141,8 +8166,8 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         return route.continue();
       });
 
-      // Reload and wait for route to render before going offline
-      await page.reload();
+      // Reload into Workout A and wait for route to render before going offline
+      await page.goto('/workout?routine=' + encodeURIComponent('Workout A (Push, Quads & Core)'));
       await page.waitForLoadState('domcontentloaded');
       await expect(statusBadge).toBeVisible({ timeout: 10000 });
       await expect(page.locator('[data-testid="add-exercise-btn"]')).toBeVisible({ timeout: 10000 });

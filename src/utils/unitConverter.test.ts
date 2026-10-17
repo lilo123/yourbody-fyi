@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import corpus from '../../supabase/tests/fixtures/portion_corpus.json';
 import {
   convertPortion,
+  parseDecimalInput,
   parseQuantityInput,
   shortUnitLabel,
   MAX_QUANTITY,
@@ -133,6 +134,7 @@ describe('parseQuantityInput — the numeric form-field path', () => {
   // which is what this guard is for.
   it('accepts the values a number input really produces', () => {
     expect(parseQuantityInput('12.5')).toBe(12.5);
+    expect(parseQuantityInput('12,5')).toBe(12.5);
     expect(parseQuantityInput('0')).toBe(0);
     expect(parseQuantityInput(150)).toBe(150);
     expect(parseQuantityInput('1e3')).toBe(1000);
@@ -146,8 +148,63 @@ describe('parseQuantityInput — the numeric form-field path', () => {
     expect(parseQuantityInput(undefined)).toBeNull();
     expect(parseQuantityInput('abc')).toBeNull();
     expect(parseQuantityInput('1..5')).toBeNull();
+    expect(parseQuantityInput('1,2,3')).toBeNull();
     expect(parseQuantityInput(NaN)).toBeNull();
     expect(parseQuantityInput(Infinity)).toBeNull();
     expect(parseQuantityInput('999999999')).toBeNull();
+  });
+});
+
+describe('parseDecimalInput', () => {
+  it('parses single comma decimal separator in numbers', () => {
+    expect(parseDecimalInput('72,5')).toBe(72.5);
+    expect(parseDecimalInput('72,50')).toBe(72.5);
+    expect(parseDecimalInput(' 72,5 ')).toBe(72.5);
+    expect(parseDecimalInput('12,5')).toBe(12.5);
+    expect(parseDecimalInput('0,5')).toBe(0.5);
+  });
+
+  it('mirrors dot behavior for trailing and leading separators', () => {
+    expect(parseDecimalInput('72,')).toBe(parseDecimalInput('72.'));
+    expect(parseDecimalInput('72,')).toBe(72);
+    expect(parseDecimalInput(',5')).toBe(parseDecimalInput('.5'));
+    expect(parseDecimalInput(',5')).toBe(0.5);
+    expect(parseDecimalInput(',')).toBe(parseDecimalInput('.'));
+    expect(parseDecimalInput(',')).toBeNull();
+  });
+
+  it('returns null for ambiguous inputs with multiple separators or mixed dot/comma', () => {
+    expect(parseDecimalInput('1,234,5')).toBeNull();
+    expect(parseDecimalInput('1.234,5')).toBeNull();
+    expect(parseDecimalInput('1,234.5')).toBeNull();
+    expect(parseDecimalInput(',,')).toBeNull();
+    expect(parseDecimalInput(' 72, 5 ')).toBeNull();
+    expect(parseDecimalInput('1,2,3')).toBeNull();
+    expect(parseDecimalInput('1..5')).toBeNull();
+  });
+
+  it('rejects negative numbers by default and supports allowNegative option', () => {
+    expect(parseDecimalInput('-72,5')).toBeNull();
+    expect(parseDecimalInput('-5')).toBeNull();
+    expect(parseDecimalInput('-72,5', { allowNegative: true })).toBe(-72.5);
+    expect(parseDecimalInput('-5', { allowNegative: true })).toBe(-5);
+  });
+
+  it('returns null for invalid inputs', () => {
+    expect(parseDecimalInput('')).toBeNull();
+    expect(parseDecimalInput('   ')).toBeNull();
+    expect(parseDecimalInput(null)).toBeNull();
+    expect(parseDecimalInput(undefined)).toBeNull();
+    expect(parseDecimalInput('abc')).toBeNull();
+    expect(parseDecimalInput(NaN)).toBeNull();
+    expect(parseDecimalInput(Infinity)).toBeNull();
+    expect(parseDecimalInput('999999999')).toBeNull();
+  });
+
+  it('accepts raw numbers', () => {
+    expect(parseDecimalInput(42)).toBe(42);
+    expect(parseDecimalInput(0)).toBe(0);
+    expect(parseDecimalInput(-5)).toBeNull();
+    expect(parseDecimalInput(-5, { allowNegative: true })).toBe(-5);
   });
 });

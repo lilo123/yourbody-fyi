@@ -27,6 +27,7 @@ export async function fetchDishDetail(dishId: string): Promise<CustomDishDetail 
   return data as CustomDishDetail | null;
 }
 
+import { queryKeys } from '../../lib/queryKeys';
 import {
   getDayBounds,
   normalizeDateStr,
@@ -147,7 +148,7 @@ export function useNutritionData({
     error: customDishesError,
     refetch: refetchCustomDishes,
   } = useQuery({
-    queryKey: ['custom_dishes', targetUserId],
+    queryKey: queryKeys.customDishes.byUser(targetUserId),
     queryFn: async () => {
       if (!targetUserId) return [];
       const { data, error } = await supabase
@@ -166,21 +167,23 @@ export function useNutritionData({
   });
 
   // Cached fetchDishDetail reading query cache first:
-  // resolves: list entry with items -> 'full' cache entry -> network (online) -> clear offline error
+  // resolves: 'full' cache entry -> list entry with items -> network (online) -> clear offline error
   const cachedFetchDishDetail = useCallback(
     async (dishId: string): Promise<CustomDishDetail | null> => {
-      // 1. Check list entry with items
-      const cachedList = queryClient.getQueryData<CustomDish[]>(['custom_dishes', targetUserId]);
-      const foundInList = cachedList?.find((d) => d.id === dishId);
-      if (foundInList && ((foundInList as any).items !== undefined || (foundInList as any).ingredients !== undefined)) {
-        return foundInList as CustomDishDetail;
-      }
-
-      // 2. Check 'full' cache entry
-      const cachedFull = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', targetUserId, 'full']);
+      // 1. Check 'full' cache entry
+      const fullKey = queryKeys.customDishes.fullByUser(targetUserId);
+      const cachedFull = queryClient.getQueryData<CustomDishDetail[]>(fullKey);
       const foundInFull = cachedFull?.find((d) => d.id === dishId);
       if (foundInFull) {
         return foundInFull;
+      }
+
+      // 2. Check list entry with items
+      const listKey = queryKeys.customDishes.byUser(targetUserId);
+      const cachedList = queryClient.getQueryData<CustomDish[]>(listKey);
+      const foundInList = cachedList?.find((d) => d.id === dishId);
+      if (foundInList && ((foundInList as any).items !== undefined || (foundInList as any).ingredients !== undefined)) {
+        return foundInList as CustomDishDetail;
       }
 
       // 3. Network (if online)
@@ -188,14 +191,15 @@ export function useNutritionData({
       if (isOnline) {
         const detail = await fetchDishDetail(dishId);
         if (detail && targetUserId) {
-          const currentFull = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', targetUserId, 'full']) || [];
+          const currentFull = queryClient.getQueryData<CustomDishDetail[]>(fullKey) || [];
           const idx = currentFull.findIndex((d) => d.id === dishId);
+          const nextFull = [...currentFull];
           if (idx >= 0) {
-            currentFull[idx] = { ...currentFull[idx], ...detail };
-            queryClient.setQueryData(['custom_dishes', targetUserId, 'full'], [...currentFull]);
+            nextFull[idx] = { ...nextFull[idx], ...detail };
           } else {
-            queryClient.setQueryData(['custom_dishes', targetUserId, 'full'], [...currentFull, detail]);
+            nextFull.push(detail);
           }
+          queryClient.setQueryData(fullKey, nextFull);
         }
         return detail;
       }
@@ -343,7 +347,7 @@ export function useNutritionData({
       setIsError(false);
       queryClient.invalidateQueries({ queryKey: ['nutrition_logs', targetUserId] });
       if (created?.incrementDishId) {
-        queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
       }
       markFirstLogCompleted();
       onMutationSuccessReset();
@@ -465,8 +469,54 @@ export function useNutritionData({
         return data;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
+      const savedRow = (Array.isArray(data) && data.length > 0 ? data[0] : (data && !Array.isArray(data) ? data : null)) ?? (
+        variables.editingDishId
+          ? { id: variables.editingDishId, ...variables.dishPayload }
+          : null
+      );
+      if (savedRow?.id && targetUserId) {
+        const fullKey = queryKeys.customDishes.fullByUser(targetUserId);
+        const currentFull = queryClient.getQueryData<CustomDishDetail[]>(fullKey);
+        if (currentFull) {
+          const idx = currentFull.findIndex((d) => d.id === savedRow.id);
+          const nextFull = [...currentFull];
+          if (idx >= 0) {
+            nextFull[idx] = { ...nextFull[idx], ...(savedRow as any) };
+          } else {
+            nextFull.unshift(savedRow as any as CustomDishDetail);
+          }
+          queryClient.setQueryData(fullKey, nextFull);
+        } else {
+          queryClient.setQueryData(fullKey, [savedRow as any as CustomDishDetail]);
+        }
+
+        const listKey = queryKeys.customDishes.byUser(targetUserId);
+        const currentList = queryClient.getQueryData<CustomDish[]>(listKey);
+        if (currentList) {
+          const rawItems = (savedRow as any).items;
+          const serving_quantity =
+            (savedRow as any).serving_quantity ??
+            (Array.isArray(rawItems) && rawItems[0] ? rawItems[0].quantity : null);
+          const serving_unit =
+            (savedRow as any).serving_unit ??
+            (Array.isArray(rawItems) && rawItems[0] ? rawItems[0].unit : null);
+          const listEntry: CustomDish = {
+            ...(savedRow as any),
+            serving_quantity,
+            serving_unit,
+          };
+          const listIdx = currentList.findIndex((d) => d.id === savedRow.id);
+          const nextList = [...currentList];
+          if (listIdx >= 0) {
+            nextList[listIdx] = { ...nextList[listIdx], ...listEntry };
+          } else {
+            nextList.unshift(listEntry);
+          }
+          queryClient.setQueryData(listKey, nextList);
+        }
+      }
       showToast({ message: 'Custom dish saved', kind: 'success' });
       setStatus('');
       setIsError(false);
@@ -486,8 +536,26 @@ export function useNutritionData({
       if (error) throw error;
       return dishId;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['custom_dishes', targetUserId] });
+    onSuccess: (_, dishId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
+      if (targetUserId && dishId) {
+        const fullKey = queryKeys.customDishes.fullByUser(targetUserId);
+        const currentFull = queryClient.getQueryData<CustomDishDetail[]>(fullKey);
+        if (currentFull) {
+          queryClient.setQueryData(
+            fullKey,
+            currentFull.filter((d) => d.id !== dishId)
+          );
+        }
+        const listKey = queryKeys.customDishes.byUser(targetUserId);
+        const currentList = queryClient.getQueryData<CustomDish[]>(listKey);
+        if (currentList) {
+          queryClient.setQueryData(
+            listKey,
+            currentList.filter((d) => d.id !== dishId)
+          );
+        }
+      }
       setStatus('Custom dish deleted');
       setIsError(false);
     },
