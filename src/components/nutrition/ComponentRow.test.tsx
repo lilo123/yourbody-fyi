@@ -121,6 +121,28 @@ describe('ComponentRow', () => {
     expect(scaled.calories).toBe(150);
   });
 
+  it('accepts decimal comma ("12,5") and rejects ambiguous separators ("1,2,3")', () => {
+    const item = component({ quantity: 10, calories: 100 });
+    const onChange = vi.fn();
+    render(<ComponentRow item={item} reference={item} onChange={onChange} />);
+
+    const input = screen.getByTestId('component-quantity-input');
+    fireEvent.change(input, { target: { value: '12,5' } });
+    fireEvent.blur(input);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const scaled = onChange.mock.calls[0][0] as NutritionItem;
+    expect(scaled.quantity).toBe(12.5);
+    expect(scaled.calories).toBe(125);
+
+    // Ambiguous input "1,2,3" reverts to previous without invoking onChange
+    onChange.mockClear();
+    fireEvent.change(input, { target: { value: '1,2,3' } });
+    fireEvent.blur(input);
+    expect(onChange).not.toHaveBeenCalled();
+    expect((input as HTMLInputElement).value).toBe('10');
+  });
+
 
   it('preserves edited unit when quantity is subsequently adjusted', () => {
     // Reference has initial unit 'g'

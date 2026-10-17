@@ -65,6 +65,13 @@ const SIGNED_OUT_AUTH: AuthContextType = {
   resetPassword: async () => ({ success: false }),
 };
 
+export {
+  generateSoftwareApplicationJsonLd,
+  generateFreeOffer,
+  getFreePricingTier,
+  PRICING_TIERS,
+} from '../components/landing/pricingData';
+
 export function renderRoute(path: string): string {
   let element: React.ReactElement;
   switch (path) {

@@ -221,5 +221,30 @@ describe('Legal Pages', () => {
         expect(screen.getByRole('heading', { name: /Health Disclaimer/i })).toBeDefined();
       });
     });
+
+    it('ensures /terms, /privacy, and /refunds each render with exactly one h1 heading (own page title)', async () => {
+      const legalRoutes: Array<{ route: string; title: string }> = [
+        { route: '/terms', title: 'Terms of Service' },
+        { route: '/privacy', title: 'Privacy Policy' },
+        { route: '/refunds', title: 'Refund Policy' },
+      ];
+
+      for (const item of legalRoutes) {
+        window.history.pushState({}, '', item.route);
+        const { unmount, container } = render(
+          <QueryClientProvider client={queryClient}>
+            <App />
+          </QueryClientProvider>
+        );
+
+        await waitFor(() => {
+          const h1List = container.querySelectorAll('h1');
+          expect(h1List.length).toBe(1);
+          expect(h1List[0].textContent).toBe(item.title);
+        });
+
+        unmount();
+      }
+    });
   });
 });
