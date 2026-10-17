@@ -443,18 +443,18 @@ Deno.test("shared nutritionParser: property test 3 - thousands separators never 
   assertNotEquals(deResult.meal?.calories, 1);
 });
 
-Deno.test("shared nutritionParser: '1,000' and '1.000' with 0 macros yield computed 0 kcal + warning (never 1 kcal)", () => {
+Deno.test("shared nutritionParser: '1,000' and '1.000' with 0 macros yield stated 1000 kcal + warning (never 1 kcal)", () => {
   const commaInput = "Protein Shake\nCalories: 1,000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g";
   const commaResult = parseNutritionText(commaInput);
   assertEquals(commaResult.confidence, "exact");
-  assertEquals(commaResult.meal?.calories, 0);
+  assertEquals(commaResult.meal?.calories, 1000);
   assertEquals(commaResult.meal?.calorieCorrection, { computed: 0, stated: 1000 });
 
   // Same for European period separator '1.000'
   const periodInput = "Protein Shake\nCalories: 1.000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g";
   const periodResult = parseNutritionText(periodInput);
   assertEquals(periodResult.confidence, "exact");
-  assertEquals(periodResult.meal?.calories, 0);
+  assertEquals(periodResult.meal?.calories, 1000);
   assertEquals(periodResult.meal?.calorieCorrection, { computed: 0, stated: 1000 });
 });
 
@@ -648,7 +648,7 @@ Deno.test("shared nutritionParser: Format C - grams-only macro breakdown partial
   assertEquals(result.meal?.fat, 32);
 });
 
-Deno.test("shared nutritionParser: markdown table with cumulative row discrepancy corrects rows and sets calorieCorrection", () => {
+Deno.test("shared nutritionParser: markdown table with cumulative row discrepancy keeps stated rows when stated > computed", () => {
   const table = [
     "| Food | Calories | Protein | Carbs | Fat |",
     "| --- | --- | --- | --- | --- |",
@@ -659,13 +659,54 @@ Deno.test("shared nutritionParser: markdown table with cumulative row discrepanc
   const result = parseNutritionText(table);
   assertEquals(result.confidence, "exact");
   assertEquals(result.meal?.items?.length, 3);
+  assertEquals(result.meal?.calories, 420);
+  assertEquals(result.meal?.protein, 30);
+  assertEquals(result.meal?.carbs, 30);
+  assertEquals(result.meal?.fat, 0);
+  for (const it of result.meal?.items ?? []) {
+    assertEquals(it.calories, 140);
+    assertEquals(it.calorieCorrection, { computed: 80, stated: 140 });
+  }
+});
+
+Deno.test("shared nutritionParser: markdown table with cumulative row discrepancy where stated < computed corrects rows up", () => {
+  const table = [
+    "| Food | Calories | Protein | Carbs | Fat |",
+    "| --- | --- | --- | --- | --- |",
+    "| Item A | 30 kcal | 10g | 10g | 0g |",
+    "| Item B | 30 kcal | 10g | 10g | 0g |",
+    "| Item C | 30 kcal | 10g | 10g | 0g |",
+  ].join("\n");
+  const result = parseNutritionText(table);
+  assertEquals(result.confidence, "exact");
+  assertEquals(result.meal?.items?.length, 3);
   assertEquals(result.meal?.calories, 240);
   assertEquals(result.meal?.protein, 30);
   assertEquals(result.meal?.carbs, 30);
   assertEquals(result.meal?.fat, 0);
   for (const it of result.meal?.items ?? []) {
     assertEquals(it.calories, 80);
-    assertEquals(it.calorieCorrection, { computed: 80, stated: 140 });
+    assertEquals(it.calorieCorrection, { computed: 80, stated: 30 });
   }
+});
+
+Deno.test("shared nutritionParser: beer example (stated 150 kcal > computed 58 kcal) keeps stated calories with warning", () => {
+  const input = "Beer\nCalories: 150 kcal\nProtein: 1.6g\nCarbs: 13g\nFat: 0g";
+  const result = parseNutritionText(input);
+  assertEquals(result.confidence, "exact");
+  assertEquals(result.meal?.calories, 150);
+  assertEquals(result.meal?.calorieCorrection, { computed: 58, stated: 150 });
+});
+
+Deno.test("shared nutritionParser: 79 vs 179 kcal example (stated 79 < computed 179) corrects calories up with warning", () => {
+  const text = "* Herb Roasted Chicken Breast: protein 40.5 g, carbs 10g, fat 11.2 g, 263 kcal calories\n* Steamed Jasmine Rice: protein 3.2 g, carbs 38.5 g, fat 1.4 g, 79 kcal calories";
+  const result = parseNutritionText(text);
+  assertEquals(result.confidence, "exact");
+  assertEquals(result.meal?.items?.length, 2);
+  assertEquals(result.meal?.calories, 442);
+  assertEquals(result.meal?.items?.[0].calories, 263);
+  assertEquals(result.meal?.items?.[0].calorieCorrection, undefined);
+  assertEquals(result.meal?.items?.[1].calories, 179);
+  assertEquals(result.meal?.items?.[1].calorieCorrection, { computed: 179, stated: 79 });
 });
 

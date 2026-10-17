@@ -343,7 +343,7 @@ Protein: 30g`;
 
     const inconsistent = parseNutritionText('Calories: 800\nProtein: 10g\nCarbs: 10g\nFat: 2g');
     expect(inconsistent.confidence).toBe('exact');
-    expect(inconsistent.meal?.calories).toBe(98);
+    expect(inconsistent.meal?.calories).toBe(800);
     expect(inconsistent.meal?.calorieCorrection).toEqual({ computed: 98, stated: 800 });
   });
 });
@@ -779,29 +779,29 @@ describe('Seeded Property Tests', () => {
     expect(deResult.meal?.calories).not.toBe(1);
   });
 
-  it('thousands separators with 0 macros yield computed 0 kcal + warning (never 1 kcal)', () => {
+  it('thousands separators with 0 macros yield stated 1000 kcal + warning (never 1 kcal)', () => {
     const commaInput = 'Protein Shake\nCalories: 1,000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g';
     const commaResult = parseNutritionText(commaInput);
     expect(commaResult.confidence).toBe('exact');
-    expect(commaResult.meal?.calories).toBe(0);
+    expect(commaResult.meal?.calories).toBe(1000);
     expect(commaResult.meal?.calorieCorrection).toEqual({ computed: 0, stated: 1000 });
 
     const periodInput = 'Protein Shake\nCalories: 1.000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g';
     const periodResult = parseNutritionText(periodInput);
     expect(periodResult.confidence).toBe('exact');
-    expect(periodResult.meal?.calories).toBe(0);
+    expect(periodResult.meal?.calories).toBe(1000);
     expect(periodResult.meal?.calorieCorrection).toEqual({ computed: 0, stated: 1000 });
 
     const blockResultComma = parseNutritionBlock(commaInput);
     expect(blockResultComma.ok).toBe(true);
     if (blockResultComma.ok) {
-      expect(blockResultComma.meal.calories).toBe(0);
+      expect(blockResultComma.meal.calories).toBe(1000);
     }
 
     const blockResultPeriod = parseNutritionBlock(periodInput);
     expect(blockResultPeriod.ok).toBe(true);
     if (blockResultPeriod.ok) {
-      expect(blockResultPeriod.meal.calories).toBe(0);
+      expect(blockResultPeriod.meal.calories).toBe(1000);
     }
   });
 
@@ -995,7 +995,7 @@ describe('Seeded Property Tests', () => {
       expect(result.meal?.fat).toBe(32);
     });
 
-    it('parses markdown table with cumulative row discrepancy, correcting rows and setting calorieCorrection', () => {
+    it('parses markdown table with cumulative row discrepancy, keeping stated rows when stated > computed', () => {
       const table = [
         '| Food | Calories | Protein | Carbs | Fat |',
         '| --- | --- | --- | --- | --- |',
@@ -1006,13 +1006,34 @@ describe('Seeded Property Tests', () => {
       const result = parseNutritionText(table);
       expect(result.confidence).toBe('exact');
       expect(result.meal?.items).toHaveLength(3);
+      expect(result.meal?.calories).toBe(420);
+      expect(result.meal?.protein).toBe(30);
+      expect(result.meal?.carbs).toBe(30);
+      expect(result.meal?.fat).toBe(0);
+      for (const it of result.meal?.items ?? []) {
+        expect(it.calories).toBe(140);
+        expect(it.calorieCorrection).toEqual({ computed: 80, stated: 140 });
+      }
+    });
+
+    it('parses markdown table with cumulative row discrepancy where stated < computed, correcting rows up', () => {
+      const table = [
+        '| Food | Calories | Protein | Carbs | Fat |',
+        '| --- | --- | --- | --- | --- |',
+        '| Item A | 30 kcal | 10g | 10g | 0g |',
+        '| Item B | 30 kcal | 10g | 10g | 0g |',
+        '| Item C | 30 kcal | 10g | 10g | 0g |',
+      ].join('\n');
+      const result = parseNutritionText(table);
+      expect(result.confidence).toBe('exact');
+      expect(result.meal?.items).toHaveLength(3);
       expect(result.meal?.calories).toBe(240);
       expect(result.meal?.protein).toBe(30);
       expect(result.meal?.carbs).toBe(30);
       expect(result.meal?.fat).toBe(0);
       for (const it of result.meal?.items ?? []) {
         expect(it.calories).toBe(80);
-        expect(it.calorieCorrection).toEqual({ computed: 80, stated: 140 });
+        expect(it.calorieCorrection).toEqual({ computed: 80, stated: 30 });
       }
     });
   });

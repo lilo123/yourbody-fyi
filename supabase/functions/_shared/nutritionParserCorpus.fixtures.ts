@@ -271,7 +271,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
     "expected": {
       "confidence": "exact",
       "ok": true,
-      "calories": 465,
+      "calories": 650,
       "protein": 50,
       "carbs": 10,
       "fat": 25,
@@ -1099,7 +1099,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
     "expected": {
       "confidence": "exact",
       "ok": true,
-      "calories": 580,
+      "calories": 800,
       "protein": 54,
       "carbs": 44,
       "fat": 21,
@@ -1117,7 +1117,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
     "expected": {
       "confidence": "exact",
       "ok": true,
-      "calories": 757,
+      "calories": 1150,
       "protein": 44,
       "carbs": 58,
       "fat": 36,
@@ -1135,7 +1135,7 @@ export const NUTRITION_CORPUS_FIXTURES: CorpusFixture[] = [
     "expected": {
       "confidence": "exact",
       "ok": true,
-      "calories": 400,
+      "calories": 660,
       "protein": 44,
       "carbs": 10,
       "fat": 20,

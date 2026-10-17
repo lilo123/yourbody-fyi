@@ -1290,7 +1290,9 @@ function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
   }
 
   // Per-item consistency check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
-  // When stated kcal disagrees beyond tolerance, parse succeeds, calories is set to computed 4/4/9,
+  // When stated kcal disagrees beyond tolerance, parse succeeds:
+  // - If stated < computed: calories is set to computed 4/4/9
+  // - If stated > computed: keep stated calories
   // and calorieCorrection records { computed, stated } for the UI warning.
   const expectedKcal = 4 * itemProtein + 4 * itemCarbs + 9 * itemFat;
   const maxDiscrepancy = Math.max(60, 0.25 * itemCalories);
@@ -1298,11 +1300,12 @@ function tryParseMultiItemLine(rawLine: string): ParsedNutritionItem | null {
   let calorieCorrection: CalorieCorrection | undefined;
   if (Math.abs(expectedKcal - itemCalories) > maxDiscrepancy) {
     const computedVal = Math.round(expectedKcal);
+    const statedVal = Math.round(itemCalories);
     calorieCorrection = {
       computed: computedVal,
-      stated: Math.round(itemCalories),
+      stated: statedVal,
     };
-    finalCalories = computedVal;
+    finalCalories = statedVal < computedVal ? computedVal : statedVal;
   }
 
   return {
@@ -1551,11 +1554,12 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
     let rowCalorieCorrection: CalorieCorrection | undefined;
     if (rowDiscrepancy > maxRowDiscrepancy) {
       const computedVal = Math.round(rowExpectedKcal);
+      const statedVal = Math.round(calVal);
       rowCalorieCorrection = {
         computed: computedVal,
-        stated: Math.round(calVal),
+        stated: statedVal,
       };
-      finalRowCal = computedVal;
+      finalRowCal = statedVal < computedVal ? computedVal : statedVal;
     }
 
     items.push({
@@ -1637,8 +1641,10 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
   if (sumFib > 0) foundMacros.push('fiber');
 
   // Table-level calorie consistency check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
-  // When cumulative row discrepancies exceed table tolerance, apply computed 4/4/9 calories
-  // and attach calorieCorrection per row with discrepancy; parent total = items sum.
+  // When cumulative row discrepancies exceed table tolerance:
+  // - rows where stated < computed are corrected up to computed 4/4/9
+  // - rows where stated > computed keep stated calories
+  // and calorieCorrection is attached per row with discrepancy; parent total = items sum.
   const expectedMealKcal = 4 * sumP + 4 * sumC + 9 * sumF;
   const mealDiscrepancy = Math.abs(expectedMealKcal - sumCal);
   const maxMealAllowedDiscrepancy = Math.max(60, 0.25 * sumCal);
@@ -1652,7 +1658,9 @@ export function tryParseMarkdownTable(rawLines: string[]): NutritionParseResult 
             stated: Math.round(it.calories),
           };
         }
-        it.calories = expKcal;
+        if (it.calories < expKcal) {
+          it.calories = expKcal;
+        }
       }
     }
     sumCal = roundToOneDecimal(items.reduce((total, it) => total + it.calories, 0));
@@ -2758,7 +2766,9 @@ export function parseNutritionText(text: string): NutritionParseResult {
   }
 
   // Kcal Consistency Check: |4P + 4C + 9F - kcal| <= max(60, 25% * kcal)
-  // When stated kcal disagrees beyond tolerance, parse succeeds, calories is set to computed 4/4/9,
+  // When stated kcal disagrees beyond tolerance, parse succeeds:
+  // - If stated < computed: calories is set to computed 4/4/9
+  // - If stated > computed: keep stated calories
   // and calorieCorrection records { computed, stated } for the UI warning.
   const expectedKcal = 4 * protein! + 4 * carbs! + 9 * fat!;
   const kcalDiscrepancy = Math.abs(expectedKcal - calories!);
@@ -2767,11 +2777,12 @@ export function parseNutritionText(text: string): NutritionParseResult {
   let calorieCorrection: CalorieCorrection | undefined;
   if (kcalDiscrepancy > maxAllowedDiscrepancy) {
     const computedVal = Math.round(expectedKcal);
+    const statedVal = Math.round(calories!);
     calorieCorrection = {
       computed: computedVal,
-      stated: Math.round(calories!),
+      stated: statedVal,
     };
-    finalCalories = computedVal;
+    finalCalories = statedVal < computedVal ? computedVal : statedVal;
   }
 
   const meal: ParsedNutritionMeal = {

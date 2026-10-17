@@ -1054,12 +1054,21 @@ describe('Mismatched Calories Handling (Owner Rule)', () => {
     expect(result.meal?.calorieCorrection).toEqual({ computed: 352, stated: 100 });
   });
 
-  it('parses single-food text with too-high calories and sets computed value + calorieCorrection', () => {
-    // 30P, 40C, 8F = 352 kcal (stated was 700)
-    const result = parseNutritionText('Calories: 700, Protein: 30g, Carbs: 40g, Fat: 8g');
+  it('parses single-food text with too-high calories and keeps stated value + calorieCorrection (e.g. beer)', () => {
+    // Beer example: 150 kcal, P 1.6, C 13, F 0 -> computed 4*1.6 + 4*13 = 58.4 -> 58
+    // Stated (150) > computed (58), so stays 150 kcal
+    const result = parseNutritionText('Beer\nCalories: 150 kcal\nProtein: 1.6g\nCarbs: 13g\nFat: 0g');
     expect(result.confidence).toBe('exact');
-    expect(result.meal?.calories).toBe(352);
-    expect(result.meal?.calorieCorrection).toEqual({ computed: 352, stated: 700 });
+    expect(result.meal?.calories).toBe(150);
+    expect(result.meal?.calorieCorrection).toEqual({ computed: 58, stated: 150 });
+  });
+
+  it('keeps stated calories when within tolerance (no calorieCorrection)', () => {
+    // 10P, 10C, 2F = 98 kcal, stated 100 kcal -> diff is 2 <= max(60, 25)
+    const result = parseNutritionText('Snack\nCalories: 100 kcal\nProtein: 10g\nCarbs: 10g\nFat: 2g');
+    expect(result.confidence).toBe('exact');
+    expect(result.meal?.calories).toBe(100);
+    expect(result.meal?.calorieCorrection).toBeUndefined();
   });
 
   it('parses 2-line food text on device when calories match macros (179 kcal)', () => {
@@ -1086,7 +1095,7 @@ describe('Mismatched Calories Handling (Owner Rule)', () => {
     expect(result.meal?.calories).toBe(442);
     expect(result.meal?.items?.[0].calories).toBe(263);
     expect(result.meal?.items?.[0].calorieCorrection).toBeUndefined();
-    // Rice calories computed from 3.2P 38.5C 1.4F = 179.4 -> 179
+    // Rice calories computed from 3.2P 38.5C 1.4F = 179.4 -> 179 (stated 79 < 179 computed)
     expect(result.meal?.items?.[1].calories).toBe(179);
     expect(result.meal?.items?.[1].calorieCorrection).toEqual({ computed: 179, stated: 79 });
   });
@@ -1098,11 +1107,11 @@ describe('Mismatched Calories Handling (Owner Rule)', () => {
     expect(result.meal?.calories).toBe(263);
   });
 
-  it('parses 1,000 kcal with 0 macros as computed 0 kcal with warning (never 1 kcal)', () => {
+  it('parses 1,000 kcal with 0 macros as stated 1000 kcal with warning (never 1 kcal)', () => {
     const input = 'Protein Shake\nCalories: 1,000 kcal\nProtein: 0g\nCarbs: 0g\nFat: 0g';
     const result = parseNutritionText(input);
     expect(result.confidence).toBe('exact');
-    expect(result.meal?.calories).toBe(0);
+    expect(result.meal?.calories).toBe(1000);
     expect(result.meal?.calorieCorrection).toEqual({ computed: 0, stated: 1000 });
   });
 });
