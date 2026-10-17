@@ -2829,5 +2829,58 @@ describe('useCustomDishActions', () => {
       expect(quickLogPayload.serving_size).toBe(40);
       expect(quickLogPayload.serving_unit).toBe('g');
     });
+
+    it('staging a custom dish without items builds the fallback item matching resolveCustomDishServing amount and unit', async () => {
+      let capturedStagedMeal: StagedMeal | null = null;
+      const setStagedMeal = vi.fn((meal: StagedMeal | null) => {
+        capturedStagedMeal = meal;
+      });
+
+      const dish: CustomDish = {
+        id: 'dish-no-items-1',
+        user_id: 'user-123',
+        name: 'Greek Yogurt',
+        calories: 130,
+        protein: 15,
+        carbs: 6,
+        fat: 0,
+        fiber: 0,
+        kind: 'food',
+        use_count: 3,
+        serving_quantity: 170,
+        serving_unit: 'g',
+      };
+
+      const fetchDishDetail = vi.fn().mockResolvedValue({
+        ...dish,
+        items: null,
+        ingredients: null,
+      });
+
+      const { result } = renderHook(
+        () =>
+          useCustomDishActions({
+            targetUserId: 'user-123',
+            selectedDate: '2026-10-16',
+            setStagedMeal,
+            fetchDishDetail,
+            mutation: { mutate: vi.fn() },
+          }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.handleStageCustomDish(dish);
+      });
+
+      expect(setStagedMeal).toHaveBeenCalledTimes(1);
+      const staged = capturedStagedMeal!;
+      expect(staged.servingSize).toBe(170);
+      expect(staged.servingUnit).toBe('g');
+      expect(staged.items).toHaveLength(1);
+      expect(staged.items[0].quantity).toBe(170);
+      expect(staged.items[0].unit).toBe('g');
+      expect(staged.items[0].portion).toBe('170 g');
+    });
   });
 });
