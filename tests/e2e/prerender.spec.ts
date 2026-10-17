@@ -151,4 +151,65 @@ test.describe('Prerender Guard & Cold Load Invariants', () => {
       expect(cls).toBeLessThan(0.05);
     }
   });
+
+  test('/terms served from index.html (SW-fallback scenario) never shows the landing hero (poll every 50 ms)', async ({
+    page,
+  }) => {
+    // Simulate SW navigateFallback: intercept /terms to return index.html shell containing prerendered landing
+    await page.route('**/terms', async (route) => {
+      const response = await page.request.get('/index.html');
+      let body = await response.text();
+      // Ensure the served shell carries the prerendered landing hero and route="/"
+      if (!body.includes('data-prerender-route')) {
+        body = body.replace(
+          '<div id="prerender">',
+          '<div id="prerender" data-prerender-route="/">'
+        );
+      }
+      if (!body.includes('You know your workout')) {
+        body = body.replace(
+          /id="prerender"[^>]*>([\s\S]*?)<\/div>/,
+          'id="prerender" data-prerender-route="/"><h1>You know your workout. We just help you track it.</h1><p>No frills. Free forever.</p></div>'
+        );
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+        body,
+      });
+    });
+
+    // Install high-frequency poller (every 50 ms)
+    await page.addInitScript(() => {
+      (window as any).__landingHeroObserved = false;
+      const inspect = () => {
+        const prerender = document.getElementById('prerender');
+        if (prerender && window.getComputedStyle(prerender).display !== 'none') {
+          const text = prerender.innerText || '';
+          if (
+            text.includes('You know your workout') ||
+            text.includes('We just help you track it') ||
+            text.includes('No frills.') ||
+            text.includes('Free forever.')
+          ) {
+            (window as any).__landingHeroObserved = true;
+          }
+        }
+      };
+      inspect();
+      const timer = setInterval(inspect, 50);
+      window.addEventListener('load', () => {
+        setTimeout(() => clearInterval(timer), 1000);
+      });
+    });
+
+    await page.goto('/terms');
+    await expect(page.locator('h1', { hasText: 'Terms of Service' })).toBeVisible({ timeout: 10000 });
+
+    const heroObserved = await page.evaluate(() => (window as any).__landingHeroObserved);
+    expect(heroObserved, 'Landing hero flashed on /terms served from index.html').toBe(false);
+
+    const prerender = page.locator('#prerender');
+    await expect(prerender).not.toBeVisible();
+  });
 });

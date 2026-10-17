@@ -49,12 +49,23 @@ if (typeof window !== 'undefined') {
 }
 
 if (typeof document !== 'undefined') {
-  const rawPath = (window.location && window.location.pathname) || '/';
-  const normPath = rawPath.toLowerCase().replace(/\/+$/, '').replace(/\.html$/, '') || '/';
-  const isPub = normPath === '/' || normPath === '/terms' || normPath === '/privacy' || normPath === '/refunds';
+  const normalizeRoutePath = (raw?: string): string => {
+    if (!raw) return '/';
+    const clean = raw.toLowerCase().split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+    const noExt = clean.endsWith('.html') ? clean.slice(0, -5) || '/' : clean;
+    return noExt === '/index' ? '/' : noExt;
+  };
+
+  const currentPath = normalizeRoutePath(window.location?.pathname);
+  const metaRoute = document.querySelector('meta[name="prerender-route"]')?.getAttribute('content');
+  const prerenderEl = document.getElementById('prerender');
+  const renderedRoute = normalizeRoutePath(metaRoute || prerenderEl?.getAttribute('data-prerender-route') || '/');
+
+  const isPub = currentPath === '/' || currentPath === '/terms' || currentPath === '/privacy' || currentPath === '/refunds';
+  const isRouteMatch = currentPath === renderedRoute;
   const hasUser = hasValidAuthToken();
 
-  if (!isPub || hasUser || document.documentElement.classList.contains('hide-prerender')) {
+  if (!isPub || !isRouteMatch || hasUser || document.documentElement.classList.contains('hide-prerender')) {
     removePrerender();
   }
 }

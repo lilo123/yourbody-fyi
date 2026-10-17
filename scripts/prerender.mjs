@@ -58,15 +58,27 @@ try {
     const renderedMarkup = renderRoute(route.path);
 
     let html = template;
-    if (html.includes('<div id="prerender">')) {
+    if (/<div id="prerender"[^>]*>/.test(html)) {
       html = html.replace(
-        /<div id="prerender">[\s\S]*?<\/div>/,
-        `<div id="prerender">${renderedMarkup}</div>`
+        /<div id="prerender"[^>]*>[\s\S]*?<\/div>/,
+        `<div id="prerender" data-prerender-route="${route.path}">${renderedMarkup}</div>`
       );
     } else {
       html = html.replace(
         '<div id="root"></div>',
-        `<div id="prerender">${renderedMarkup}</div><div id="root"></div>`
+        `<div id="prerender" data-prerender-route="${route.path}">${renderedMarkup}</div><div id="root"></div>`
+      );
+    }
+
+    if (/<meta\s+name=["']prerender-route["']/i.test(html)) {
+      html = html.replace(
+        /<meta\s+name=["']prerender-route["']\s+content=["'][^"']*["']\s*\/?>/i,
+        `<meta name="prerender-route" content="${route.path}" />`
+      );
+    } else {
+      html = html.replace(
+        '<script src="/prerender-guard.js"></script>',
+        `<meta name="prerender-route" content="${route.path}" />\n    <script src="/prerender-guard.js"></script>`
       );
     }
 
