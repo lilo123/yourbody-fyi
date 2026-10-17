@@ -2530,23 +2530,19 @@ describe('HistoryView', () => {
       // Switch to Nutrition tab
       fireEvent.click(screen.getByTestId('history-tab-nutrition'));
 
-      let expandBtn: HTMLElement | null = null;
-      await waitFor(() => {
-        const btns = screen.queryAllByTestId(/^expand-day-btn-/);
-        expect(btns.length).toBeGreaterThan(0);
-        expandBtn = screen.queryByTestId('expand-day-btn-2026-09-02') || btns[0];
-        expect(expandBtn).not.toBeNull();
-      });
-
-      const dayCard = expandBtn!.closest('[data-civil-date]');
+      // Wait specifically for the pending day card on the timeline
+      const expandBtn = await screen.findByTestId('expand-day-btn-2026-09-02');
+      const dayCard = expandBtn.closest('[data-civil-date]');
       expect(dayCard).not.toBeNull();
       const pendingMarksOnCard = within(dayCard as HTMLElement).getAllByTestId('pending-mark');
       expect(pendingMarksOnCard.length).toBeGreaterThanOrEqual(1);
 
       // Expand the day card to inspect the meal row
-      fireEvent.click(expandBtn!);
-
       await waitFor(() => {
+        const btn = screen.getByTestId('expand-day-btn-2026-09-02');
+        if (btn.getAttribute('aria-expanded') !== 'true') {
+          fireEvent.click(btn);
+        }
         expect(screen.getByText('Offline Steak Dinner')).toBeDefined();
       });
     });
