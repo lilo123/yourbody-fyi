@@ -204,7 +204,7 @@ test.describe('P6 Weight Units Suite (p6-weight-units)', () => {
     await loginAsAthlete(page);
     await page.goto('/settings');
     await page.waitForURL('**/settings');
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', level: 2 })).toBeVisible();
 
     const lbBtn = page.locator('[data-testid="weight-unit-lb"]');
     const kgBtn = page.locator('[data-testid="weight-unit-kg"]');

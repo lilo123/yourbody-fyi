@@ -283,10 +283,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
         <div className="bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-transparent border border-cyan-500/20 rounded-3xl p-5 shadow-2xl">
         <div className="flex items-center gap-2 mb-2">
           <Settings className="w-5 h-5 text-cyan-400" />
-          <h2
-            aria-label="Account & Preferences"
-            className="text-base font-bold text-white uppercase tracking-wider"
-          >
+          <h2 className="text-base font-bold text-white uppercase tracking-wider">
             Settings
           </h2>
         </div>
