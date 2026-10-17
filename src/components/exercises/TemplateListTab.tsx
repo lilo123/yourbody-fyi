@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useCoach } from '../../hooks/useCoach';
 import type { Exercise, RoutineTemplate } from '../../types/database';
-import { PlusCircle, RefreshCw, AlertCircle, Pencil, Copy, Trash2, ChevronDown, Play } from 'lucide-react';
+import { PlusCircle, RefreshCw, AlertCircle, Pencil, Copy, Trash2, ChevronDown, Play, RotateCcw } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
 import { EditTemplateSheet } from './EditTemplateSheet';
 import { HiddenRoutineList } from './HiddenRoutineList';
@@ -242,6 +242,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
         ) : (
           visibleTemplates.map((tpl) => {
             const isMaster = Boolean(tpl.is_master);
+            const isForked = !isMaster && Boolean(tpl.source_template_id);
             const isOwner = tpl.user_id === (selectedAthleteId || user?.id);
             const isDirectMasterEdit = isMaster && isCoach && !selectedAthleteId;
             const isMasterHidable = isMaster && !isDirectMasterEdit;
@@ -381,8 +382,8 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
                   </div>
                 </div>
 
-                {/* "Start routine" CTA Button */}
-                <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2">
+                {/* "Start routine" CTA Button & "Reset to original" for forked routines */}
+                <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2 flex-wrap">
                   <Button
                     variant="secondary"
                     size="sm"
@@ -398,6 +399,34 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
                   >
                     Start routine
                   </Button>
+                  {isForked && canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      testId={`reset-template-${tpl.id}`}
+                      disabled={!isOnline}
+                      title={!isOnline ? 'Available when online' : 'Reset to original'}
+                      onClick={() => {
+                        if (!isOnline) {
+                          setTemplateError('Available when online');
+                          return;
+                        }
+                        schedule(tpl, tpl.name);
+                        showToast({
+                          kind: 'undo',
+                          verb: 'Routine deleted',
+                          subject: tpl.name,
+                          onUndo: undo,
+                          onCommit: flush,
+                          undoAriaLabel: `Undo delete ${tpl.name}`,
+                          durationMs: effectiveDurationMs,
+                        });
+                      }}
+                      leftIcon={<RotateCcw className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />}
+                    >
+                      Reset to original
+                    </Button>
+                  )}
                 </div>
 
                 {/* Accordion Content: Listing exercises with sets x reps and Archived pill */}
