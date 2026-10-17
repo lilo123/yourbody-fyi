@@ -181,9 +181,9 @@ export const PrivacyPage: React.FC = () => {
                 <td className="p-3 text-zinc-400">United States</td>
               </tr>
               <tr>
-                <td className="p-3 font-semibold text-white">PostHog</td>
-                <td className="p-3">Product analytics (cookieless product usage insights; marked as planned).</td>
-                <td className="p-3 text-zinc-400">Planned</td>
+                <td className="p-3 font-semibold text-white">Cloudflare Web Analytics</td>
+                <td className="p-3">Cookieless page-view and performance statistics.</td>
+                <td className="p-3 text-zinc-400">Global / United States</td>
               </tr>
             </tbody>
           </table>
