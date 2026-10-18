@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { CoachAthleteMacros } from './CoachAthleteMacros';
 import { expectNoA11yViolations } from '../../test/a11y';
 
@@ -75,5 +75,81 @@ describe('CoachAthleteMacros accessibility', () => {
     expect(assertiveOf(container)).toBe(assertiveBefore);
     expect(politeOf(container)!.textContent).toBe('');
     expect(assertiveOf(container)!.textContent).toBe('Failed to update targets');
+  });
+
+  it('accepts decimal comma ("72,5") and decimal period ("72.5") on converted macro inputs (protein, carbs, fat, fiber)', () => {
+    const setAthletePro = vi.fn();
+    const setAthleteCarb = vi.fn();
+    const setAthleteFat = vi.fn();
+    const setAthleteFiber = vi.fn();
+    const onUpdateAthleteMacros = vi.fn((e: React.FormEvent) => e.preventDefault());
+
+    const { rerender } = render(
+      <CoachAthleteMacros
+        {...defaultProps}
+        setAthletePro={setAthletePro}
+        setAthleteCarb={setAthleteCarb}
+        setAthleteFat={setAthleteFat}
+        setAthleteFiber={setAthleteFiber}
+        onUpdateAthleteMacros={onUpdateAthleteMacros}
+      />
+    );
+
+    const proInput = screen.getByTestId('athlete-macro-pro');
+    const carbInput = screen.getByTestId('athlete-macro-carb');
+    const fatInput = screen.getByTestId('athlete-macro-fat');
+    const fiberInput = screen.getByTestId('athlete-macro-fiber');
+
+    // Converted fields use inputMode="decimal" and type="text"
+    expect(proInput.getAttribute('type')).toBe('text');
+    expect(carbInput.getAttribute('type')).toBe('text');
+    expect(fatInput.getAttribute('type')).toBe('text');
+    expect(fiberInput.getAttribute('type')).toBe('text');
+
+    // Test decimal comma "72,5"
+    fireEvent.change(proInput, { target: { value: '72,5' } });
+    expect(setAthletePro).toHaveBeenCalledWith('72.5');
+
+    fireEvent.change(carbInput, { target: { value: '72,5' } });
+    expect(setAthleteCarb).toHaveBeenCalledWith('72.5');
+
+    fireEvent.change(fatInput, { target: { value: '72,5' } });
+    expect(setAthleteFat).toHaveBeenCalledWith('72.5');
+
+    fireEvent.change(fiberInput, { target: { value: '72,5' } });
+    expect(setAthleteFiber).toHaveBeenCalledWith('72.5');
+
+    // Test decimal period "72.5"
+    fireEvent.change(proInput, { target: { value: '72.5' } });
+    expect(setAthletePro).toHaveBeenCalledWith('72.5');
+
+    fireEvent.change(carbInput, { target: { value: '72.5' } });
+    expect(setAthleteCarb).toHaveBeenCalledWith('72.5');
+
+    fireEvent.change(fatInput, { target: { value: '72.5' } });
+    expect(setAthleteFat).toHaveBeenCalledWith('72.5');
+
+    fireEvent.change(fiberInput, { target: { value: '72.5' } });
+    expect(setAthleteFiber).toHaveBeenCalledWith('72.5');
+
+    // Form submission verifies save handler is called with updated values
+    rerender(
+      <CoachAthleteMacros
+        {...defaultProps}
+        athletePro="72.5"
+        athleteCarb="72.5"
+        athleteFat="72.5"
+        athleteFiber="72.5"
+        setAthletePro={setAthletePro}
+        setAthleteCarb={setAthleteCarb}
+        setAthleteFat={setAthleteFat}
+        setAthleteFiber={setAthleteFiber}
+        onUpdateAthleteMacros={onUpdateAthleteMacros}
+      />
+    );
+
+    const submitBtn = screen.getByTestId('update-athlete-macros-btn');
+    fireEvent.click(submitBtn);
+    expect(onUpdateAthleteMacros).toHaveBeenCalledTimes(1);
   });
 });
