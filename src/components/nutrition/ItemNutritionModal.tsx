@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { AccessibleModal } from '../common/AccessibleModal';
 import { KcalMacroHint } from './KcalMacroHint';
 import { roundTo1Decimal } from '../../utils/nutrition';
-import { shortUnitLabel } from '../../utils/unitConverter';
+import { parseDecimalInput, shortUnitLabel } from '../../utils/unitConverter';
 import type { NutritionItem } from '../../utils/itemModel';
 import type { EditedItemNutrition } from './nutritionEngineHelpers';
 
@@ -77,8 +77,8 @@ function validateFieldValue(val: string): { parsed: number; error: string | null
   if (trimmed === '') {
     return { parsed: 0, error: null };
   }
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || isNaN(n)) {
+  const n = parseDecimalInput(trimmed, { allowNegative: true });
+  if (n === null || !Number.isFinite(n) || isNaN(n)) {
     return { parsed: 0, error: 'Must be a valid number' };
   }
   if (n < 0) {
