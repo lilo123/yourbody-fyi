@@ -479,4 +479,80 @@ describe('useNutritionAi quota exceeded handling', () => {
       expect(onParsedSuccess).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('preserves existing staged meal on handleForceAiAnalyze failure', () => {
+    it('does NOT call onFallbackToManual when handleForceAiAnalyze fails with quota_exceeded', async () => {
+      const quotaErr: parseNutritionModule.ParseNutritionError = new Error(
+        "You've used today's AI parses. Quick log and on-device parsing still work."
+      );
+      quotaErr.is429 = true;
+      quotaErr.status = 429;
+      quotaErr.code = 'quota_exceeded';
+      quotaErr.limit = 30;
+      quotaErr.period = 'day';
+
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(quotaErr);
+
+      const { result } = setupHook();
+
+      await act(async () => {
+        await result.current.handleForceAiAnalyze('4 eggs');
+      });
+
+      expect(result.current.isQuotaExceeded).toBe(true);
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call onFallbackToManual when handleForceAiAnalyze fails with server/timeout error', async () => {
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(new Error('504 Gateway Timeout'));
+
+      const { result } = setupHook();
+
+      await act(async () => {
+        await result.current.handleForceAiAnalyze('4 eggs');
+      });
+
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(setStatus).toHaveBeenCalledWith('AI service unavailable: 504 Gateway Timeout');
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call onFallbackToManual when handleForceAiAnalyze fails with network error', async () => {
+      const netErr = new TypeError('Failed to fetch');
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(netErr);
+
+      const { result } = setupHook();
+
+      await act(async () => {
+        await result.current.handleForceAiAnalyze('4 eggs');
+      });
+
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call onFallbackToManual when hasExistingStagedMeal is true on handleAnalyze failure', async () => {
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(new Error('500 Server Error'));
+
+      const { result } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus,
+          setIsError,
+          onParsedSuccess,
+          onFallbackToManual,
+          hasExistingStagedMeal: true,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleAnalyze({ overrideText: 'Greek Yogurt' });
+      });
+
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+  });
 });
