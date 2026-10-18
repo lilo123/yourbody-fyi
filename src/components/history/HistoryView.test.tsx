@@ -2502,52 +2502,61 @@ describe('HistoryView', () => {
     });
 
     it('renders pending offline meals overlaid on the timeline with pending-mark in nutrition domain', async () => {
-      setFlusherSessionUser('test-athlete-id');
-      updateUserCache('test-athlete-id', [
-        {
-          opId: 'op-offline-meal-1',
-          userId: 'test-athlete-id',
-          seq: 1,
-          createdAt: '2026-09-02T12:00:00Z',
-          kind: 'nutrition.log',
-          payload: {
-            id: 'meal-offline-1',
-            user_id: 'test-athlete-id',
-            food_name: 'Offline Steak Dinner',
-            calories: 650,
-            protein: 55,
-            carbs: 5,
-            fat: 45,
-            fiber: 1,
-            logged_at: '2026-09-02T19:00:00Z',
-            logged_date: '2026-09-02',
+      localStorage.setItem(
+        'yourbody_user',
+        JSON.stringify({ id: 'test-athlete-id', email: 'athlete@example.com' })
+      );
+      try {
+        setFlusherSessionUser('test-athlete-id');
+        updateUserCache('test-athlete-id', [
+          {
+            opId: 'op-offline-meal-1',
+            userId: 'test-athlete-id',
+            seq: 1,
+            createdAt: '2026-09-02T12:00:00Z',
+            kind: 'nutrition.log',
+            payload: {
+              id: 'meal-offline-1',
+              user_id: 'test-athlete-id',
+              food_name: 'Offline Steak Dinner',
+              calories: 650,
+              protein: 55,
+              carbs: 5,
+              fat: 45,
+              fiber: 1,
+              logged_at: '2026-09-02T19:00:00Z',
+              logged_date: '2026-09-02',
+            },
+            state: 'pending',
+            attempts: 0,
           },
-          state: 'pending',
-          attempts: 0,
-        },
-      ]);
-      notifyOutboxChanged('test-athlete-id');
+        ]);
+        notifyOutboxChanged('test-athlete-id');
 
-      renderComponent();
+        renderComponent();
+        await screen.findByText('Chest & Back');
 
-      // Switch to Nutrition tab
-      fireEvent.click(screen.getByTestId('history-tab-nutrition'));
+        // Switch to Nutrition tab
+        fireEvent.click(screen.getByTestId('history-tab-nutrition'));
 
-      // Wait specifically for the pending day card on the timeline
-      const expandBtn = await screen.findByTestId('expand-day-btn-2026-09-02');
-      const dayCard = expandBtn.closest('.rounded-3xl');
-      expect(dayCard).not.toBeNull();
-      const pendingMarksOnCard = within(dayCard as HTMLElement).getAllByTestId('pending-mark');
-      expect(pendingMarksOnCard.length).toBeGreaterThanOrEqual(1);
+        // Wait specifically for the pending day card on the timeline
+        const expandBtn = await screen.findByTestId('expand-day-btn-2026-09-02');
+        const dayCard = expandBtn.closest('.rounded-3xl');
+        expect(dayCard).not.toBeNull();
+        const pendingMarksOnCard = within(dayCard as HTMLElement).getAllByTestId('pending-mark');
+        expect(pendingMarksOnCard.length).toBeGreaterThanOrEqual(1);
 
-      // Expand the day card to inspect the meal row
-      await waitFor(() => {
-        const btn = screen.getByTestId('expand-day-btn-2026-09-02');
-        if (btn.getAttribute('aria-expanded') !== 'true') {
-          fireEvent.click(btn);
-        }
-        expect(screen.getByText('Offline Steak Dinner')).toBeDefined();
-      });
+        // Expand the day card to inspect the meal row
+        await waitFor(() => {
+          const btn = screen.getByTestId('expand-day-btn-2026-09-02');
+          if (btn.getAttribute('aria-expanded') !== 'true') {
+            fireEvent.click(btn);
+          }
+          expect(screen.getByText('Offline Steak Dinner')).toBeDefined();
+        });
+      } finally {
+        localStorage.removeItem('yourbody_user');
+      }
     });
   });
 });
