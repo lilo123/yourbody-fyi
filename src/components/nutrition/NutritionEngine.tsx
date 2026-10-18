@@ -182,6 +182,7 @@ export const NutritionEngine: React.FC = () => {
     customDishes,
     targetUserId,
     timeZone: profile?.timezone ?? undefined,
+    hasExistingStagedMeal: Boolean(stagedMeal),
     onParsedSuccess: (meal) => {
       setStagedMeal(meal);
       setShowManualForm(false);
