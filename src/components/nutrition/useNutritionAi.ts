@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { CustomDish } from '../../types/database';
 import { formatCalories } from '../../utils/nutrition';
 import { parseNutritionText } from '../../lib/nutrition/localParse';
@@ -16,6 +16,7 @@ import {
   getNutritionParserMode,
   type NutritionParserMode,
 } from '../../hooks/useNutritionParserMode';
+import { registerUpdateBlocker, unregisterUpdateBlocker } from '../../pwa/updateSafety';
 
 export interface UseNutritionAiOptions {
   customDishes: CustomDish[];
@@ -167,6 +168,14 @@ export function useNutritionAi({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const isAnalyzingRef = useRef(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    if (!isAnalyzing) return;
+    registerUpdateBlocker('nutrition-ai-analyze', () => 'AI analysis in progress');
+    return () => {
+      unregisterUpdateBlocker('nutrition-ai-analyze');
+    };
+  }, [isAnalyzing]);
 
   const {
     selectedPhoto,
