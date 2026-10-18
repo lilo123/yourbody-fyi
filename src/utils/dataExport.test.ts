@@ -24,7 +24,6 @@ import {
   clearMockHistory,
 } from '../test/supabaseBuilderMock';
 import type { NutritionItem } from './itemModel';
-import { getDayBounds } from './date';
 
 vi.mock('../lib/supabase', async () => {
   const { createSupabaseMock } = await import('../test/supabaseBuilderMock');
@@ -711,15 +710,15 @@ describe('dataExport utilities', () => {
       });
 
       const workoutBuilder = mockSupabase.getLastBuilder('workouts')!;
-      expect(workoutBuilder.filters.some((f) => f.column === 'date' && f.method === 'gte')).toBe(true);
-      expect(workoutBuilder.filters.some((f) => f.column === 'date' && f.method === 'lte')).toBe(true);
+      expect(workoutBuilder.filters.some((f) => f.column === 'workout_date' && f.method === 'gte')).toBe(true);
+      expect(workoutBuilder.filters.some((f) => f.column === 'workout_date' && f.method === 'lte')).toBe(true);
 
       const nutritionBuilder = mockSupabase.getLastBuilder('nutrition_logs')!;
       expect(nutritionBuilder.filters.some((f) => f.column === 'logged_at' && f.method === 'gte')).toBe(true);
       expect(nutritionBuilder.filters.some((f) => f.column === 'logged_at' && f.method === 'lte')).toBe(true);
     });
 
-    it('bounds workouts query to end-of-day so end-date workouts are included', async () => {
+    it('bounds workouts query directly on civil workout_date column with plain dates', async () => {
       mockSupabase.setTableData('workouts', []);
       mockSupabase.setTableData('nutrition_logs', []);
       mockSupabase.setTableData('custom_dishes', []);
@@ -735,10 +734,21 @@ describe('dataExport utilities', () => {
       });
 
       const workoutBuilder = mockSupabase.getLastBuilder('workouts')!;
-      const lteFilter = workoutBuilder.filters.find((f) => f.column === 'date' && f.method === 'lte');
+      const gteFilter = workoutBuilder.filters.find((f) => f.column === 'workout_date' && f.method === 'gte');
+      const lteFilter = workoutBuilder.filters.find((f) => f.column === 'workout_date' && f.method === 'lte');
+
+      expect(gteFilter).toBeDefined();
+      expect(gteFilter?.value).toBe('2026-10-10');
       expect(lteFilter).toBeDefined();
-      expect(lteFilter?.value).not.toBe('2026-10-18');
-      expect(lteFilter?.value).toBe(getDayBounds('2026-10-18').endOfDay);
+      expect(lteFilter?.value).toBe('2026-10-18');
+
+      // Boundary assertions on workout_date filters:
+      // (a) midnight-UTC legacy row on the start date (workout_date '2026-10-10') is included
+      expect('2026-10-10' >= gteFilter!.value && '2026-10-10' <= lteFilter!.value).toBe(true);
+      // (b) row late on end date (workout_date '2026-10-18') is included
+      expect('2026-10-18' >= gteFilter!.value && '2026-10-18' <= lteFilter!.value).toBe(true);
+      // (c) row on endDate+1 (workout_date '2026-10-19') is excluded
+      expect('2026-10-19' <= lteFilter!.value).toBe(false);
     });
 
     it('throws error when Supabase query returns an error', async () => {

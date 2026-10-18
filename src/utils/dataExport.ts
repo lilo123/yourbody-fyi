@@ -471,9 +471,6 @@ export async function fetchWorkoutsPage(
   from: number,
   to: number
 ): Promise<Workout[]> {
-  const startIso = bounds.startDate ? getDayBounds(bounds.startDate).startOfDay : null;
-  const endIso = bounds.endDate ? getDayBounds(bounds.endDate).endOfDay : null;
-
   // payload-gate: detail-fetch — user-initiated full data export
   let query = supabase
     .from('workouts')
@@ -481,11 +478,11 @@ export async function fetchWorkoutsPage(
     .eq('user_id', targetUserId)
     .order('date', { ascending: false });
 
-  if (startIso) {
-    query = query.gte('date', startIso);
+  if (bounds.startDate) {
+    query = query.gte('workout_date', bounds.startDate);
   }
-  if (endIso) {
-    query = query.lte('date', endIso);
+  if (bounds.endDate) {
+    query = query.lte('workout_date', bounds.endDate);
   }
 
   const { data, error } = await query.range(from, to);
