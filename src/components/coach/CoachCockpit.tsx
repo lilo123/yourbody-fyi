@@ -426,15 +426,15 @@ export const CoachCockpit: React.FC = () => {
           }}
           exercises={exercises}
         />
-
-        <ConfirmDialog
-          isOpen={showDisconnectConfirm}
-          title={`Disconnect ${selectedAthlete?.name || 'this athlete'}?`}
-          consequence={`Are you sure you want to disconnect from ${selectedAthlete?.name || 'this athlete'}? They will no longer appear in your roster and you will lose access to their training and nutrition data.`}
-          confirmLabel="Disconnect" cancelLabel="Cancel" isDestructive={true} isLoading={isDisconnecting}
-          testId="disconnect-athlete-confirm-dialog" onCancel={() => setShowDisconnectConfirm(false)} onConfirm={handleConfirmDisconnect}
-        />
       </div>
+
+      <ConfirmDialog
+        isOpen={showDisconnectConfirm}
+        title={`Disconnect ${selectedAthlete?.name || 'this athlete'}?`}
+        consequence={`Are you sure you want to disconnect from ${selectedAthlete?.name || 'this athlete'}? They will no longer appear in your roster and you will lose access to their training and nutrition data.`}
+        confirmLabel="Disconnect" cancelLabel="Cancel" isDestructive={true} isLoading={isDisconnecting}
+        testId="disconnect-athlete-confirm-dialog" onCancel={() => setShowDisconnectConfirm(false)} onConfirm={handleConfirmDisconnect}
+      />
     </div>
   );
 };
