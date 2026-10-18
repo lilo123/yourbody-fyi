@@ -710,12 +710,11 @@ export function useNutritionData({
     [dismissToast, deleteMutation, showToast]
   );
 
-  const timerState = useSyncExternalStore(
+  const isTimerActive = useSyncExternalStore(
     restTimerStore.subscribe,
-    restTimerStore.getSnapshot,
-    restTimerStore.getServerSnapshot
+    restTimerStore.getIsActiveSnapshot,
+    restTimerStore.getIsActiveServerSnapshot
   );
-  const isTimerActive = timerState.isRunning || timerState.isPaused;
 
   return {
     customDishes,

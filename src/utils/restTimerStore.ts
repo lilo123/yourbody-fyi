@@ -199,6 +199,14 @@ export class RestTimerStore {
     return SERVER_SNAPSHOT;
   };
 
+  getIsActiveSnapshot = (): boolean => {
+    return this.cachedSnapshot.isRunning || this.cachedSnapshot.isPaused;
+  };
+
+  getIsActiveServerSnapshot = (): boolean => {
+    return false;
+  };
+
   start(seconds: number): void {
     const targetEnd = Date.now() + seconds * 1000;
     this.cachedSnapshot = {
