@@ -11,6 +11,7 @@ import { formatNutritionDayHeader } from './useHistoryData';
 import { AuthContext } from '../../context/AuthContextTypes';
 import { useToast } from '../../hooks/useToast';
 import { shareMacroStory } from '../../utils/macroStoryShare';
+import { PendingMark } from '../sync/PendingMark';
 
 export interface NutritionDaySummary {
   date: string;
@@ -200,8 +201,8 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   const virtualItems = virtualizer.getVirtualItems();
   const isVirtual = virtualItems.length > 0;
 
-  // Skeleton cards (aria-busy) while initial fetch is pending
-  if (isNutritionPending) {
+  // Skeleton cards (aria-busy) while initial fetch is pending or not yet settled (only when nothing to show)
+  if (displayDays.length === 0 && isNutritionPending) {
     return (
       <div data-testid="nutrition-history-skeleton" className="space-y-4">
         <Skeleton variant="card" count={3} ariaLabel="Loading nutrition history..." />
@@ -238,6 +239,7 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   const renderDayCard = (day: NutritionDaySummary) => {
     const { title, subtitle } = formatNutritionDayHeader(day.date, day.meals.length);
     const isExpanded = expandedDates.has(day.date);
+    const isDayPending = day.meals.some((meal) => Boolean((meal as any).pending));
 
     return (
       <div
@@ -248,10 +250,13 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
         <div className={`space-y-3 ${isExpanded ? 'border-b border-zinc-800 pb-3' : ''}`}>
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="truncate">{title}</span>
-              </h3>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2 truncate">
+                  <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">{title}</span>
+                </h3>
+                {isDayPending && <PendingMark size="sm" className="shrink-0" />}
+              </div>
               <div className="text-xs text-zinc-400 mt-0.5 truncate">
                 <span>{subtitle}</span>
                 <span className="sr-only">{day.date} • {day.meals.length} {day.meals.length === 1 ? "meal" : "meals"} logged</span>

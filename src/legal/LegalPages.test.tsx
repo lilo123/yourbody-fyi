@@ -134,7 +134,7 @@ describe('Legal Pages', () => {
       expect(screen.getByText('Sentry')).toBeDefined();
       expect(screen.getByText('Cloudflare and Vercel')).toBeDefined();
       expect(screen.getByText('Resend')).toBeDefined();
-      expect(screen.getByText('PostHog')).toBeDefined();
+      expect(screen.getByText('Cloudflare Web Analytics')).toBeDefined();
 
       // Cookies and Children
       expect(screen.getByText(/No advertising or tracking cookies/i)).toBeDefined();

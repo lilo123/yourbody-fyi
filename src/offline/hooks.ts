@@ -132,18 +132,22 @@ export function useAiRescue({
 
     if (!canRescue()) return;
 
-    void readLegacyAiQueueLeftovers(targetUserId).then(async (result) => {
-      if (isCancelled || !result) return;
-      if (!canRescue()) return;
+    void readLegacyAiQueueLeftovers(targetUserId)
+      .then(async (result) => {
+        if (isCancelled || !result) return;
+        if (!canRescue()) return;
 
-      // 1. Set the input first
-      setNlInput(result.text);
+        // 1. Set the input first
+        setNlInput(result.text);
 
-      // 2. THEN delete exactly the ids whose text was written
-      if (!isCancelled) {
-        await deleteLegacyAiQueueItems(targetUserId, result.ids);
-      }
-    });
+        // 2. THEN delete exactly the ids whose text was written
+        if (!isCancelled) {
+          await deleteLegacyAiQueueItems(targetUserId, result.ids);
+        }
+      })
+      .catch((err: unknown) => {
+        console.warn('[aiRescue] Failed to rescue legacy queue leftovers:', err);
+      });
 
     return () => {
       isCancelled = true;

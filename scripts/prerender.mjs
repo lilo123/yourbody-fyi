@@ -49,15 +49,31 @@ if (!fs.existsSync(ssrEntryPath)) {
   process.exit(1);
 }
 
-const { renderRoute, PRERENDER_ROUTES } = await import(pathToFileURL(ssrEntryPath).href);
+const { renderRoute, PRERENDER_ROUTES, generateSoftwareApplicationJsonLd } = await import(pathToFileURL(ssrEntryPath).href);
 
 console.log('[prerender] Pre-rendering public pages...');
 
 try {
+  const softwareAppJson = generateSoftwareApplicationJsonLd();
+  const softwareAppJsonString = JSON.stringify(softwareAppJson, null, 2);
+  const indentedJson = softwareAppJsonString
+    .split('\n')
+    .map((line) => '      ' + line)
+    .join('\n');
+  const softwareAppBlock = `    <!-- SoftwareApplication JSON-LD: must match live pricing and is generated from src/components/landing/pricingData.ts -->\n    <script type="application/ld+json">\n${indentedJson}\n    </script>`;
+
+  const softwareAppRegex = /(?:[ \t]*<!--\s*SoftwareApplication JSON-LD[^\n]*-->\s*)?<script\s+type=["']application\/ld\+json["']>\s*\{\s*"@context":\s*"https:\/\/schema\.org",\s*"@type":\s*"SoftwareApplication"[\s\S]*?<\/script>/;
+
   for (const route of PRERENDER_ROUTES) {
     const renderedMarkup = renderRoute(route.path);
 
     let html = template;
+    if (softwareAppRegex.test(html)) {
+      html = html.replace(softwareAppRegex, softwareAppBlock);
+    } else {
+      console.warn('[prerender] SoftwareApplication JSON-LD block not found in template');
+    }
+
     if (/<div id="prerender"[^>]*>/.test(html)) {
       html = html.replace(
         /<div id="prerender"[^>]*>[\s\S]*?<\/div>/,

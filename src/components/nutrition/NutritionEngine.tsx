@@ -359,14 +359,13 @@ export const NutritionEngine: React.FC = () => {
     : null;
 
   return (
-    <div className={`space-y-6 ${stagedMeal ? 'pb-32' : ''}`}>
-      <NutritionDashboardRings
-        selectedDate={selectedDate}
-        onDateChange={setSelectedDate}
-        dailyTotals={displayedDailyTotals}
-        targets={targets}
-        remainingFuel={displayedRemainingFuel}
-        onSelectBreakdownNutrient={setBreakdownNutrient}
+    <div className={stagedMeal ? 'pb-32' : ''}>
+      <h1 className="sr-only">Nutrition</h1>
+      <div className="space-y-6">
+        <NutritionDashboardRings
+        selectedDate={selectedDate} onDateChange={setSelectedDate}
+        dailyTotals={displayedDailyTotals} targets={targets}
+        remainingFuel={displayedRemainingFuel} onSelectBreakdownNutrient={setBreakdownNutrient}
       />
 
       <QuickLogFavorites
@@ -588,10 +587,9 @@ export const NutritionEngine: React.FC = () => {
         onClose={() => setBreakdownNutrient(null)}
         selectedNutrient={breakdownNutrient ?? 'calories'}
         onSelectNutrient={setBreakdownNutrient}
-        logs={displayedTodayLogs}
-        dailyTotals={displayedDailyTotals}
-        targets={targets}
+        logs={displayedTodayLogs} dailyTotals={displayedDailyTotals} targets={targets}
       />
+      </div>
     </div>
   );
 };
