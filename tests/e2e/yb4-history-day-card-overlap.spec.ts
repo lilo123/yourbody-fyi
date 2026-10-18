@@ -57,9 +57,9 @@ function seedNutritionData(userId: string, email: string): void {
       VALUES (v_uid, '${email}', 'YB4 Overlap Athlete', 'athlete')
       ON CONFLICT (id) DO UPDATE SET username = 'YB4 Overlap Athlete', role = 'athlete';
 
-      -- Seed 10 days of nutrition logs (CURRENT_DATE down to CURRENT_DATE - 9)
+      -- Seed 15 days of nutrition logs (CURRENT_DATE down to CURRENT_DATE - 14)
       -- Each day has realistic macros incl. fiber (45g) so chips wrap to 2 rows at 393px and 320px
-      FOR i IN 0..9 LOOP
+      FOR i IN 0..14 LOOP
         v_date := CURRENT_DATE - i;
         INSERT INTO public.nutrition_logs (id, user_id, food_name, calories, protein, carbs, fat, fiber, logged_at, logged_date)
         VALUES
@@ -219,9 +219,9 @@ test.describe('D-YB4-3: Nutrition History Day Card Overlap Regression', () => {
       await expect(virtualContainer).toHaveCSS('position', 'relative');
 
       // Positive proof of virtualization:
-      // (1) Fewer cards rendered than seeded days (windowing active; e.g. < 10 cards rendered)
+      // (1) Fewer cards rendered than seeded days (windowing active; e.g. < 15 cards rendered with overscan)
       const renderedCardCount = await virtualCards.count();
-      expect(renderedCardCount).toBeLessThan(10);
+      expect(renderedCardCount).toBeLessThan(15);
       expect(renderedCardCount).toBeGreaterThanOrEqual(2);
 
       // (2) Container total height exceeds sum of rendered card heights (scroll extent includes unrendered items)
