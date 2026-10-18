@@ -452,7 +452,7 @@ export function withSyncedServing(meal: StagedMeal, items: StagedItem[]): Staged
 export function resyncStagedMealWithCustomDish(
   meal: StagedMeal,
   updatedDish: CustomDishDetail | CustomDish,
-  previousDish?: CustomDishDetail | CustomDish | null
+  previousDish?: CustomDishDetail | CustomDish | { id?: string; name?: string; notes?: string | null } | null
 ): StagedMeal {
   if (!meal || !Array.isArray(meal.items) || meal.items.length === 0) {
     return meal;

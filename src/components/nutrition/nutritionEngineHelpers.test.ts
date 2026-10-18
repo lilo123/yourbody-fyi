@@ -1702,6 +1702,8 @@ describe('resyncStagedMealWithCustomDish', () => {
         carbs: 27,
         fat: 3,
         fiber: 4,
+        servingSize: 1,
+        servingUnit: 'unit',
         notes: 'Original note',
       };
 
@@ -1755,6 +1757,8 @@ describe('resyncStagedMealWithCustomDish', () => {
         carbs: 27,
         fat: 3,
         fiber: 4,
+        servingSize: 1,
+        servingUnit: 'unit',
         notes: 'My custom notes added on card',
       };
 
@@ -1811,6 +1815,8 @@ describe('resyncStagedMealWithCustomDish', () => {
         carbs: 27,
         fat: 3,
         fiber: 4,
+        servingSize: 1,
+        servingUnit: 'unit',
         notes: 'Existing note',
       };
 

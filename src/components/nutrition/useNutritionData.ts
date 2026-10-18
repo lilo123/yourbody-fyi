@@ -75,7 +75,10 @@ export interface UseNutritionDataOptions {
   profile: UserProfile | null;
   timeZone?: string;
   onMutationSuccessReset: () => void;
-  onCustomDishSaved?: (dish: CustomDishDetail, previousDish?: CustomDishDetail | CustomDish | null) => void;
+  onCustomDishSaved?: (
+    dish: CustomDishDetail,
+    previousDish?: CustomDishDetail | CustomDish | { id?: string; name?: string; notes?: string | null } | null
+  ) => void;
   setStatus: (s: string) => void;
   setIsError: (e: boolean) => void;
 }
