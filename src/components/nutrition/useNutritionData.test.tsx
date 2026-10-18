@@ -1177,6 +1177,502 @@ describe('useNutritionData (src/components/nutrition/useNutritionData.ts)', () =
         const cachedFull = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', mockUserId, 'full']);
         expect(cachedFull?.find((d) => d.id === mockDishId)).toBeUndefined();
       });
+
+      it('populates full cache on edit when full cache is initially absent', async () => {
+        // Full cache is initially absent (undefined)
+        expect(queryClient.getQueryData(['custom_dishes', mockUserId, 'full'])).toBeUndefined();
+
+        const updatedDishDetail: CustomDishDetail = {
+          ...leanDish,
+          calories: 627,
+          protein: 76,
+          serving_quantity: 595,
+          serving_unit: 'g',
+          items: [
+            {
+              id: 'item-1',
+              name: 'Protein Ice Cream',
+              quantity: 595,
+              unit: 'g',
+              displayPortion: '595 g',
+              calories: 627,
+              protein: 76,
+              carbs: 42,
+              fat: 16.1,
+              fiber: 0,
+            },
+          ],
+        };
+
+        vi.mocked(supabase.from).mockImplementation((table: string) => {
+          const builder = createSupabaseBuilder(table, { data: [updatedDishDetail], error: null });
+          builder.update = vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockResolvedValue({ data: [updatedDishDetail], error: null }),
+            }),
+          });
+          return builder as any;
+        });
+
+        const { result } = renderHook(
+          () =>
+            useNutritionData({
+              targetUserId: mockUserId,
+              selectedDate: '2026-10-01',
+              profile: null,
+              onMutationSuccessReset: vi.fn(),
+              setStatus: vi.fn(),
+              setIsError: vi.fn(),
+            }),
+          { wrapper }
+        );
+
+        await act(async () => {
+          await result.current.saveCustomDishMutation.mutateAsync({
+            dishPayload: {
+              name: 'Protein Ice Cream',
+              calories: 627,
+              protein: 76,
+              carbs: 42,
+              fat: 16.1,
+              fiber: 0,
+              items: updatedDishDetail.items,
+            },
+            editingDishId: mockDishId,
+          });
+        });
+
+        // Full cache must now be populated with the saved dish
+        const fullCache = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', mockUserId, 'full']);
+        expect(fullCache).toBeDefined();
+        expect(fullCache?.length).toBe(1);
+        expect(fullCache?.[0].id).toBe(mockDishId);
+        expect(fullCache?.[0].calories).toBe(627);
+
+        // Fetching detail resolves immediately from the freshly populated full cache
+        const freshDetail = await result.current.fetchDishDetail(mockDishId);
+        expect(freshDetail?.calories).toBe(627);
+        expect(freshDetail?.items?.[0].quantity).toBe(595);
+      });
+
+      it('clears items on edit when server row lacks items without keeping stale items', async () => {
+        // Seed full cache and list cache with multi-item dish
+        queryClient.setQueryData(['custom_dishes', mockUserId], [leanDish]);
+        queryClient.setQueryData(['custom_dishes', mockUserId, 'full'], [fullDishDetail]);
+
+        // Server row returned on update has items: null (e.g. converted to simple food)
+        const updatedServerRow: CustomDishDetail = {
+          ...leanDish,
+          name: 'Protein Shake Simple',
+          calories: 400,
+          protein: 50,
+          items: null,
+          ingredients: null,
+          serving_quantity: null,
+          serving_unit: null,
+        };
+
+        const updatedLean: CustomDish = {
+          id: mockDishId,
+          user_id: mockUserId,
+          name: 'Protein Shake Simple',
+          calories: 400,
+          protein: 50,
+          carbs: 42,
+          fat: 16.1,
+          fiber: 0,
+          kind: 'food',
+          use_count: 5,
+          notes: null,
+          serving_quantity: null,
+          serving_unit: null,
+        };
+
+        vi.mocked(supabase.from).mockImplementation((table: string) => {
+          const builder = createSupabaseBuilder(table, {
+            resolver: (innerBuilder: any) => {
+              if (innerBuilder.projection === 'id, items, ingredients, kind, notes') {
+                return updatedServerRow;
+              }
+              return [updatedLean];
+            },
+          });
+          builder.update = vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockResolvedValue({ data: [updatedServerRow], error: null }),
+            }),
+          });
+          return builder as any;
+        });
+
+        const { result } = renderHook(
+          () =>
+            useNutritionData({
+              targetUserId: mockUserId,
+              selectedDate: '2026-10-01',
+              profile: null,
+              onMutationSuccessReset: vi.fn(),
+              setStatus: vi.fn(),
+              setIsError: vi.fn(),
+            }),
+          { wrapper }
+        );
+
+        await act(async () => {
+          await result.current.saveCustomDishMutation.mutateAsync({
+            dishPayload: {
+              name: 'Protein Shake Simple',
+              calories: 400,
+              protein: 50,
+              items: null,
+            },
+            editingDishId: mockDishId,
+          });
+        });
+
+        // Detail in full cache must NOT retain the stale items from before the edit
+        const freshDetail = await result.current.fetchDishDetail(mockDishId);
+        expect(freshDetail?.name).toBe('Protein Shake Simple');
+        expect(freshDetail?.calories).toBe(400);
+        expect(freshDetail?.items).toBeNull();
+        expect(freshDetail?.items).not.toEqual(fullDishDetail.items);
+
+        // List cache must also have cleared serving size derived from items
+        const listCache = queryClient.getQueryData<CustomDish[]>(['custom_dishes', mockUserId]);
+        const listEntry = listCache?.find((dish) => dish.id === mockDishId);
+        expect(listEntry?.serving_quantity).toBeNull();
+      });
+
+      it('evicts old dish on delete and registers new dish when recreated with same name', async () => {
+        const originalDishId = 'dish-protein-bowl-old';
+        const newDishId = 'dish-protein-bowl-new';
+        const dishName = 'Acai Protein Bowl';
+
+        const originalDish: CustomDishDetail = {
+          id: originalDishId,
+          user_id: mockUserId,
+          name: dishName,
+          calories: 350,
+          protein: 20,
+          carbs: 45,
+          fat: 8,
+          fiber: 6,
+          kind: 'food',
+          use_count: 2,
+          notes: null,
+          items: null,
+          ingredients: null,
+        };
+
+        const recreatedDish: CustomDishDetail = {
+          id: newDishId,
+          user_id: mockUserId,
+          name: dishName,
+          calories: 420,
+          protein: 28,
+          carbs: 50,
+          fat: 10,
+          fiber: 7,
+          kind: 'food',
+          use_count: 0,
+          notes: null,
+          items: null,
+          ingredients: null,
+        };
+
+        // Seed cache with original dish
+        queryClient.setQueryData(['custom_dishes', mockUserId], [originalDish]);
+        queryClient.setQueryData(['custom_dishes', mockUserId, 'full'], [originalDish]);
+
+        vi.mocked(supabase.from).mockImplementation((table: string) => {
+          const builder = createSupabaseBuilder(table, { data: [], error: null });
+          builder.delete = vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          });
+          builder.insert = vi.fn().mockReturnValue({
+            select: vi.fn().mockResolvedValue({ data: [recreatedDish], error: null }),
+          });
+          return builder as any;
+        });
+
+        const { result } = renderHook(
+          () =>
+            useNutritionData({
+              targetUserId: mockUserId,
+              selectedDate: '2026-10-01',
+              profile: null,
+              onMutationSuccessReset: vi.fn(),
+              setStatus: vi.fn(),
+              setIsError: vi.fn(),
+            }),
+          { wrapper }
+        );
+
+        // 1. Delete original dish
+        await act(async () => {
+          await result.current.deleteCustomDishMutation.mutateAsync(originalDishId);
+        });
+
+        // Full and list cache should no longer have original dish
+        const fullAfterDelete = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', mockUserId, 'full']);
+        expect(fullAfterDelete?.find((dish) => dish.id === originalDishId)).toBeUndefined();
+        const listAfterDelete = queryClient.getQueryData<CustomDish[]>(['custom_dishes', mockUserId]);
+        expect(listAfterDelete?.find((dish) => dish.id === originalDishId)).toBeUndefined();
+
+        // 2. Re-create dish with identical name
+        await act(async () => {
+          await result.current.saveCustomDishMutation.mutateAsync({
+            dishPayload: {
+              name: dishName,
+              calories: 420,
+              protein: 28,
+              carbs: 50,
+              fat: 10,
+              fiber: 7,
+            },
+          });
+        });
+
+        // Full cache contains new dish ID with fresh macros, not old ID
+        const fullAfterRecreate = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', mockUserId, 'full']);
+        expect(fullAfterRecreate?.find((dish) => dish.id === originalDishId)).toBeUndefined();
+        const newInFull = fullAfterRecreate?.find((dish) => dish.id === newDishId);
+        expect(newInFull).toBeDefined();
+        expect(newInFull?.name).toBe(dishName);
+        expect(newInFull?.calories).toBe(420);
+
+        // Fetching detail by new ID returns recreated dish
+        const newDetail = await result.current.fetchDishDetail(newDishId);
+        expect(newDetail?.id).toBe(newDishId);
+        expect(newDetail?.calories).toBe(420);
+      });
+
+      it('enforces cross-user cache isolation when coach views athlete dishes', async () => {
+        const coachUserId = 'user-coach-123';
+        const athleteUserId = 'user-athlete-456';
+
+        const coachDish: CustomDishDetail = {
+          id: 'dish-coach-special',
+          user_id: coachUserId,
+          name: 'Coach Oatmeal',
+          calories: 500,
+          protein: 30,
+          carbs: 60,
+          fat: 10,
+          fiber: 8,
+          kind: 'food',
+          use_count: 10,
+          notes: null,
+          items: null,
+          ingredients: null,
+        };
+
+        const athleteDish: CustomDishDetail = {
+          id: 'dish-athlete-special',
+          user_id: athleteUserId,
+          name: 'Athlete Oats',
+          calories: 350,
+          protein: 20,
+          carbs: 45,
+          fat: 5,
+          fiber: 4,
+          kind: 'food',
+          use_count: 1,
+          notes: null,
+          items: null,
+          ingredients: null,
+        };
+
+        // Seed coach and athlete caches independently
+        queryClient.setQueryData(['custom_dishes', coachUserId], [coachDish]);
+        queryClient.setQueryData(['custom_dishes', coachUserId, 'full'], [coachDish]);
+        queryClient.setQueryData(['custom_dishes', athleteUserId], [athleteDish]);
+        queryClient.setQueryData(['custom_dishes', athleteUserId, 'full'], [athleteDish]);
+
+        const updatedAthleteDish: CustomDishDetail = {
+          ...athleteDish,
+          calories: 380,
+          protein: 25,
+        };
+
+        vi.mocked(supabase.from).mockImplementation((table: string) => {
+          const builder = createSupabaseBuilder(table, { data: [updatedAthleteDish], error: null });
+          builder.update = vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockResolvedValue({ data: [updatedAthleteDish], error: null }),
+            }),
+          });
+          return builder as any;
+        });
+
+        // Coach acts on athlete data (targetUserId = athleteUserId)
+        const { result } = renderHook(
+          () =>
+            useNutritionData({
+              targetUserId: athleteUserId,
+              selectedDate: '2026-10-01',
+              profile: null,
+              onMutationSuccessReset: vi.fn(),
+              setStatus: vi.fn(),
+              setIsError: vi.fn(),
+            }),
+          { wrapper }
+        );
+
+        await act(async () => {
+          await result.current.saveCustomDishMutation.mutateAsync({
+            dishPayload: {
+              name: 'Athlete Oats',
+              calories: 380,
+              protein: 25,
+            },
+            editingDishId: athleteDish.id,
+          });
+        });
+
+        // Athlete cache must reflect updated values
+        const athleteFull = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', athleteUserId, 'full']);
+        expect(athleteFull?.find((dish) => dish.id === athleteDish.id)?.calories).toBe(380);
+
+        // Coach cache must remain completely untouched
+        const coachFull = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', coachUserId, 'full']);
+        expect(coachFull?.length).toBe(1);
+        expect(coachFull?.[0].id).toBe(coachDish.id);
+        expect(coachFull?.[0].calories).toBe(500);
+
+        const coachList = queryClient.getQueryData<CustomDish[]>(['custom_dishes', coachUserId]);
+        expect(coachList?.length).toBe(1);
+        expect(coachList?.[0].calories).toBe(500);
+      });
+
+      it('offline edit queued then staged: rejects offline dish save with "Available when online" and stages cached dish offline', async () => {
+        // Seed full cache and list cache with existing dish
+        queryClient.setQueryData(['custom_dishes', mockUserId], [leanDish]);
+        queryClient.setQueryData(['custom_dishes', mockUserId, 'full'], [fullDishDetail]);
+
+        const originalOnLine = navigator.onLine;
+        try {
+          Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+          const { result } = renderHook(
+            () =>
+              useNutritionData({
+                targetUserId: mockUserId,
+                selectedDate: '2026-10-01',
+                profile: null,
+                onMutationSuccessReset: vi.fn(),
+                setStatus: vi.fn(),
+                setIsError: vi.fn(),
+              }),
+            { wrapper }
+          );
+
+          // 1. Offline custom dish edit attempt must reject with "Available when online" (custom dishes require connectivity)
+          await expect(
+            result.current.saveCustomDishMutation.mutateAsync({
+              dishPayload: {
+                name: 'Offline Modified Name',
+                calories: 999,
+              },
+              editingDishId: mockDishId,
+            })
+          ).rejects.toThrow('Available when online');
+
+          // 2. Dish in cache must remain uncorrupted by failed mutation
+          const cachedFull = queryClient.getQueryData<CustomDishDetail[]>(['custom_dishes', mockUserId, 'full']);
+          expect(cachedFull?.find((dish) => dish.id === mockDishId)?.calories).toBe(609);
+
+          // 3. Staging the dish offline resolves the intact pre-edit cached details
+          const offlineDetail = await result.current.fetchDishDetail(mockDishId);
+          expect(offlineDetail).toBeDefined();
+          expect(offlineDetail?.calories).toBe(609);
+          expect(offlineDetail?.items?.[0].quantity).toBe(1);
+        } finally {
+          Object.defineProperty(navigator, 'onLine', { value: originalOnLine, configurable: true });
+        }
+      });
+
+      it('offline edit queued then staged: stages freshly edited dish offline immediately without intermediate network fetch', async () => {
+        // Seed initial dish in caches
+        queryClient.setQueryData(['custom_dishes', mockUserId], [leanDish]);
+        queryClient.setQueryData(['custom_dishes', mockUserId, 'full'], [fullDishDetail]);
+
+        const editedDishDetail: CustomDishDetail = {
+          ...leanDish,
+          calories: 650,
+          protein: 80,
+          serving_quantity: 600,
+          serving_unit: 'g',
+          items: [
+            {
+              id: 'item-1',
+              name: 'Protein Ice Cream',
+              quantity: 600,
+              unit: 'g',
+              displayPortion: '600 g',
+              calories: 650,
+              protein: 80,
+              carbs: 45,
+              fat: 17,
+              fiber: 0,
+            },
+          ],
+        };
+
+        vi.mocked(supabase.from).mockImplementation((table: string) => {
+          const builder = createSupabaseBuilder(table, { data: [editedDishDetail], error: null });
+          builder.update = vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockResolvedValue({ data: [editedDishDetail], error: null }),
+            }),
+          });
+          return builder as any;
+        });
+
+        const { result } = renderHook(
+          () =>
+            useNutritionData({
+              targetUserId: mockUserId,
+              selectedDate: '2026-10-01',
+              profile: null,
+              onMutationSuccessReset: vi.fn(),
+              setStatus: vi.fn(),
+              setIsError: vi.fn(),
+            }),
+          { wrapper }
+        );
+
+        // Edit online
+        await act(async () => {
+          await result.current.saveCustomDishMutation.mutateAsync({
+            dishPayload: {
+              name: 'Protein Ice Cream',
+              calories: 650,
+              protein: 80,
+              carbs: 45,
+              fat: 17,
+              fiber: 0,
+              items: editedDishDetail.items,
+            },
+            editingDishId: mockDishId,
+          });
+        });
+
+        // Immediately transition offline (without any prior online fetchDishDetail call)
+        const originalOnLine = navigator.onLine;
+        try {
+          Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+          // Staging offline must read the write-through updated cache immediately
+          const stagedOffline = await result.current.fetchDishDetail(mockDishId);
+          expect(stagedOffline).toBeDefined();
+          expect(stagedOffline?.calories).toBe(650);
+          expect(stagedOffline?.protein).toBe(80);
+          expect(stagedOffline?.items?.[0].quantity).toBe(600);
+        } finally {
+          Object.defineProperty(navigator, 'onLine', { value: originalOnLine, configurable: true });
+        }
+      });
     });
   });
 

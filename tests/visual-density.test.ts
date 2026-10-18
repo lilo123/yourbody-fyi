@@ -5585,7 +5585,7 @@ async function setupSettingsDensityPage(page: Page) {
 
   await page.goto("/settings");
   await page.waitForURL("**/settings");
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("heading", { name: "Settings", level: 2 })).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Weight Units", () => {

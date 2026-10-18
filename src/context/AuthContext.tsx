@@ -137,7 +137,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // ignore
           }
           if (deviceZone && data.timezone !== deviceZone) {
-            syncUserTimezone(userId, true);
+            syncUserTimezone(userId, true).catch((err) => {
+              console.warn('[AuthContext] Background syncUserTimezone error:', err);
+            });
           }
           const prModeVal: PrMode = (data as any)?.pr_mode === 'e1rm' ? 'e1rm' : 'weight';
 
@@ -249,7 +251,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(result.session.user);
             markAuthValid(result.session.user.id);
             setLoading(false);
-            syncUserTimezone(result.session.user.id);
+            syncUserTimezone(result.session.user.id).catch((err) => {
+              console.warn('[AuthContext] Background syncUserTimezone error:', err);
+            });
             fetchProfile(result.session.user.id, result.session.user.email).catch((err) => {
               console.warn('[AuthContext] Background fetchProfile error:', err);
             });
@@ -307,7 +311,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userRef.current = session.user;
         setUser(session.user);
         markAuthValid(session.user.id);
-        syncUserTimezone(session.user.id);
+        syncUserTimezone(session.user.id).catch((err) => {
+          console.warn('[AuthContext] Background syncUserTimezone error:', err);
+        });
         fetchProfile(session.user.id, session.user.email).catch((err) => {
           console.warn('[AuthContext] Background fetchProfile error:', err);
         });
@@ -341,7 +347,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               userRef.current = session.user;
               setUser(session.user);
               markAuthValid(session.user.id);
-              syncUserTimezone(session.user.id);
+              syncUserTimezone(session.user.id).catch((err) => {
+                console.warn('[AuthContext] Background resume syncUserTimezone error:', err);
+              });
               fetchProfile(session.user.id, session.user.email).catch((err) => {
                 console.warn('[AuthContext] Background resume fetchProfile error:', err);
               });

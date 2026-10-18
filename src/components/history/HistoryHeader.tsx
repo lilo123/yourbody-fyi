@@ -26,10 +26,10 @@ export const HistoryHeader: React.FC<HistoryHeaderProps> = ({
     <div className="bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-transparent border border-cyan-500/20 rounded-3xl p-5 shadow-2xl space-y-4">
       <div className="flex items-center gap-2">
         <Activity className="w-5 h-5 text-cyan-400" />
-        {/* Exactly one h1 heading on the page */}
-        <h1 className="text-base font-bold text-white uppercase tracking-wider">
+        {/* Active domain title within History */}
+        <h2 className="text-base font-bold text-white uppercase tracking-wider">
           {historyDomain === 'workouts' ? 'Workout History' : 'Nutrition History'}
-        </h1>
+        </h2>
       </div>
       <p className="text-xs text-zinc-400">
         {historyDomain === 'workouts'

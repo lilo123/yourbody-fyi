@@ -8,6 +8,8 @@ import './components/workout/WorkoutEngine';
 import './components/nutrition/NutritionEngine';
 import './components/history/HistoryView';
 import './components/coach/CoachCockpit';
+import './components/exercises/ExercisesView';
+import './components/settings/SettingsView';
 
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from './test/supabaseBuilderMock';
 
@@ -468,6 +470,49 @@ describe('App Shell & Navigation', () => {
         screen.getByRole('heading', { name: /You know your workout\. We just help you track it\./i })
       ).toBeDefined();
     });
+  });
+
+  describe('one h1 per signed-in app view (WCAG 2.4.6 / 1.3.1)', () => {
+    const mainViews = [
+      { route: '/workout', name: 'Workout' },
+      { route: '/nutrition', name: 'Nutrition' },
+      { route: '/exercises', name: 'Library' },
+      { route: '/history', name: 'History' },
+      { route: '/settings', name: 'Settings' },
+    ];
+
+    for (const { route, name } of mainViews) {
+      it(`renders exactly one h1 heading with existing nav label "${name}" on ${route}`, async () => {
+        const cachedProfile = {
+          id: 'test-user-id',
+          email: 'coach@yourbody.fyi',
+          username: 'Coach Demo',
+          role: 'coach',
+          target_calories: 2400,
+          target_protein: 180,
+          target_carbs: 240,
+          target_fat: 70,
+          target_fiber: 30,
+        };
+        localStorage.setItem('yourbody_user', JSON.stringify(cachedProfile));
+        window.history.pushState({}, '', route);
+
+        const { unmount, container } = render(
+          <QueryClientProvider client={queryClient}>
+            <App />
+          </QueryClientProvider>
+        );
+
+        await waitFor(() => {
+          const h1List = container.querySelectorAll('h1');
+          expect(h1List.length).toBe(1);
+          expect(h1List[0].textContent?.trim()).toBe(name);
+          expect(h1List[0].className).toContain('sr-only');
+        });
+
+        unmount();
+      });
+    }
   });
 });
 
