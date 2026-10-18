@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect } from 'react';
+import { SkipToContentLink } from '../common/SkipToContentLink';
 import { InAppBrowserBanner } from '../common/InAppBrowserBanner';
 import { LandingHeader } from './LandingHeader';
 import { HeroSection } from './HeroSection';
@@ -38,9 +39,10 @@ export const LandingView: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
+      <SkipToContentLink />
       <InAppBrowserBanner />
       <LandingHeader />
-      <main className="w-full">
+      <main id="main-content" tabIndex={-1} className="w-full focus:outline-none">
         <HeroSection />
         <MealDemoSection />
         <FeaturesSection />
