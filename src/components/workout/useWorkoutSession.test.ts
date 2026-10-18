@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWorkoutSession } from './useWorkoutSession';
 import { workoutSessionStore } from '../../utils/workoutSessionStore';
 import type { Exercise, RoutineTemplate, WorkoutSet } from '../../types/database';
+import * as outboxModule from '../../offline/outbox';
+import { enqueue, resetOutboxForTesting } from '../../offline/outbox';
+import { deleteOfflineDb, closeAllOfflineDbs } from '../../offline/db';
 
 const { mockFetchTemplateDetail, mockShowToast, getMockIsOnline, setMockIsOnline } = vi.hoisted(() => {
   let isOnline = true;
@@ -549,6 +552,238 @@ describe('useWorkoutSession', () => {
     ]);
     expect(mockFetchTemplateDetail).not.toHaveBeenCalled();
     expect(mockShowToast).not.toHaveBeenCalled();
+  });
+
+  describe('offline pending ops on unscheduled rest day', () => {
+    const offlineUserId = 'user-test-offline-123';
+
+    beforeEach(async () => {
+      await closeAllOfflineDbs();
+      await deleteOfflineDb(offlineUserId);
+      resetOutboxForTesting();
+    });
+
+    afterEach(async () => {
+      await closeAllOfflineDbs();
+      await deleteOfflineDb(offlineUserId);
+      resetOutboxForTesting();
+    });
+
+    it('re-resolves session when outbox read resolves, replacing latched Rest Day with pending workout', async () => {
+      // Outbox has workout.ensure + set.create for today (2026-09-06, Sunday - no scheduled routine)
+      await enqueue({
+        userId: offlineUserId,
+        kind: 'workout.ensure',
+        payload: {
+          clientWorkoutId: 'offline-w-1',
+          workout_date: '2026-09-06',
+          name: 'Chest Hypertrophy',
+        },
+      });
+      await enqueue({
+        userId: offlineUserId,
+        kind: 'set.create',
+        payload: {
+          id: 'offline-s-1',
+          workoutRef: 'offline-w-1',
+          exercise_id: 'ex-bench',
+          weight: 185,
+          reps: 8,
+          set_index: 1,
+          set_type: 'working',
+          created_at: '2026-09-06T12:00:00Z',
+        },
+      });
+
+      // Reset in-memory cache to simulate cold launch where outbox must be read from IndexedDB
+      resetOutboxForTesting();
+
+      // Delay getOutboxOps so initial resolution runs before outbox read finishes
+      let resolveOutboxRead!: () => void;
+      const readGate = new Promise<void>((resolve) => {
+        resolveOutboxRead = resolve;
+      });
+
+      const realGetOutboxOps = outboxModule.getOutboxOps;
+      const getOutboxOpsSpy = vi.spyOn(outboxModule, 'getOutboxOps').mockImplementation(async (uid) => {
+        await readGate;
+        return realGetOutboxOps(uid);
+      });
+
+      try {
+        const { result } = renderHook(() =>
+          useWorkoutSession({
+            ...defaultProps,
+            targetUserId: offlineUserId,
+          })
+        );
+
+        // Initially, while outbox read is in-flight, today resolves to 'Rest Day'
+        expect(result.current.activeRoutineName).toBe('Rest Day');
+        expect(result.current.activeExercises).toEqual([]);
+
+        // Resolve the delayed outbox read
+        await act(async () => {
+          resolveOutboxRead();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        // After the read resolves, session must show the offline workout, not Rest Day
+        await waitFor(() => {
+          expect(result.current.activeRoutineName).toBe('Chest Hypertrophy');
+        });
+        expect(result.current.activeExercises).toEqual(['Bench Press']);
+        expect(result.current.targetSetCounts['Bench Press']).toBeGreaterThanOrEqual(1);
+      } finally {
+        getOutboxOpsSpy.mockRestore();
+      }
+    });
+
+    it('explicit user choice of Rest Day is NOT overridden when pending ops arrive', async () => {
+      await enqueue({
+        userId: offlineUserId,
+        kind: 'workout.ensure',
+        payload: {
+          clientWorkoutId: 'offline-w-2',
+          workout_date: '2026-09-06',
+          name: 'Chest Hypertrophy',
+        },
+      });
+      await enqueue({
+        userId: offlineUserId,
+        kind: 'set.create',
+        payload: {
+          id: 'offline-s-2',
+          workoutRef: 'offline-w-2',
+          exercise_id: 'ex-bench',
+          weight: 185,
+          reps: 8,
+          set_index: 1,
+          set_type: 'working',
+          created_at: '2026-09-06T12:00:00Z',
+        },
+      });
+
+      resetOutboxForTesting();
+
+      let resolveOutboxRead!: () => void;
+      const readGate = new Promise<void>((resolve) => {
+        resolveOutboxRead = resolve;
+      });
+
+      const realGetOutboxOps = outboxModule.getOutboxOps;
+      const getOutboxOpsSpy = vi.spyOn(outboxModule, 'getOutboxOps').mockImplementation(async (uid) => {
+        await readGate;
+        return realGetOutboxOps(uid);
+      });
+
+      try {
+        const { result } = renderHook(() =>
+          useWorkoutSession({
+            ...defaultProps,
+            targetUserId: offlineUserId,
+          })
+        );
+
+        // User explicitly chooses Rest Day
+        await act(async () => {
+          await result.current.handleSelectRoutine('Rest Day');
+        });
+
+        expect(result.current.activeRoutineName).toBe('Rest Day');
+
+        // Resolve the delayed outbox read
+        await act(async () => {
+          resolveOutboxRead();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        // Explicit choice must NOT be overridden
+        expect(result.current.activeRoutineName).toBe('Rest Day');
+        expect(result.current.activeExercises).toEqual([]);
+      } finally {
+        getOutboxOpsSpy.mockRestore();
+      }
+    });
+
+    it('explicit user choice of another routine is NOT overridden when pending ops arrive', async () => {
+      await enqueue({
+        userId: offlineUserId,
+        kind: 'workout.ensure',
+        payload: {
+          clientWorkoutId: 'offline-w-3',
+          workout_date: '2026-09-06',
+          name: 'Chest Hypertrophy',
+        },
+      });
+      await enqueue({
+        userId: offlineUserId,
+        kind: 'set.create',
+        payload: {
+          id: 'offline-s-3',
+          workoutRef: 'offline-w-3',
+          exercise_id: 'ex-bench',
+          weight: 185,
+          reps: 8,
+          set_index: 1,
+          set_type: 'working',
+          created_at: '2026-09-06T12:00:00Z',
+        },
+      });
+
+      resetOutboxForTesting();
+
+      let resolveOutboxRead!: () => void;
+      const readGate = new Promise<void>((resolve) => {
+        resolveOutboxRead = resolve;
+      });
+
+      const realGetOutboxOps = outboxModule.getOutboxOps;
+      const getOutboxOpsSpy = vi.spyOn(outboxModule, 'getOutboxOps').mockImplementation(async (uid) => {
+        await readGate;
+        return realGetOutboxOps(uid);
+      });
+
+      try {
+        const { result } = renderHook(() =>
+          useWorkoutSession({
+            ...defaultProps,
+            targetUserId: offlineUserId,
+          })
+        );
+
+        // User explicitly chooses a different routine
+        await act(async () => {
+          await result.current.handleSelectRoutine('Push, Quads, & Core - Reduced');
+        });
+
+        expect(result.current.activeRoutineName).toBe('Push, Quads, & Core - Reduced');
+
+        // Resolve delayed outbox read
+        await act(async () => {
+          resolveOutboxRead();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        // Explicit choice must NOT be overridden
+        expect(result.current.activeRoutineName).toBe('Push, Quads, & Core - Reduced');
+      } finally {
+        getOutboxOpsSpy.mockRestore();
+      }
+    });
+
+    it('online behavior unchanged when outbox is empty: stays Rest Day with zero extra network calls', async () => {
+      const { result } = renderHook(() =>
+        useWorkoutSession({
+          ...defaultProps,
+          targetUserId: offlineUserId,
+        })
+      );
+
+      expect(result.current.activeRoutineName).toBe('Rest Day');
+      expect(result.current.activeExercises).toEqual([]);
+      expect(mockFetchTemplateDetail).not.toHaveBeenCalled();
+    });
   });
 });
 
