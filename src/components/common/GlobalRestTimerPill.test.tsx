@@ -172,7 +172,7 @@ describe('GlobalRestTimerPill', () => {
     afterEach(() => {
       Object.defineProperty(window, 'innerWidth', { value: origWidth, configurable: true });
       Object.defineProperty(window, 'innerHeight', { value: origHeight, configurable: true });
-      document.querySelectorAll('[data-testid="staged-card-actions"], [role="dialog"], [data-testid="sheet-action-row"], [data-testid="delete-set-btn"]').forEach((el) => {
+      document.querySelectorAll('[data-testid="staged-card-actions"], [role="dialog"], [data-testid="sheet-action-row"]').forEach((el) => {
         el.parentElement?.removeChild(el);
       });
     });
@@ -576,12 +576,79 @@ describe('GlobalRestTimerPill', () => {
       // Trigger resize or re-render to update obstacle detection
       act(() => {
         window.dispatchEvent(new Event('resize'));
+        vi.runOnlyPendingTimers();
       });
       rerender(<GlobalRestTimerPill />);
 
       const pill = screen.getByTestId('rest-timer-pill');
       expect(pill.tagName).toBe('DIV');
       expect(pill.className).toContain('bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))]');
+    });
+
+    it('does not attach MutationObserver when no timer is running', () => {
+      const observeSpy = vi.fn();
+      const origMO = window.MutationObserver;
+      class MockMO {
+        observe = observeSpy;
+        disconnect = vi.fn();
+        takeRecords = vi.fn();
+      }
+      window.MutationObserver = MockMO as unknown as typeof MutationObserver;
+
+      try {
+        render(<GlobalRestTimerPill />);
+        expect(observeSpy).not.toHaveBeenCalled();
+      } finally {
+        window.MutationObserver = origMO;
+      }
+    });
+
+    it('attaches MutationObserver with attributeFilter when timer is active on mobile', () => {
+      const observeSpy = vi.fn();
+      const origMO = window.MutationObserver;
+      class MockMO {
+        observe = observeSpy;
+        disconnect = vi.fn();
+        takeRecords = vi.fn();
+      }
+      window.MutationObserver = MockMO as unknown as typeof MutationObserver;
+
+      try {
+        act(() => {
+          restTimerStore.start(90);
+        });
+        render(<GlobalRestTimerPill />);
+        expect(observeSpy).toHaveBeenCalledTimes(1);
+        expect(observeSpy).toHaveBeenCalledWith(document.body, {
+          childList: true,
+          subtree: true,
+          attributeFilter: ['aria-modal', 'hidden', 'aria-hidden', 'data-state', 'role'],
+        });
+      } finally {
+        window.MutationObserver = origMO;
+      }
+    });
+
+    it('does not attach MutationObserver on desktop even if timer is running', () => {
+      Object.defineProperty(window, 'innerWidth', { value: 768, configurable: true });
+      const observeSpy = vi.fn();
+      const origMO = window.MutationObserver;
+      class MockMO {
+        observe = observeSpy;
+        disconnect = vi.fn();
+        takeRecords = vi.fn();
+      }
+      window.MutationObserver = MockMO as unknown as typeof MutationObserver;
+
+      try {
+        act(() => {
+          restTimerStore.start(90);
+        });
+        render(<GlobalRestTimerPill />);
+        expect(observeSpy).not.toHaveBeenCalled();
+      } finally {
+        window.MutationObserver = origMO;
+      }
     });
   });
 });

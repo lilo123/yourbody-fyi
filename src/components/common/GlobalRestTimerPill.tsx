@@ -6,7 +6,7 @@ import { restTimerStore } from '../../utils/restTimerStore';
  * Returns the viewport top coordinate of any obstructing bottom element on mobile (<640px).
  * Reuses existing signals from ToastHost and zLayers:
  * 1. Staged meal action bar: [data-testid="staged-card-actions"] (ToastHost.tsx:47)
- * 2. Bottom sheet action row: [data-testid="sheet-action-row"] or delete-set action container (zLayers.ts:81)
+ * 2. Bottom sheet action row: [data-testid="sheet-action-row"] (zLayers.ts:81)
  * 3. Modal dialog container: [role="dialog"][aria-modal="true"] (zLayers.ts:22, isAnyModalOpen)
  */
 export function getObstacleTop(): number | null {
@@ -24,9 +24,7 @@ export function getObstacleTop(): number | null {
   }
 
   // 2. Bottom sheet action row (e.g. EditSetSheet action buttons)
-  const sheetAction =
-    document.querySelector<HTMLElement>('[data-testid="sheet-action-row"]') ||
-    document.querySelector<HTMLElement>('[data-testid="delete-set-btn"]')?.parentElement;
+  const sheetAction = document.querySelector<HTMLElement>('[data-testid="sheet-action-row"]');
   if (sheetAction) {
     const r = sheetAction.getBoundingClientRect();
     if (r.height > 0 && r.top < window.innerHeight && r.bottom > 0) {
@@ -47,43 +45,105 @@ export function getObstacleTop(): number | null {
   return null;
 }
 
-export function useObstacleAvoidance(): number | null {
-  const [obstacleTop, setObstacleTop] = useState<number | null>(() => getObstacleTop());
+export function useObstacleAvoidance(enabled: boolean = true): number | null {
+  const [obstacleTop, setObstacleTop] = useState<number | null>(() => {
+    if (!enabled) return null;
+    return getObstacleTop();
+  });
 
   useEffect(() => {
-    const update = () => {
+    if (!enabled) {
+      setObstacleTop(null);
+      return;
+    }
+
+    let observer: MutationObserver | null = null;
+    let scrollAttached = false;
+    let rafId: number | null = null;
+
+    const runUpdate = () => {
       const next = getObstacleTop();
       setObstacleTop((prev) => (prev === next ? prev : next));
     };
 
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, { capture: true, passive: true });
+    const scheduleUpdate = () => {
+      if (rafId !== null) return;
+      if (typeof requestAnimationFrame !== 'undefined') {
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          runUpdate();
+        });
+      } else {
+        runUpdate();
+      }
+    };
+
+    const attachMobileListeners = () => {
+      if (!scrollAttached) {
+        window.addEventListener('scroll', scheduleUpdate, { capture: true, passive: true });
+        scrollAttached = true;
+      }
+      if (!observer && typeof MutationObserver !== 'undefined') {
+        observer = new MutationObserver(scheduleUpdate);
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributeFilter: ['aria-modal', 'hidden', 'aria-hidden', 'data-state', 'role'],
+        });
+      }
+    };
+
+    const detachMobileListeners = () => {
+      if (scrollAttached) {
+        window.removeEventListener('scroll', scheduleUpdate, { capture: true });
+        scrollAttached = false;
+      }
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+    };
+
+    const checkBreakpointAndSync = () => {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+      if (isMobile) {
+        attachMobileListeners();
+      } else {
+        detachMobileListeners();
+      }
+      scheduleUpdate();
+    };
+
+    // Initial sync
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    if (isMobile) {
+      attachMobileListeners();
+      runUpdate();
+    } else {
+      setObstacleTop(null);
+    }
+
+    window.addEventListener('resize', checkBreakpointAndSync);
 
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
     if (vv) {
-      vv.addEventListener('resize', update);
-    }
-
-    let observer: MutationObserver | null = null;
-    if (typeof MutationObserver !== 'undefined') {
-      observer = new MutationObserver(update);
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-      });
+      vv.addEventListener('resize', scheduleUpdate);
     }
 
     return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, { capture: true });
-      if (vv) {
-        vv.removeEventListener('resize', update);
+      if (rafId !== null) {
+        if (typeof cancelAnimationFrame !== 'undefined') {
+          cancelAnimationFrame(rafId);
+        }
+        rafId = null;
       }
-      observer?.disconnect();
+      window.removeEventListener('resize', checkBreakpointAndSync);
+      if (vv) {
+        vv.removeEventListener('resize', scheduleUpdate);
+      }
+      detachMobileListeners();
     };
-  }, []);
+  }, [enabled]);
 
   return obstacleTop;
 }
@@ -95,7 +155,8 @@ export const GlobalRestTimerPill: React.FC = () => {
     restTimerStore.getServerSnapshot
   );
 
-  const obstacleTop = useObstacleAvoidance();
+  const isTimerActive = state.isRunning || state.isPaused;
+  const obstacleTop = useObstacleAvoidance(isTimerActive);
   const [isExpanded, setIsExpanded] = useState(false);
   const expandedRef = useRef<HTMLDivElement>(null);
   const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,7 +231,7 @@ export const GlobalRestTimerPill: React.FC = () => {
     };
   }, [isExpanded, obstacleTop]);
 
-  if (!state.isRunning && !state.isPaused) {
+  if (!isTimerActive) {
     return null;
   }
 
