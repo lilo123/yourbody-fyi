@@ -2541,9 +2541,11 @@ describe('HistoryView', () => {
       expect(pendingMarksOnCard.length).toBeGreaterThanOrEqual(1);
 
       // Expand the day card to inspect the meal row
-      fireEvent.click(expandBtn);
-
       await waitFor(() => {
+        const btn = screen.getByTestId('expand-day-btn-2026-09-02');
+        if (btn.getAttribute('aria-expanded') !== 'true') {
+          fireEvent.click(btn);
+        }
         expect(screen.getByText('Offline Steak Dinner')).toBeDefined();
       });
     });
