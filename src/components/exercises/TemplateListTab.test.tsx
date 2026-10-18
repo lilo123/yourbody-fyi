@@ -888,4 +888,44 @@ describe('TemplateListTab - Routine Features', () => {
       expect(resetBtn.getAttribute('title')).toBe('Available when online');
     });
   });
+
+  describe('Catalog Query Error Handling', () => {
+    it('renders error banner with retry button on catalog query rejection and triggers refetch on click', async () => {
+      let fail = true;
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          if (fail) {
+            return Promise.reject(new Error('Network error loading catalog'));
+          }
+          return Promise.resolve({ data: mockTemplates, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent();
+
+      // Error banner displays with error message
+      const errorBanner = await screen.findByTestId('template-action-error');
+      expect(errorBanner).toBeDefined();
+      expect(errorBanner.textContent).toContain('Network error loading catalog');
+
+      // The templates list area does not render empty state or template cards
+      expect(screen.queryByTestId('template-card-tpl-push')).toBeNull();
+      expect(screen.queryByText(/No routine templates found/)).toBeNull();
+
+      // Retry button is rendered
+      const retryBtn = screen.getByTestId('retry-templates-btn');
+      expect(retryBtn).toBeDefined();
+      expect(retryBtn.textContent).toContain('Retry');
+
+      // Clicking retry triggers refetch and succeeds
+      fail = false;
+      fireEvent.click(retryBtn);
+
+      // Now templates should render
+      const templateTitle = await screen.findByText('Chest & Triceps Push');
+      expect(templateTitle).toBeDefined();
+      expect(screen.queryByTestId('retry-templates-btn')).toBeNull();
+    });
+  });
 });
