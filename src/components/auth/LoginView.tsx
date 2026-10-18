@@ -28,6 +28,18 @@ export const LoginView: React.FC = () => {
   const [cooldown, setCooldown] = useState(0);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
+  React.useLayoutEffect(() => {
+    const prerenderEmail = document.querySelector<HTMLInputElement>('#prerender #login-email');
+    if (prerenderEmail?.value && !email) {
+      setEmail(prerenderEmail.value);
+    }
+    const prerenderPassword = document.querySelector<HTMLInputElement>('#prerender #login-password');
+    if (prerenderPassword?.value && !password) {
+      setPassword(prerenderPassword.value);
+    }
+    document.getElementById('prerender')?.remove();
+  }, []);
+
   useEffect(() => {
     let timer: any;
     if (cooldown > 0) {

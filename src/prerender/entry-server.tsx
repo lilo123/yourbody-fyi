@@ -5,6 +5,7 @@ import LandingView from '../components/landing/LandingView';
 import { TermsPage } from '../legal/TermsPage';
 import { PrivacyPage } from '../legal/PrivacyPage';
 import { RefundsPage } from '../legal/RefundsPage';
+import { LoginView } from '../components/auth/LoginView';
 import { Header } from '../components/common/Header';
 import { AuthContext, type AuthContextType } from '../context/AuthContextTypes';
 
@@ -43,6 +44,13 @@ export const PRERENDER_ROUTES: PrerenderRoute[] = [
     description:
       'We believe refund policies should be fair, transparent, and respectful. If you are ever unhappy with Yourbody or experience an accidental charge, we want to help.',
     outFile: 'refunds.html',
+  },
+  {
+    path: '/login',
+    title: 'Sign In | Yourbody.fyi',
+    description:
+      'Sign in to Yourbody to track your workouts and meals. Free forever, with coach mode built in.',
+    outFile: 'login.html',
   },
 ];
 
@@ -99,6 +107,19 @@ export function renderRoute(path: string): string {
             <Header />
             <main className="flex-1 max-w-xl w-full mx-auto p-4 pb-8">
               {content}
+            </main>
+          </div>
+        </AuthContext.Provider>
+      );
+      break;
+    }
+    case '/login': {
+      element = (
+        <AuthContext.Provider value={SIGNED_OUT_AUTH}>
+          <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
+            <Header />
+            <main className="flex-1 max-w-xl w-full mx-auto p-4 pb-8">
+              <LoginView />
             </main>
           </div>
         </AuthContext.Provider>
