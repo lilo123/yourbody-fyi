@@ -7,6 +7,7 @@ import {
   updateStagedItemNutrition,
   reanchorStagedItem,
   scaleStagedMeal,
+  resyncStagedMealWithCustomDish,
   buildStagedMealFromManualData,
   useStagedCardFocus,
   isIdenticalItem,
@@ -1375,6 +1376,208 @@ describe('calorieCorrection clearing on edit/reanchor/scale', () => {
 
     const scaled = scaleStagedMeal(meal, 1.5);
     expect(scaled.items[0].calorieCorrection).toBeUndefined();
+  });
+});
+
+describe('resyncStagedMealWithCustomDish', () => {
+  it('returns meal untouched when no staged items match the updated dish id', () => {
+    const item = buildStagedItem({
+      name: 'Oats',
+      quantity: 50,
+      unit: 'g',
+      calories: 190,
+      protein: 7,
+      carbs: 32,
+      fat: 3,
+      fiber: 5,
+      dishId: 'dish-111',
+    });
+    const meal = {
+      name: 'Breakfast',
+      mealType: 'Breakfast',
+      explanation: '190 kcal (Oats)',
+      items: [item],
+      calories: 190,
+      protein: 7,
+      carbs: 32,
+      fat: 3,
+      fiber: 5,
+      servingSize: 50,
+      servingUnit: 'g',
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(meal, {
+      id: 'dish-999',
+      user_id: 'user-1',
+      name: 'Unrelated Dish',
+      calories: 400,
+      protein: 20,
+      carbs: 50,
+      fat: 10,
+      fiber: 4,
+      kind: 'food',
+      use_count: 0,
+    });
+
+    expect(resynced).toBe(meal);
+  });
+
+  it('resyncs staged item macros and base values to updated custom dish values', () => {
+    const item = buildStagedItem({
+      name: 'Protein Shake',
+      quantity: 1,
+      unit: 'unit',
+      calories: 200,
+      protein: 25,
+      carbs: 10,
+      fat: 2,
+      fiber: 1,
+      dishId: 'dish-shake',
+    });
+    const meal = {
+      name: 'Protein Shake',
+      mealType: 'Snack',
+      explanation: '200 kcal (Protein Shake)',
+      items: [item],
+      calories: 200,
+      protein: 25,
+      carbs: 10,
+      fat: 2,
+      fiber: 1,
+      servingSize: 1,
+      servingUnit: 'unit',
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(meal, {
+      id: 'dish-shake',
+      user_id: 'user-1',
+      name: 'Mega Shake',
+      calories: 320,
+      protein: 40,
+      carbs: 15,
+      fat: 4,
+      fiber: 2,
+      kind: 'food',
+      use_count: 1,
+      serving_quantity: 1,
+      serving_unit: 'unit',
+    });
+
+    expect(resynced.name).toBe('Mega Shake');
+    expect(resynced.calories).toBe(320);
+    expect(resynced.protein).toBe(40);
+    expect(resynced.items[0].name).toBe('Mega Shake');
+    expect(resynced.items[0].calories).toBe(320);
+    expect(resynced.items[0].protein).toBe(40);
+    expect(resynced.items[0].baseCalories).toBe(320);
+    expect(resynced.items[0].baseProtein).toBe(40);
+  });
+
+  it('does NOT overwrite hand-edited items (userOverridden = true)', () => {
+    const originalItem = buildStagedItem({
+      name: 'Salad',
+      quantity: 1,
+      unit: 'unit',
+      calories: 150,
+      protein: 3,
+      carbs: 12,
+      fat: 5,
+      fiber: 4,
+      dishId: 'dish-salad',
+    });
+    const overriddenItem = updateStagedItemNutrition(originalItem, {
+      calories: 220,
+      protein: 10,
+      carbs: 15,
+      fat: 8,
+      fiber: 4,
+    });
+    expect(overriddenItem.userOverridden).toBe(true);
+
+    const meal = {
+      name: 'Salad',
+      mealType: 'Lunch',
+      explanation: '220 kcal (Salad)',
+      items: [overriddenItem],
+      calories: 220,
+      protein: 10,
+      carbs: 15,
+      fat: 8,
+      fiber: 4,
+      servingSize: 1,
+      servingUnit: 'unit',
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(meal, {
+      id: 'dish-salad',
+      user_id: 'user-1',
+      name: 'Updated Salad',
+      calories: 300,
+      protein: 20,
+      carbs: 20,
+      fat: 10,
+      fiber: 5,
+      kind: 'food',
+      use_count: 1,
+    });
+
+    expect(resynced.items[0].calories).toBe(220);
+    expect(resynced.items[0].protein).toBe(10);
+    expect(resynced.items[0].userOverridden).toBe(true);
+  });
+
+  it('preserves scaled quantity and recalculates macros from updated dish values', () => {
+    const item = buildStagedItem({
+      name: 'Rice',
+      quantity: 200,
+      unit: 'g',
+      calories: 260,
+      protein: 5,
+      carbs: 56,
+      fat: 1,
+      fiber: 1,
+      dishId: 'dish-rice',
+    });
+    // Base quantity was 100g, but user staged 200g
+    item.baseQuantity = 100;
+    item.baseCalories = 130;
+    item.baseProtein = 2.5;
+
+    const meal = {
+      name: 'Rice',
+      mealType: 'Dinner',
+      explanation: '260 kcal (Rice)',
+      items: [item],
+      calories: 260,
+      protein: 5,
+      carbs: 56,
+      fat: 1,
+      fiber: 1,
+      servingSize: 200,
+      servingUnit: 'g',
+    };
+
+    // Dish is updated: 100g now has 150 kcal, 3g protein
+    const resynced = resyncStagedMealWithCustomDish(meal, {
+      id: 'dish-rice',
+      user_id: 'user-1',
+      name: 'Brown Rice',
+      calories: 150,
+      protein: 3,
+      carbs: 60,
+      fat: 1,
+      fiber: 2,
+      kind: 'food',
+      use_count: 1,
+      serving_quantity: 100,
+      serving_unit: 'g',
+    });
+
+    expect(resynced.items[0].quantity).toBe(200);
+    expect(resynced.items[0].calories).toBe(300); // 200/100 * 150
+    expect(resynced.items[0].protein).toBe(6); // 200/100 * 3
+    expect(resynced.items[0].baseQuantity).toBe(100);
+    expect(resynced.items[0].baseCalories).toBe(150);
   });
 });
 

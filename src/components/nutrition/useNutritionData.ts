@@ -75,6 +75,7 @@ export interface UseNutritionDataOptions {
   profile: UserProfile | null;
   timeZone?: string;
   onMutationSuccessReset: () => void;
+  onCustomDishSaved?: (dish: CustomDishDetail) => void;
   setStatus: (s: string) => void;
   setIsError: (e: boolean) => void;
 }
@@ -127,10 +128,13 @@ export function useNutritionData({
   profile,
   timeZone,
   onMutationSuccessReset,
+  onCustomDishSaved,
   setStatus,
   setIsError,
 }: UseNutritionDataOptions) {
   const queryClient = useQueryClient();
+  const onCustomDishSavedRef = useRef(onCustomDishSaved);
+  onCustomDishSavedRef.current = onCustomDishSaved;
   const { show: showToast, dismiss: dismissGlobalToast, activeToast: contextActiveToast } = useToast();
   const contextActiveToastRef = useRef(contextActiveToast);
   contextActiveToastRef.current = contextActiveToast;
@@ -479,13 +483,16 @@ export function useNutritionData({
       if (savedRow?.id && targetUserId) {
         const fullKey = queryKeys.customDishes.fullByUser(targetUserId);
         const currentFull = queryClient.getQueryData<CustomDishDetail[]>(fullKey);
+        let updatedFullRow: CustomDishDetail = savedRow as any as CustomDishDetail;
         if (currentFull) {
           const idx = currentFull.findIndex((d) => d.id === savedRow.id);
           const nextFull = [...currentFull];
           if (idx >= 0) {
             nextFull[idx] = { ...nextFull[idx], ...(savedRow as any) };
+            updatedFullRow = nextFull[idx];
           } else {
             nextFull.unshift(savedRow as any as CustomDishDetail);
+            updatedFullRow = nextFull[0];
           }
           queryClient.setQueryData(fullKey, nextFull);
         } else {
@@ -516,6 +523,7 @@ export function useNutritionData({
           }
           queryClient.setQueryData(listKey, nextList);
         }
+        onCustomDishSavedRef.current?.(updatedFullRow);
       }
       showToast({ message: 'Custom dish saved', kind: 'success' });
       setStatus('');

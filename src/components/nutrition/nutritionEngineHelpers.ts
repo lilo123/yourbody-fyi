@@ -44,7 +44,8 @@ export const useNavHeight = (): number => {
 
 import { convertPortion, type CanonicalUnit } from '../../utils/unitConverter';
 import { roundTo1Decimal, formatCalories } from '../../utils/nutrition';
-import { sumItems, scaleItem, scaleItemToQuantity, type NutritionItem } from '../../utils/itemModel';
+import { sumItems, scaleItem, scaleItemToQuantity, normalizeItems, type NutritionItem } from '../../utils/itemModel';
+import type { CustomDish, CustomDishDetail } from '../../types/database';
 import type { ManualMealStagedData } from './useManualMealForm';
 
 export interface StagedItem {
@@ -79,6 +80,10 @@ export interface StagedItem {
     computed: number;
     stated: number;
   };
+  /** Optional linkage to source custom dish when staged from one. */
+  dishId?: string;
+  /** Optional linkage to specific component id within the source custom dish. */
+  dishItemId?: string;
 }
 
 /** The staged component as the shared level-2 model sees it. */
@@ -269,6 +274,8 @@ export function buildStagedItem(raw: {
   unit?: unknown;
   portionMultiplier?: unknown;
   calorieCorrection?: { computed: number; stated: number };
+  dishId?: string;
+  dishItemId?: string;
 }): StagedItem {
   const portion = raw.portion || '1 serving';
   const derived = convertPortion(portion);
@@ -317,6 +324,8 @@ export function buildStagedItem(raw: {
     baseFiber: base.fiber,
     ...current,
     calorieCorrection: raw.calorieCorrection,
+    dishId: raw.dishId,
+    dishItemId: raw.dishItemId,
   };
 }
 
@@ -432,6 +441,148 @@ export function withSyncedServing(meal: StagedMeal, items: StagedItem[]): Staged
         ? { servingSize: 1, servingUnit: 'serving' }
         : {}),
   };
+}
+
+/**
+ * Re-synchronizes staged items that originated from a custom dish when that
+ * custom dish is edited. Hand-edited items (where the user explicitly edited macros)
+ * are preserved as-is. Quantity/scale adjustments made in the staged card are
+ * preserved and recalculated using the updated per-serving values.
+ */
+export function resyncStagedMealWithCustomDish(
+  meal: StagedMeal,
+  updatedDish: CustomDishDetail | CustomDish
+): StagedMeal {
+  if (!meal || !Array.isArray(meal.items) || meal.items.length === 0) {
+    return meal;
+  }
+
+  const hasMatchingItem = meal.items.some((item) => item.dishId === updatedDish.id);
+  if (!hasMatchingItem) {
+    return meal;
+  }
+
+  const dishItems = normalizeItems(updatedDish.items);
+
+  const updatedItems = meal.items.map((item) => {
+    if (item.dishId !== updatedDish.id) {
+      return item;
+    }
+
+    // Hand-edited macro field means: keep that item as is
+    if (item.userOverridden) {
+      return item;
+    }
+
+    // Determine the new base values from the updated dish
+    let newBaseQuantity = 1;
+    let newUnit: CanonicalUnit = 'unit';
+    let newBaseCalories = 0;
+    let newBaseProtein = 0;
+    let newBaseCarbs = 0;
+    let newBaseFat = 0;
+    let newBaseFiber = 0;
+    let newName = item.name;
+
+    if (dishItems && dishItems.length > 0) {
+      const match =
+        (item.dishItemId ? dishItems.find((candidate) => candidate.id === item.dishItemId) : null) ??
+        dishItems.find((candidate) => candidate.name.trim().toLowerCase() === item.name.trim().toLowerCase()) ??
+        dishItems[0];
+      newBaseQuantity = match.quantity > 0 ? match.quantity : 1;
+      newUnit = match.unit;
+      newBaseCalories = match.calories;
+      newBaseProtein = match.protein;
+      newBaseCarbs = match.carbs;
+      newBaseFat = match.fat;
+      newBaseFiber = match.fiber;
+      newName = match.name || updatedDish.name;
+    } else {
+      const servingSize =
+        typeof updatedDish.serving_quantity === 'number' && updatedDish.serving_quantity > 0
+          ? updatedDish.serving_quantity
+          : 1;
+      const servingUnit: CanonicalUnit =
+        updatedDish.serving_unit === 'g' ||
+        updatedDish.serving_unit === 'ml' ||
+        updatedDish.serving_unit === 'unit'
+          ? updatedDish.serving_unit
+          : 'unit';
+      newBaseQuantity = servingSize;
+      newUnit = servingUnit;
+      newBaseCalories = updatedDish.calories ?? 0;
+      newBaseProtein = updatedDish.protein ?? 0;
+      newBaseCarbs = updatedDish.carbs ?? 0;
+      newBaseFat = updatedDish.fat ?? 0;
+      newBaseFiber = updatedDish.fiber ?? 0;
+      newName = updatedDish.name;
+    }
+
+    // Amount / serving scale is fine to keep: recompute from the new per-serving values at the same amount
+    const isAmountUnchanged =
+      item.baseQuantity > 0 && Math.abs(item.quantity - item.baseQuantity) < 0.001;
+
+    let targetQuantity: number;
+    let targetUnit: CanonicalUnit;
+
+    if (isAmountUnchanged) {
+      targetQuantity = newBaseQuantity;
+      targetUnit = newUnit;
+    } else {
+      targetQuantity = item.quantity;
+      targetUnit = item.unit;
+    }
+
+    const ratio = newBaseQuantity > 0 ? targetQuantity / newBaseQuantity : 1;
+
+    const scaledCalories = roundTo1Decimal(newBaseCalories * ratio);
+    const scaledProtein = roundTo1Decimal(newBaseProtein * ratio);
+    const scaledCarbs = roundTo1Decimal(newBaseCarbs * ratio);
+    const scaledFat = roundTo1Decimal(newBaseFat * ratio);
+    const scaledFiber = roundTo1Decimal(newBaseFiber * ratio);
+
+    const portion =
+      targetUnit === 'unit' && targetQuantity === 1
+        ? '1 serving'
+        : `${roundTo1Decimal(targetQuantity)} ${targetUnit}`;
+
+    return {
+      ...item,
+      name: newName,
+      quantity: roundTo1Decimal(targetQuantity),
+      unit: targetUnit,
+      calories: scaledCalories,
+      protein: scaledProtein,
+      carbs: scaledCarbs,
+      fat: scaledFat,
+      fiber: scaledFiber,
+      baseQuantity: roundTo1Decimal(newBaseQuantity),
+      baseCalories: roundTo1Decimal(newBaseCalories),
+      baseProtein: roundTo1Decimal(newBaseProtein),
+      baseCarbs: roundTo1Decimal(newBaseCarbs),
+      baseFat: roundTo1Decimal(newBaseFat),
+      baseFiber: roundTo1Decimal(newBaseFiber),
+      portion,
+      portionMultiplier: ratio,
+      calorieCorrection: undefined,
+    };
+  });
+
+  const single = updatedItems.length === 1 ? updatedItems[0] : null;
+  const mealName =
+    single && single.dishId === updatedDish.id
+      ? updatedDish.name || meal.name
+      : meal.name;
+  const mealNotes =
+    single && single.dishId === updatedDish.id && updatedDish.notes !== undefined
+      ? updatedDish.notes
+      : meal.notes;
+
+  const resynced = withSyncedServing({ ...meal, name: mealName, notes: mealNotes }, updatedItems);
+  if (single) {
+    resynced.explanation = `${formatCalories(resynced.calories)} kcal (${mealName})`;
+  }
+  return resynced;
 }
 
 /** Allowed range for the whole-meal scale factor. */
