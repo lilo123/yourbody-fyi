@@ -90,6 +90,24 @@ describe('Prerender Output and Configuration', () => {
       expect(html).toContain('min-h-[100dvh]');
     });
 
+    it('renders static "/login" with disabled inputs, disabled submit, method="post", and no password value', () => {
+      const html = renderRoute('/login');
+      // Belt-and-braces POST guard with no action prevents pre-hydration GET submission
+      expect(html).toContain('method="post"');
+      expect(html).not.toMatch(/<form[^>]*action=/i);
+
+      // Email and password inputs must be disabled prior to client hydration
+      expect(html).toMatch(/<input[^>]*id="login-email"[^>]*disabled/);
+      expect(html).toMatch(/<input[^>]*id="login-password"[^>]*disabled/);
+
+      // Submit button must be disabled
+      expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
+
+      // Password input must have no password value populated
+      expect(html).toMatch(/<input[^>]*id="login-password"[^>]*value=""/);
+      expect(html).not.toMatch(/<input[^>]*id="login-password"[^>]*value="[^"]+"/);
+    });
+
     it('defines PRERENDER_ROUTES covering all five public paths', () => {
       const paths = PRERENDER_ROUTES.map((r) => r.path);
       expect(paths).toEqual(['/', '/terms', '/privacy', '/refunds', '/login']);
@@ -246,6 +264,12 @@ describe('Prerender Output and Configuration', () => {
       expect(distLogin).toContain('data-prerender-route="/login"');
       expect(distLogin).toMatch(/<meta\s+name=["']prerender-route["']\s+content=["']\/login["']/);
       expect(distLogin).toContain('Sign In');
+      expect(distLogin).toContain('method="post"');
+      expect(distLogin).not.toMatch(/<form[^>]*action=/i);
+      expect(distLogin).toMatch(/<input[^>]*id="login-email"[^>]*disabled/);
+      expect(distLogin).toMatch(/<input[^>]*id="login-password"[^>]*disabled/);
+      expect(distLogin).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
+      expect(distLogin).not.toMatch(/<input[^>]*id="login-password"[^>]*value="[^"]+"/);
 
       expect(fs.existsSync(path.join(distDir, 'prerender-guard.js'))).toBe(true);
     });

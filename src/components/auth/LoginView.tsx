@@ -12,7 +12,11 @@ const InAppBrowserBanner = React.lazy(() =>
 
 type AuthMode = 'signin' | 'register' | 'check_email' | 'forgot_password';
 
-export const LoginView: React.FC = () => {
+export interface LoginViewProps {
+  prerenderDisabled?: boolean;
+}
+
+export const LoginView: React.FC<LoginViewProps> = ({ prerenderDisabled = false }) => {
   const { signIn, signUp, requestPasswordReset, resendConfirmation } = useAuth();
   const navigate = useNavigate();
 
@@ -29,14 +33,6 @@ export const LoginView: React.FC = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   React.useLayoutEffect(() => {
-    const prerenderEmail = document.querySelector<HTMLInputElement>('#prerender #login-email');
-    if (prerenderEmail?.value && !email) {
-      setEmail(prerenderEmail.value);
-    }
-    const prerenderPassword = document.querySelector<HTMLInputElement>('#prerender #login-password');
-    if (prerenderPassword?.value && !password) {
-      setPassword(prerenderPassword.value);
-    }
     document.getElementById('prerender')?.remove();
   }, []);
 
@@ -226,7 +222,11 @@ export const LoginView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form
+            method={prerenderDisabled ? 'post' : undefined}
+            onSubmit={handleSubmit}
+            className="space-y-4"
+          >
             <div>
               <label
                 htmlFor="login-email"
@@ -241,6 +241,7 @@ export const LoginView: React.FC = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 autoComplete="email"
+                disabled={prerenderDisabled}
                 className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-3 text-base sm:text-sm font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none transition"
                 required
               />
@@ -262,6 +263,7 @@ export const LoginView: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     autoComplete={mode === 'register' ? "new-password" : "current-password"}
+                    disabled={prerenderDisabled}
                     className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-3 pr-12 text-base sm:text-sm font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none transition"
                     required
                   />
@@ -293,6 +295,7 @@ export const LoginView: React.FC = () => {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     autoComplete="new-password"
+                    disabled={prerenderDisabled}
                     className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-3 pr-12 text-base sm:text-sm font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none transition"
                     required
                   />
@@ -362,7 +365,7 @@ export const LoginView: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading || (mode === 'register' && isTermsConsentEnabled() && !termsAccepted)}
+              disabled={prerenderDisabled || loading || (mode === 'register' && isTermsConsentEnabled() && !termsAccepted)}
               className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3 min-h-[44px] rounded-xl uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95 transition disabled:opacity-50"
             >
               {loading ? (mode === 'register' ? 'Creating Account...' : mode === 'signin' ? 'Signing in...' : 'Processing...') : (

@@ -119,7 +119,7 @@ export function renderRoute(path: string): string {
           <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
             <Header />
             <main className="flex-1 max-w-xl w-full mx-auto p-4 pb-8">
-              <LoginView />
+              <LoginView prerenderDisabled />
             </main>
           </div>
         </AuthContext.Provider>
