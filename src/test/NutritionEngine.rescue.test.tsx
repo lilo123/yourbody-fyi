@@ -456,4 +456,38 @@ describe('NutritionEngine Legacy AI Queue Leftover Rescue', () => {
     expect(remaining).toHaveLength(1);
     expect(remaining[0].id).toBe('other-user-legacy');
   });
+
+  it('handles rejected readLegacyAiQueueLeftovers promise without unhandled rejection', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const unhandledRejections: any[] = [];
+    const onUnhandled = (event: PromiseRejectionEvent) => {
+      unhandledRejections.push(event.reason);
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+
+    const spy = vi.spyOn(aiRescueModule, 'readLegacyAiQueueLeftovers').mockRejectedValue(
+      new Error('IndexedDB storage corrupted')
+    );
+
+    try {
+      renderComponent();
+
+      const input = await screen.findByPlaceholderText(
+        'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect((input as HTMLTextAreaElement).value).toBe('');
+      expect(unhandledRejections).toHaveLength(0);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[aiRescue] Failed to rescue legacy queue leftovers:'),
+        expect.any(Error)
+      );
+    } finally {
+      spy.mockRestore();
+      warnSpy.mockRestore();
+      window.removeEventListener('unhandledrejection', onUnhandled);
+    }
+  });
 });

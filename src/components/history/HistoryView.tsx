@@ -270,8 +270,10 @@ export const HistoryView: React.FC = () => {
   }, [nutritionDays, timeRange, effectiveTimeZone]);
 
   return (
-    <div className="space-y-5">
-      {/* Mutation Error Notification (Dismiss aria label) */}
+    <div>
+      <h1 className="sr-only">History</h1>
+      <div className="space-y-5">
+        {/* Mutation Error Notification (Dismiss aria label) */}
       <StatusBanner
         message={mutationError}
         tone="error"
@@ -480,6 +482,7 @@ export const HistoryView: React.FC = () => {
         onDeleteRequested={handleDeleteSetRequested}
         targetUserId={targetUserId}
       />
+      </div>
     </div>
   );
 };
