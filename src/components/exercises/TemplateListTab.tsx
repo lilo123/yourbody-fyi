@@ -53,6 +53,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
     data: catalogTemplates = [],
     isError: isCatalogError,
     error: catalogError,
+    refetch: refetchCatalog,
   } = useQuery({
     queryKey: ['routine_templates', targetUserId || 'self', 'catalog'],
     queryFn: async () => {
@@ -175,6 +176,21 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
         testId="template-action-error"
         className="mb-3"
         icon={<AlertCircle className="w-4 h-4 shrink-0 text-rose-400" aria-hidden="true" />}
+        action={
+          isCatalogError ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<RotateCcw className="w-4 h-4" aria-hidden="true" />}
+              onClick={() => {
+                void refetchCatalog();
+              }}
+              testId="retry-templates-btn"
+            >
+              Retry
+            </Button>
+          ) : null
+        }
       />
 
       {/* List-first Header with + New Routine Action */}

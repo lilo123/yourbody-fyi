@@ -277,7 +277,6 @@ export const HistoryCalendarSheet: React.FC<HistoryCalendarSheetProps> = ({
                             }
                           }}
                           type="button"
-                          disabled={!hasWorkout}
                           aria-disabled={!hasWorkout}
                           aria-label={ariaLabel}
                           tabIndex={isFocused ? 0 : -1}

@@ -280,6 +280,23 @@ describe('CoachCockpit', () => {
     });
   });
 
+  it('renders disconnect confirmation dialog outside hidden tab panels when on non-templates tab', async () => {
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disconnect-athlete-btn')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('disconnect-athlete-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disconnect-athlete-confirm-dialog')).toBeDefined();
+    });
+
+    const dialog = screen.getByTestId('disconnect-athlete-confirm-dialog');
+    expect(dialog.closest('.hidden')).toBeNull();
+  });
+
   it('does not disconnect athlete if confirmation is cancelled', async () => {
     renderComponent();
 

@@ -142,6 +142,32 @@ describe('ManualMealForm', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('blocks submission and does not call onSubmit when isPending is true', () => {
+    const onSubmit = vi.fn();
+    const { container } = renderForm({ isPending: true, onSubmit });
+
+    const form = container.querySelector('form')!;
+    fireEvent.submit(form);
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('prevents double submission when Enter is pressed while mutation is pending', () => {
+    const onSubmit = vi.fn();
+    const { rerender, container, props } = renderForm({ onSubmit, isPending: false });
+
+    const form = container.querySelector('form')!;
+    fireEvent.submit(form);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    // Mutation is now pending
+    rerender(<ManualMealForm {...props} isPending={true} />);
+    fireEvent.submit(form);
+
+    // Still only called once
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
   it('blocks submission with alert text when a macro value is negative', () => {
     const onSubmit = vi.fn();
     renderForm({ manualProtein: -2, onSubmit });
