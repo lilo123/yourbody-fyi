@@ -5,6 +5,7 @@ import { roundTo1Decimal, formatCalories, formatMacro } from '../../utils/nutrit
 import { getDishIcon } from '../../utils/dishIcons';
 import { Star, X, Trash2, Edit2 } from 'lucide-react';
 import { CustomDishEditor } from './CustomDishEditor';
+import { DecimalInput } from './DecimalInput';
 import { NotesField } from './NotesField';
 import { UnitChip } from './UnitChip';
 import { mapLegacyUnit } from './legacyUnitMapping';
@@ -248,15 +249,13 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                   >
                     Qty
                   </label>
-                  <input
+                  <DecimalInput
                     id={qtyId}
-                    type="number"
                     step="any"
                     min="0"
-                    inputMode="decimal"
                     value={dishModalQuantity}
-                    onChange={(e) => {
-                      const next = e.target.value === '' ? '' : Number(e.target.value);
+                    onChange={(val) => {
+                      const next = val;
                       if (onQuantityChange) {
                         onQuantityChange(next, isScaleEnabled);
                       } else {
@@ -316,14 +315,16 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                 >
                   Calories
                 </label>
-                <input
+                <DecimalInput
                   id={calId}
-                  type="number"
                   step="any"
-                  inputMode="decimal"
                   value={dishModalCalories === '' ? '' : roundTo1Decimal(dishModalCalories)}
-                  onChange={(e) =>
-                    setDishModalCalories(e.target.value === '' ? '' : roundTo1Decimal(Number(e.target.value)))
+                  onChange={(val) =>
+                    setDishModalCalories(
+                      val === '' || (typeof val === 'number' && Number.isNaN(val))
+                        ? val
+                        : roundTo1Decimal(val)
+                    )
                   }
                   placeholder="0"
                   className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
@@ -337,14 +338,16 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                 >
                   Protein (g)
                 </label>
-                <input
+                <DecimalInput
                   id={proteinId}
-                  type="number"
                   step="any"
-                  inputMode="decimal"
                   value={dishModalProtein === '' ? '' : roundTo1Decimal(dishModalProtein)}
-                  onChange={(e) =>
-                    setDishModalProtein(e.target.value === '' ? '' : roundTo1Decimal(Number(e.target.value)))
+                  onChange={(val) =>
+                    setDishModalProtein(
+                      val === '' || (typeof val === 'number' && Number.isNaN(val))
+                        ? val
+                        : roundTo1Decimal(val)
+                    )
                   }
                   placeholder="0"
                   className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
@@ -358,14 +361,16 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                 >
                   Carbs (g)
                 </label>
-                <input
+                <DecimalInput
                   id={carbsId}
-                  type="number"
                   step="any"
-                  inputMode="decimal"
                   value={dishModalCarbs === '' ? '' : roundTo1Decimal(dishModalCarbs)}
-                  onChange={(e) =>
-                    setDishModalCarbs(e.target.value === '' ? '' : roundTo1Decimal(Number(e.target.value)))
+                  onChange={(val) =>
+                    setDishModalCarbs(
+                      val === '' || (typeof val === 'number' && Number.isNaN(val))
+                        ? val
+                        : roundTo1Decimal(val)
+                    )
                   }
                   placeholder="0"
                   className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
@@ -379,14 +384,16 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                 >
                   Fat (g)
                 </label>
-                <input
+                <DecimalInput
                   id={fatId}
-                  type="number"
                   step="any"
-                  inputMode="decimal"
                   value={dishModalFat === '' ? '' : roundTo1Decimal(dishModalFat)}
-                  onChange={(e) =>
-                    setDishModalFat(e.target.value === '' ? '' : roundTo1Decimal(Number(e.target.value)))
+                  onChange={(val) =>
+                    setDishModalFat(
+                      val === '' || (typeof val === 'number' && Number.isNaN(val))
+                        ? val
+                        : roundTo1Decimal(val)
+                    )
                   }
                   placeholder="0"
                   className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
@@ -400,14 +407,16 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
                 >
                   Fiber (g)
                 </label>
-                <input
+                <DecimalInput
                   id={fiberId}
-                  type="number"
                   step="any"
-                  inputMode="decimal"
                   value={dishModalFiber === '' ? '' : roundTo1Decimal(dishModalFiber)}
-                  onChange={(e) =>
-                    setDishModalFiber(e.target.value === '' ? '' : roundTo1Decimal(Number(e.target.value)))
+                  onChange={(val) =>
+                    setDishModalFiber(
+                      val === '' || (typeof val === 'number' && Number.isNaN(val))
+                        ? val
+                        : roundTo1Decimal(val)
+                    )
                   }
                   placeholder="0"
                   className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"

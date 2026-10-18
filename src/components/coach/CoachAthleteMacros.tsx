@@ -1,6 +1,7 @@
 import React, { useId } from 'react';
 import { Target, CheckCircle2, AlertCircle } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
+import { DecimalInput } from '../nutrition/DecimalInput';
 
 interface CoachAthleteMacrosProps {
   selectedAthlete: { name?: string } | null;
@@ -93,13 +94,11 @@ export const CoachAthleteMacros: React.FC<CoachAthleteMacrosProps> = ({
               <label htmlFor={proId} className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Protein</label>
               <span className="text-xs tabular-nums text-zinc-400 font-bold">grams</span>
             </div>
-            <input
+            <DecimalInput
               id={proId}
-              type="number"
-              inputMode="decimal"
               min="0"
-              value={athletePro}
-              onChange={(e) => setAthletePro(e.target.value)}
+              value={athletePro === '' ? '' : Number(athletePro)}
+              onChange={(val) => setAthletePro(val === '' ? '' : String(val))}
               data-testid="athlete-macro-pro"
               className="w-full min-h-[44px] bg-zinc-900 border border-border-interactive text-white rounded-xl p-2.5 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
               required
@@ -112,13 +111,11 @@ export const CoachAthleteMacros: React.FC<CoachAthleteMacrosProps> = ({
               <label htmlFor={carbId} className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Carbs</label>
               <span className="text-xs tabular-nums text-zinc-400 font-bold">grams</span>
             </div>
-            <input
+            <DecimalInput
               id={carbId}
-              type="number"
-              inputMode="decimal"
               min="0"
-              value={athleteCarb}
-              onChange={(e) => setAthleteCarb(e.target.value)}
+              value={athleteCarb === '' ? '' : Number(athleteCarb)}
+              onChange={(val) => setAthleteCarb(val === '' ? '' : String(val))}
               data-testid="athlete-macro-carb"
               className="w-full min-h-[44px] bg-zinc-900 border border-border-interactive text-white rounded-xl p-2.5 text-base tabular-nums font-bold focus:border-emerald-500 outline-none text-center"
               required
@@ -131,13 +128,11 @@ export const CoachAthleteMacros: React.FC<CoachAthleteMacrosProps> = ({
               <label htmlFor={fatId} className="text-xs font-bold text-violet-400 uppercase tracking-wider">Fat</label>
               <span className="text-xs tabular-nums text-zinc-400 font-bold">grams</span>
             </div>
-            <input
+            <DecimalInput
               id={fatId}
-              type="number"
-              inputMode="decimal"
               min="0"
-              value={athleteFat}
-              onChange={(e) => setAthleteFat(e.target.value)}
+              value={athleteFat === '' ? '' : Number(athleteFat)}
+              onChange={(val) => setAthleteFat(val === '' ? '' : String(val))}
               data-testid="athlete-macro-fat"
               className="w-full min-h-[44px] bg-zinc-900 border border-border-interactive text-white rounded-xl p-2.5 text-base tabular-nums font-bold focus:border-violet-500 focus:ring-2 focus:ring-violet-500/50 outline-none text-center"
               required
@@ -150,13 +145,11 @@ export const CoachAthleteMacros: React.FC<CoachAthleteMacrosProps> = ({
               <label htmlFor={fiberId} className="text-xs font-bold text-teal-400 uppercase tracking-wider">Fiber</label>
               <span className="text-xs tabular-nums text-zinc-400 font-bold">grams</span>
             </div>
-            <input
+            <DecimalInput
               id={fiberId}
-              type="number"
-              inputMode="decimal"
               min="0"
-              value={athleteFiber}
-              onChange={(e) => setAthleteFiber(e.target.value)}
+              value={athleteFiber === '' ? '' : Number(athleteFiber)}
+              onChange={(val) => setAthleteFiber(val === '' ? '' : String(val))}
               data-testid="athlete-macro-fiber"
               className="w-full min-h-[44px] bg-zinc-900 border border-border-interactive text-white rounded-xl p-2.5 text-base tabular-nums font-bold focus:border-teal-500 outline-none text-center"
               required
