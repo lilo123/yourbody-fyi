@@ -16,7 +16,7 @@ test.describe('Coach-Athlete Code Linking & Lifecycle E2E', () => {
 
     // 2. Navigate to Settings
     await page.goto('/settings');
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', level: 2 })).toBeVisible();
 
     // 3. Handle initial connection state: wait for either linked state or unlinked input
     await page.waitForSelector('[data-testid="coach-link-loading"]', { state: 'detached' }).catch(() => {});
