@@ -72,6 +72,7 @@ export const NutritionDashboardRings: React.FC<NutritionDashboardRingsProps> = m
         </div>
         <input
           type="date"
+          aria-label="Nutrition date"
           data-testid="nutrition-date-input"
           value={dateDraft}
           onChange={(e) => {
