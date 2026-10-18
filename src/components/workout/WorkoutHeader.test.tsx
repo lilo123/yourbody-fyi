@@ -127,4 +127,12 @@ describe('WorkoutHeader', () => {
     expect(toggleSpy).toHaveBeenCalledWith(120);
     toggleSpy.mockRestore();
   });
+
+  it('ignores empty date value when native date input is cleared', () => {
+    const onDateChange = vi.fn();
+    render(<WorkoutHeader {...defaultProps} onDateChange={onDateChange} />);
+    const dateInput = screen.getByTestId('workout-date-input');
+    fireEvent.change(dateInput, { target: { value: '' } });
+    expect(onDateChange).not.toHaveBeenCalled();
+  });
 });

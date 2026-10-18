@@ -215,4 +215,12 @@ describe('NutritionDashboardRings', () => {
       });
     });
   });
+
+  it('ignores empty date value when native date input is cleared', () => {
+    const onDateChange = vi.fn();
+    renderDashboard({ onDateChange });
+    const dateInput = screen.getByTestId('nutrition-date-input');
+    fireEvent.change(dateInput, { target: { value: '' } });
+    expect(onDateChange).not.toHaveBeenCalled();
+  });
 });

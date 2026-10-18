@@ -87,8 +87,10 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
                 aria-label="Workout date"
                 value={workoutDate}
                 onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) return;
                   workoutSessionStore.flushPendingWrites();
-                  onDateChange(e.target.value);
+                  onDateChange(val);
                 }}
                 className="date-pill bg-zinc-950 border border-border-interactive text-cyan-400 rounded-xl px-2 h-11 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none shadow-inner cursor-pointer touch-manipulation max-w-[145px] sm:max-w-none"
                 data-testid="workout-date-input"
