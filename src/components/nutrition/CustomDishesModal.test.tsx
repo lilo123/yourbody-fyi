@@ -644,6 +644,143 @@ describe('CustomDishesModal', () => {
 
     expect(screen.getByText('Protein Bowl')).toBeDefined();
   });
+
+  it('accepts decimal comma ("72,5") and decimal period ("72.5") on converted direct inputs (qty, calories, protein, carbs, fat, fiber)', () => {
+    const setDishModalQuantity = vi.fn();
+    const setDishModalCalories = vi.fn();
+    const setDishModalProtein = vi.fn();
+    const setDishModalCarbs = vi.fn();
+    const setDishModalFat = vi.fn();
+    const setDishModalFiber = vi.fn();
+    const onSaveDish = vi.fn((e: React.FormEvent) => e.preventDefault());
+
+    const { rerender } = render(
+      <CustomDishesModal
+        isOpen={true}
+        onClose={vi.fn()}
+        editingDish={null}
+        dishModalKind="food"
+        dishModalName="Protein Oatmeal"
+        setDishModalName={vi.fn()}
+        dishModalQuantity={100}
+        setDishModalQuantity={setDishModalQuantity}
+        dishModalCalories={400}
+        setDishModalCalories={setDishModalCalories}
+        dishModalProtein={30}
+        setDishModalProtein={setDishModalProtein}
+        dishModalCarbs={50}
+        setDishModalCarbs={setDishModalCarbs}
+        dishModalFat={8}
+        setDishModalFat={setDishModalFat}
+        dishModalFiber={6}
+        setDishModalFiber={setDishModalFiber}
+        dishModalItems={[]}
+        setDishModalItems={vi.fn()}
+        onSaveDish={onSaveDish}
+        onDeleteDish={vi.fn()}
+        isSaving={false}
+        isDeleting={false}
+        customDishes={[]}
+        onOpenEditDishModal={vi.fn()}
+      />
+    );
+
+    const qtyInput = screen.getByLabelText(/qty/i);
+    const calInput = screen.getByLabelText('Calories');
+    const proInput = screen.getByLabelText(/protein/i);
+    const carbInput = screen.getByLabelText(/carbs/i);
+    const fatInput = screen.getByLabelText(/fat/i);
+    const fiberInput = screen.getByLabelText(/fiber/i);
+
+    // Converted fields use type="text" and inputMode="decimal"
+    expect(qtyInput.getAttribute('type')).toBe('text');
+    expect(calInput.getAttribute('type')).toBe('text');
+    expect(proInput.getAttribute('type')).toBe('text');
+    expect(carbInput.getAttribute('type')).toBe('text');
+    expect(fatInput.getAttribute('type')).toBe('text');
+    expect(fiberInput.getAttribute('type')).toBe('text');
+
+    expect(qtyInput.getAttribute('inputmode')).toBe('decimal');
+    expect(calInput.getAttribute('inputmode')).toBe('decimal');
+    expect(proInput.getAttribute('inputmode')).toBe('decimal');
+    expect(carbInput.getAttribute('inputmode')).toBe('decimal');
+    expect(fatInput.getAttribute('inputmode')).toBe('decimal');
+    expect(fiberInput.getAttribute('inputmode')).toBe('decimal');
+
+    // Test decimal comma "72,5"
+    fireEvent.change(qtyInput, { target: { value: '72,5' } });
+    expect(setDishModalQuantity).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(calInput, { target: { value: '72,5' } });
+    expect(setDishModalCalories).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(proInput, { target: { value: '72,5' } });
+    expect(setDishModalProtein).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(carbInput, { target: { value: '72,5' } });
+    expect(setDishModalCarbs).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(fatInput, { target: { value: '72,5' } });
+    expect(setDishModalFat).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(fiberInput, { target: { value: '72,5' } });
+    expect(setDishModalFiber).toHaveBeenCalledWith(72.5);
+
+    // Test decimal period "72.5"
+    fireEvent.change(qtyInput, { target: { value: '72.5' } });
+    expect(setDishModalQuantity).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(calInput, { target: { value: '72.5' } });
+    expect(setDishModalCalories).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(proInput, { target: { value: '72.5' } });
+    expect(setDishModalProtein).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(carbInput, { target: { value: '72.5' } });
+    expect(setDishModalCarbs).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(fatInput, { target: { value: '72.5' } });
+    expect(setDishModalFat).toHaveBeenCalledWith(72.5);
+
+    fireEvent.change(fiberInput, { target: { value: '72.5' } });
+    expect(setDishModalFiber).toHaveBeenCalledWith(72.5);
+
+    // Form submission verifies save handler
+    rerender(
+      <CustomDishesModal
+        isOpen={true}
+        onClose={vi.fn()}
+        editingDish={null}
+        dishModalKind="food"
+        dishModalName="Protein Oatmeal"
+        setDishModalName={vi.fn()}
+        dishModalQuantity={72.5}
+        setDishModalQuantity={setDishModalQuantity}
+        dishModalCalories={72.5}
+        setDishModalCalories={setDishModalCalories}
+        dishModalProtein={72.5}
+        setDishModalProtein={setDishModalProtein}
+        dishModalCarbs={72.5}
+        setDishModalCarbs={setDishModalCarbs}
+        dishModalFat={72.5}
+        setDishModalFat={setDishModalFat}
+        dishModalFiber={72.5}
+        setDishModalFiber={setDishModalFiber}
+        dishModalItems={[]}
+        setDishModalItems={vi.fn()}
+        onSaveDish={onSaveDish}
+        onDeleteDish={vi.fn()}
+        isSaving={false}
+        isDeleting={false}
+        customDishes={[]}
+        onOpenEditDishModal={vi.fn()}
+      />
+    );
+
+    const saveBtn = screen.getByRole('button', { name: /save dish/i });
+    fireEvent.click(saveBtn);
+    expect(onSaveDish).toHaveBeenCalledTimes(1);
+  });
 });
 
 
