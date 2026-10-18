@@ -455,4 +455,49 @@ describe('NutritionHistoryTimeline', () => {
       shareSpy.mockRestore();
     });
   });
+
+  describe('Pending Outbox Overlay (D-OFF-4, D-O2-3)', () => {
+    it('shows pending offline day with pending-mark while nutrition query is pending', () => {
+      const pendingMeal: NutritionLog = {
+        id: 'meal-pending-offline-1',
+        user_id: 'user-123',
+        food_name: 'Offline Steak',
+        calories: 600,
+        protein: 50,
+        carbs: 0,
+        fat: 40,
+        fiber: 0,
+        logged_at: '2026-10-17T12:00:00Z',
+        logged_date: '2026-10-17',
+        pending: true,
+      } as any;
+
+      const pendingDay: NutritionDaySummary = {
+        date: '2026-10-17',
+        meals: [pendingMeal],
+        totals: { calories: 600, protein: 50, carbs: 0, fat: 40, fiber: 0 },
+        macroCalories: { protein: 200, carbs: 0, fat: 360, total: 560 },
+        percentages: { protein: 36, carbs: 0, fat: 64 },
+      };
+
+      render(
+        <NutritionHistoryTimeline
+          filteredNutritionDays={[pendingDay]}
+          timeRange="all"
+          isInspectingAthlete={false}
+          onEditMeal={vi.fn()}
+          onDeleteMeal={vi.fn()}
+          isNutritionPending={true}
+        />
+      );
+
+      // Skeleton should NOT be shown when there are days to display
+      expect(screen.queryByTestId('nutrition-history-skeleton')).toBeNull();
+      // Offline meal day header and pending mark should be visible
+      expect(screen.getByText(/Oct 17/)).toBeDefined();
+      const pendingMarks = screen.getAllByTestId('pending-mark');
+      expect(pendingMarks.length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
+
