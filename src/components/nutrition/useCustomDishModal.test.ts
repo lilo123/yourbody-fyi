@@ -387,6 +387,73 @@ describe('useCustomDishModal', () => {
     expect(item.protein).toBe(20);
   });
 
+  it('synthesizes 1 component for legacy dish with items: null with decimal macros and saves exact sum (constraint holds)', async () => {
+    const onSaveDish = vi.fn();
+    const legacyDish: any = {
+      id: 'dish-legacy-decimals',
+      user_id: 'user-1',
+      name: 'Protein Ice Cream',
+      calories: 609,
+      protein: 73.9,
+      carbs: 50.6,
+      fat: 15.7,
+      fiber: 1.2,
+      kind: 'food',
+      serving_quantity: 595,
+      serving_unit: 'g',
+      items: null,
+      use_count: 5,
+    };
+
+    const { result } = renderHook(() =>
+      useCustomDishModal({
+        onSaveDish,
+        onDeleteDish: vi.fn(),
+        onDismissToast: vi.fn(),
+        fetchDishDetail: vi.fn().mockResolvedValue(null),
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleOpenEditDishModal(legacyDish);
+    });
+
+    expect(result.current.dishModalItems).toHaveLength(1);
+    const item = result.current.dishModalItems[0];
+    expect(item.name).toBe('Protein Ice Cream');
+    expect(item.quantity).toBe(595);
+    expect(item.unit).toBe('g');
+    expect(item.calories).toBe(609);
+    expect(item.protein).toBe(73.9);
+    expect(item.carbs).toBe(50.6);
+    expect(item.fat).toBe(15.7);
+    expect(item.fiber).toBe(1.2);
+
+    // Save WITHOUT changes
+    act(() => {
+      result.current.handleSaveCustomDishModal({ preventDefault: vi.fn() } as any);
+    });
+
+    expect(onSaveDish).toHaveBeenCalled();
+    const { dishPayload, editingDishId } = onSaveDish.mock.calls[0][0];
+    expect(editingDishId).toBe('dish-legacy-decimals');
+    expect(dishPayload.items).toHaveLength(1);
+    expect(dishPayload.items[0].quantity).toBe(595);
+    expect(dishPayload.items[0].unit).toBe('g');
+    // Exact totals preserved without rounding drift
+    expect(dishPayload.calories).toBe(609);
+    expect(dishPayload.protein).toBe(73.9);
+    expect(dishPayload.carbs).toBe(50.6);
+    expect(dishPayload.fat).toBe(15.7);
+    expect(dishPayload.fiber).toBe(1.2);
+    // Mathematical consistency for chk_cd_parent_equals_items_sum
+    expect(Math.abs(dishPayload.calories - dishPayload.items[0].calories)).toBeLessThanOrEqual(0.05);
+    expect(Math.abs(dishPayload.protein - dishPayload.items[0].protein)).toBeLessThanOrEqual(0.05);
+    expect(Math.abs(dishPayload.carbs - dishPayload.items[0].carbs)).toBeLessThanOrEqual(0.05);
+    expect(Math.abs(dishPayload.fat - dishPayload.items[0].fat)).toBeLessThanOrEqual(0.05);
+    expect(Math.abs(dishPayload.fiber - dishPayload.items[0].fiber)).toBeLessThanOrEqual(0.05);
+  });
+
   it('saving an existing single-item dish unchanged preserves exact item ID, quantity, unit, and derived parent macros', async () => {
     const onSaveDish = vi.fn();
     const existingDish: CustomDish = {

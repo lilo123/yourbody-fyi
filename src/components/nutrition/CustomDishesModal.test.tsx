@@ -381,6 +381,73 @@ describe('CustomDishesModal', () => {
 
     expect(screen.getByText('Protein Bowl')).toBeDefined();
   });
+
+  it('satisfies the touch-target className contract (min-h-[44px]) on remaining interactive controls', () => {
+    const dishes = [
+      {
+        id: 'dish-1',
+        user_id: 'user-1',
+        name: 'Avocado Toast',
+        calories: 320,
+        protein: 8,
+        carbs: 25,
+        fat: 18,
+        fiber: 6,
+        kind: 'food' as const,
+        use_count: 2,
+        notes: null,
+        created_at: '2026-09-01T12:00:00Z',
+      },
+    ];
+
+    render(
+      <CustomDishesModal
+        isOpen={true}
+        onClose={vi.fn()}
+        editingDish={dishes[0]}
+        dishModalName="Avocado Toast"
+        setDishModalName={vi.fn()}
+        dishModalCalories={320}
+        setDishModalCalories={vi.fn()}
+        dishModalProtein={8}
+        setDishModalProtein={vi.fn()}
+        dishModalCarbs={25}
+        setDishModalCarbs={vi.fn()}
+        dishModalFat={18}
+        setDishModalFat={vi.fn()}
+        dishModalFiber={6}
+        setDishModalFiber={vi.fn()}
+        dishModalItems={[mockItem]}
+        setDishModalItems={vi.fn()}
+        onSaveDish={vi.fn()}
+        onDeleteDish={vi.fn()}
+        isSaving={false}
+        isDeleting={false}
+        customDishes={dishes}
+        onOpenEditDishModal={vi.fn()}
+      />
+    );
+
+    // Modal action buttons
+    expect(screen.getByLabelText('Close dialog').className).toContain('min-h-[44px]');
+    expect(screen.getByRole('button', { name: /save dish/i }).className).toContain('min-h-[44px]');
+    expect(screen.getByRole('button', { name: /cancel/i }).className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('modal-delete-dish-btn').className).toContain('min-h-[44px]');
+
+    // Dish Name input
+    expect(screen.getByLabelText('Dish Name').className).toContain('min-h-[44px]');
+
+    // Component controls
+    expect(screen.getByTestId('dish-add-item').className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('dish-item-name').className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('dish-item-remove').className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('dish-item-quantity').className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('dish-item-calories').className).toContain('min-h-[44px]');
+
+    // Saved dish row buttons
+    expect(screen.getByTitle('Edit').className).toContain('min-h-[44px]');
+    expect(screen.getByTitle('Delete').className).toContain('min-h-[44px]');
+  });
 });
 
 
