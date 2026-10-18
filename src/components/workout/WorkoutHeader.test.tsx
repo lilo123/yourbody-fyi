@@ -135,4 +135,23 @@ describe('WorkoutHeader', () => {
     fireEvent.change(dateInput, { target: { value: '' } });
     expect(onDateChange).not.toHaveBeenCalled();
   });
+
+  it('calls onDateChange once with new valid date after typing empty string and never with empty string', () => {
+    const onDateChange = vi.fn();
+    render(<WorkoutHeader {...defaultProps} onDateChange={onDateChange} />);
+    const dateInput = screen.getByTestId('workout-date-input');
+    fireEvent.change(dateInput, { target: { value: '' } });
+    fireEvent.change(dateInput, { target: { value: '2026-09-25' } });
+    expect(onDateChange).toHaveBeenCalledTimes(1);
+    expect(onDateChange).toHaveBeenCalledWith('2026-09-25');
+  });
+
+  it('restores prop date value on blur if date input is empty', () => {
+    render(<WorkoutHeader {...defaultProps} workoutDate="2026-09-21" />);
+    const dateInput = screen.getByTestId('workout-date-input') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '' } });
+    expect(dateInput.value).toBe('');
+    fireEvent.blur(dateInput);
+    expect(dateInput.value).toBe('2026-09-21');
+  });
 });

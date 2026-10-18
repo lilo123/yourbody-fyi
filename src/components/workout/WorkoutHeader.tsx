@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertCircle, Layers, ChevronDown, Timer, Trash2 } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
 import { IconButton } from '../common/IconButton';
@@ -26,6 +26,12 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
   onClearWorkout,
   restTimerSeconds,
 }) => {
+  const [dateDraft, setDateDraft] = useState<string>(workoutDate);
+
+  useEffect(() => {
+    setDateDraft(workoutDate);
+  }, [workoutDate]);
+
   return (
     <>
       {/* Mutation Error Notification */}
@@ -85,12 +91,18 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
               <input
                 type="date"
                 aria-label="Workout date"
-                value={workoutDate}
+                value={dateDraft}
                 onChange={(e) => {
                   const val = e.target.value;
+                  setDateDraft(val);
                   if (!val) return;
                   workoutSessionStore.flushPendingWrites();
                   onDateChange(val);
+                }}
+                onBlur={() => {
+                  if (!dateDraft) {
+                    setDateDraft(workoutDate);
+                  }
                 }}
                 className="date-pill bg-zinc-950 border border-border-interactive text-cyan-400 rounded-xl px-2 h-11 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none shadow-inner cursor-pointer touch-manipulation max-w-[145px] sm:max-w-none"
                 data-testid="workout-date-input"
