@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { CustomDish } from '../../types/database';
 import { formatCalories } from '../../utils/nutrition';
 import { parseNutritionText } from '../../lib/nutrition/localParse';
@@ -16,6 +16,7 @@ import {
   getNutritionParserMode,
   type NutritionParserMode,
 } from '../../hooks/useNutritionParserMode';
+import { registerUpdateBlocker, unregisterUpdateBlocker } from '../../pwa/updateSafety';
 
 export interface UseNutritionAiOptions {
   customDishes: CustomDish[];
@@ -26,6 +27,7 @@ export interface UseNutritionAiOptions {
   setStatus: (msg: string) => void;
   setIsError: (err: boolean) => void;
   parserMode?: NutritionParserMode;
+  hasExistingStagedMeal?: boolean;
 }
 
 function buildStagedMealFromLocal(
@@ -161,12 +163,21 @@ export function useNutritionAi({
   setStatus,
   setIsError,
   parserMode: configuredParserMode,
+  hasExistingStagedMeal = false,
 }: UseNutritionAiOptions) {
   const [nlInput, setNlInput] = useState('');
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const isAnalyzingRef = useRef(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    if (!isAnalyzing) return;
+    registerUpdateBlocker('nutrition-ai-analyze', () => 'AI analysis in progress');
+    return () => {
+      unregisterUpdateBlocker('nutrition-ai-analyze');
+    };
+  }, [isAnalyzing]);
 
   const {
     selectedPhoto,
@@ -204,6 +215,7 @@ export function useNutritionAi({
       setIsAnalyzing(false);
     };
 
+    const isExistingMeal = Boolean(options?.forceAi || hasExistingStagedMeal);
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     const mode: NutritionParserMode = configuredParserMode ?? getNutritionParserMode();
 
@@ -449,11 +461,13 @@ export function useNutritionAi({
 
         setIsError(true);
         setStatus('AI needs a connection: use quick log');
-        const prefill = extractPrefill(textToAnalyze, localResult);
-        onFallbackToManual(
-          prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
-          prefill
-        );
+        if (!isExistingMeal) {
+          const prefill = extractPrefill(textToAnalyze, localResult);
+          onFallbackToManual(
+            prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+            prefill
+          );
+        }
         return;
       }
 
@@ -464,13 +478,15 @@ export function useNutritionAi({
           setIsQuotaExceeded(true);
           const quotaMsg = error?.message || formatQuotaExceededMessage(error?.limit, error?.period);
           setStatus(quotaMsg);
-          const localResult =
-            textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
-          const prefill = extractPrefill(textToAnalyze, localResult);
-          onFallbackToManual(
-            prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
-            prefill
-          );
+          if (!isExistingMeal) {
+            const localResult =
+              textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
+            const prefill = extractPrefill(textToAnalyze, localResult);
+            onFallbackToManual(
+              prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+              prefill
+            );
+          }
           return;
         }
 
@@ -490,13 +506,15 @@ export function useNutritionAi({
           ? `Meal Analysis: ${errorMsg}`
           : `AI service unavailable: ${errorMsg}`
       );
-      const localResult =
-        textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
-      const prefill = extractPrefill(textToAnalyze, localResult);
-      onFallbackToManual(
-        prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
-        prefill
-      );
+      if (!isExistingMeal) {
+        const localResult =
+          textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
+        const prefill = extractPrefill(textToAnalyze, localResult);
+        onFallbackToManual(
+          prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+          prefill
+        );
+      }
     } finally {
       stopAnalyzing();
     }

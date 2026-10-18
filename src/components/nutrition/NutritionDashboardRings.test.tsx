@@ -215,4 +215,31 @@ describe('NutritionDashboardRings', () => {
       });
     });
   });
+
+  it('ignores empty date value when native date input is cleared', () => {
+    const onDateChange = vi.fn();
+    renderDashboard({ onDateChange });
+    const dateInput = screen.getByTestId('nutrition-date-input');
+    fireEvent.change(dateInput, { target: { value: '' } });
+    expect(onDateChange).not.toHaveBeenCalled();
+  });
+
+  it('calls onDateChange once with new valid date after typing empty string and never with empty string', () => {
+    const onDateChange = vi.fn();
+    renderDashboard({ onDateChange });
+    const dateInput = screen.getByTestId('nutrition-date-input');
+    fireEvent.change(dateInput, { target: { value: '' } });
+    fireEvent.change(dateInput, { target: { value: '2026-09-25' } });
+    expect(onDateChange).toHaveBeenCalledTimes(1);
+    expect(onDateChange).toHaveBeenCalledWith('2026-09-25');
+  });
+
+  it('restores prop date value on blur if date input is empty', () => {
+    renderDashboard({ selectedDate: '2026-09-22' });
+    const dateInput = screen.getByTestId('nutrition-date-input') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '' } });
+    expect(dateInput.value).toBe('');
+    fireEvent.blur(dateInput);
+    expect(dateInput.value).toBe('2026-09-22');
+  });
 });

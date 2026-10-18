@@ -61,7 +61,7 @@ if (typeof document !== 'undefined') {
   const prerenderEl = document.getElementById('prerender');
   const renderedRoute = normalizeRoutePath(metaRoute || prerenderEl?.getAttribute('data-prerender-route') || '/');
 
-  const isPub = currentPath === '/' || currentPath === '/terms' || currentPath === '/privacy' || currentPath === '/refunds';
+  const isPub = currentPath === '/' || currentPath === '/terms' || currentPath === '/privacy' || currentPath === '/refunds' || currentPath === '/login';
   const isRouteMatch = currentPath === renderedRoute;
   const hasUser = hasValidAuthToken();
 

@@ -210,6 +210,7 @@ export default defineConfig(({ mode }) => {
             '**/terms.html',
             '**/privacy.html',
             '**/refunds.html',
+            '**/login.html',
             '**/og-image.png',
           ],
           navigateFallback: '/index.html',
