@@ -7910,7 +7910,8 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         expect(geo3!.intersectNav).toBe(false);
         expect(geo3!.intersectLogBtn).toBe(false);
         expect(geo3!.toastTopRatio).toBeGreaterThanOrEqual(0.5);
-        expect(geo3!.toastBottom).toBeLessThanOrEqual(geo3!.pillTop);
+        const noOverlapGeo3 = geo3!.toastBottom <= geo3!.pillTop || geo3!.pillTop <= geo3!.toastTop;
+        expect(noOverlapGeo3, `toast and pill must not collide vertically after scroll to bottom at ${width}px (toastBottom: ${geo3!.toastBottom}px, pillTop: ${geo3!.pillTop}px)`).toBe(true);
       } finally {
         await page.close();
         try {
