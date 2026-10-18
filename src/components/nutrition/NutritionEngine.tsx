@@ -61,8 +61,8 @@ export const NutritionEngine: React.FC = () => {
     useStagedCardFocus(Boolean(stagedMeal));
 
   const handleCustomDishSaved = useCallback(
-    (savedDish: CustomDishDetail) => {
-      setStagedMeal((current) => (current ? resyncStagedMealWithCustomDish(current, savedDish) : current));
+    (savedDish: CustomDishDetail, previousDish?: CustomDishDetail | CustomDish | null) => {
+      setStagedMeal((current) => (current ? resyncStagedMealWithCustomDish(current, savedDish, previousDish) : current));
     },
     [setStagedMeal]
   );

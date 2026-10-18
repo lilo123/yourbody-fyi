@@ -3902,6 +3902,49 @@ Total Fiber: 1 g`;
         expect(screen.getByTestId('staged-meal-card').textContent).toContain('250 kcal');
         expect(screen.getByText(/Log Meal/)).toBeDefined();
       });
+
+      it('hand-typed meal name is kept when dish is renamed in modal', async () => {
+        renderComponent();
+
+        // 1. Stage custom dish A
+        await waitFor(() => {
+          expect(screen.getByTestId('custom-dish-card-dish-custom-a')).toBeDefined();
+        });
+        fireEvent.click(screen.getByTestId('custom-dish-card-dish-custom-a'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('dish-name-input')).toBeDefined();
+        });
+
+        // 2. Hand-type custom name into staged card
+        const dishNameInput = screen.getByTestId('dish-name-input') as HTMLInputElement;
+        fireEvent.change(dishNameInput, { target: { value: 'My Morning Special' } });
+        expect(dishNameInput.value).toBe('My Morning Special');
+
+        // 3. Edit custom dish A in modal: rename to 'Super Custom Dish A' and change calories to 350
+        fireEvent.click(screen.getByTestId('edit-dish-btn-dish-custom-a'));
+        await waitFor(() => {
+          expect(screen.getByText('Edit Custom Dish')).toBeDefined();
+        });
+
+        const modal = screen.getByTestId('custom-dish-modal');
+        const nameField = within(modal).getByLabelText('Dish Name') as HTMLInputElement;
+        fireEvent.change(nameField, { target: { value: 'Super Custom Dish A' } });
+        const calInput = within(modal).getByLabelText('Calories') as HTMLInputElement;
+        fireEvent.change(calInput, { target: { value: '350' } });
+
+        fireEvent.click(screen.getByText('Save Dish'));
+
+        await waitFor(() => {
+          expect(screen.queryByText('Edit Custom Dish')).toBeNull();
+        });
+
+        // 4. Staged card picks up new calories (350 kcal) but keeps the hand-typed name ('My Morning Special')
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card').textContent).toContain('350 kcal');
+        });
+        expect((screen.getByTestId('dish-name-input') as HTMLInputElement).value).toBe('My Morning Special');
+      });
     });
   });
 

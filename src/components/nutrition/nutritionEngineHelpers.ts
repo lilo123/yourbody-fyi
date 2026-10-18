@@ -451,7 +451,8 @@ export function withSyncedServing(meal: StagedMeal, items: StagedItem[]): Staged
  */
 export function resyncStagedMealWithCustomDish(
   meal: StagedMeal,
-  updatedDish: CustomDishDetail | CustomDish
+  updatedDish: CustomDishDetail | CustomDish,
+  previousDish?: CustomDishDetail | CustomDish | null
 ): StagedMeal {
   if (!meal || !Array.isArray(meal.items) || meal.items.length === 0) {
     return meal;
@@ -462,6 +463,7 @@ export function resyncStagedMealWithCustomDish(
     return meal;
   }
 
+  const dishStagedItems = meal.items.filter((item) => item.dishId === updatedDish.id);
   const dishItems = normalizeItems(updatedDish.items);
 
   const updatedItems = meal.items.map((item) => {
@@ -485,10 +487,17 @@ export function resyncStagedMealWithCustomDish(
     let newName = item.name;
 
     if (dishItems && dishItems.length > 0) {
+      const representsDish = !item.dishItemId || dishStagedItems.length === 1;
+      const fallback = dishItems.length === 1 && representsDish ? dishItems[0] : null;
       const match =
         (item.dishItemId ? dishItems.find((candidate) => candidate.id === item.dishItemId) : null) ??
         dishItems.find((candidate) => candidate.name.trim().toLowerCase() === item.name.trim().toLowerCase()) ??
-        dishItems[0];
+        fallback;
+
+      if (!match) {
+        return item;
+      }
+
       newBaseQuantity = match.quantity > 0 ? match.quantity : 1;
       newUnit = match.unit;
       newBaseCalories = match.calories;
@@ -498,6 +507,9 @@ export function resyncStagedMealWithCustomDish(
       newBaseFiber = match.fiber;
       newName = match.name || updatedDish.name;
     } else {
+      if (dishStagedItems.length > 1 && item.dishItemId) {
+        return item;
+      }
       const servingSize =
         typeof updatedDish.serving_quantity === 'number' && updatedDish.serving_quantity > 0
           ? updatedDish.serving_quantity
@@ -569,14 +581,23 @@ export function resyncStagedMealWithCustomDish(
   });
 
   const single = updatedItems.length === 1 ? updatedItems[0] : null;
-  const mealName =
-    single && single.dishId === updatedDish.id
-      ? updatedDish.name || meal.name
-      : meal.name;
-  const mealNotes =
-    single && single.dishId === updatedDish.id && updatedDish.notes !== undefined
-      ? updatedDish.notes
-      : meal.notes;
+  const canUpdateName =
+    single !== null &&
+    single.dishId === updatedDish.id &&
+    previousDish != null &&
+    typeof previousDish.name === 'string' &&
+    meal.name.trim() === previousDish.name.trim();
+
+  const mealName = canUpdateName ? (updatedDish.name || meal.name) : meal.name;
+
+  const canUpdateNotes =
+    single !== null &&
+    single.dishId === updatedDish.id &&
+    previousDish != null &&
+    (meal.notes ?? '') === (previousDish.notes ?? '') &&
+    updatedDish.notes !== undefined;
+
+  const mealNotes = canUpdateNotes ? updatedDish.notes : meal.notes;
 
   const resynced = withSyncedServing({ ...meal, name: mealName, notes: mealNotes }, updatedItems);
   if (single) {

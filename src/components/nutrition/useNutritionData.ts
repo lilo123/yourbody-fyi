@@ -75,7 +75,7 @@ export interface UseNutritionDataOptions {
   profile: UserProfile | null;
   timeZone?: string;
   onMutationSuccessReset: () => void;
-  onCustomDishSaved?: (dish: CustomDishDetail) => void;
+  onCustomDishSaved?: (dish: CustomDishDetail, previousDish?: CustomDishDetail | CustomDish | null) => void;
   setStatus: (s: string) => void;
   setIsError: (e: boolean) => void;
 }
@@ -483,6 +483,14 @@ export function useNutritionData({
       if (savedRow?.id && targetUserId) {
         const fullKey = queryKeys.customDishes.fullByUser(targetUserId);
         const currentFull = queryClient.getQueryData<CustomDishDetail[]>(fullKey);
+        const listKey = queryKeys.customDishes.byUser(targetUserId);
+        const currentList = queryClient.getQueryData<CustomDish[]>(listKey);
+        const previousDish =
+          currentFull?.find((dishItem) => dishItem.id === savedRow.id) ??
+          currentList?.find((dishItem) => dishItem.id === savedRow.id) ??
+          null;
+        const previousDishSnapshot = previousDish ? { ...previousDish } : null;
+
         let updatedFullRow: CustomDishDetail = savedRow as any as CustomDishDetail;
         if (currentFull) {
           const idx = currentFull.findIndex((d) => d.id === savedRow.id);
@@ -499,8 +507,6 @@ export function useNutritionData({
           queryClient.setQueryData(fullKey, [savedRow as any as CustomDishDetail]);
         }
 
-        const listKey = queryKeys.customDishes.byUser(targetUserId);
-        const currentList = queryClient.getQueryData<CustomDish[]>(listKey);
         if (currentList) {
           const rawItems = (savedRow as any).items;
           const serving_quantity =
@@ -523,7 +529,7 @@ export function useNutritionData({
           }
           queryClient.setQueryData(listKey, nextList);
         }
-        onCustomDishSavedRef.current?.(updatedFullRow);
+        onCustomDishSavedRef.current?.(updatedFullRow, previousDishSnapshot);
       }
       showToast({ message: 'Custom dish saved', kind: 'success' });
       setStatus('');
