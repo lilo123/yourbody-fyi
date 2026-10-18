@@ -24,6 +24,7 @@ import {
   clearMockHistory,
 } from '../test/supabaseBuilderMock';
 import type { NutritionItem } from './itemModel';
+import { getDayBounds } from './date';
 
 vi.mock('../lib/supabase', async () => {
   const { createSupabaseMock } = await import('../test/supabaseBuilderMock');
@@ -737,7 +738,7 @@ describe('dataExport utilities', () => {
       const lteFilter = workoutBuilder.filters.find((f) => f.column === 'date' && f.method === 'lte');
       expect(lteFilter).toBeDefined();
       expect(lteFilter?.value).not.toBe('2026-10-18');
-      expect(lteFilter?.value).toBe('2026-10-18T23:59:59.999Z');
+      expect(lteFilter?.value).toBe(getDayBounds('2026-10-18').endOfDay);
     });
 
     it('throws error when Supabase query returns an error', async () => {
