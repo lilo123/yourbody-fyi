@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { test, expect, type Page, type TestInfo, type Locator } from '@playwright/test';
 
 const DB_URL =
   process.env.DATABASE_URL ||
@@ -126,6 +126,62 @@ async function getNormalBottomOffset(page: Page): Promise<number> {
   });
 }
 
+/**
+ * Waits deterministically for the toast to finish its enter animation/transition
+ * (Web Animations finished, computed opacity == 1, transform settled, and bounding box stable across frames)
+ * before taking measurements or running elementFromPoint hit tests.
+ */
+async function waitForToastEnter(toast: Locator): Promise<void> {
+  await expect(toast).toBeVisible({ timeout: 10000 });
+
+  // 1. Wait for all CSS animations / transitions on the toast element to finish
+  await toast.evaluate(async (el) => {
+    // Allow a frame for any newly triggered CSS transitions or keyframes to attach
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const animations = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
+    if (animations.length > 0) {
+      await Promise.all(animations.map((a) => a.finished.catch(() => {})));
+    }
+  });
+
+  // 2. Poll until computed opacity is 1 and no animation is running
+  await toast.page().waitForFunction(
+    () => {
+      const el = document.querySelector('[data-testid="quick-log-toast"]');
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      if (parseFloat(style.opacity) < 0.99) return false;
+      const anims = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
+      return !anims.some((a) => a.playState === 'running');
+    },
+    undefined,
+    { timeout: 10000 }
+  );
+
+  // 3. Ensure the bounding box has settled across consecutive animation frames
+  await toast.evaluate(async (el) => {
+    let prev = el.getBoundingClientRect();
+    let consecutiveStable = 0;
+    let frames = 0;
+    while (consecutiveStable < 2 && frames < 60) {
+      frames++;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const curr = el.getBoundingClientRect();
+      const isStable =
+        Math.abs(curr.x - prev.x) < 0.5 &&
+        Math.abs(curr.y - prev.y) < 0.5 &&
+        Math.abs(curr.width - prev.width) < 0.5 &&
+        Math.abs(curr.height - prev.height) < 0.5;
+      if (isStable) {
+        consecutiveStable++;
+      } else {
+        consecutiveStable = 0;
+      }
+      prev = curr;
+    }
+  });
+}
+
 async function openEditMealSheet(page: Page, mealName: string) {
   await page.goto('/nutrition');
   await expect(page.locator("text=Today's Nutrition")).toBeVisible({ timeout: 15000 });
@@ -177,11 +233,12 @@ test.describe('YB6 Toast Bottom In Modal (D-YB6-5)', () => {
     // Save as Custom Dish via Star button inside EditMealSheet
     const starBtn = sheet.locator('button[aria-label="Save as Custom Dish"]');
     await expect(starBtn).toBeVisible({ timeout: 10000 });
+    await expect(starBtn).toBeEnabled({ timeout: 10000 });
     await starBtn.click();
 
     // Toast "Saved custom dish" appears
     const toast = page.locator('[data-testid="quick-log-toast"]');
-    await expect(toast).toBeVisible({ timeout: 10000 });
+    await waitForToastEnter(toast);
     await expect(toast).toContainText('Saved custom dish');
 
     // Measure toast bounding box
@@ -328,11 +385,12 @@ test.describe('YB6 Toast Bottom In Modal (D-YB6-5)', () => {
     // Save as Custom Dish via Star button inside EditMealSheet
     const starBtn = sheet.locator('button[aria-label="Save as Custom Dish"]');
     await expect(starBtn).toBeVisible({ timeout: 10000 });
+    await expect(starBtn).toBeEnabled({ timeout: 10000 });
     await starBtn.click();
 
     // Toast "Saved custom dish" appears
     const toast = page.locator('[data-testid="quick-log-toast"]');
-    await expect(toast).toBeVisible({ timeout: 10000 });
+    await waitForToastEnter(toast);
     await expect(toast).toContainText('Saved custom dish');
 
     // Measure toast bounding box
@@ -444,7 +502,7 @@ test.describe('YB6 Toast Bottom In Modal (D-YB6-5)', () => {
 
     // Verify toast appears
     const toast = page.locator('[data-testid="quick-log-toast"]');
-    await expect(toast).toBeVisible({ timeout: 10000 });
+    await waitForToastEnter(toast);
     await expect(toast).toContainText('Custom dish saved');
 
     // CustomDishesModal closes synchronously on save (handleSaveCustomDishModal calls
