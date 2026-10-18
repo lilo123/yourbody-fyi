@@ -566,6 +566,61 @@ Deno.test("parse-nutrition should return 500 rather than mock 200 data during se
     }
 });
 
+Deno.test("parse-nutrition should return 503 rather than connection error when upstream Gemini returns 403 PERMISSION_DENIED", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            return new Response(
+                JSON.stringify({
+                    error: {
+                        code: 403,
+                        message: "The caller does not have permission",
+                        status: "PERMISSION_DENIED"
+                    }
+                }),
+                {
+                    status: 403,
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Had 2 scoops of whey protein" })
+        });
+
+        const res = await app.fetch(req);
+        const data = await res.json();
+        assertEquals(data.error, "AI service is temporarily unavailable. Please try again or switch to manual entry.");
+        assertEquals(res.status, 503);
+        assertEquals(data.code, "AI_SERVICE_UNAVAILABLE");
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) {
+            Deno.env.set("GEMINI_API_KEY", originalKey);
+        } else {
+            Deno.env.delete("GEMINI_API_KEY");
+        }
+    }
+});
+
 Deno.test("parse-nutrition handles conversational multi-dish meal input (Chicken Rice & Eggs) and elaborates dishes into components", async () => {
     const originalKey = Deno.env.get("GEMINI_API_KEY");
     Deno.env.set("GEMINI_API_KEY", "test-key");

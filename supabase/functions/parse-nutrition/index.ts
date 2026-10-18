@@ -297,6 +297,39 @@ function isTimeoutError(err: any): boolean {
   );
 }
 
+function isAuthOrPermissionError(err: any): boolean {
+  if (!err) return false;
+  if (err.status === 403 || err.statusCode === 403 || err.code === 403) return true;
+  if (err.status === 401 || err.statusCode === 401 || err.code === 401) return true;
+  if (err.error?.code === 403 || err.error?.code === 401) return true;
+  if (err.error?.status === 'PERMISSION_DENIED' || err.error?.status === 'UNAUTHENTICATED') return true;
+  if (err.code === 'PERMISSION_DENIED' || err.code === 'UNAUTHENTICATED') return true;
+  const msgParts: string[] = [
+    typeof err.message === 'string' ? err.message : '',
+    typeof err.error?.message === 'string' ? err.error.message : '',
+    typeof err.statusText === 'string' ? err.statusText : '',
+    typeof err.cause?.message === 'string' ? err.cause.message : '',
+    String(err),
+  ];
+  try {
+    msgParts.push(JSON.stringify(err));
+  } catch {
+    // ignore circular json error
+  }
+  const msg = msgParts.join(' ').toLowerCase();
+  return (
+    msg.includes('permission_denied') ||
+    msg.includes('permission denied') ||
+    msg.includes('403') ||
+    msg.includes('unauthenticated') ||
+    msg.includes('401') ||
+    msg.includes('api key not valid') ||
+    msg.includes('api_key_invalid') ||
+    msg.includes('api_key_expired') ||
+    msg.includes('forbidden')
+  );
+}
+
 async function refundQuota(
   supabaseUrl: string,
   userId: string | undefined,
@@ -815,6 +848,9 @@ CORE RESPONSIBILITIES & GUIDELINES:
           const attemptDurationMs = Date.now() - attemptStartTime;
           const statusInfo = modelErr?.status ? ` (status ${modelErr.status})` : '';
           console.warn(`[parse-nutrition] Model ${model} encountered error in ${attemptDurationMs}ms${statusInfo}:`, modelErr?.message || modelErr);
+          if (isAuthOrPermissionError(modelErr)) {
+            break;
+          }
         }
       }
 
@@ -853,6 +889,23 @@ CORE RESPONSIBILITIES & GUIDELINES:
                 ...corsHeaders,
                 'Content-Type': 'application/json',
                 'Retry-After': '15',
+              },
+            }
+          );
+        }
+
+        if (isAuthOrPermissionError(lastAiError)) {
+          await reportAiFailure(false);
+          return new Response(
+            JSON.stringify({
+              error: "AI service is temporarily unavailable. Please try again or switch to manual entry.",
+              code: "AI_SERVICE_UNAVAILABLE",
+            }),
+            {
+              status: 503,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
               },
             }
           );
@@ -971,6 +1024,30 @@ CORE RESPONSIBILITIES & GUIDELINES:
               ...corsHeaders,
               'Content-Type': 'application/json',
               'Retry-After': '15',
+            },
+          }
+        );
+      }
+      if (isAuthOrPermissionError(error)) {
+        try {
+          if (attemptsCount > 0) {
+            await reportAiFailure(false);
+          } else {
+            await captureException(error);
+          }
+        } catch (sentryErr) {
+          console.warn("[parse-nutrition] Error reporting failed:", sentryErr);
+        }
+        return new Response(
+          JSON.stringify({
+            error: "AI service is temporarily unavailable. Please try again or switch to manual entry.",
+            code: "AI_SERVICE_UNAVAILABLE",
+          }),
+          {
+            status: 503,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
             },
           }
         );
