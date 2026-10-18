@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { Flame } from 'lucide-react';
 import { MacroRing } from '../common/MacroRing';
 import type { BreakdownNutrient } from './NutrientBreakdownModal';
@@ -38,6 +38,11 @@ export const NutritionDashboardRings: React.FC<NutritionDashboardRingsProps> = m
   remainingFuel,
   onSelectBreakdownNutrient,
 }) => {
+  const [dateDraft, setDateDraft] = useState<string>(selectedDate);
+
+  useEffect(() => {
+    setDateDraft(selectedDate);
+  }, [selectedDate]);
 
   const formatStatus = (label: string, fuel: { badgeLabel: string; isOver: boolean }) => {
     const isOver = fuel.isOver;
@@ -68,8 +73,18 @@ export const NutritionDashboardRings: React.FC<NutritionDashboardRingsProps> = m
         <input
           type="date"
           data-testid="nutrition-date-input"
-          value={selectedDate}
-          onChange={(e) => onDateChange(e.target.value)}
+          value={dateDraft}
+          onChange={(e) => {
+            const val = e.target.value;
+            setDateDraft(val);
+            if (!val) return;
+            onDateChange(val);
+          }}
+          onBlur={() => {
+            if (!dateDraft) {
+              setDateDraft(selectedDate);
+            }
+          }}
           className="date-pill bg-zinc-950 border border-border-interactive text-cyan-400 rounded-xl px-1 sm:px-2.5 py-1 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none cursor-pointer shrink-0 min-h-[44px] h-11 -my-1.5 w-[120px] sm:w-auto"
         />
       </div>
