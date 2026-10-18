@@ -39,8 +39,6 @@ export interface NutritionHistoryTimelineProps {
   pendingDeleteMealId?: string | null;
   // Optional profile targets for story card sharing
   profile?: Partial<UserProfile> | null;
-  // Target date highlight for calendar jump
-  highlightDate?: string;
 }
 
 // Realistic collapsed day-card height estimate derived from 390px/320px browser measurements
@@ -60,7 +58,6 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   onLoadMoreNutrition,
   pendingDeleteMealId,
   profile,
-  highlightDate,
 }) => {
   const auth = React.useContext(AuthContext);
   const { show: showToast } = useToast();
@@ -204,33 +201,6 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
   const virtualItems = virtualizer.getVirtualItems();
   const isVirtual = virtualItems.length > 0;
 
-  // Scroll to highlightDate day index and focus its card
-  React.useEffect(() => {
-    if (!highlightDate) return;
-    const targetIndex = displayDays.findIndex((day) => day.date === highlightDate);
-
-    if (targetIndex !== -1) {
-      if (typeof virtualizer?.scrollToIndex === 'function') {
-        virtualizer.scrollToIndex(targetIndex, { align: 'center' });
-      }
-      const focusCard = () => {
-        const cardEl = (parentRef.current || document).querySelector(
-          `[data-civil-date="${highlightDate}"]`
-        ) as HTMLElement | null;
-        if (cardEl) {
-          cardEl.focus();
-        }
-      };
-      focusCard();
-      const rafId = requestAnimationFrame(focusCard);
-      const timer = setTimeout(focusCard, 50);
-      return () => {
-        cancelAnimationFrame(rafId);
-        clearTimeout(timer);
-      };
-    }
-  }, [highlightDate, displayDays, virtualizer]);
-
   // Skeleton cards (aria-busy) while initial fetch is pending or not yet settled (only when nothing to show)
   if (displayDays.length === 0 && isNutritionPending) {
     return (
@@ -270,18 +240,11 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
     const { title, subtitle } = formatNutritionDayHeader(day.date, day.meals.length);
     const isExpanded = expandedDates.has(day.date);
     const isDayPending = day.meals.some((meal) => Boolean((meal as any).pending));
-    const isHighlighted = highlightDate === day.date;
 
     return (
       <div
         key={day.date}
-        data-civil-date={day.date}
-        tabIndex={isHighlighted ? 0 : -1}
-        className={`bg-zinc-900/90 border rounded-3xl p-5 shadow-2xl space-y-4 ${
-          isHighlighted
-            ? 'ring-2 ring-cyan-400 border-cyan-400'
-            : 'border-zinc-800/80'
-        }`}
+        className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-4"
       >
         {/* Date Header & Macro Summary Pills */}
         <div className={`space-y-3 ${isExpanded ? 'border-b border-zinc-800 pb-3' : ''}`}>

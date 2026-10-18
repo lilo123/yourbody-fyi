@@ -498,44 +498,6 @@ describe('NutritionHistoryTimeline', () => {
       const pendingMarks = screen.getAllByTestId('pending-mark');
       expect(pendingMarks.length).toBeGreaterThanOrEqual(1);
     });
-
-    it('highlights target day when highlightDate is provided', () => {
-      const sampleMeal: NutritionLog = {
-        id: 'meal-hl-1',
-        user_id: 'user-123',
-        food_name: 'Target Meal',
-        calories: 400,
-        protein: 30,
-        carbs: 40,
-        fat: 10,
-        fiber: 5,
-        logged_at: '2026-10-15T12:00:00Z',
-        logged_date: '2026-10-15',
-      };
-
-      const targetDay: NutritionDaySummary = {
-        date: '2026-10-15',
-        meals: [sampleMeal],
-        totals: { calories: 400, protein: 30, carbs: 40, fat: 10, fiber: 5 },
-        macroCalories: { protein: 120, carbs: 160, fat: 90, total: 370 },
-        percentages: { protein: 32, carbs: 43, fat: 25 },
-      };
-
-      render(
-        <NutritionHistoryTimeline
-          filteredNutritionDays={[targetDay]}
-          timeRange="all"
-          isInspectingAthlete={false}
-          onEditMeal={vi.fn()}
-          onDeleteMeal={vi.fn()}
-          highlightDate="2026-10-15"
-        />
-      );
-
-      const dayCard = screen.getByTestId('expand-day-btn-2026-10-15').closest('[data-civil-date="2026-10-15"]');
-      expect(dayCard).not.toBeNull();
-      expect(dayCard?.className).toContain('ring-2 ring-cyan-400');
-    });
   });
 });
 

@@ -391,7 +391,6 @@ export const HistoryView: React.FC = () => {
             isLoadingMoreNutrition={isLoadingMoreNutrition}
             onLoadMoreNutrition={loadMoreNutrition}
             pendingDeleteMealId={pendingDeleteMealId}
-            highlightDate={highlightDate}
           />
         ) : viewMode === 'session' ? (
           <div className="space-y-4">

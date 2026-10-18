@@ -2535,7 +2535,7 @@ describe('HistoryView', () => {
 
       // Wait specifically for the pending day card on the timeline
       const expandBtn = await screen.findByTestId('expand-day-btn-2026-09-02');
-      const dayCard = expandBtn.closest('[data-civil-date]');
+      const dayCard = expandBtn.closest('.rounded-3xl');
       expect(dayCard).not.toBeNull();
       const pendingMarksOnCard = within(dayCard as HTMLElement).getAllByTestId('pending-mark');
       expect(pendingMarksOnCard.length).toBeGreaterThanOrEqual(1);
