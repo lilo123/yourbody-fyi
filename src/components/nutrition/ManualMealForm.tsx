@@ -128,6 +128,7 @@ export const ManualMealForm: React.FC<ManualMealFormProps> = memo(({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isPending) return;
     setHasAttemptedSubmit(true);
 
     const isNameValid = Boolean(manualName.trim());
