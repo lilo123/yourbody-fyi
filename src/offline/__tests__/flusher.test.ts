@@ -311,6 +311,88 @@ describe('Flusher & EnqueueAndAwait (§A4, §D)', () => {
     expect(getAuthRequiredStatus()).toBe(true);
   });
 
+  it('11. flusher skips dependent ops in the same flush run when parent fails permanently', async () => {
+    // Seed parent op: workout.ensure
+    const parentOp = await enqueue({
+      userId: userA,
+      kind: 'workout.ensure',
+      payload: { clientWorkoutId: 'w-fail', workout_date: '2026-09-30' },
+    });
+
+    // Seed dependent op: set.create referencing w-fail
+    await enqueue({
+      userId: userA,
+      kind: 'set.create',
+      payload: {
+        id: 's-dep-1',
+        workoutRef: 'w-fail',
+        exercise_id: 'ex-1',
+        set_index: 1,
+        reps: 10,
+        weight: 100,
+      } as any,
+    });
+
+    // Seed independent op: workout.ensure for a different workout
+    await enqueue({
+      userId: userA,
+      kind: 'workout.ensure',
+      payload: { clientWorkoutId: 'w-success', workout_date: '2026-10-01' },
+    });
+
+    let setReplayed = false;
+    ((supabase as any)['from']).mockImplementation((table: string) => {
+      if (table === 'workouts') {
+        return {
+          upsert: vi.fn().mockImplementation((payload: any) => {
+            if (payload?.id === 'w-fail') {
+              return Promise.resolve({
+                data: null,
+                error: {
+                  code: '42501',
+                  message: 'Permission denied (RLS policy violation)',
+                },
+              });
+            }
+            return Promise.resolve({ data: null, error: null });
+          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: 'canonical-w-success' }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'sets') {
+        return {
+          upsert: vi.fn().mockImplementation(() => {
+            setReplayed = true;
+            return Promise.resolve({ data: null, error: null });
+          }),
+        };
+      }
+      return {};
+    });
+
+    const synced = await flushNow(userA);
+
+    // w-success synced, but w-fail failed and s-dep-1 was skipped
+    expect(synced).toBe(1);
+    expect(setReplayed).toBe(false);
+
+    const opsAfter = await getOutboxOps(userA);
+    const parentAfter = opsAfter.find((o) => (o.payload as any)?.clientWorkoutId === 'w-fail');
+    const dependentAfter = opsAfter.find((o) => o.kind === 'set.create');
+    const independentAfter = opsAfter.find((o) => (o.payload as any)?.clientWorkoutId === 'w-success');
+
+    expect(parentAfter?.state).toBe('attention');
+    expect(dependentAfter?.state).toBe('attention');
+    expect(dependentAfter?.blockedBy).toBe(parentOp.opId);
+    expect(independentAfter).toBeUndefined(); // Completed and deleted
+  });
+
   describe('Multi-tab Sync Broadcast (B.1, B.3)', () => {
     it('synced broadcast from another tab for the same user emits once and updates last synced count', async () => {
       setFlusherSessionUser(userA);
