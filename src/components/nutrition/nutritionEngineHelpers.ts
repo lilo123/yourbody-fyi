@@ -507,9 +507,6 @@ export function resyncStagedMealWithCustomDish(
       newBaseFiber = match.fiber;
       newName = match.name || updatedDish.name;
     } else {
-      if (dishStagedItems.length > 1 && item.dishItemId) {
-        return item;
-      }
       const servingSize =
         typeof updatedDish.serving_quantity === 'number' && updatedDish.serving_quantity > 0
           ? updatedDish.serving_quantity

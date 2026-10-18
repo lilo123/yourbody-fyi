@@ -1679,6 +1679,136 @@ describe('resyncStagedMealWithCustomDish', () => {
     expect(resynced.calories).toBe(580);
   });
 
+  it('3-item recipe staged, edit ingredient 2 grams in dish -> staged ingredient 2 updates, 1 and 3 unchanged, no duplicates; removed ingredient stays as it was', () => {
+    const item1 = buildStagedItem({
+      name: 'Rolled Oats',
+      quantity: 100,
+      unit: 'g',
+      calories: 380,
+      protein: 13,
+      carbs: 68,
+      fat: 7,
+      fiber: 10,
+      dishId: 'dish-recipe-3',
+      dishItemId: 'ing-1',
+    });
+    const item2 = buildStagedItem({
+      name: 'Peanut Butter',
+      quantity: 30,
+      unit: 'g',
+      calories: 180,
+      protein: 8,
+      carbs: 6,
+      fat: 15,
+      fiber: 2,
+      dishId: 'dish-recipe-3',
+      dishItemId: 'ing-2',
+    });
+    const item3 = buildStagedItem({
+      name: 'Honey',
+      quantity: 20,
+      unit: 'g',
+      calories: 60,
+      protein: 0,
+      carbs: 17,
+      fat: 0,
+      fiber: 0,
+      dishId: 'dish-recipe-3',
+      dishItemId: 'ing-3',
+    });
+
+    const meal: StagedMeal = {
+      name: 'Power Oatmeal',
+      mealType: 'Breakfast',
+      explanation: '620 kcal (Power Oatmeal)',
+      items: [item1, item2, item3],
+      calories: 620,
+      protein: 21,
+      carbs: 91,
+      fat: 22,
+      fiber: 12,
+      servingSize: 150,
+      servingUnit: 'g',
+    };
+
+    // User edits recipe in dish editor:
+    // - ing-1 (Rolled Oats) is unchanged (100g, 380 kcal)
+    // - ing-2 (Peanut Butter) grams edited from 30g to 45g (macros scaled to 270 kcal, 12g P)
+    // - ing-3 (Honey) was removed from the recipe in the dish editor
+    const updatedDish: CustomDishDetail = {
+      id: 'dish-recipe-3',
+      user_id: 'user-1',
+      name: 'Power Oatmeal',
+      calories: 650,
+      protein: 25,
+      carbs: 77,
+      fat: 29.5,
+      fiber: 13,
+      kind: 'recipe',
+      use_count: 1,
+      serving_quantity: 145,
+      serving_unit: 'g',
+      items: [
+        {
+          id: 'ing-1',
+          name: 'Rolled Oats',
+          quantity: 100,
+          unit: 'g',
+          calories: 380,
+          protein: 13,
+          carbs: 68,
+          fat: 7,
+          fiber: 10,
+        },
+        {
+          id: 'ing-2',
+          name: 'Peanut Butter',
+          quantity: 45,
+          unit: 'g',
+          calories: 270,
+          protein: 12,
+          carbs: 9,
+          fat: 22.5,
+          fiber: 3,
+        },
+      ],
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(meal, updatedDish, {
+      id: 'dish-recipe-3',
+      name: 'Power Oatmeal',
+    });
+
+    expect(resynced.items).toHaveLength(3);
+
+    // Ingredient 1 is unchanged
+    expect(resynced.items[0].name).toBe('Rolled Oats');
+    expect(resynced.items[0].quantity).toBe(100);
+    expect(resynced.items[0].calories).toBe(380);
+    expect(resynced.items[0].protein).toBe(13);
+
+    // Ingredient 2 updated its grams and macros
+    expect(resynced.items[1].name).toBe('Peanut Butter');
+    expect(resynced.items[1].quantity).toBe(45);
+    expect(resynced.items[1].calories).toBe(270);
+    expect(resynced.items[1].protein).toBe(12);
+
+    // Ingredient 3 (removed in dish edit) stays exactly as it was
+    expect(resynced.items[2].name).toBe('Honey');
+    expect(resynced.items[2].quantity).toBe(20);
+    expect(resynced.items[2].calories).toBe(60);
+    expect(resynced.items[2].protein).toBe(0);
+
+    // Zero duplicates of ingredient 1 or 2
+    const oatsItems = resynced.items.filter((item) => item.name === 'Rolled Oats');
+    const pbItems = resynced.items.filter((item) => item.name === 'Peanut Butter');
+    expect(oatsItems).toHaveLength(1);
+    expect(pbItems).toHaveLength(1);
+
+    // Total calories: 380 + 270 + 60 = 710
+    expect(resynced.calories).toBe(710);
+  });
+
   describe('single-item meal name and notes synchronization', () => {
     it('(a) untouched name follows the dish rename', () => {
       const item = buildStagedItem({
