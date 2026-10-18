@@ -87,7 +87,7 @@ describe('HistoryCalendarSheet', () => {
     expect(screen.queryByTestId('workout-dot-2026-09-15')).toBeNull();
   });
 
-  it('disables days without workouts and marks them aria-disabled', async () => {
+  it('marks days without workouts as aria-disabled while keeping them focusable', async () => {
     renderComponent();
 
     await waitFor(() => {
@@ -103,9 +103,14 @@ describe('HistoryCalendarSheet', () => {
     const nonWorkoutDayBtn = screen.getByRole('button', {
       name: /Monday, September 28, 2026/i,
     });
-    expect(nonWorkoutDayBtn).toBeDisabled();
+    expect(nonWorkoutDayBtn).not.toBeDisabled();
     expect(nonWorkoutDayBtn).toHaveAttribute('aria-disabled', 'true');
     expect(nonWorkoutDayBtn).toHaveAttribute('data-has-workout', 'false');
+
+    // Clicking a rest day does nothing
+    fireEvent.click(nonWorkoutDayBtn);
+    expect(mockOnSelectDate).not.toHaveBeenCalled();
+    expect(mockOnClose).not.toHaveBeenCalled();
   });
 
   it('calls onSelectDate and onClose when a workout day is tapped', async () => {
@@ -148,32 +153,38 @@ describe('HistoryCalendarSheet', () => {
     expect(screen.getByTestId('calendar-month-heading').textContent).toContain('August 2026');
   });
 
-  it('supports keyboard navigation with arrow keys across grid cells', async () => {
+  it('supports keyboard navigation with arrow keys across grid cells including rest days', async () => {
     renderComponent({
-      sessionDates: ['2026-09-01', '2026-09-02', '2026-09-08'],
+      sessionDates: ['2026-09-01', '2026-09-03', '2026-09-08'],
     });
 
     const day1Btn = screen.getByRole('button', { name: /September 1, 2026/i });
     day1Btn.focus();
 
-    // ArrowRight to day 2
+    // ArrowRight to day 2 (rest day)
     fireEvent.keyDown(day1Btn, { key: 'ArrowRight' });
     const day2Btn = screen.getByRole('button', { name: /September 2, 2026/i });
     expect(document.activeElement).toBe(day2Btn);
+    expect(day2Btn).toHaveAttribute('aria-disabled', 'true');
 
-    // ArrowDown to day 9 (+7 days)
-    fireEvent.keyDown(day2Btn, { key: 'ArrowDown' });
+    // ArrowRight from rest day 2 to workout day 3
+    fireEvent.keyDown(day2Btn, { key: 'ArrowRight' });
+    const day3Btn = screen.getByRole('button', { name: /September 3, 2026/i });
+    expect(document.activeElement).toBe(day3Btn);
+
+    // ArrowDown to day 10 (+7 days)
+    fireEvent.keyDown(day3Btn, { key: 'ArrowDown' });
+    const day10Btn = screen.getByRole('button', { name: /September 10, 2026/i });
+    expect(document.activeElement).toBe(day10Btn);
+
+    // ArrowLeft to day 9
+    fireEvent.keyDown(day10Btn, { key: 'ArrowLeft' });
     const day9Btn = screen.getByRole('button', { name: /September 9, 2026/i });
     expect(document.activeElement).toBe(day9Btn);
 
-    // ArrowLeft to day 8
-    fireEvent.keyDown(day9Btn, { key: 'ArrowLeft' });
-    const day8Btn = screen.getByRole('button', { name: /September 8, 2026/i });
-    expect(document.activeElement).toBe(day8Btn);
-
-    // ArrowUp to day 1 (-7 days)
-    fireEvent.keyDown(day8Btn, { key: 'ArrowUp' });
-    expect(document.activeElement).toBe(day1Btn);
+    // ArrowUp to day 2 (-7 days)
+    fireEvent.keyDown(day9Btn, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(day2Btn);
   });
 
   it('closes when Escape is pressed', async () => {

@@ -7,6 +7,7 @@ import { PrivacyPage } from '../legal/PrivacyPage';
 import { RefundsPage } from '../legal/RefundsPage';
 import { LoginView } from '../components/auth/LoginView';
 import { Header } from '../components/common/Header';
+import { SkipToContentLink } from '../components/common/SkipToContentLink';
 import { AuthContext, type AuthContextType } from '../context/AuthContextTypes';
 
 export interface PrerenderRoute {
@@ -104,8 +105,9 @@ export function renderRoute(path: string): string {
       element = (
         <AuthContext.Provider value={SIGNED_OUT_AUTH}>
           <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
+            <SkipToContentLink />
             <Header />
-            <main className="flex-1 max-w-xl w-full mx-auto p-4 pb-8">
+            <main id="main-content" tabIndex={-1} className="flex-1 max-w-xl w-full mx-auto p-4 pb-8 focus:outline-none">
               {content}
             </main>
           </div>

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useNutritionAi } from './useNutritionAi';
 import * as parseNutritionModule from './parseNutrition';
+import { evaluateUpdateSafety, resetUpdateSafetyForTesting } from '../../pwa/updateSafety';
 
 vi.mock('./parseNutrition', async (importOriginal) => {
   const actual = await importOriginal<typeof parseNutritionModule>();
@@ -477,6 +478,202 @@ describe('useNutritionAi quota exceeded handling', () => {
 
       expect(mockParse).toHaveBeenCalledTimes(1);
       expect(onParsedSuccess).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('preserves existing staged meal on handleForceAiAnalyze failure', () => {
+    it('does NOT call onFallbackToManual when handleForceAiAnalyze fails with quota_exceeded', async () => {
+      const quotaErr: parseNutritionModule.ParseNutritionError = new Error(
+        "You've used today's AI parses. Quick log and on-device parsing still work."
+      );
+      quotaErr.is429 = true;
+      quotaErr.status = 429;
+      quotaErr.code = 'quota_exceeded';
+      quotaErr.limit = 30;
+      quotaErr.period = 'day';
+
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(quotaErr);
+
+      const { result } = setupHook();
+
+      await act(async () => {
+        await result.current.handleForceAiAnalyze('4 eggs');
+      });
+
+      expect(result.current.isQuotaExceeded).toBe(true);
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call onFallbackToManual when handleForceAiAnalyze fails with server/timeout error', async () => {
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(new Error('504 Gateway Timeout'));
+
+      const { result } = setupHook();
+
+      await act(async () => {
+        await result.current.handleForceAiAnalyze('4 eggs');
+      });
+
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(setStatus).toHaveBeenCalledWith('AI service unavailable: 504 Gateway Timeout');
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call onFallbackToManual when handleForceAiAnalyze fails with network error', async () => {
+      const netErr = new TypeError('Failed to fetch');
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(netErr);
+
+      const { result } = setupHook();
+
+      await act(async () => {
+        await result.current.handleForceAiAnalyze('4 eggs');
+      });
+
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call onFallbackToManual when hasExistingStagedMeal is true on handleAnalyze failure', async () => {
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(new Error('500 Server Error'));
+
+      const { result } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus,
+          setIsError,
+          onParsedSuccess,
+          onFallbackToManual,
+          hasExistingStagedMeal: true,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleAnalyze({ overrideText: 'Greek Yogurt' });
+      });
+
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('PWA update blocker registration during AI analysis', () => {
+    beforeEach(() => {
+      resetUpdateSafetyForTesting();
+    });
+
+    it('registers hard update blocker while AI parse is in flight and clears it on completion', async () => {
+      let resolvePromise: (val: any) => void = () => {};
+      const pendingParse = new Promise((resolve) => {
+        resolvePromise = resolve;
+      });
+
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockImplementationOnce(() => pendingParse as any);
+
+      const { result } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus,
+          setIsError,
+          onParsedSuccess,
+          onFallbackToManual,
+        })
+      );
+
+      expect(evaluateUpdateSafety().status).toBe('clear');
+
+      let analyzePromise: Promise<void> | undefined;
+      act(() => {
+        analyzePromise = result.current.handleForceAiAnalyze('salmon bowl');
+      });
+
+      expect(result.current.isAnalyzing).toBe(true);
+
+      const inFlightSafety = evaluateUpdateSafety();
+      expect(inFlightSafety.status).toBe('hard');
+      if (inFlightSafety.status === 'hard') {
+        expect(inFlightSafety.reason).toBe('AI analysis in progress');
+      }
+
+      await act(async () => {
+        resolvePromise({
+          name: 'Salmon Bowl',
+          items: [],
+          calories: 500,
+          protein: 40,
+          carbs: 45,
+          fat: 15,
+          fiber: 5,
+          servingSize: 1,
+          servingUnit: 'bowl',
+          source: 'ai',
+        });
+        await analyzePromise;
+      });
+
+      expect(result.current.isAnalyzing).toBe(false);
+      expect(evaluateUpdateSafety().status).toBe('clear');
+    });
+
+    it('clears hard update blocker when AI analysis fails', async () => {
+      let rejectPromise: (err: any) => void = () => {};
+      const pendingParse = new Promise((_, reject) => {
+        rejectPromise = reject;
+      });
+
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockImplementationOnce(() => pendingParse as any);
+
+      const { result } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus,
+          setIsError,
+          onParsedSuccess,
+          onFallbackToManual,
+        })
+      );
+
+      let analyzePromise: Promise<void> | undefined;
+      act(() => {
+        analyzePromise = result.current.handleForceAiAnalyze('protein bar');
+      });
+
+      expect(result.current.isAnalyzing).toBe(true);
+      expect(evaluateUpdateSafety().status).toBe('hard');
+
+      await act(async () => {
+        rejectPromise(new Error('Network error'));
+        await analyzePromise?.catch(() => {});
+      });
+
+      expect(result.current.isAnalyzing).toBe(false);
+      expect(evaluateUpdateSafety().status).toBe('clear');
+    });
+
+    it('unregisters update blocker if unmounted while AI analysis is in flight', () => {
+      const pendingParse = new Promise(() => {});
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockImplementationOnce(() => pendingParse as any);
+
+      const { result, unmount } = renderHook(() =>
+        useNutritionAi({
+          customDishes: [],
+          setStatus,
+          setIsError,
+          onParsedSuccess,
+          onFallbackToManual,
+        })
+      );
+
+      act(() => {
+        result.current.handleForceAiAnalyze('salmon bowl');
+      });
+
+      expect(result.current.isAnalyzing).toBe(true);
+      expect(evaluateUpdateSafety().status).toBe('hard');
+
+      unmount();
+
+      expect(evaluateUpdateSafety().status).toBe('clear');
     });
   });
 });
