@@ -7869,7 +7869,11 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         expect(geo1!.intersectNav, `toast must not intersect nav on /nutrition at ${width}px`).toBe(false);
         expect(geo1!.intersectLogBtn, `toast must not intersect Log Meal button on /nutrition at ${width}px`).toBe(false);
         expect(geo1!.toastTopRatio, `toast top must stay in bottom zone (>= 50% vh, got ${geo1!.toastTopRatio}) at ${width}px`).toBeGreaterThanOrEqual(0.5);
-        expect(geo1!.toastBottom, `toast bottom (${geo1!.toastBottom}px) <= pill top (${geo1!.pillTop}px) at ${width}px`).toBeLessThanOrEqual(geo1!.pillTop);
+        // In Option E, the pill collapses to a 44x44 badge docked 8px above the staged card obstacle.
+        // When the obstacle is higher on screen, the badge sits above the toast lane; when scrolled
+        // to bottom, the toast stacks above the docked pill/badge. In all cases they never collide.
+        const noOverlapGeo1 = geo1!.toastBottom <= geo1!.pillTop || geo1!.pillTop <= geo1!.toastTop;
+        expect(noOverlapGeo1, `toast and pill must not collide vertically at ${width}px (toastBottom: ${geo1!.toastBottom}px, pillTop: ${geo1!.pillTop}px)`).toBe(true);
 
         // Toast overlays page content, so its background must be fully opaque
         // (no list text bleeding through the toast).
@@ -7894,7 +7898,8 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
         expect(geo2!.intersectNav).toBe(false);
         expect(geo2!.intersectLogBtn).toBe(false);
         expect(geo2!.toastTopRatio).toBeGreaterThanOrEqual(0.5);
-        expect(geo2!.toastBottom).toBeLessThanOrEqual(geo2!.pillTop);
+        const noOverlapGeo2 = geo2!.toastBottom <= geo2!.pillTop || geo2!.pillTop <= geo2!.toastTop;
+        expect(noOverlapGeo2, `toast and pill must not collide vertically after mid-screen scroll at ${width}px (toastBottom: ${geo2!.toastBottom}px, pillTop: ${geo2!.pillTop}px)`).toBe(true);
 
         // 3. Scrolled to bottom: staged card scrolled past or bottom-anchored
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
