@@ -13,6 +13,9 @@ import { ToastProvider } from '../../context/ToastContext';
 import { ToastHost } from '../common/ToastHost';
 import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory, recordedTables } from '../../test/supabaseBuilderMock';
+import { updateUserCache, notifyOutboxChanged, resetOutboxForTesting } from '../../offline/outbox';
+import { setFlusherSessionUser, resetFlusherForTesting } from '../../offline/flusher';
+import { getOfflineDb } from '../../offline';
 
 /**
  * Edit and Delete now live behind a single overflow trigger (`meal-actions-<id>`)
@@ -153,6 +156,8 @@ describe('HistoryView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMockHistory();
+    resetOutboxForTesting();
+    resetFlusherForTesting();
     (supabase.auth.getUser as any).mockResolvedValue({ data: { user: { id: 'test-athlete-id' } } });
     (supabase.auth.getSession as any).mockResolvedValue({ data: { session: mockSession } });
     (supabase.auth.onAuthStateChange as any).mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
@@ -2495,6 +2500,91 @@ describe('HistoryView', () => {
       await waitFor(() => {
         expect(screen.getByText('Exercise 0000')).toBeDefined();
       });
+    });
+
+    it('renders pending offline meals overlaid on the timeline with pending-mark in nutrition domain', async () => {
+      const fullProfile = {
+        id: 'test-athlete-id',
+        email: 'athlete@example.com',
+        username: 'athlete',
+        role: 'athlete',
+        target_calories: 2200,
+        target_protein: 160,
+        target_carbs: 220,
+        target_fat: 70,
+        target_fiber: 30,
+        auto_rest_timer: true,
+        rest_timer_seconds: 90,
+        is_coach_mode: false,
+        timezone: 'UTC',
+        weight_unit: 'lb',
+        pr_mode: 'weight',
+      };
+      localStorage.setItem('yourbody_user', JSON.stringify(fullProfile));
+      localStorage.setItem('yourbody_view_mode', 'athlete');
+
+      const offlineMealOp = {
+        opId: 'op-offline-meal-1',
+        userId: 'test-athlete-id',
+        seq: 1,
+        createdAt: '2026-09-02T12:00:00Z',
+        kind: 'nutrition.log' as const,
+        payload: {
+          id: 'meal-offline-1',
+          user_id: 'test-athlete-id',
+          food_name: 'Offline Steak Dinner',
+          calories: 650,
+          protein: 55,
+          carbs: 5,
+          fat: 45,
+          fiber: 1,
+          logged_at: '2026-09-02T19:00:00Z',
+          logged_date: '2026-09-02',
+        },
+        state: 'pending' as const,
+        attempts: 0,
+      };
+
+      try {
+        setFlusherSessionUser('test-athlete-id');
+        const db = await getOfflineDb('test-athlete-id');
+        await db.clear('outbox');
+        await db.put('outbox', offlineMealOp);
+        updateUserCache('test-athlete-id', [offlineMealOp]);
+        notifyOutboxChanged('test-athlete-id');
+
+        renderComponent();
+        await screen.findByText('Chest & Back');
+        await screen.findByText('Workout History');
+
+        // Switch to Nutrition tab
+        fireEvent.click(screen.getByTestId('history-tab-nutrition'));
+
+        // Wait specifically for the pending day card on the timeline
+        const expandBtn = await screen.findByTestId('expand-day-btn-2026-09-02');
+        const dayCard = expandBtn.closest('.rounded-3xl');
+        expect(dayCard).not.toBeNull();
+        const pendingMarksOnCard = within(dayCard as HTMLElement).getAllByTestId('pending-mark');
+        expect(pendingMarksOnCard.length).toBeGreaterThanOrEqual(1);
+
+        // Expand the day card to inspect the meal row
+        await waitFor(() => {
+          const btn = screen.getByTestId('expand-day-btn-2026-09-02');
+          if (btn.getAttribute('aria-expanded') !== 'true') {
+            fireEvent.click(btn);
+          }
+          expect(screen.getByText('Offline Steak Dinner')).toBeDefined();
+        });
+      } finally {
+        localStorage.removeItem('yourbody_user');
+        localStorage.removeItem('yourbody_view_mode');
+        try {
+          const db = await getOfflineDb('test-athlete-id');
+          await db.clear('outbox');
+        } catch {
+          // ignore
+        }
+      }
     });
   });
 });

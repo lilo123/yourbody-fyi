@@ -17,24 +17,31 @@ export const OwnerDashboardCard: React.FC = () => {
 
     let isMounted = true;
 
-    fetchOwnerStats().then((result) => {
-      if (!isMounted) return;
+    fetchOwnerStats()
+      .then((result) => {
+        if (!isMounted) return;
 
-      if (result.isForbidden) {
-        setIsForbidden(true);
+        if (result.isForbidden) {
+          setIsForbidden(true);
+          setLoading(false);
+          return;
+        }
+
+        if (result.error) {
+          setError(result.error.message || 'Failed to load owner statistics');
+          setLoading(false);
+          return;
+        }
+
+        setStats(result.data);
         setLoading(false);
-        return;
-      }
-
-      if (result.error) {
-        setError(result.error.message || 'Failed to load owner statistics');
+      })
+      .catch((err: unknown) => {
+        if (!isMounted) return;
+        console.warn('[OwnerDashboardCard] Failed to fetch owner stats:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load owner statistics');
         setLoading(false);
-        return;
-      }
-
-      setStats(result.data);
-      setLoading(false);
-    });
+      });
 
     return () => {
       isMounted = false;

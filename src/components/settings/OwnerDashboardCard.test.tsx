@@ -111,4 +111,27 @@ describe('OwnerDashboardCard', () => {
     await screen.findByTestId('owner-dashboard-card');
     await expectNoA11yViolations(container);
   });
+
+  it('handles rejected fetchOwnerStats promise without unhandled rejection and displays error state', async () => {
+    vi.mocked(useFeatureFlag).mockReturnValue(true);
+    const unhandledRejections: any[] = [];
+    const onUnhandled = (event: PromiseRejectionEvent) => {
+      unhandledRejections.push(event.reason);
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+
+    try {
+      vi.mocked(fetchOwnerStats).mockRejectedValue(new Error('Network failure'));
+
+      render(<OwnerDashboardCard />);
+
+      await screen.findByTestId('owner-dashboard-card');
+      const errorEl = await screen.findByTestId('owner-dashboard-error');
+      expect(errorEl.textContent).toContain('Network failure');
+      expect(unhandledRejections).toHaveLength(0);
+    } finally {
+      window.removeEventListener('unhandledrejection', onUnhandled);
+    }
+  });
 });
+

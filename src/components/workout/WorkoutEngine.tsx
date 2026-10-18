@@ -365,8 +365,10 @@ export const WorkoutEngine: React.FC = () => {
   const currentDayAbbr = getDayOfWeekAbbr(workoutDate);
 
   return (
-    <div className="space-y-6 pb-44 text-white">
-      {/* Header controls & stats */}
+    <div className="pb-44 text-white">
+      <h1 className="sr-only">Workout</h1>
+      <div className="space-y-6">
+        {/* Header controls & stats */}
       <WorkoutHeader
         mutationError={mutationError}
         onClearMutationError={clearMutationError}
@@ -586,6 +588,7 @@ export const WorkoutEngine: React.FC = () => {
         activeExerciseNames={activeExercises}
         userLogs={userLogs}
       />
+      </div>
     </div>
   );
 };
