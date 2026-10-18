@@ -26,6 +26,7 @@ export interface UseNutritionAiOptions {
   setStatus: (msg: string) => void;
   setIsError: (err: boolean) => void;
   parserMode?: NutritionParserMode;
+  hasExistingStagedMeal?: boolean;
 }
 
 function buildStagedMealFromLocal(
@@ -161,6 +162,7 @@ export function useNutritionAi({
   setStatus,
   setIsError,
   parserMode: configuredParserMode,
+  hasExistingStagedMeal = false,
 }: UseNutritionAiOptions) {
   const [nlInput, setNlInput] = useState('');
   const [isRateLimited, setIsRateLimited] = useState(false);
@@ -204,6 +206,7 @@ export function useNutritionAi({
       setIsAnalyzing(false);
     };
 
+    const isExistingMeal = Boolean(options?.forceAi || hasExistingStagedMeal);
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     const mode: NutritionParserMode = configuredParserMode ?? getNutritionParserMode();
 
@@ -449,11 +452,13 @@ export function useNutritionAi({
 
         setIsError(true);
         setStatus('AI needs a connection: use quick log');
-        const prefill = extractPrefill(textToAnalyze, localResult);
-        onFallbackToManual(
-          prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
-          prefill
-        );
+        if (!isExistingMeal) {
+          const prefill = extractPrefill(textToAnalyze, localResult);
+          onFallbackToManual(
+            prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+            prefill
+          );
+        }
         return;
       }
 
@@ -464,13 +469,15 @@ export function useNutritionAi({
           setIsQuotaExceeded(true);
           const quotaMsg = error?.message || formatQuotaExceededMessage(error?.limit, error?.period);
           setStatus(quotaMsg);
-          const localResult =
-            textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
-          const prefill = extractPrefill(textToAnalyze, localResult);
-          onFallbackToManual(
-            prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
-            prefill
-          );
+          if (!isExistingMeal) {
+            const localResult =
+              textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
+            const prefill = extractPrefill(textToAnalyze, localResult);
+            onFallbackToManual(
+              prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+              prefill
+            );
+          }
           return;
         }
 
@@ -490,13 +497,15 @@ export function useNutritionAi({
           ? `Meal Analysis: ${errorMsg}`
           : `AI service unavailable: ${errorMsg}`
       );
-      const localResult =
-        textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
-      const prefill = extractPrefill(textToAnalyze, localResult);
-      onFallbackToManual(
-        prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
-        prefill
-      );
+      if (!isExistingMeal) {
+        const localResult =
+          textToAnalyze.trim() && !selectedPhoto ? parseNutritionText(textToAnalyze.trim()) : null;
+        const prefill = extractPrefill(textToAnalyze, localResult);
+        onFallbackToManual(
+          prefill.name || textToAnalyze.trim() || (selectedPhoto ? 'Meal Photo' : ''),
+          prefill
+        );
+      }
     } finally {
       stopAnalyzing();
     }
