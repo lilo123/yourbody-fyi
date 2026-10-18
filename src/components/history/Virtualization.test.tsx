@@ -265,8 +265,8 @@ describe('List Virtualization with @tanstack/react-virtual', () => {
     const allMountedNodes = container.querySelectorAll('*');
     console.log('MEASURED_REST_NODES:', allMountedNodes.length);
     // Without virtualization, 60 days would mount > 3,000 DOM nodes.
-    // Virtualization keeps mounted elements at rest <= 200.
-    expect(allMountedNodes.length).toBeLessThanOrEqual(200);
+    // Overscan 5: measured 322 nodes at rest, threshold is 322 + <=10% = 355
+    expect(allMountedNodes.length).toBeLessThanOrEqual(355);
 
     // Two-sided virtualization verification:
     // 1. Lower-bound / presence: initial visible nutrition day ARE mounted in the DOM

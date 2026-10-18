@@ -5,7 +5,7 @@ import { Calendar, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import { formatCalories, formatMacro } from '../../utils/nutrition';
 import { MealLogRow } from '../nutrition/MealLogRow';
 import type { NutritionItem } from '../../utils/itemModel';
-import { FALLBACK_WINDOW } from './virtualizationConstants';
+import { FALLBACK_WINDOW, HISTORY_OVERSCAN } from './virtualizationConstants';
 import { Skeleton } from '../common/Skeleton';
 import { formatNutritionDayHeader } from './useHistoryData';
 import { AuthContext } from '../../context/AuthContextTypes';
@@ -177,7 +177,7 @@ export const NutritionHistoryTimeline: React.FC<NutritionHistoryTimelineProps> =
       const mealsCount = day.meals?.length ?? 1;
       return 200 + mealsCount * 80;
     },
-    overscan: 0,
+    overscan: HISTORY_OVERSCAN,
     gap: 16,
     scrollMargin,
     measureElement: (element, entry) => {
