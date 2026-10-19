@@ -779,5 +779,27 @@ describe('NutritionAiInput live regions and accessibility', () => {
       expect(screen.queryByTestId('status-message')).toBeNull();
     });
   });
+
+  describe('header layout and spacing', () => {
+    it('applies gap-3, min-w-0, and shrink-0 to prevent text from crowding manual entry button', () => {
+      render(<NutritionAiInput {...defaultProps()} />);
+      const heading = screen.getByRole('heading', { name: /log food/i });
+      expect(heading.className).toContain('whitespace-nowrap');
+
+      const headerRow = heading.closest('.flex.items-center.justify-between');
+      expect(headerRow).not.toBeNull();
+      expect(headerRow?.className).toContain('gap-3');
+
+      const textColumn = heading.closest('.min-w-0');
+      expect(textColumn).not.toBeNull();
+
+      const subtitle = screen.getByText('Describe what you ate in natural language');
+      expect(subtitle).toBeDefined();
+
+      const manualBtn = screen.getByRole('button', { name: /manual entry/i });
+      expect(manualBtn.className).toContain('min-h-[44px]');
+      expect(manualBtn.className).toContain('min-w-[44px]');
+    });
+  });
 });
 
