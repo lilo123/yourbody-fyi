@@ -200,14 +200,14 @@ export const NutritionAiInput: React.FC<NutritionAiInputProps> = memo(({
     isAnalyzing || (effectiveOffline ? !canParseLocally : (!nlInput.trim() && !selectedPhoto));
   return (
     <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-neon-cyan">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-neon-cyan shrink-0">
             <Sparkles className="w-4 h-4 text-zinc-950" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 ref={headingRef} tabIndex={-1} className="text-xs font-bold text-white uppercase tracking-wider outline-none">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h3 ref={headingRef} tabIndex={-1} className="text-xs font-bold text-white uppercase tracking-wider outline-none whitespace-nowrap">
                 Log Food
               </h3>
               <div className="relative">

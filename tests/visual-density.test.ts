@@ -8950,7 +8950,7 @@ test.describe("HF-B: Workout Shell & Overlays", () => {
           const expectedLeft = Math.max(16, (width - 576) / 2 + 16);
           const expectedRight = width - expectedLeft;
 
-          const logo = page.locator('header a[href="/workout"] > div:first-child');
+          const logo = page.locator('header [data-testid="brand-link"] > div:first-child');
           await expect(logo).toBeVisible({ timeout: 10000 });
           const logoBox = await logo.boundingBox();
           expect(logoBox, `logoBox exists on /login at ${width}px`).not.toBeNull();
