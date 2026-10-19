@@ -168,6 +168,71 @@ describe('ItemNutritionModal', () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it('accepts decimal comma in numeric inputs and saves parsed value (12,5 -> 12.5)', () => {
+    const item = makeItem();
+    const onSave = vi.fn();
+    const onClose = vi.fn();
+
+    render(<ItemNutritionModal isOpen={true} onClose={onClose} item={item} onSave={onSave} />);
+
+    const fInput = screen.getByTestId('edit-item-fat-input');
+    const saveBtn = screen.getByTestId('save-edit-item-nutrition-btn') as HTMLButtonElement;
+
+    fireEvent.change(fInput, { target: { value: '12,5' } });
+
+    expect(screen.queryByTestId('edit-item-fat-error')).toBeNull();
+    expect(saveBtn.disabled).toBe(false);
+
+    fireEvent.click(saveBtn);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({
+      calories: 104,
+      protein: 10,
+      carbs: 0,
+      fat: 12.5,
+      fiber: 0,
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('validates garbage values with comma: displays inline error and disables Save', () => {
+    const item = makeItem();
+    const onSave = vi.fn();
+
+    render(<ItemNutritionModal isOpen={true} onClose={() => {}} item={item} onSave={onSave} />);
+
+    const cInput = screen.getByTestId('edit-item-carbs-input');
+    const saveBtn = screen.getByTestId('save-edit-item-nutrition-btn') as HTMLButtonElement;
+
+    fireEvent.change(cInput, { target: { value: '1,2,3' } });
+
+    expect(screen.getByTestId('edit-item-carbs-error')).toBeDefined();
+    expect(screen.getByText('Must be a valid number')).toBeDefined();
+    expect(saveBtn.disabled).toBe(true);
+
+    fireEvent.click(saveBtn);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('validates negative decimal comma values: displays inline error and disables Save', () => {
+    const item = makeItem();
+    const onSave = vi.fn();
+
+    render(<ItemNutritionModal isOpen={true} onClose={() => {}} item={item} onSave={onSave} />);
+
+    const fInput = screen.getByTestId('edit-item-fat-input');
+    const saveBtn = screen.getByTestId('save-edit-item-nutrition-btn') as HTMLButtonElement;
+
+    fireEvent.change(fInput, { target: { value: '-12,5' } });
+
+    expect(screen.getByTestId('edit-item-fat-error')).toBeDefined();
+    expect(screen.getByText('Cannot be negative')).toBeDefined();
+    expect(saveBtn.disabled).toBe(true);
+
+    fireEvent.click(saveBtn);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it('Cancel button closes modal without calling onSave', () => {
     const item = makeItem();
     const onSave = vi.fn();

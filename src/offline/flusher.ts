@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { isDbClosedError } from './db';
+import { getOfflineDb, isDbClosedError } from './db';
 import {
   enqueue as outboxEnqueue,
   getOutboxOps,
@@ -203,8 +203,14 @@ export async function flushNow(targetUserId?: string, callerOpId?: string): Prom
     const syncedOpIds = new Set<string>();
 
     try {
-      for (const op of pendingOps) {
-        if (op.state === 'attention' || op.blockedBy) {
+      for (const pendingOp of pendingOps) {
+        if (pendingOp.state === 'attention' || pendingOp.blockedBy) {
+          continue;
+        }
+
+        const db = await getOfflineDb(userId);
+        const op = await db.get('outbox', pendingOp.opId);
+        if (!op || op.state === 'attention' || op.blockedBy) {
           continue;
         }
 
