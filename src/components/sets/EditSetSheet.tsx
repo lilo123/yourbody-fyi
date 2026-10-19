@@ -423,7 +423,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="pt-2 flex items-center gap-3">
+        <div data-testid="sheet-action-row" className="pt-2 flex items-center gap-3">
           <Button
             type="button"
             variant="destructive"
