@@ -280,6 +280,138 @@ describe('CoachCockpit', () => {
     });
   });
 
+  it('refreshes roster and deselects disconnected athlete when disconnect is confirmed', async () => {
+    let currentLinks = [
+      {
+        athlete_id: 'ath-1',
+        status: 'active',
+        linked_at: '2026-09-01T00:00:00Z',
+        athlete: { id: 'ath-1', username: 'Alex Johnson', email: 'alex@example.com', role: 'athlete' },
+      },
+    ];
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'coach_athlete_links') {
+        return createSupabaseBuilder('coach_athlete_links', {
+          resolver: () => currentLinks,
+        });
+      }
+      return defaultMock(table);
+    });
+
+    (supabase.rpc as any).mockImplementation((fn: string, args: any) => {
+      if (fn === 'disconnect_coach') {
+        currentLinks = currentLinks.filter((l) => l.athlete_id !== args.target_athlete_id);
+        return Promise.resolve({ data: { success: true }, error: null });
+      }
+      if (fn === 'get_exercise_catalog') {
+        return Promise.resolve({
+          data: [
+            { id: 'ex-1', name: 'Leg Extension Machine', body_parts: ['Legs'], is_master: true, equipment: null, is_archived: false, is_hidden: false, user_id: null },
+            { id: 'ex-2', name: 'Incline Bench Press', body_parts: ['Chest'], is_master: true, equipment: null, is_archived: false, is_hidden: false, user_id: null },
+          ],
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: { success: true, template_id: 'tpl-1' }, error: null });
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disconnect-athlete-btn')).toBeDefined();
+    });
+    expect(screen.getByText('Alex Johnson')).toBeDefined();
+
+    fireEvent.click(screen.getByTestId('disconnect-athlete-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disconnect-athlete-confirm-dialog')).toBeDefined();
+    });
+    expect(screen.getByTestId('disconnect-athlete-confirm-dialog').textContent).toContain('Disconnect Alex Johnson?');
+
+    fireEvent.click(screen.getByTestId('disconnect-athlete-confirm-dialog-confirm'));
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith('disconnect_coach', {
+        target_athlete_id: 'ath-1',
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Alex Johnson')).toBeNull();
+    });
+  });
+
+  it('refreshes roster and selects next remaining athlete when one of multiple athletes is disconnected', async () => {
+    let currentLinks = [
+      {
+        athlete_id: 'ath-1',
+        status: 'active',
+        linked_at: '2026-09-03T00:00:00Z',
+        athlete: { id: 'ath-1', username: 'Alex Johnson', email: 'alex@example.com', role: 'athlete' },
+      },
+      {
+        athlete_id: 'ath-2',
+        status: 'active',
+        linked_at: '2026-09-02T00:00:00Z',
+        athlete: { id: 'ath-2', username: 'Sam Taylor', email: 'sam@example.com', role: 'athlete' },
+      },
+    ];
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'coach_athlete_links') {
+        return createSupabaseBuilder('coach_athlete_links', {
+          resolver: () => currentLinks,
+        });
+      }
+      return defaultMock(table);
+    });
+
+    (supabase.rpc as any).mockImplementation((fn: string, args: any) => {
+      if (fn === 'disconnect_coach') {
+        currentLinks = currentLinks.filter((l) => l.athlete_id !== args.target_athlete_id);
+        return Promise.resolve({ data: { success: true }, error: null });
+      }
+      if (fn === 'get_exercise_catalog') {
+        return Promise.resolve({
+          data: [
+            { id: 'ex-1', name: 'Leg Extension Machine', body_parts: ['Legs'], is_master: true, equipment: null, is_archived: false, is_hidden: false, user_id: null },
+            { id: 'ex-2', name: 'Incline Bench Press', body_parts: ['Chest'], is_master: true, equipment: null, is_archived: false, is_hidden: false, user_id: null },
+          ],
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: { success: true, template_id: 'tpl-1' }, error: null });
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disconnect-athlete-btn')).toBeDefined();
+    });
+    expect(screen.getByText('Alex Johnson')).toBeDefined();
+
+    fireEvent.click(screen.getByTestId('disconnect-athlete-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disconnect-athlete-confirm-dialog')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('disconnect-athlete-confirm-dialog-confirm'));
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith('disconnect_coach', {
+        target_athlete_id: 'ath-1',
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Alex Johnson')).toBeNull();
+      expect(screen.getByText('Sam Taylor')).toBeDefined();
+    });
+  });
+
   it('renders disconnect confirmation dialog outside hidden tab panels when on non-templates tab', async () => {
     renderComponent();
 
