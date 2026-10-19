@@ -44,19 +44,21 @@ async function expandNutritionDay(date?: string) {
 }
 
 
-const { mockSession, mockUpdate, mockUpdateEq } = vi.hoisted(() => {
+const { mockSession, mockUpdate, mockUpdateEq, mockDeleteEq } = vi.hoisted(() => {
   const mockUpdateEq = vi.fn().mockReturnValue({
     select: vi.fn().mockResolvedValue({ data: [], error: null }),
   });
   const mockUpdate = vi.fn().mockReturnValue({
     eq: mockUpdateEq,
   });
+  const mockDeleteEq = vi.fn().mockResolvedValue({ error: null });
   return {
     mockSession: {
       user: { id: 'test-athlete-id', email: 'athlete@example.com' },
     },
     mockUpdate,
     mockUpdateEq,
+    mockDeleteEq,
   };
 });
 
@@ -97,6 +99,15 @@ vi.mock('../../lib/sets', async () => {
         set_type: updates.setType || 'working',
       });
     }),
+    deleteSet: vi.fn().mockImplementation((_client, id) => {
+      const eqRes = mockDeleteEq('id', id);
+      if (eqRes) {
+        return Promise.resolve(eqRes).then((res: any) => {
+          if (res?.error) throw new Error(res.error.message || 'Delete failed');
+        });
+      }
+      return Promise.resolve();
+    }),
   };
 });
 
@@ -122,7 +133,6 @@ vi.mock('../../lib/supabase', () => ({
 
 describe('HistoryView', () => {
   let queryClient: QueryClient;
-  const mockDeleteEq = vi.fn().mockResolvedValue({ error: null });
 
   const mockNutritionLogs = [
     {
