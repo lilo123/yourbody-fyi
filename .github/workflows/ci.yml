@@ -205,6 +205,9 @@ jobs:
             npx playwright install --with-deps chromium
           fi
 
+      - name: Build application
+        run: npm run build
+
       - name: Run E2E tests (Desktop Chrome)
         run: npx playwright test tests/e2e --project='Desktop Chrome' --workers=1
 
@@ -275,6 +278,9 @@ jobs:
             npx playwright install --with-deps webkit
           fi
 
+      - name: Build application
+        run: npm run build
+
       - name: Run E2E tests (Mobile Safari)
         run: npx playwright test tests/e2e --project='Mobile Safari' --workers=1
 
@@ -331,6 +337,9 @@ jobs:
           else
             npx playwright install --with-deps webkit
           fi
+
+      - name: Build application
+        run: npm run build
 
       - name: Run E2E tests (Narrow Safari 320px)
         run: npx playwright test tests/e2e --project='Narrow Safari (320px)' --workers=1
