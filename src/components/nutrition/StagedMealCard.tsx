@@ -558,7 +558,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
           aria-label="Save as Custom Dish"
           disabled={!isOnline}
           onClick={onSaveStagedAsCustomDish}
-          className="bg-zinc-800 hover:bg-zinc-700 text-amber-300 font-bold py-2.5 px-3 min-h-[40px] rounded-xl text-xs border border-border-interactive transition motion-reduce:transition-none flex items-center gap-1.5 touch-manipulation shrink-0 disabled:opacity-50"
+          className="bg-zinc-800 hover:bg-zinc-700 text-amber-300 font-bold py-2.5 px-3 min-h-[40px] rounded-xl text-xs border border-border-interactive transition motion-reduce:transition-none flex items-center gap-1.5 touch-manipulation shrink-0 disabled:opacity-50 relative before:absolute before:right-0 before:bottom-0 before:min-w-[44px] before:min-h-[44px] before:content-['']"
           title={!isOnline ? 'Available when online' : 'Save this meal as a quick-log custom dish'}
         >
           <Star className="w-3.5 h-3.5 fill-amber-400 shrink-0" />
@@ -583,7 +583,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
             type="button"
             aria-label="Discard staged meal"
             onClick={handleDiscardClick}
-            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-2.5 min-h-[40px] min-w-[40px] rounded-xl transition motion-reduce:transition-none border border-border-interactive flex items-center justify-center touch-manipulation shrink-0"
+            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-2.5 min-h-[40px] min-w-[40px] rounded-xl transition motion-reduce:transition-none border border-border-interactive flex items-center justify-center touch-manipulation shrink-0 relative before:absolute before:right-0 before:bottom-0 before:min-w-[44px] before:min-h-[44px] before:content-['']"
             title="Discard"
           >
             <X className="w-4 h-4 shrink-0" />
