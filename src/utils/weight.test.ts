@@ -9,6 +9,7 @@ import {
   lbToKg,
   kgToLb,
   convertWeight,
+  convertDraftWeight,
   weightUnitLabel,
 } from './weight';
 
@@ -206,6 +207,50 @@ describe('weight utilities (src/utils/weight.ts)', () => {
       expect(parseWeightInput('')).toBeNull();
       expect(parseWeightInput('abc')).toBeNull();
       expect(parseWeightInput('-5')).toBeNull();
+    });
+  });
+
+  describe('convertDraftWeight', () => {
+    it('converts kg to lb with nearest 0.5 rounding', () => {
+      expect(convertDraftWeight('100', 'kg', 'lb')).toBe('220.5');
+      expect(convertDraftWeight('50', 'kg', 'lb')).toBe('110');
+      expect(convertDraftWeight('45.5', 'kg', 'lb')).toBe('100.5');
+    });
+
+    it('converts lb to kg with nearest 0.1 rounding', () => {
+      expect(convertDraftWeight('220', 'lb', 'kg')).toBe('99.8');
+      expect(convertDraftWeight('225', 'lb', 'kg')).toBe('102.1');
+      expect(convertDraftWeight('100', 'lb', 'kg')).toBe('45.4');
+    });
+
+    it('leaves BW and bw untouched', () => {
+      expect(convertDraftWeight('BW', 'kg', 'lb')).toBe('BW');
+      expect(convertDraftWeight('bw', 'lb', 'kg')).toBe('bw');
+      expect(convertDraftWeight('  BW  ', 'kg', 'lb')).toBe('  BW  ');
+    });
+
+    it('leaves empty and whitespace strings untouched', () => {
+      expect(convertDraftWeight('', 'kg', 'lb')).toBe('');
+      expect(convertDraftWeight('   ', 'kg', 'lb')).toBe('   ');
+    });
+
+    it('handles decimal comma separator', () => {
+      expect(convertDraftWeight('100,5', 'kg', 'lb')).toBe('221.5');
+      expect(convertDraftWeight('220,5', 'lb', 'kg')).toBe('100');
+    });
+
+    it('returns draft unchanged if fromUnit equals toUnit', () => {
+      expect(convertDraftWeight('100', 'kg', 'kg')).toBe('100');
+      expect(convertDraftWeight('225', 'lb', 'lb')).toBe('225');
+    });
+
+    it('converts 0 to 0', () => {
+      expect(convertDraftWeight('0', 'kg', 'lb')).toBe('0');
+      expect(convertDraftWeight('0', 'lb', 'kg')).toBe('0');
+    });
+
+    it('returns invalid non-numeric strings untouched', () => {
+      expect(convertDraftWeight('abc', 'kg', 'lb')).toBe('abc');
     });
   });
 });

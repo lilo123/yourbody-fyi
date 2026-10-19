@@ -1,4 +1,5 @@
 import { getLocalDateStr } from './ghostSets';
+import { convertDraftWeight, type WeightUnit } from './weight';
 
 export interface SetDraftInput {
   weight: string;
@@ -19,6 +20,7 @@ export interface ActiveWorkoutSession {
   startedAt: string; // ISO 8601
   lastModifiedAt: string; // ISO 8601
   completedAt: string | null;
+  weightUnit?: WeightUnit;
 }
 
 import {
@@ -492,6 +494,38 @@ export class WorkoutSessionStore {
       (s, p) => this.saveSession(s, p),
       this.pendingDrafts
     );
+  }
+
+  /**
+   * Converts all typed draft weights across active workout sessions for a user
+   * from fromUnit to toUnit using canonical display rounding rules.
+   */
+  convertDraftWeights(userId: string, fromUnit: WeightUnit, toUnit: WeightUnit): void {
+    if (!this.isStorageAvailable() || !userId || fromUnit === toUnit) return;
+    this.flushPendingWrites();
+
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`${SESSION_PREFIX}${userId}_`)) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const session: ActiveWorkoutSession = JSON.parse(raw);
+            if (session && session.inputDrafts) {
+              for (const draft of Object.values(session.inputDrafts)) {
+                if (draft && draft.weight !== undefined) {
+                  draft.weight = convertDraftWeight(draft.weight, fromUnit, toUnit);
+                }
+              }
+              session.weightUnit = toUnit;
+              this.saveSession(session, false);
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 
   resetForTesting(): void {
