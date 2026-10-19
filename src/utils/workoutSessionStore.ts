@@ -505,21 +505,26 @@ export class WorkoutSessionStore {
     this.flushPendingWrites();
 
     try {
+      const matchingKeys: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(`${SESSION_PREFIX}${userId}_`)) {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const session: ActiveWorkoutSession = JSON.parse(raw);
-            if (session && session.inputDrafts) {
-              for (const draft of Object.values(session.inputDrafts)) {
-                if (draft && draft.weight !== undefined) {
-                  draft.weight = convertDraftWeight(draft.weight, fromUnit, toUnit);
-                }
+          matchingKeys.push(key);
+        }
+      }
+
+      for (const key of matchingKeys) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const session: ActiveWorkoutSession = JSON.parse(raw);
+          if (session && session.inputDrafts) {
+            for (const draft of Object.values(session.inputDrafts)) {
+              if (draft && draft.weight !== undefined) {
+                draft.weight = convertDraftWeight(draft.weight, fromUnit, toUnit);
               }
-              session.weightUnit = toUnit;
-              this.saveSession(session, false);
             }
+            session.weightUnit = toUnit;
+            this.saveSession(session, false);
           }
         }
       }
