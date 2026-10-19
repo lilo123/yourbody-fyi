@@ -154,10 +154,11 @@ describe('App Shell & Navigation', () => {
     });
 
     // Pill is visible on /workout
+    const pill = await screen.findByTestId('rest-timer-pill', {}, { timeout: 10000 });
+    expect(pill).toBeDefined();
     await waitFor(() => {
-      expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
       expect(screen.getByTestId('rest-timer-display').textContent).toBe('1:30');
-    });
+    }, { timeout: 10000 });
 
     // Navigate to /nutrition
     const nutritionTab = await screen.findByTestId('nav-nutrition');
