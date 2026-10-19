@@ -557,6 +557,34 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
       expect(mockClient['from']).not.toHaveBeenCalled();
     });
 
+    it('updateSet enqueues set_index when setIndex is provided, and never enqueues created_at in patch', async () => {
+      const mockClient: any = { ['from']: vi.fn() };
+      vi.mocked(enqueueAndAwait).mockResolvedValueOnce({
+        status: 'synced',
+        opId: 'op-update-3',
+      });
+
+      const res = await updateSet(mockClient, 's-3', {
+        weight: 235,
+        reps: 8,
+        setIndex: 3,
+      });
+
+      expect(enqueueAndAwait).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'set.update',
+          payload: expect.objectContaining({
+            id: 's-3',
+            patch: { weight: 235, reps: 8, set_index: 3 },
+          }),
+        }),
+        expect.anything()
+      );
+      const call = vi.mocked(enqueueAndAwait).mock.calls[0];
+      expect((call[0].payload as any).patch.created_at).toBeUndefined();
+      expect(res.set_index).toBe(3);
+    });
+
     it('online PERMANENT -> error surfaces as before on update', async () => {
       const mockClient: any = { ['from']: vi.fn() };
       vi.mocked(enqueueAndAwait).mockRejectedValueOnce(
