@@ -162,19 +162,16 @@ export function newId(): string {
 }
 
 async function getCurrentSessionUserId(): Promise<string | null> {
-  let sessionUser: string | null = null;
   try {
-    const {
-      data: { session },
-    } = await activeSupabaseClient.auth.getSession();
-    sessionUser = session?.user?.id || null;
+    if (!activeSupabaseClient?.auth?.getSession) {
+      return flusherSessionUserId;
+    }
+    const { data } = await activeSupabaseClient.auth.getSession();
+    return data?.session?.user?.id || null;
   } catch {
-    // Cannot verify session from supabase client
+    // Cannot verify session from supabase client (e.g. throws)
+    return flusherSessionUserId;
   }
-  if (!sessionUser) {
-    sessionUser = flusherSessionUserId;
-  }
-  return sessionUser;
 }
 
 /**

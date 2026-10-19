@@ -516,6 +516,84 @@ describe('Flusher & EnqueueAndAwait (§A4, §D)', () => {
     expect(opsA[0].error).toBeUndefined();
   });
 
+  it('15. mid-flush sign-out without setFlusherSessionUser(null): flush aborts when getSession returns null after op 1, leaving op 2 pending', async () => {
+    await enqueue({
+      userId: userA,
+      kind: 'workout.ensure',
+      payload: { clientWorkoutId: 'w-1', workout_date: '2026-09-30' },
+    });
+    await enqueue({
+      userId: userA,
+      kind: 'workout.ensure',
+      payload: { clientWorkoutId: 'w-2', workout_date: '2026-10-01' },
+    });
+
+    let op1Executed = false;
+    let op2Executed = false;
+
+    ((supabase as any)['from']).mockImplementation((table: string) => {
+      if (table === 'workouts') {
+        return {
+          upsert: vi.fn().mockImplementation((payload: any) => {
+            if (payload?.id === 'w-1') {
+              op1Executed = true;
+              // User signs out mid-flush after op 1 (session becomes null),
+              // but setFlusherSessionUser(null) has NOT been called yet
+              (supabase.auth.getSession as any).mockResolvedValue({
+                data: { session: null },
+              });
+              return Promise.resolve({ data: null, error: null });
+            }
+            if (payload?.id === 'w-2') {
+              op2Executed = true;
+              return Promise.resolve({
+                data: null,
+                error: { code: '42501', message: 'Permission denied (RLS policy violation)' },
+              });
+            }
+            return Promise.resolve({ data: null, error: null });
+          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: 'canonical-w-1' }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    const synced = await flushNow(userA);
+
+    expect(synced).toBe(1);
+    expect(op1Executed).toBe(true);
+    expect(op2Executed).toBe(false);
+
+    const opsA = await getOutboxOps(userA);
+    expect(opsA).toHaveLength(1);
+    expect(opsA[0].state).toBe('pending');
+    expect(opsA[0].error).toBeUndefined();
+  });
+
+  it('16. getCurrentSessionUserId falls back to cached flusherSessionUserId only when getSession throws', async () => {
+    await enqueue({
+      userId: userA,
+      kind: 'workout.ensure',
+      payload: { clientWorkoutId: 'w-throw', workout_date: '2026-09-30' },
+    });
+
+    setFlusherSessionUser(userA);
+    (supabase.auth.getSession as any).mockRejectedValue(new Error('Network/storage failure'));
+
+    const synced = await flushNow(userA);
+    expect(synced).toBe(1);
+
+    const opsA = await getOutboxOps(userA);
+    expect(opsA).toHaveLength(0);
+  });
+
   describe('Multi-tab Sync Broadcast (B.1, B.3)', () => {
     it('synced broadcast from another tab for the same user emits once and updates last synced count', async () => {
       setFlusherSessionUser(userA);
