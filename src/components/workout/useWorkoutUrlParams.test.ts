@@ -108,4 +108,185 @@ describe('useWorkoutUrlParams (URL-1, URL-2)', () => {
       customTemplates[0]
     );
   });
+
+  it('removes ?routine= param from URL after consuming custom routine while preserving other query params and history state', () => {
+    const onSelectRoutine = vi.fn();
+    const customTemplates: RoutineTemplate[] = [
+      {
+        id: '11111111-2222-3333-4444-555555555555',
+        name: 'Custom Push Day',
+        user_id: 'u1',
+        is_master: false,
+        assigned_to: null,
+        created_at: '2026-09-01',
+      },
+    ];
+
+    const initialHistoryState = { fromSettings: true, scrollY: 120 };
+    window.history.replaceState(
+      initialHistoryState,
+      '',
+      '/workout?date=2026-09-20&routine=11111111-2222-3333-4444-555555555555#overview'
+    );
+
+    renderHook(() =>
+      useWorkoutUrlParams({
+        customTemplates,
+        templatesFetched: true,
+        onSelectRoutine,
+        workoutDate: '2026-09-20',
+        onDateChange: vi.fn(),
+      })
+    );
+
+    expect(onSelectRoutine).toHaveBeenCalledWith(
+      'Custom Push Day',
+      customTemplates[0]
+    );
+
+    const searchParams = new URLSearchParams(window.location.search);
+    expect(searchParams.has('routine')).toBe(false);
+    expect(searchParams.get('date')).toBe('2026-09-20');
+    expect(window.location.hash).toBe('#overview');
+    expect(window.location.pathname).toBe('/workout');
+    expect(window.history.state).toEqual(initialHistoryState);
+  });
+
+  it('removes ?routine= param from URL after consuming default routine', () => {
+    const onSelectRoutine = vi.fn();
+
+    window.history.replaceState(
+      null,
+      '',
+      '/workout?routine=Workout%20A%20(Push,%20Quads%20%26%20Core)'
+    );
+
+    renderHook(() =>
+      useWorkoutUrlParams({
+        customTemplates: [],
+        templatesFetched: true,
+        onSelectRoutine,
+        workoutDate: '2026-09-01',
+        onDateChange: vi.fn(),
+      })
+    );
+
+    expect(onSelectRoutine).toHaveBeenCalledWith('Workout A (Push, Quads & Core)');
+
+    const searchParams = new URLSearchParams(window.location.search);
+    expect(searchParams.has('routine')).toBe(false);
+    expect(window.location.pathname).toBe('/workout');
+  });
+
+
+  it('does not re-apply routine param when targetUserId changes after being consumed', () => {
+    const onSelectRoutine = vi.fn();
+    const athlete1Templates: RoutineTemplate[] = [
+      {
+        id: '11111111-2222-3333-4444-555555555555',
+        name: 'Custom Push Day',
+        user_id: 'athlete-1',
+        is_master: false,
+        assigned_to: null,
+        created_at: '2026-09-01',
+      },
+    ];
+    const athlete2Templates: RoutineTemplate[] = [
+      {
+        id: '11111111-2222-3333-4444-555555555555',
+        name: 'Custom Push Day',
+        user_id: 'athlete-2',
+        is_master: false,
+        assigned_to: null,
+        created_at: '2026-09-01',
+      },
+    ];
+
+    window.history.replaceState(
+      null,
+      '',
+      '/workout?routine=11111111-2222-3333-4444-555555555555'
+    );
+
+    const { rerender } = renderHook(
+      ({ targetUserId, customTemplates }) =>
+        useWorkoutUrlParams({
+          customTemplates,
+          templatesFetched: true,
+          onSelectRoutine,
+          workoutDate: '2026-09-01',
+          onDateChange: vi.fn(),
+          targetUserId,
+        }),
+      {
+        initialProps: { targetUserId: 'athlete-1', customTemplates: athlete1Templates },
+      }
+    );
+
+    expect(onSelectRoutine).toHaveBeenCalledTimes(1);
+    expect(onSelectRoutine).toHaveBeenCalledWith(
+      'Custom Push Day',
+      athlete1Templates[0]
+    );
+
+    // Param is now stripped from URL
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(false);
+
+    // Coach switches athlete -> targetUserId changes and athlete 2 templates load
+    rerender({ targetUserId: 'athlete-2', customTemplates: athlete2Templates });
+
+    // onSelectRoutine should NOT be called a second time
+    expect(onSelectRoutine).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-apply routine param on remount after being consumed', () => {
+    const onSelectRoutine = vi.fn();
+    const customTemplates: RoutineTemplate[] = [
+      {
+        id: '11111111-2222-3333-4444-555555555555',
+        name: 'Custom Push Day',
+        user_id: 'u1',
+        is_master: false,
+        assigned_to: null,
+        created_at: '2026-09-01',
+      },
+    ];
+
+    window.history.replaceState(
+      null,
+      '',
+      '/workout?routine=11111111-2222-3333-4444-555555555555'
+    );
+
+    const { unmount } = renderHook(() =>
+      useWorkoutUrlParams({
+        customTemplates,
+        templatesFetched: true,
+        onSelectRoutine,
+        workoutDate: '2026-09-01',
+        onDateChange: vi.fn(),
+      })
+    );
+
+    expect(onSelectRoutine).toHaveBeenCalledTimes(1);
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(false);
+
+    // Unmount and remount (simulating page reload or component remount)
+    unmount();
+
+    renderHook(() =>
+      useWorkoutUrlParams({
+        customTemplates,
+        templatesFetched: true,
+        onSelectRoutine,
+        workoutDate: '2026-09-01',
+        onDateChange: vi.fn(),
+      })
+    );
+
+    expect(onSelectRoutine).toHaveBeenCalledTimes(1);
+  });
 });
+
+
+
