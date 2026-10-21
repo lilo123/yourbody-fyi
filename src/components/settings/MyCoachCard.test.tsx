@@ -9,6 +9,7 @@ import type { UserProfile } from '../../types/database';
 import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, clearMockHistory, getRecordedTables, getRecordedSelects } from '../../test/supabaseBuilderMock';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { queryKeys } from '../../lib/queryKeys';
 
 vi.mock('../../hooks/useOnlineStatus');
 
@@ -314,8 +315,9 @@ describe('MyCoachCard accessibility and live regions', () => {
       expect(screen.getByTestId('link-coach-status')).toHaveTextContent('Successfully linked to coach!');
     });
 
-    // The registered workout query in cache must be invalidated using the real queryKey ['workout_sets']
+    // Both workout_sets (active sets/history/calendar queries) and workouts (workouts.all) are invalidated
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workout_sets'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.workouts.all });
     expect(testQueryClient.getQueryState(['workout_sets', 'athlete-123', '2026-10-21'])?.isInvalidated).toBe(true);
   });
 
@@ -368,8 +370,9 @@ describe('MyCoachCard accessibility and live regions', () => {
       expect(supabase.rpc).toHaveBeenCalledWith('disconnect_coach');
     });
 
-    // The registered workout query in cache must be invalidated using the real queryKey ['workout_sets']
+    // Both workout_sets (active sets/history/calendar queries) and workouts (workouts.all) are invalidated
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workout_sets'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.workouts.all });
     expect(testQueryClient.getQueryState(['workout_sets', 'athlete-123', '2026-10-21'])?.isInvalidated).toBe(true);
   });
 });
