@@ -87,7 +87,7 @@ export const MyCoachCard: React.FC<MyCoachCardProps> = ({
       
       queryClient.invalidateQueries({ queryKey: ['my_coach_link'] });
       queryClient.invalidateQueries({ queryKey: ['routine_templates'] });
-      queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      queryClient.invalidateQueries({ queryKey: ['workout_sets'] });
       queryClient.invalidateQueries({ queryKey: ['nutrition_logs'] });
 
       await refetchCoachLink();
@@ -113,7 +113,7 @@ export const MyCoachCard: React.FC<MyCoachCardProps> = ({
       
       queryClient.invalidateQueries({ queryKey: ['my_coach_link'] });
       queryClient.invalidateQueries({ queryKey: ['routine_templates'] });
-      queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      queryClient.invalidateQueries({ queryKey: ['workout_sets'] });
       queryClient.invalidateQueries({ queryKey: ['nutrition_logs'] });
 
       await refetchCoachLink();

@@ -281,4 +281,95 @@ describe('MyCoachCard accessibility and live regions', () => {
     expect(disconnectBtn.getAttribute('title')).toBe('Available when online');
     expect(screen.getByTestId('offline-helper-text').textContent).toBe('Available when online');
   });
+
+  it('invalidates registered workout_sets queries when linking to coach', async () => {
+    (supabase.from as any).mockImplementation((table: string) =>
+      createSupabaseBuilder(table, { data: null, error: null })
+    );
+
+    const testQueryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(testQueryClient, 'invalidateQueries');
+
+    testQueryClient.setQueryData(['workout_sets', 'athlete-123', '2026-10-21'], [
+      { id: 'set-1', exercise_id: 'ex-1', weight: 100, reps: 5 },
+    ]);
+
+    render(
+      <QueryClientProvider client={testQueryClient}>
+        <ToastProvider>
+          <MyCoachCard profile={mockProfile} />
+          <ToastHost />
+        </ToastProvider>
+      </QueryClientProvider>
+    );
+
+    const input = await screen.findByTestId('link-coach-code-input');
+    const form = input.closest('form')!;
+    fireEvent.change(input, { target: { value: 'COACH1' } });
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('link-coach-status')).toHaveTextContent('Successfully linked to coach!');
+    });
+
+    // The registered workout query in cache must be invalidated using the real queryKey ['workout_sets']
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workout_sets'] });
+    expect(testQueryClient.getQueryState(['workout_sets', 'athlete-123', '2026-10-21'])?.isInvalidated).toBe(true);
+  });
+
+  it('invalidates registered workout_sets queries when disconnecting from coach', async () => {
+    const linkedCoachData = {
+      id: 'link-1',
+      coach_id: 'coach-99',
+      linked_at: '2026-09-15T10:00:00Z',
+      coach: {
+        username: 'Coach Mike',
+        email: 'coach@example.com',
+        coach_code: 'MIKE-FIT',
+      },
+    };
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'coach_athlete_links') {
+        return createSupabaseBuilder('coach_athlete_links', { data: linkedCoachData, error: null });
+      }
+      return createSupabaseBuilder(table, { data: null, error: null });
+    });
+
+    const testQueryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(testQueryClient, 'invalidateQueries');
+
+    testQueryClient.setQueryData(['workout_sets', 'athlete-123', '2026-10-21'], [
+      { id: 'set-1', exercise_id: 'ex-1', weight: 100, reps: 5 },
+    ]);
+
+    render(
+      <QueryClientProvider client={testQueryClient}>
+        <ToastProvider>
+          <MyCoachCard profile={mockProfile} />
+          <ToastHost />
+        </ToastProvider>
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText('Coach Mike')).toBeDefined();
+
+    const disconnectBtn = screen.getByTestId('disconnect-coach-btn');
+    fireEvent.click(disconnectBtn);
+
+    const confirmBtn = await screen.findByTestId('disconnect-coach-confirm-dialog-confirm');
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith('disconnect_coach');
+    });
+
+    // The registered workout query in cache must be invalidated using the real queryKey ['workout_sets']
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['workout_sets'] });
+    expect(testQueryClient.getQueryState(['workout_sets', 'athlete-123', '2026-10-21'])?.isInvalidated).toBe(true);
+  });
 });
