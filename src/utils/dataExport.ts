@@ -434,7 +434,7 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
 export async function fetchProfileForExport(targetUserId: string): Promise<Partial<UserProfile> | null> {
   let query = supabase
     .from('users')
-    .select('id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit')
+    .select('id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit, pr_mode')
     .eq('id', targetUserId);
 
   const { data, error } = await query.maybeSingle();
