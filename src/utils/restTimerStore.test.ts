@@ -283,4 +283,18 @@ describe('restTimerStore', () => {
     expect(snap.totalDuration).toBe(150);
     freshStore.resetForTesting();
   });
+
+  it('17. getIsActiveSnapshot() returns true when running or paused, false when idle, and getIsActiveServerSnapshot() returns false', () => {
+    expect(restTimerStore.getIsActiveServerSnapshot()).toBe(false);
+    expect(restTimerStore.getIsActiveSnapshot()).toBe(false);
+
+    restTimerStore.start(60);
+    expect(restTimerStore.getIsActiveSnapshot()).toBe(true);
+
+    restTimerStore.pause();
+    expect(restTimerStore.getIsActiveSnapshot()).toBe(true);
+
+    restTimerStore.stop();
+    expect(restTimerStore.getIsActiveSnapshot()).toBe(false);
+  });
 });
