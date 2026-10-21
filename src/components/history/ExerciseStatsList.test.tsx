@@ -125,4 +125,23 @@ describe('ExerciseStatsList (kg-mode & unit display)', () => {
     expect(title.className).toContain('break-words');
     expect(title.className).toContain('flex-1');
   });
+
+  it('has accessible name for the search input', () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ExerciseStatsList
+          exerciseStats={[]}
+          searchQuery=""
+          selectedCategory="All"
+          onSearchQueryChange={vi.fn()}
+          onSelectedCategoryChange={vi.fn()}
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    const searchInput = screen.getByRole('textbox', { name: 'Search exercise library' });
+    expect(searchInput).toBeDefined();
+    expect(searchInput.getAttribute('aria-label')).toBe('Search exercise library');
+  });
 });
