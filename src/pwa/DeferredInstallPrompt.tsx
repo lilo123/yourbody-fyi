@@ -1,15 +1,33 @@
 import React, { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useInstallPrompt, syncFirstLogFromQueryClient } from './installPromptStore';
+import {
+  useInstallPrompt,
+  syncFirstLogFromQueryClient,
+  hasLoggedFirstActivity,
+} from './installPromptStore';
 import { InstallPromptCard } from './InstallPromptCard';
 
 export const DeferredInstallPrompt: React.FC = () => {
   const queryClient = useQueryClient();
   const { shouldShowPrompt } = useInstallPrompt();
 
-  // One-time check on mount for returning users whose data is in queryClient
+  // Sync first log from queryClient on mount or as queries resolve for returning users
   useEffect(() => {
     syncFirstLogFromQueryClient(queryClient);
+    if (hasLoggedFirstActivity()) {
+      return;
+    }
+
+    const unsubscribe = queryClient.getQueryCache().subscribe(() => {
+      syncFirstLogFromQueryClient(queryClient);
+      if (hasLoggedFirstActivity()) {
+        unsubscribe();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [queryClient]);
 
   if (!shouldShowPrompt) {
