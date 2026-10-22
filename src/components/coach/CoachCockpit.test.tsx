@@ -992,13 +992,19 @@ describe('CoachCockpit', () => {
         'save_routine_template',
         expect.objectContaining({
           p_template_id: 'tpl-master-1',
+          p_name: 'Master Hypertrophy',
+          p_days_of_week: ['Mon'],
+          p_user_id: null,
+          p_is_master: true,
         })
       );
     });
 
     const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
     expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
+    expect((rpcCall?.[1] as any)?.p_assigned_to).toBeUndefined();
     expect((rpcCall?.[1] as any)?.p_user_id).toBeNull();
+    expect((rpcCall?.[1] as any)?.p_user_id).not.toBe('ath-1');
   });
 
   it('editing an existing athlete template with another athlete selected preserves template assignment and does not pass p_assigned_to to rpc', async () => {
@@ -1052,13 +1058,19 @@ describe('CoachCockpit', () => {
         'save_routine_template',
         expect.objectContaining({
           p_template_id: 'tpl-alice-1',
+          p_name: "Alice's Routine",
+          p_days_of_week: ['Tue', 'Thu'],
+          p_user_id: null,
+          p_is_master: false,
         })
       );
     });
 
     const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
     expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
+    expect((rpcCall?.[1] as any)?.p_assigned_to).toBeUndefined();
     expect((rpcCall?.[1] as any)?.p_user_id).toBeNull();
+    expect((rpcCall?.[1] as any)?.p_user_id).not.toBe('ath-1');
   });
 
 });
