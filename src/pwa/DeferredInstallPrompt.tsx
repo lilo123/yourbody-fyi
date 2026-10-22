@@ -18,10 +18,16 @@ export const DeferredInstallPrompt: React.FC = () => {
       return;
     }
 
-    const unsubscribe = queryClient.getQueryCache().subscribe(() => {
-      syncFirstLogFromQueryClient(queryClient);
-      if (hasLoggedFirstActivity()) {
-        unsubscribe();
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === 'updated' &&
+        (event.query?.queryKey?.[0] === 'workout_sets' ||
+          event.query?.queryKey?.[0] === 'nutrition_logs')
+      ) {
+        syncFirstLogFromQueryClient(queryClient);
+        if (hasLoggedFirstActivity()) {
+          unsubscribe();
+        }
       }
     });
 

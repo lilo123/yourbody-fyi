@@ -102,11 +102,13 @@ describe('DeferredInstallPrompt Component', () => {
     expect(hasLoggedFirstActivity()).toBe(false);
   });
 
-  it('does not become eligible when an unrelated query resolves', async () => {
+  it('does not trigger sync or become eligible when an unrelated query resolves', async () => {
     const queryClient = new QueryClient();
     const mockEvent = createMockPromptEvent();
     setDeferredPromptForTesting(mockEvent);
     setStandaloneOverrideForTesting(false);
+
+    const getQueriesDataSpy = vi.spyOn(queryClient, 'getQueriesData');
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -114,12 +116,30 @@ describe('DeferredInstallPrompt Component', () => {
       </QueryClientProvider>
     );
 
+    // Initial mount sync calls getQueriesData for workout_sets and nutrition_logs
+    expect(getQueriesDataSpy).toHaveBeenCalledTimes(2);
+    getQueriesDataSpy.mockClear();
+
+    // Resolving unrelated query keys does NOT trigger sync
     await act(async () => {
       queryClient.setQueryData(['user_profile', 'user-1'], { name: 'Alex' });
+      queryClient.setQueryData(['settings', 'preferences'], { darkMode: true });
     });
 
+    expect(getQueriesDataSpy).not.toHaveBeenCalled();
     expect(screen.queryByTestId('install-prompt-card')).toBeNull();
     expect(hasLoggedFirstActivity()).toBe(false);
+
+    // Resolving a relevant key ('workout_sets') DOES trigger sync
+    await act(async () => {
+      queryClient.setQueryData(['workout_sets', 'user-1', '2026-10-21'], [
+        { id: 'set-1', reps: 10, weight: 100 },
+      ]);
+    });
+
+    expect(getQueriesDataSpy).toHaveBeenCalled();
+    expect(screen.getByTestId('install-prompt-card')).toBeInTheDocument();
+    expect(hasLoggedFirstActivity()).toBe(true);
   });
 
   it('syncs first log immediately on mount if data already in queryClient', () => {
