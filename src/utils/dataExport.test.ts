@@ -554,6 +554,55 @@ describe('dataExport utilities', () => {
       );
       expect(workoutsCsv.content).toContain('w-1,2026-09-21,Push Day,0,working,Bench Press,Chest,225,5,8.5,2026-09-21T10:05:00Z');
     });
+
+    it('formats workout date as plain calendar date in CSV export even with ISO timestamp', () => {
+      const bundleWithIsoDate: ExportBundle = {
+        ...mockBundle,
+        filters: {
+          ...mockBundle.filters,
+          domains: ['workouts'],
+        },
+        data: {
+          ...mockBundle.data,
+          workouts: [
+            {
+              id: 'w-iso',
+              user_id: 'usr-1',
+              name: 'Evening Lift',
+              date: '2026-09-21T18:30:00.000Z',
+              sets: [
+                {
+                  id: 'set-iso',
+                  workout_id: 'w-iso',
+                  exercise_id: 'ex-1',
+                  exercise: { name: 'Squat', body_parts: ['Legs'] },
+                  set_index: 0,
+                  set_type: 'working',
+                  weight: 135,
+                  reps: 5,
+                  created_at: '2026-09-21T18:35:00Z',
+                },
+              ],
+            },
+            {
+              id: 'w-iso-empty',
+              user_id: 'usr-1',
+              name: 'Rest Session',
+              date: '2026-09-22T20:15:00.000Z',
+              sets: [],
+            },
+          ],
+        },
+      };
+
+      const files = serializeToExportCsvFiles(bundleWithIsoDate, '2026-09-23');
+      const workoutsFile = files.find((f) => f.filename === 'yourbody-workouts-2026-09-23.csv')!;
+      expect(workoutsFile).toBeDefined();
+      expect(workoutsFile.content).toContain('w-iso,2026-09-21,Evening Lift,0,working,Squat,Legs,135,5,,2026-09-21T18:35:00Z');
+      expect(workoutsFile.content).not.toContain('2026-09-21T18:30:00.000Z');
+      expect(workoutsFile.content).toContain('w-iso-empty,2026-09-22,Rest Session,,,,,,,,');
+      expect(workoutsFile.content).not.toContain('2026-09-22T20:15:00.000Z');
+    });
   });
 
   describe('fetchExportBundle (Paginated fetchers & Guardrails)', () => {
@@ -661,12 +710,45 @@ describe('dataExport utilities', () => {
       });
 
       const workoutBuilder = mockSupabase.getLastBuilder('workouts')!;
-      expect(workoutBuilder.filters.some((f) => f.column === 'date' && f.method === 'gte')).toBe(true);
-      expect(workoutBuilder.filters.some((f) => f.column === 'date' && f.method === 'lte')).toBe(true);
+      expect(workoutBuilder.filters.some((f) => f.column === 'workout_date' && f.method === 'gte')).toBe(true);
+      expect(workoutBuilder.filters.some((f) => f.column === 'workout_date' && f.method === 'lte')).toBe(true);
 
       const nutritionBuilder = mockSupabase.getLastBuilder('nutrition_logs')!;
       expect(nutritionBuilder.filters.some((f) => f.column === 'logged_at' && f.method === 'gte')).toBe(true);
       expect(nutritionBuilder.filters.some((f) => f.column === 'logged_at' && f.method === 'lte')).toBe(true);
+    });
+
+    it('bounds workouts query directly on civil workout_date column with plain dates', async () => {
+      mockSupabase.setTableData('workouts', []);
+      mockSupabase.setTableData('nutrition_logs', []);
+      mockSupabase.setTableData('custom_dishes', []);
+      mockSupabase.setTableData('routine_templates', []);
+      mockSupabase.setTableData('users', null);
+
+      await fetchExportBundle({
+        ...baseOptions,
+        preset: 'custom',
+        customStartDate: '2026-10-10',
+        customEndDate: '2026-10-18',
+        domains: ['workouts'],
+      });
+
+      const workoutBuilder = mockSupabase.getLastBuilder('workouts')!;
+      const gteFilter = workoutBuilder.filters.find((f) => f.column === 'workout_date' && f.method === 'gte');
+      const lteFilter = workoutBuilder.filters.find((f) => f.column === 'workout_date' && f.method === 'lte');
+
+      expect(gteFilter).toBeDefined();
+      expect(gteFilter?.value).toBe('2026-10-10');
+      expect(lteFilter).toBeDefined();
+      expect(lteFilter?.value).toBe('2026-10-18');
+
+      // Boundary assertions on workout_date filters:
+      // (a) midnight-UTC legacy row on the start date (workout_date '2026-10-10') is included
+      expect('2026-10-10' >= gteFilter!.value && '2026-10-10' <= lteFilter!.value).toBe(true);
+      // (b) row late on end date (workout_date '2026-10-18') is included
+      expect('2026-10-18' >= gteFilter!.value && '2026-10-18' <= lteFilter!.value).toBe(true);
+      // (c) row on endDate+1 (workout_date '2026-10-19') is excluded
+      expect('2026-10-19' <= lteFilter!.value).toBe(false);
     });
 
     it('throws error when Supabase query returns an error', async () => {
