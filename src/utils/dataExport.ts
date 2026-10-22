@@ -73,7 +73,7 @@ export const WORKOUT_EXPORT_PROJECTION =
   'id, user_id, name, date, workout_date, created_at, sets(id, exercise_id, set_index, set_type, weight, reps, rpe, created_at, exercise:exercises(name, body_parts))';
 
 export const NUTRITION_EXPORT_PROJECTION =
-  'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, created_at, notes, has_components, items';
+  'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, logged_date, created_at, notes, has_components, items';
 
 export const CUSTOM_DISH_EXPORT_PROJECTION =
   'id, user_id, name, kind, calories, protein, carbs, fat, fiber, use_count, notes, created_at, items';
@@ -270,6 +270,7 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
       const headers = [
         'log_id',
         'logged_at',
+        'logged_date',
         'meal_type',
         'food_name',
         'calories',
@@ -291,6 +292,7 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
         const cells = [
           l.id,
           l.logged_at,
+          l.logged_date ?? '',
           l.meal_type ?? '',
           l.food_name,
           l.calories ?? '',
