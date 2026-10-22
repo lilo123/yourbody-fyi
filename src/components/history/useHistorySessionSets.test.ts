@@ -226,5 +226,170 @@ describe('useHistorySessionSets deduplication', () => {
     expect(sets).toHaveLength(1);
     expect(sets[0].exercise_name).toBe('Barbell Bench Press');
   });
+
+  it('overlays queued set.batchCreate sets into sessionSetsMap', async () => {
+    vi.spyOn(workoutHistoryModule, 'fetchSessionSets').mockResolvedValue([]);
+
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-batch-1',
+        userId: 'u1',
+        seq: 1,
+        createdAt: '2026-09-30T10:00:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'set.batchCreate',
+        payload: {
+          workoutRef: 'w-session-1',
+          sets: [
+            {
+              id: 'set-batch-1',
+              exercise_id: 'bench-press',
+              weight: 225,
+              reps: 5,
+              set_index: 0,
+              set_type: 'working',
+              rpe: 8,
+              created_at: '2026-09-30T10:00:00Z',
+            },
+            {
+              id: 'set-batch-2',
+              exercise_id: 'bench-press',
+              weight: 225,
+              reps: 5,
+              set_index: 1,
+              set_type: 'working',
+              rpe: 8.5,
+              created_at: '2026-09-30T10:02:00Z',
+            },
+          ],
+        },
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+
+    const { result } = renderHook(() =>
+      useHistorySessionSets({
+        targetUserId: 'u1',
+        sessions: [session],
+        queryClient,
+      })
+    );
+
+    await act(async () => {
+      await result.current.loadSetsForSession('w-session-1');
+    });
+
+    await waitFor(() => {
+      expect(result.current.sessionSetsMap['w-session-1']).toBeDefined();
+    });
+
+    const sets = result.current.sessionSetsMap['w-session-1'];
+    expect(sets).toHaveLength(2);
+    expect(sets.map((s) => s.id)).toEqual(['set-batch-1', 'set-batch-2']);
+  });
+
+  it('matches set.batchCreate by workout_date and applies pending updates and deletes', async () => {
+    vi.spyOn(workoutHistoryModule, 'fetchSessionSets').mockResolvedValue([]);
+
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-ensure-1',
+        userId: 'u1',
+        seq: 1,
+        createdAt: '2026-09-30T09:00:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'workout.ensure',
+        payload: {
+          clientWorkoutId: 'client-w-1',
+          workout_date: '2026-09-30',
+          name: 'Chest Day',
+        },
+      },
+      {
+        opId: 'op-batch-2',
+        userId: 'u1',
+        seq: 2,
+        createdAt: '2026-09-30T10:00:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'set.batchCreate',
+        payload: {
+          workoutRef: 'client-w-1',
+          sets: [
+            {
+              id: 'set-b-keep',
+              exercise_id: 'bench-press',
+              weight: 200,
+              reps: 5,
+              set_index: 0,
+              set_type: 'working',
+              created_at: '2026-09-30T10:00:00Z',
+            },
+            {
+              id: 'set-b-del',
+              exercise_id: 'bench-press',
+              weight: 200,
+              reps: 5,
+              set_index: 1,
+              set_type: 'working',
+              created_at: '2026-09-30T10:02:00Z',
+            },
+          ],
+        },
+      },
+      {
+        opId: 'op-update-1',
+        userId: 'u1',
+        seq: 3,
+        createdAt: '2026-09-30T10:05:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'set.update',
+        payload: {
+          id: 'set-b-keep',
+          patch: { weight: 210, reps: 6 },
+        },
+      },
+      {
+        opId: 'op-del-1',
+        userId: 'u1',
+        seq: 4,
+        createdAt: '2026-09-30T10:06:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'set.delete',
+        payload: {
+          id: 'set-b-del',
+        },
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+
+    const { result } = renderHook(() =>
+      useHistorySessionSets({
+        targetUserId: 'u1',
+        sessions: [session], // session id is 'w-session-1', civil_date is '2026-09-30'
+        queryClient,
+      })
+    );
+
+    await act(async () => {
+      await result.current.loadSetsForSession('w-session-1');
+    });
+
+    await waitFor(() => {
+      expect(result.current.sessionSetsMap['w-session-1']).toBeDefined();
+    });
+
+    const sets = result.current.sessionSetsMap['w-session-1'];
+    expect(sets).toHaveLength(1);
+    expect(sets[0].id).toBe('set-b-keep');
+    expect(sets[0].weight).toBe(210);
+    expect(sets[0].reps).toBe(6);
+  });
 });
 
