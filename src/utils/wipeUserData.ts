@@ -58,6 +58,8 @@ export async function wipeUserData(userId: string, options?: WipeUserDataOptions
             key === 'yourbody_auto_rest_timer' ||
             key === 'yourbody_nutrition_parser_mode' ||
             key === 'yourbody_rest_timer_seconds' ||
+            key === 'yourbody_athletes' ||
+            key === 'yourbody_selected_athlete' ||
             key === 'yourbody_extra_custom_key';
 
           // Preserve keys explicitly tagged with a different user identifier (e.g. UUID)
