@@ -443,6 +443,13 @@ export default {
         );
       }
 
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return new Response(
+          JSON.stringify({ error: 'Malformed JSON or payload too large.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const rawImage = body.image_base64 || body.imageBase64 || body.image || "";
       const rawMimeType = body.imageMimeType || body.image_mime_type || body.mimeType || body.mime_type || "";
       const imageBase64 = typeof rawImage === 'string' ? rawImage.trim() : "";
