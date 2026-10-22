@@ -274,6 +274,31 @@ describe('Prerender Output and Configuration', () => {
       expect(fs.existsSync(path.join(distDir, 'prerender-guard.js'))).toBe(true);
     });
 
+    it('sets og:image:alt to match route title across all prerendered routes', () => {
+      if (!fs.existsSync(distDir)) {
+        return;
+      }
+
+      for (const route of PRERENDER_ROUTES) {
+        const filePath = path.join(distDir, route.outFile);
+        expect(fs.existsSync(filePath), `Expected prerender file ${route.outFile} to exist`).toBe(true);
+        const html = fs.readFileSync(filePath, 'utf8');
+
+        const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+        expect(ogTitleMatch, `Expected og:title in ${route.outFile}`).not.toBeNull();
+        expect(ogTitleMatch?.[1]).toBe(route.title);
+
+        const ogAltMatch = html.match(/<meta\s+property=["']og:image:alt["']\s+content=["']([^"']+)["']/i);
+        expect(ogAltMatch, `Expected og:image:alt in ${route.outFile}`).not.toBeNull();
+        expect(ogAltMatch?.[1], `og:image:alt in ${route.outFile} must match route.title`).toBe(route.title);
+
+        const twitterAltMatch = html.match(/<meta\s+(?:name|property)=["']twitter:image:alt["']\s+content=["']([^"']+)["']/i);
+        if (twitterAltMatch) {
+          expect(twitterAltMatch[1], `twitter:image:alt in ${route.outFile} must match route.title`).toBe(route.title);
+        }
+      }
+    });
+
     it('updates sw.js precache revision for index.html to match final dist/index.html md5', () => {
       if (!fs.existsSync(distDir)) {
         return;
