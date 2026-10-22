@@ -612,6 +612,27 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
       );
       expect(mockClient['from']).not.toHaveBeenCalled();
     });
+
+    it('calls enqueueAndAwait with set.delete and targetUserId from options', async () => {
+      const mockClient: any = { ['from']: vi.fn() };
+      vi.mocked(enqueueAndAwait).mockResolvedValueOnce({
+        status: 'synced',
+        opId: 'op-delete-1',
+      });
+
+      await deleteSet(mockClient, 's-1', {
+        targetUserId: 'athlete-user-123',
+        workoutDate: '2026-10-18',
+      });
+      expect(enqueueAndAwait).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'athlete-user-123',
+          kind: 'set.delete',
+          payload: { id: 's-1' },
+        })
+      );
+      expect(mockClient['from']).not.toHaveBeenCalled();
+    });
   });
 
   describe('resolveWorkoutRefForDate (d & e)', () => {
