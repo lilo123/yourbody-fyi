@@ -327,6 +327,7 @@ export const ExerciseStatsList: React.FC<ExerciseStatsListProps> = ({
             placeholder="Search exercise library..."
             value={searchQuery}
             onChange={(e) => onSearchQueryChange(e.target.value)}
+            aria-label="Search exercise library"
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-2xl pl-10 pr-4 py-2.5 text-base min-h-[44px] font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none"
           />
         </div>

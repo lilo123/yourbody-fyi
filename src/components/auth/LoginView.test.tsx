@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { LoginView } from './LoginView';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../../context/AuthContext';
 
@@ -402,6 +402,53 @@ describe('LoginView', () => {
     fireEvent.click(logoLink);
 
     expect(screen.getByTestId('landing-stub')).toBeDefined();
+  });
+
+  it('displays account-deleted confirmation message when navigated to with state.message', () => {
+    const deletedMessage = 'Your account and data have been permanently deleted.';
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[{ pathname: '/login', state: { message: deletedMessage } }]}>
+          <AuthProvider>
+            <LoginView />
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const elements = screen.getAllByText(deletedMessage);
+    expect(elements.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not display route message when state contains unrelated properties like state.from', () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: '/workout' } }]}>
+          <AuthProvider>
+            <LoginView />
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(screen.queryByText('/workout')).toBeNull();
+  });
+
+  it('clears window history state after displaying route message', () => {
+    const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
+    const deletedMessage = 'Your account and data have been permanently deleted.';
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[{ pathname: '/login', state: { message: deletedMessage } }]}>
+          <AuthProvider>
+            <LoginView />
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(replaceStateSpy).toHaveBeenCalled();
+    replaceStateSpy.mockRestore();
   });
 });
 
