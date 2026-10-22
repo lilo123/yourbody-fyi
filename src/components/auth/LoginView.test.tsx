@@ -602,6 +602,49 @@ describe('LoginView', () => {
       }
     });
 
+    it('navigates coach to /coach even when state.from targets an athlete page like /settings', async () => {
+      const { fireEvent } = await import('@testing-library/react');
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'users') {
+          return createSupabaseBuilder('users', { id: 'test-user-id', role: 'coach' });
+        }
+        return createSupabaseBuilder(table, []);
+      });
+
+      try {
+        const { container } = render(
+          <QueryClientProvider client={queryClient}>
+            <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: '/settings' } }]}>
+              <AuthProvider>
+                <Routes>
+                  <Route path="/login" element={<LoginView />} />
+                  <Route path="/settings" element={<div data-testid="settings-page">Settings</div>} />
+                  <Route path="/coach" element={<div data-testid="coach-page">Coach</div>} />
+                </Routes>
+              </AuthProvider>
+            </MemoryRouter>
+          </QueryClientProvider>
+        );
+
+        const emailInput = screen.getByPlaceholderText('you@example.com');
+        const passwordInput = screen.getByPlaceholderText('••••••••');
+        const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+        fireEvent.change(emailInput, { target: { value: 'coach@yourbody.fyi' } });
+        fireEvent.change(passwordInput, { target: { value: 'password123' } });
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('coach-page')).toBeDefined();
+        });
+        expect(screen.queryByTestId('settings-page')).toBeNull();
+      } finally {
+        (supabase.from as any).mockImplementation((table: string) =>
+          createSupabaseBuilder(table, { id: 'test-user-id', role: 'athlete' })
+        );
+      }
+    });
+
     it('rejects open-redirect attempts: //evil.com, https://evil.com, and /\\evil', async () => {
       const { fireEvent } = await import('@testing-library/react');
       const maliciousTargets = ['//evil.com', 'https://evil.com', '/\\evil'];

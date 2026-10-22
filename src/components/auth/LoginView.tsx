@@ -153,14 +153,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ prerenderDisabled = false 
     } else if (mode === 'signin') {
       const res = await signIn(email, password);
       if (res.success) {
-        const fromState = (location.state as { from?: unknown } | null)?.from;
-        const returnTo = getSafeRedirectPath(fromState, res.role);
-        if (returnTo) {
-          navigate(returnTo);
-        } else if (res.role === 'coach') {
+        if (res.role === 'coach') {
           navigate('/coach');
         } else {
-          navigate('/workout');
+          const fromState = (location.state as { from?: unknown } | null)?.from;
+          const returnTo = getSafeRedirectPath(fromState, res.role);
+          if (returnTo) {
+            navigate(returnTo);
+          } else {
+            navigate('/workout');
+          }
         }
       } else {
         setError(res.error || 'Failed to sign in');
