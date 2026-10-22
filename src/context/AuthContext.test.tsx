@@ -454,6 +454,48 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
     expect(localStorage.getItem('yourbody_nutrition_parser_mode')).toBe('regex');
   });
 
+  it('4d. signOut() synchronously clears the flusher session user before awaiting supabase.auth.signOut', async () => {
+    let resolveSignOut: () => void = () => {};
+    const signOutPromise = new Promise<{ error: null }>((resolve) => {
+      resolveSignOut = () => resolve({ error: null });
+    });
+    const signOutSpy = vi.spyOn(supabase.auth, 'signOut').mockImplementation(() => signOutPromise);
+
+    offlineModule.setFlusherSessionUser(mockProfile.id);
+    expect(offlineModule.getActiveUserId()).toBe(mockProfile.id);
+
+    let signOutFn: () => Promise<void> = async () => {};
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer onSignOutReady={(fn) => { signOutFn = fn; }} />
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-user-id').textContent).toBe(mockProfile.id);
+    });
+
+    // Invoke signOut without awaiting to observe synchronous state before await supabase.auth.signOut()
+    const signOutPromiseExec = signOutFn();
+
+    try {
+      // Synchronously, before supabase.auth.signOut resolves, flusher user must be cleared
+      expect(offlineModule.getActiveUserId()).toBeNull();
+    } finally {
+      resolveSignOut();
+      await act(async () => {
+        try {
+          await signOutPromiseExec;
+        } catch {
+          // ignore
+        }
+      });
+      signOutSpy.mockRestore();
+    }
+  });
+
   it('5. re-fetches user profile successfully on refreshProfile()', async () => {
     localStorage.setItem('yourbody_user', JSON.stringify(mockProfile));
 
