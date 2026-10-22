@@ -5,6 +5,7 @@ import {
   formatItemsSummary,
   serializeToExportJson,
   serializeToExportCsvFiles,
+  fetchProfileForExport,
   fetchExportBundle,
   downloadExportFiles,
   executeDataExport,
@@ -295,6 +296,24 @@ describe('dataExport utilities', () => {
       expect(parsed.data.workouts[0].sets[0].weight).toBe(225);
       expect(typeof parsed.data.workouts[0].sets[0].weight).toBe('number');
     });
+
+    it('includes pr_mode in profile section when present', () => {
+      const bundleWithPrMode: ExportBundle = {
+        ...mockBundle,
+        filters: { ...mockBundle.filters, domains: ['profile'] },
+        data: {
+          profile: {
+            id: 'usr-1',
+            username: 'alex_runner',
+            pr_mode: 'e1rm',
+          },
+        },
+      };
+
+      const file = serializeToExportJson(bundleWithPrMode);
+      const parsed = JSON.parse(file.content);
+      expect(parsed.data.profile.pr_mode).toBe('e1rm');
+    });
   });
 
   describe('serializeToExportCsvFiles', () => {
@@ -553,6 +572,37 @@ describe('dataExport utilities', () => {
         'workout_id,workout_date,workout_name,set_index,set_type,exercise_name,body_part,weight,reps,rpe,set_created_at'
       );
       expect(workoutsCsv.content).toContain('w-1,2026-09-21,Push Day,0,working,Bench Press,Chest,225,5,8.5,2026-09-21T10:05:00Z');
+    });
+
+    it('exports profile CSV with pr_mode header and user pr_mode value when present', () => {
+      const bundleWithPrMode: ExportBundle = {
+        ...mockBundle,
+        filters: { preset: 'all', start_date: null, end_date: null, domains: ['profile'] },
+        data: {
+          profile: {
+            id: 'usr-1',
+            username: 'alex_runner',
+            email: 'alex@example.com',
+            role: 'athlete',
+            target_calories: 2400,
+            target_protein: 180,
+            target_carbs: 250,
+            target_fat: 70,
+            target_fiber: 35,
+            auto_rest_timer: true,
+            weight_unit: 'lb',
+            pr_mode: 'e1rm',
+          },
+        },
+      };
+
+      const files = serializeToExportCsvFiles(bundleWithPrMode, '2026-10-21');
+      const profileCsv = files.find((f) => f.filename === 'yourbody-profile-2026-10-21.csv')!;
+      expect(profileCsv).toBeDefined();
+      expect(profileCsv.content).toContain(
+        'user_id,username,email,role,target_calories,target_protein_g,target_carbs_g,target_fat_g,target_fiber_g,auto_rest_timer,weight_unit,pr_mode'
+      );
+      expect(profileCsv.content).toContain('usr-1,alex_runner,alex@example.com,athlete,2400,180,250,70,35,true,lb,e1rm');
     });
 
     it('formats workout date as plain calendar date in CSV export even with ISO timestamp', () => {
@@ -846,6 +896,35 @@ describe('dataExport utilities', () => {
     });
   });
 
+  describe('fetchProfileForExport', () => {
+    it('queries users table with pr_mode in projection so pr_mode is exported', async () => {
+      await fetchProfileForExport('usr-1');
+      const userBuilder = mockSupabase.getLastBuilder('users');
+      expect(userBuilder?.projection).toContain('pr_mode');
+    });
+
+    it('returns profile data including pr_mode preference', async () => {
+      mockSupabase.setTableData('users', {
+        id: 'usr-1',
+        username: 'alex_runner',
+        email: 'alex@example.com',
+        role: 'athlete',
+        target_calories: 2400,
+        target_protein: 180,
+        target_carbs: 250,
+        target_fat: 70,
+        target_fiber: 35,
+        auto_rest_timer: true,
+        timezone: 'UTC',
+        weight_unit: 'lb',
+        pr_mode: 'e1rm',
+      });
+
+      const profile = await fetchProfileForExport('usr-1');
+      expect(profile?.pr_mode).toBe('e1rm');
+    });
+  });
+
   describe('Database Contract Fidelity', () => {
     it('services exact projection contracts for all export tables', async () => {
       await fetchExportBundle({
@@ -881,7 +960,7 @@ describe('dataExport utilities', () => {
       });
       expect(recorded).toContainEqual({
         table: 'users',
-        projection: 'id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit',
+        projection: 'id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit, pr_mode',
       });
     });
   });
