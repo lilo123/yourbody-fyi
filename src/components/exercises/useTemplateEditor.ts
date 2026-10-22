@@ -261,9 +261,10 @@ export function useTemplateEditor({
     setError(null);
     setStaleError(false);
 
+    const isEdit = Boolean(template?.id && !isFork);
     const rpcId = isFork ? null : template?.id || null;
     const isMaster = Boolean(template?.is_master || allowMaster) && !isFork;
-    const effectiveUserId = assignToAthleteId || targetUserId;
+    const effectiveUserId = isEdit ? null : (assignToAthleteId || targetUserId);
 
     const exercisePayload = templateExercises.map((e, idx) => ({
       exercise_id: e.exercise_id,
@@ -281,7 +282,7 @@ export function useTemplateEditor({
       p_is_master: isMaster,
     };
 
-    if (assignToAthleteId) {
+    if (assignToAthleteId && !isEdit) {
       rpcPayload.p_assigned_to = assignToAthleteId;
     }
 

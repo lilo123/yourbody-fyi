@@ -941,4 +941,124 @@ describe('CoachCockpit', () => {
     });
   });
 
+  it('editing an existing master template with an athlete selected does not pass p_assigned_to to rpc', async () => {
+    const masterTemplate = {
+      id: 'tpl-master-1',
+      user_id: 'coach-id',
+      name: 'Master Hypertrophy',
+      is_master: true,
+      assigned_to: null,
+      days_of_week: ['Mon'],
+      created_at: '2026-09-01T00:00:00Z',
+      exercises: [
+        { id: 'te-1', template_id: 'tpl-master-1', exercise_id: 'ex-1', order_index: 0, target_sets: 3, target_reps: 10 },
+      ],
+    };
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'routine_templates') {
+        const b = createSupabaseBuilder('routine_templates', {
+          data: [masterTemplate],
+          error: null,
+        });
+        b.single = vi.fn().mockResolvedValue({
+          data: masterTemplate,
+          error: null,
+        });
+        return b;
+      }
+      return defaultMock(table);
+    });
+
+    renderComponent();
+
+    await screen.findByText('Master Hypertrophy');
+
+    const editBtn = screen.getByRole('button', { name: /edit/i });
+    fireEvent.click(editBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-template-modal')).toBeDefined();
+    });
+
+    vi.mocked(supabase.rpc).mockClear();
+
+    const modal = screen.getByTestId('edit-template-modal');
+    const saveBtn = within(modal).getByTestId('save-template-btn');
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith(
+        'save_routine_template',
+        expect.objectContaining({
+          p_template_id: 'tpl-master-1',
+        })
+      );
+    });
+
+    const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
+    expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
+    expect(rpcCall?.[1]?.p_user_id).toBeNull();
+  });
+
+  it('editing an existing athlete template with another athlete selected preserves template assignment and does not pass p_assigned_to to rpc', async () => {
+    const aliceTemplate = {
+      id: 'tpl-alice-1',
+      user_id: 'coach-id',
+      name: "Alice's Routine",
+      is_master: false,
+      assigned_to: 'ath-alice',
+      days_of_week: ['Tue', 'Thu'],
+      created_at: '2026-09-02T00:00:00Z',
+      exercises: [
+        { id: 'te-2', template_id: 'tpl-alice-1', exercise_id: 'ex-2', order_index: 0, target_sets: 3, target_reps: 8 },
+      ],
+    };
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'routine_templates') {
+        const b = createSupabaseBuilder('routine_templates', {
+          data: [aliceTemplate],
+          error: null,
+        });
+        b.single = vi.fn().mockResolvedValue({
+          data: aliceTemplate,
+          error: null,
+        });
+        return b;
+      }
+      return defaultMock(table);
+    });
+
+    renderComponent();
+
+    await screen.findByText("Alice's Routine");
+
+    const editBtn = screen.getByRole('button', { name: /edit/i });
+    fireEvent.click(editBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-template-modal')).toBeDefined();
+    });
+
+    vi.mocked(supabase.rpc).mockClear();
+
+    const modal = screen.getByTestId('edit-template-modal');
+    const saveBtn = within(modal).getByTestId('save-template-btn');
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith(
+        'save_routine_template',
+        expect.objectContaining({
+          p_template_id: 'tpl-alice-1',
+        })
+      );
+    });
+
+    const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
+    expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
+    expect(rpcCall?.[1]?.p_user_id).toBeNull();
+  });
+
 });
