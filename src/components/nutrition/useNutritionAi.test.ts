@@ -1,8 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { Camera, CameraSource } from '@capacitor/camera';
 import { useNutritionAi } from './useNutritionAi';
 import * as parseNutritionModule from './parseNutrition';
+import {
+  compressImageBase64,
+  compressImageFile,
+  MAX_PHOTO_BYTES,
+} from '../../utils/imageCompression';
 import { evaluateUpdateSafety, resetUpdateSafetyForTesting } from '../../pwa/updateSafety';
+
+vi.mock('@capacitor/camera', () => ({
+  Camera: {
+    getPhoto: vi.fn(),
+  },
+  CameraResultType: {
+    Base64: 'base64',
+  },
+  CameraSource: {
+    Camera: 'CAMERA',
+    Photos: 'PHOTOS',
+  },
+}));
+
+vi.mock('../../utils/imageCompression', async () => {
+  const actual = await vi.importActual<typeof import('../../utils/imageCompression')>(
+    '../../utils/imageCompression'
+  );
+  return {
+    ...actual,
+    compressImageBase64: vi.fn(),
+    compressImageFile: vi.fn(),
+  };
+});
 
 vi.mock('./parseNutrition', async (importOriginal) => {
   const actual = await importOriginal<typeof parseNutritionModule>();
@@ -677,3 +707,120 @@ describe('useNutritionAi quota exceeded handling', () => {
     });
   });
 });
+
+describe('useNutritionAi photo error clearing', () => {
+  const setStatus = vi.fn();
+  const setIsError = vi.fn();
+  const onParsedSuccess = vi.fn();
+  const onFallbackToManual = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const setupHook = () =>
+    renderHook(() =>
+      useNutritionAi({
+        customDishes: [],
+        setStatus,
+        setIsError,
+        onParsedSuccess,
+        onFallbackToManual,
+      })
+    );
+
+  it('clears stale error status when a valid file is selected after an oversized photo error', async () => {
+    const { result } = setupHook();
+
+    const oversizedFile = new File(['oversized image'], 'oversized.jpg', { type: 'image/jpeg' });
+    (compressImageFile as any).mockResolvedValueOnce({
+      base64: 'huge-file-base64',
+      dataUrl: 'data:image/jpeg;base64,huge-file-base64',
+      mimeType: 'image/jpeg',
+      sizeBytes: MAX_PHOTO_BYTES + 50000,
+      width: 4000,
+      height: 3000,
+    });
+
+    const oversizedEvent = {
+      target: { files: [oversizedFile], value: 'fake-path' },
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
+
+    await act(async () => {
+      await result.current.handleFileChange(oversizedEvent);
+    });
+
+    expect(setIsError).toHaveBeenCalledWith(true);
+    expect(setStatus).toHaveBeenCalledWith(
+      'Photo is too large (max 1.5 MB). Please choose a smaller photo.'
+    );
+
+    const validFile = new File(['valid image'], 'valid.jpg', { type: 'image/jpeg' });
+    (compressImageFile as any).mockResolvedValueOnce({
+      base64: 'valid-base64',
+      dataUrl: 'data:image/jpeg;base64,valid-base64',
+      mimeType: 'image/jpeg',
+      sizeBytes: 200 * 1024,
+      width: 800,
+      height: 600,
+    });
+
+    const validEvent = {
+      target: { files: [validFile], value: 'fake-path' },
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
+
+    await act(async () => {
+      await result.current.handleFileChange(validEvent);
+    });
+
+    expect(setIsError).toHaveBeenLastCalledWith(false);
+    expect(setStatus).toHaveBeenLastCalledWith('');
+  });
+
+  it('clears stale error status when a valid camera photo is captured after an oversized photo error', async () => {
+    const { result } = setupHook();
+
+    (Camera.getPhoto as any).mockResolvedValueOnce({
+      base64String: 'huge-camera-base64',
+      format: 'jpeg',
+    });
+    (compressImageBase64 as any).mockResolvedValueOnce({
+      base64: 'huge-uncompressed-base64',
+      dataUrl: 'data:image/jpeg;base64,huge-uncompressed-base64',
+      mimeType: 'image/jpeg',
+      sizeBytes: MAX_PHOTO_BYTES + 50000,
+      width: 4032,
+      height: 3024,
+    });
+
+    await act(async () => {
+      await result.current.handlePickPhoto(CameraSource.Camera);
+    });
+
+    expect(setIsError).toHaveBeenCalledWith(true);
+    expect(setStatus).toHaveBeenCalledWith(
+      'Photo is too large (max 1.5 MB). Please choose a smaller photo.'
+    );
+
+    (Camera.getPhoto as any).mockResolvedValueOnce({
+      base64String: 'valid-camera-base64',
+      format: 'jpeg',
+    });
+    (compressImageBase64 as any).mockResolvedValueOnce({
+      base64: 'valid-camera-compressed',
+      dataUrl: 'data:image/jpeg;base64,valid-camera-compressed',
+      mimeType: 'image/jpeg',
+      sizeBytes: 250 * 1024,
+      width: 1024,
+      height: 768,
+    });
+
+    await act(async () => {
+      await result.current.handlePickPhoto(CameraSource.Camera);
+    });
+
+    expect(setIsError).toHaveBeenLastCalledWith(false);
+    expect(setStatus).toHaveBeenLastCalledWith('');
+  });
+});
+
