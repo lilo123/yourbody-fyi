@@ -959,4 +959,50 @@ describe("EditTemplateSheet", () => {
     resolveRpc!({ data: { success: true, template_id: "tpl-1" }, error: null });
   });
 
+  it("sends p_user_id as null when neither assignToAthleteId nor targetUserId is provided", async () => {
+    const mockRpc = vi.fn().mockResolvedValue({ data: { success: true, template_id: "tpl-coach-1" }, error: null });
+    (supabase.rpc as any) = mockRpc;
+
+    const tpl: RoutineTemplate = {
+      id: "tpl-coach-1",
+      user_id: "coach-1",
+      name: "Coach Routine",
+      is_master: false,
+      days_of_week: ["Mon"],
+      assigned_to: null,
+      exercises: [
+        {
+          id: "te-1",
+          template_id: "tpl-coach-1",
+          exercise_id: "ex-1",
+          order_index: 0,
+          target_sets: 3,
+          target_reps: 10,
+        },
+      ],
+    };
+
+    await renderSheetAndWait(
+      <EditTemplateSheet
+        isOpen={true}
+        template={tpl}
+        exercises={[{ id: "ex-1", name: "Squat", body_parts: ["Legs"], is_master: true, created_at: "" }]}
+        onClose={vi.fn()}
+      />
+    );
+
+    const saveBtn = screen.getByTestId("save-template-btn");
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockRpc).toHaveBeenCalledWith(
+        "save_routine_template",
+        expect.objectContaining({
+          p_name: "Coach Routine",
+          p_user_id: null,
+        })
+      );
+    });
+  });
+
 });
