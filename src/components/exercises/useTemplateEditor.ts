@@ -264,7 +264,7 @@ export function useTemplateEditor({
     const isEdit = Boolean(template?.id && !isFork);
     const rpcId = isFork ? null : template?.id || null;
     const isMaster = Boolean(template?.is_master || allowMaster) && !isFork;
-    const effectiveUserId = isEdit ? null : (assignToAthleteId || targetUserId);
+    const effectiveUserId = isEdit ? targetUserId : (assignToAthleteId || targetUserId);
 
     const exercisePayload = templateExercises.map((e, idx) => ({
       exercise_id: e.exercise_id,
