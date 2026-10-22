@@ -87,6 +87,8 @@ export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | 
       carbs: it.carbs,
       fat: it.fat,
       fiber: it.fiber,
+      dishId: dish.id,
+      dishItemId: it.id,
     })
   );
 
@@ -107,6 +109,7 @@ export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | 
         carbs: dish.carbs,
         fat: dish.fat,
         fiber: dish.fiber,
+        dishId: dish.id,
       }),
     ];
   }
