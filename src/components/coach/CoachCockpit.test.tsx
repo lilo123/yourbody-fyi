@@ -998,7 +998,7 @@ describe('CoachCockpit', () => {
 
     const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
     expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
-    expect(rpcCall?.[1]?.p_user_id).toBeNull();
+    expect((rpcCall?.[1] as any)?.p_user_id).toBeNull();
   });
 
   it('editing an existing athlete template with another athlete selected preserves template assignment and does not pass p_assigned_to to rpc', async () => {
@@ -1058,7 +1058,7 @@ describe('CoachCockpit', () => {
 
     const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
     expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
-    expect(rpcCall?.[1]?.p_user_id).toBeNull();
+    expect((rpcCall?.[1] as any)?.p_user_id).toBeNull();
   });
 
 });
