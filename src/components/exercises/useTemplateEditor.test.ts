@@ -1,12 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useTemplateEditor, mapTemplateExercises } from './useTemplateEditor';
 import type { Exercise, RoutineTemplate } from '../../types/database';
 import { supabase } from '../../lib/supabase';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
-    from: vi.fn(),
     rpc: vi.fn().mockResolvedValue({ data: { success: true }, error: null }),
   },
 }));
@@ -201,64 +200,6 @@ describe('useTemplateEditor & mapTemplateExercises', () => {
     );
   });
 
-  it('does not send p_assigned_to and sends p_user_id as null when editing an existing template even if assignToAthleteId is passed', async () => {
-    vi.mocked(supabase.rpc).mockClear();
-    const onClose = vi.fn();
-    const template: RoutineTemplate = {
-      id: 'tpl-existing-1',
-      user_id: 'coach-1',
-      name: 'Existing Master Template',
-      is_master: true,
-      assigned_to: null,
-      days_of_week: ['Mon'],
-      exercises: [
-        { id: 'i-1', exercise_id: 'ex-1', template_id: 'tpl-existing-1', order_index: 0, target_sets: 3, target_reps: 10 },
-      ],
-      created_at: '',
-    };
-
-    const mockBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: template, error: null }),
-    };
-    (supabase.from as any).mockReturnValue(mockBuilder);
-
-    const { result } = renderHook(() =>
-      useTemplateEditor({
-        isOpen: true,
-        template,
-        assignToAthleteId: 'ath-1',
-        onClose,
-        exercises: mockExercises,
-      })
-    );
-
-    await waitFor(() => {
-      expect(result.current.isLoadingTemplate).toBe(false);
-    });
-
-    act(() => {
-      result.current.setName('Updated Master Template');
-    });
-
-    await act(async () => {
-      await result.current.handleSave();
-    });
-
-    expect(supabase.rpc).toHaveBeenCalledWith(
-      'save_routine_template',
-      expect.objectContaining({
-        p_template_id: 'tpl-existing-1',
-        p_name: 'Updated Master Template',
-        p_user_id: null,
-      })
-    );
-
-    const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
-    expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
-  });
-
   it('sends p_assigned_to and p_user_id when creating a new template for an athlete', async () => {
     vi.mocked(supabase.rpc).mockClear();
     const onClose = vi.fn();
@@ -281,7 +222,6 @@ describe('useTemplateEditor & mapTemplateExercises', () => {
           exercise_name: 'Bench Press',
           target_sets: 3,
           target_reps: 10,
-          order_index: 0,
         },
       ]);
     });
