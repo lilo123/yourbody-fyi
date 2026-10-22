@@ -73,7 +73,13 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
       const list = focusables().filter(
         (el) => el.getAttribute('tabindex') !== '-1'
       );
-      if (list.length === 0) return;
+      if (list.length === 0) {
+        e.preventDefault();
+        if (!containerRef.current?.contains(document.activeElement)) {
+          containerRef.current?.focus();
+        }
+        return;
+      }
       const firstEl = list[0];
       const lastEl = list[list.length - 1];
       const active = document.activeElement as HTMLElement | null;

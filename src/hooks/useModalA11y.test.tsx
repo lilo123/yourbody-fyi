@@ -69,6 +69,25 @@ function RovingHarness({ onClose = () => {} }: { onClose?: () => void }) {
   );
 }
 
+function OnlyNegativeHarness({ onClose = () => {} }: { onClose?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useModalA11y(open, onClose);
+  return (
+    <div>
+      <button data-testid="opener" onClick={() => setOpen(true)}>
+        Open
+      </button>
+      {open && (
+        <div ref={ref} role="dialog" aria-modal="true" data-testid="dialog">
+          <button data-testid="negative-only" tabIndex={-1}>
+            Negative Only
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 describe('useModalA11y', () => {
   it('moves focus to the first control, not to a destructive one further down', () => {
     render(<Harness onClose={() => {}} />);
@@ -157,5 +176,21 @@ describe('useModalA11y', () => {
     screen.getByTestId('first').focus();
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(screen.getByTestId('tabbable-last'));
+  });
+
+  it('prevents Tab and Shift+Tab from escaping when dialog only contains controls with tabIndex=-1', () => {
+    render(<OnlyNegativeHarness />);
+    fireEvent.click(screen.getByTestId('opener'));
+
+    const item = screen.getByTestId('negative-only');
+    expect(document.activeElement).toBe(item);
+
+    const tabPrevented = !fireEvent.keyDown(document, { key: 'Tab' });
+    expect(tabPrevented).toBe(true);
+    expect(document.activeElement).toBe(item);
+
+    const shiftTabPrevented = !fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(shiftTabPrevented).toBe(true);
+    expect(document.activeElement).toBe(item);
   });
 });
