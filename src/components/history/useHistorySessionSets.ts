@@ -104,6 +104,29 @@ export function useHistorySessionSets({
               created_at: op.payload.created_at || new Date().toISOString(),
             });
           }
+        } else if (op.kind === 'set.batchCreate') {
+          const { workoutRef, sets } = op.payload;
+          const matchesRef = workoutRef === sessionId;
+          for (const s of sets) {
+            const opDate =
+              workoutRefDateMap.get(workoutRef) || s.created_at?.slice(0, 10);
+            const matchesDate = Boolean(sessionDate && opDate === sessionDate);
+            if (matchesRef || matchesDate) {
+              sessionPendingSets.push({
+                id: s.id,
+                workout_id: sessionId,
+                exercise_id: s.exercise_id,
+                weight: Number(s.weight) || 0,
+                reps: Number(s.reps) || 0,
+                set_index: s.set_index ?? sessionPendingSets.length,
+                set_type: (s.set_type as WorkoutSet['set_type']) || 'working',
+                rpe: s.rpe ?? null,
+                workout_date: sessionDate,
+                workout_name: session?.name || 'Workout Session',
+                created_at: s.created_at || new Date().toISOString(),
+              });
+            }
+          }
         } else if (op.kind === 'set.update') {
           updatedSets.set(op.payload.id, op.payload.patch);
         } else if (op.kind === 'set.delete') {
