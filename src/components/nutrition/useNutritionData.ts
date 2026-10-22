@@ -136,9 +136,9 @@ export function useNutritionData({
   contextActiveToastRef.current = contextActiveToast;
 
   const targetCalories = profile?.target_calories || 2200;
-  const targetProtein = profile?.target_protein || 160;
-  const targetCarbs = profile?.target_carbs || 220;
-  const targetFat = profile?.target_fat || 70;
+  const targetProtein = profile?.target_protein ?? 160;
+  const targetCarbs = profile?.target_carbs ?? 220;
+  const targetFat = profile?.target_fat ?? 70;
   const targetFiber = profile?.target_fiber ?? 30;
 
   // Fetch custom dishes for context injection & quick log
