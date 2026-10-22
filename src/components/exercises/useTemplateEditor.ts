@@ -277,7 +277,7 @@ export function useTemplateEditor({
       p_name: name.trim(),
       p_days_of_week: days,
       p_exercises: exercisePayload,
-      p_user_id: effectiveUserId,
+      p_user_id: effectiveUserId || null,
       p_is_master: isMaster,
     };
 

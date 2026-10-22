@@ -240,6 +240,55 @@ describe('SyncStatusSheet', () => {
     });
   });
 
+  it('pressing Escape with discard confirmation open closes confirmation but keeps sheet open', async () => {
+    const mockOp: OutboxOp = {
+      opId: 'op-esc',
+      userId: 'test-user-id',
+      clientMutationId: 'client-mut-esc',
+      kind: 'workout.rename',
+      table: 'workouts',
+      rowId: 'row-esc',
+      payload: { name: 'Leg Day Blast' },
+      createdAt: '2026-09-30T12:00:00.000Z',
+      retryCount: 1,
+      status: 'attention',
+      error: 'Conflict: workout already deleted',
+    } as any;
+
+    vi.mocked(useAttentionOps).mockReturnValue({
+      ops: [mockOp],
+      count: 1,
+      retry: mockRetry,
+      discard: mockDiscard,
+    });
+
+    renderSheet();
+    const discardBtn = screen.getByTestId('discard-op-btn-op-esc');
+    discardBtn.focus();
+    expect(document.activeElement).toBe(discardBtn);
+    fireEvent.click(discardBtn);
+
+    // Confirm dialog should be open
+    expect(screen.getByText('Discard change?')).toBeInTheDocument();
+
+    // Press Escape
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // Confirm dialog should be closed
+    expect(screen.queryByText('Discard change?')).not.toBeInTheDocument();
+
+    // Sheet should remain open (onClose not called)
+    expect(mockOnClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('sync-status-sheet')).toBeInTheDocument();
+
+    // Focus returns to the sheet (to the discard button that opened the confirm dialog)
+    expect(document.activeElement).toBe(discardBtn);
+
+    // Second Escape closes the sheet
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+  });
+
   it('passes axe accessibility audit when open', async () => {
     const mockOp: OutboxOp = {
       opId: 'op-123',
