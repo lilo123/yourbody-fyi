@@ -413,6 +413,78 @@ describe('useWorkoutUrlParams (URL-1, URL-2)', () => {
     // Now stripped!
     expect(new URLSearchParams(window.location.search).has('routine')).toBe(false);
   });
+
+  it('does not mark param as applied or strip from URL when onSelectRoutine rejects, permitting retry', async () => {
+    let rejectSelection: (reason?: unknown) => void = () => {};
+    let resolveRetry: () => void = () => {};
+
+    let attempt = 0;
+    const onSelectRoutine = vi.fn().mockImplementation(() => {
+      attempt++;
+      if (attempt === 1) {
+        return new Promise<void>((_, reject) => {
+          rejectSelection = reject;
+        });
+      }
+      return new Promise<void>((resolve) => {
+        resolveRetry = resolve;
+      });
+    });
+
+    const customTemplates: RoutineTemplate[] = [
+      {
+        id: '11111111-2222-3333-4444-555555555555',
+        name: 'Custom Push Day',
+        user_id: 'u1',
+        is_master: false,
+        assigned_to: null,
+        created_at: '2026-09-01',
+      },
+    ];
+
+    window.history.replaceState(
+      null,
+      '',
+      '/workout?routine=11111111-2222-3333-4444-555555555555'
+    );
+
+    const { rerender } = renderHook(
+      ({ templates }) =>
+        useWorkoutUrlParams({
+          customTemplates: templates,
+          templatesFetched: true,
+          onSelectRoutine,
+          workoutDate: '2026-09-01',
+          onDateChange: vi.fn(),
+        }),
+      {
+        initialProps: { templates: customTemplates },
+      }
+    );
+
+    expect(onSelectRoutine).toHaveBeenCalledTimes(1);
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(true);
+
+    // Reject the first selection attempt
+    await act(async () => {
+      rejectSelection(new Error('Network error loading routine exercises'));
+    });
+
+    // Parameter remains untouched and was not consumed
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(true);
+
+    // Trigger re-evaluation (e.g. rerender or prop change triggering effect retry)
+    rerender({ templates: [...customTemplates] });
+
+    expect(onSelectRoutine).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveRetry();
+    });
+
+    // Now stripped after successful resolution on retry
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(false);
+  });
 });
 
 

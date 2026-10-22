@@ -114,12 +114,16 @@ export function useWorkoutUrlParams({
       let isCancelled = false;
       const res = onSelectRoutine(matchedCustom.name, matchedCustom) as unknown;
       if (res && typeof (res as Promise<unknown>).then === 'function') {
-        (res as Promise<unknown>).then(() => {
-          if (!isCancelled) {
-            routineParamAppliedRef.current = routineParam;
-            stripRoutineParamFromUrl();
-          }
-        });
+        (res as Promise<unknown>)
+          .then(() => {
+            if (!isCancelled) {
+              routineParamAppliedRef.current = routineParam;
+              stripRoutineParamFromUrl();
+            }
+          })
+          .catch(() => {
+            // Swallow error: leave param unapplied and unstripped so a retry can apply it
+          });
         return () => {
           isCancelled = true;
         };
@@ -138,12 +142,16 @@ export function useWorkoutUrlParams({
       let isCancelled = false;
       const res = onSelectRoutine(matchedDefault.name) as unknown;
       if (res && typeof (res as Promise<unknown>).then === 'function') {
-        (res as Promise<unknown>).then(() => {
-          if (!isCancelled) {
-            routineParamAppliedRef.current = routineParam;
-            stripRoutineParamFromUrl();
-          }
-        });
+        (res as Promise<unknown>)
+          .then(() => {
+            if (!isCancelled) {
+              routineParamAppliedRef.current = routineParam;
+              stripRoutineParamFromUrl();
+            }
+          })
+          .catch(() => {
+            // Swallow error: leave param unapplied and unstripped so a retry can apply it
+          });
         return () => {
           isCancelled = true;
         };
