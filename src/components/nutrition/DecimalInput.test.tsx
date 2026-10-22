@@ -92,4 +92,40 @@ describe('DecimalInput', () => {
     fireEvent.change(input, { target: { value: '-5' } });
     expect(onChange).toHaveBeenCalledWith(-5);
   });
+
+  it('rejects negative input like -50 by default when rendered like coach athlete macros', () => {
+    function CoachAthleteMacrosLike() {
+      const [athletePro, setAthletePro] = useState<string | number>(150);
+      return (
+        <DecimalInput
+          min="0"
+          value={athletePro === '' ? '' : Number(athletePro)}
+          onChange={(val) => setAthletePro(val === '' ? '' : String(val))}
+          data-testid="athlete-macro-pro"
+        />
+      );
+    }
+
+    render(<CoachAthleteMacrosLike />);
+    const input = screen.getByTestId('athlete-macro-pro') as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: '-50' } });
+    fireEvent.blur(input);
+
+    expect(input.value).not.toBe('-50');
+  });
+
+  it('rejects negative numbers by default and reverts on blur', () => {
+    const onChange = vi.fn();
+    render(<DecimalInput value={10} onChange={onChange} data-testid="dec-input" />);
+    const input = screen.getByTestId('dec-input') as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: '-5' } });
+    expect(onChange).toHaveBeenCalledWith(NaN);
+    expect(input.value).toBe('-5');
+
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith(10);
+    expect(input.value).toBe('10');
+  });
 });
