@@ -409,7 +409,7 @@ describe('useWorkoutMutations', () => {
     expect(result.current.exerciseErrors['Bench Press']).toBeUndefined();
   });
 
-  it('passes targetUserId to deleteSet in deleteSetMutation', async () => {
+  it('passes targetUserId and workoutDate to deleteSet in deleteSetMutation', async () => {
     const deleteSpy = vi.spyOn(setsLib, 'deleteSet').mockResolvedValue(undefined as any);
 
     const { result } = renderHook(
@@ -430,8 +430,10 @@ describe('useWorkoutMutations', () => {
 
     expect(deleteSpy).toHaveBeenCalledWith(
       expect.anything(),
-      'set-to-delete-123'
+      'set-to-delete-123',
+      { targetUserId, workoutDate }
     );
+    deleteSpy.mockRestore();
   });
 
   it('optimistically removes set from query cache on deleteSet and rolls back on failure', async () => {

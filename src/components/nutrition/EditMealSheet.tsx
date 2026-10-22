@@ -225,7 +225,7 @@ const EditMealSheetContent: React.FC<EditMealSheetContentProps> = ({
         <button
           type="button"
           onClick={handleCancel}
-          className="text-zinc-400 hover:text-white min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg touch-manipulation"
+          className="text-zinc-400 hover:text-white min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg touch-manipulation relative before:absolute before:right-0 before:bottom-0 before:min-w-[44px] before:min-h-[44px] before:content-['']"
           aria-label="Close edit meal"
           data-testid="close-edit-meal-sheet-btn"
         >
