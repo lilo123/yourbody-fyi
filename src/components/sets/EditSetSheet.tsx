@@ -114,6 +114,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
           reps: updates.reps,
           rpe: updates.rpe,
           setType: updates.set_type,
+          setIndex: currentSet.set_index,
         },
         expected,
         targetUserId
@@ -126,6 +127,8 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
         ...currentSet,
         ...variables,
         ...(updatedRow || {}),
+        set_index: currentSet.set_index,
+        created_at: currentSet.created_at,
         workout_id: updatedRow?.workout_id || currentSet.workout_id,
       };
       onSaved(savedRow);

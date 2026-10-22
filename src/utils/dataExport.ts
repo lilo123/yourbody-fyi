@@ -12,6 +12,7 @@ import {
   normalizeDateStr,
   getDayBounds,
 } from './date';
+import { isMidnightUtc } from './timelineGrouping';
 
 export type ExportDomain = 'workouts' | 'nutrition_logs' | 'custom_dishes' | 'routines' | 'profile';
 export type ExportFormat = 'json' | 'csv';
@@ -69,7 +70,7 @@ export interface GeneratedExportFile {
 export const EXPORT_PAGE_SIZE = 250;
 
 export const WORKOUT_EXPORT_PROJECTION =
-  'id, user_id, name, date, created_at, sets(id, exercise_id, set_index, set_type, weight, reps, rpe, created_at, exercise:exercises(name, body_parts))';
+  'id, user_id, name, date, workout_date, created_at, sets(id, exercise_id, set_index, set_type, weight, reps, rpe, created_at, exercise:exercises(name, body_parts))';
 
 export const NUTRITION_EXPORT_PROJECTION =
   'id, user_id, food_name, meal_type, calories, protein, carbs, fat, fiber, serving_size, serving_unit, logged_at, created_at, notes, has_components, items';
@@ -180,6 +181,26 @@ export function serializeToExportJson(bundle: ExportBundle): GeneratedExportFile
   };
 }
 
+export function deriveWorkoutCivilDate(
+  workout: { workout_date?: string | null; date?: string | null },
+  timeZone?: string | null
+): string {
+  if (workout.workout_date && /^\d{4}-\d{2}-\d{2}$/.test(workout.workout_date)) {
+    return workout.workout_date;
+  }
+  const dateStr = workout.date;
+  if (!dateStr) return '';
+  const effectiveTz = timeZone || undefined;
+  if (isMidnightUtc(dateStr)) {
+    return normalizeDateStr(dateStr) || String(dateStr).slice(0, 10);
+  }
+  return (
+    normalizeDateStr(dateStr, effectiveTz) ||
+    normalizeDateStr(dateStr) ||
+    String(dateStr).slice(0, 10)
+  );
+}
+
 export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: string): GeneratedExportFile[] {
   const files: GeneratedExportFile[] = [];
 
@@ -200,14 +221,16 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
       ];
       const rows: string[] = [headers.join(',')];
       const workouts = bundle.data.workouts || [];
+      const userTimeZone = bundle.data.profile?.timezone || undefined;
 
-      for (const w of workouts) {
-        const sets = w.sets || [];
+      for (const workout of workouts) {
+        const workoutDate = deriveWorkoutCivilDate(workout, userTimeZone);
+        const sets = workout.sets || [];
         if (sets.length === 0) {
           const cells = [
-            w.id,
-            w.date,
-            w.name ?? '',
+            workout.id,
+            workoutDate,
+            workout.name ?? '',
             '',
             '',
             '',
@@ -221,9 +244,9 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
         } else {
           for (const s of sets) {
             const cells = [
-              w.id,
-              w.date,
-              w.name ?? '',
+              workout.id,
+              workoutDate,
+              workout.name ?? '',
               s.set_index ?? '',
               s.set_type ?? '',
               s.exercise?.name ?? s.exercise_name ?? '',
@@ -456,10 +479,10 @@ export async function fetchWorkoutsPage(
     .order('date', { ascending: false });
 
   if (bounds.startDate) {
-    query = query.gte('date', bounds.startDate);
+    query = query.gte('workout_date', bounds.startDate);
   }
   if (bounds.endDate) {
-    query = query.lte('date', bounds.endDate);
+    query = query.lte('workout_date', bounds.endDate);
   }
 
   const { data, error } = await query.range(from, to);
