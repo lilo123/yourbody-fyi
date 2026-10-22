@@ -144,4 +144,168 @@ describe('ExerciseStatsList (kg-mode & unit display)', () => {
     expect(searchInput).toBeDefined();
     expect(searchInput.getAttribute('aria-label')).toBe('Search exercise library');
   });
+
+  it('draws sparkline chronologically (oldest to newest) when RPC returns recent_sets newest-first', () => {
+    const rawExerciseStats = [
+      {
+        exercise_id: 'ex-bench',
+        exercise_name: 'Bench Press',
+        set_count: 2,
+        max_weight: 225,
+        pr_reps: 5,
+        pr_date: '2026-10-01',
+        // RPC returns recent_sets ordered newest-first:
+        recent_sets: [
+          { id: 's2', weight: 225, reps: 5, workout_date: '2026-10-01' },
+          { id: 's1', weight: 185, reps: 5, workout_date: '2026-09-01' },
+        ],
+      },
+    ];
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ExerciseStatsList
+          rawExerciseStats={rawExerciseStats}
+          searchQuery=""
+          selectedCategory="All"
+          onSearchQueryChange={vi.fn()}
+          onSelectedCategoryChange={vi.fn()}
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+
+    // Progression 185 -> 225 must produce sparkline: first 185, last 225
+    expect(screen.getByLabelText('Trend: first 185, last 225 over 2 sessions')).toBeDefined();
+  });
+
+  it('orders logged exercises by most recent workout date when RPC returns recent_sets newest-first', () => {
+    const rawExerciseStats = [
+      {
+        exercise_id: 'ex-bench',
+        exercise_name: 'Bench Press',
+        set_count: 2,
+        max_weight: 225,
+        pr_reps: 5,
+        pr_date: '2026-10-20',
+        // Most recent workout was 2026-10-20, older was 2026-09-01
+        recent_sets: [
+          { id: 'b2', weight: 225, reps: 5, workout_date: '2026-10-20' },
+          { id: 'b1', weight: 185, reps: 5, workout_date: '2026-09-01' },
+        ],
+      },
+      {
+        exercise_id: 'ex-squat',
+        exercise_name: 'Squat',
+        set_count: 1,
+        max_weight: 315,
+        pr_reps: 5,
+        pr_date: '2026-10-10',
+        // Most recent workout was 2026-10-10
+        recent_sets: [
+          { id: 'sq1', weight: 315, reps: 5, workout_date: '2026-10-10' },
+        ],
+      },
+    ];
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ExerciseStatsList
+          rawExerciseStats={rawExerciseStats}
+          searchQuery=""
+          selectedCategory="All"
+          onSearchQueryChange={vi.fn()}
+          onSelectedCategoryChange={vi.fn()}
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    // Bench Press (performed 2026-10-20) should be before Squat (performed 2026-10-10)
+    expect(headings).toEqual(['Bench Press', 'Squat']);
+  });
+
+  it('draws sparkline chronologically even when sets are given in oldest-first or shuffled order', () => {
+    const rawExerciseStats = [
+      {
+        exercise_id: 'ex-bench',
+        exercise_name: 'Bench Press',
+        set_count: 3,
+        max_weight: 225,
+        pr_reps: 5,
+        pr_date: '2026-10-01',
+        // Shuffled dates: Sep 15, Oct 1, Sep 1
+        recent_sets: [
+          { id: 's2', weight: 205, reps: 5, workout_date: '2026-09-15' },
+          { id: 's3', weight: 225, reps: 5, workout_date: '2026-10-01' },
+          { id: 's1', weight: 185, reps: 5, workout_date: '2026-09-01' },
+        ],
+      },
+    ];
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ExerciseStatsList
+          rawExerciseStats={rawExerciseStats}
+          searchQuery=""
+          selectedCategory="All"
+          onSearchQueryChange={vi.fn()}
+          onSelectedCategoryChange={vi.fn()}
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByLabelText('Trend: first 185, last 225 over 3 sessions')).toBeDefined();
+  });
+
+  it('orders logged exercises by latest date even when sets are in oldest-first order', () => {
+    const rawExerciseStats = [
+      {
+        exercise_id: 'ex-bench',
+        exercise_name: 'Bench Press',
+        set_count: 2,
+        max_weight: 225,
+        pr_reps: 5,
+        pr_date: '2026-10-20',
+        // Oldest-first
+        recent_sets: [
+          { id: 'b1', weight: 185, reps: 5, workout_date: '2026-09-01' },
+          { id: 'b2', weight: 225, reps: 5, workout_date: '2026-10-20' },
+        ],
+      },
+      {
+        exercise_id: 'ex-squat',
+        exercise_name: 'Squat',
+        set_count: 1,
+        max_weight: 315,
+        pr_reps: 5,
+        pr_date: '2026-10-10',
+        recent_sets: [
+          { id: 'sq1', weight: 315, reps: 5, workout_date: '2026-10-10' },
+        ],
+      },
+    ];
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ExerciseStatsList
+          rawExerciseStats={rawExerciseStats}
+          searchQuery=""
+          selectedCategory="All"
+          onSearchQueryChange={vi.fn()}
+          onSelectedCategoryChange={vi.fn()}
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Bench Press', 'Squat']);
+  });
 });
