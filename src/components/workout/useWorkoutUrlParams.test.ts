@@ -334,6 +334,85 @@ describe('useWorkoutUrlParams (URL-1, URL-2)', () => {
     );
     expect(new URLSearchParams(window.location.search).has('routine')).toBe(false);
   });
+
+  it('awaits async onSelectRoutine before stripping ?routine= and does not strip if unmounted while pending', async () => {
+    let resolveSelection: () => void = () => {};
+    const onSelectRoutine = vi.fn().mockImplementation(() => {
+      return new Promise<void>((resolve) => {
+        resolveSelection = resolve;
+      });
+    });
+
+    const customTemplates: RoutineTemplate[] = [
+      {
+        id: '11111111-2222-3333-4444-555555555555',
+        name: 'Custom Push Day',
+        user_id: 'u1',
+        is_master: false,
+        assigned_to: null,
+        created_at: '2026-09-01',
+      },
+    ];
+
+    window.history.replaceState(
+      null,
+      '',
+      '/workout?routine=11111111-2222-3333-4444-555555555555'
+    );
+
+    const { unmount } = renderHook(() =>
+      useWorkoutUrlParams({
+        customTemplates,
+        templatesFetched: true,
+        onSelectRoutine,
+        workoutDate: '2026-09-01',
+        onDateChange: vi.fn(),
+      })
+    );
+
+    expect(onSelectRoutine).toHaveBeenCalledTimes(1);
+    // While pending, routine param must NOT be stripped yet
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(true);
+
+    // Unmount while selection is still pending (simulating StrictMode or unmount)
+    unmount();
+
+    // Now resolve the pending promise after unmount
+    await act(async () => {
+      resolveSelection();
+    });
+
+    // Param should still NOT have been stripped because effect was cancelled
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(true);
+
+    // Remount: should try again and strip upon successful resolution
+    let resolveMount2: () => void = () => {};
+    const onSelectRoutine2 = vi.fn().mockImplementation(() => {
+      return new Promise<void>((resolve) => {
+        resolveMount2 = resolve;
+      });
+    });
+
+    renderHook(() =>
+      useWorkoutUrlParams({
+        customTemplates,
+        templatesFetched: true,
+        onSelectRoutine: onSelectRoutine2,
+        workoutDate: '2026-09-01',
+        onDateChange: vi.fn(),
+      })
+    );
+
+    expect(onSelectRoutine2).toHaveBeenCalledTimes(1);
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(true);
+
+    await act(async () => {
+      resolveMount2();
+    });
+
+    // Now stripped!
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(false);
+  });
 });
 
 

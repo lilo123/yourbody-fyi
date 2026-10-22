@@ -111,9 +111,22 @@ export function useWorkoutUrlParams({
       customTemplates.find((template) => template.name.toLowerCase() === trimmed.toLowerCase());
 
     if (matchedCustom) {
-      routineParamAppliedRef.current = routineParam;
-      onSelectRoutine(matchedCustom.name, matchedCustom);
-      stripRoutineParamFromUrl();
+      let isCancelled = false;
+      const res = onSelectRoutine(matchedCustom.name, matchedCustom) as unknown;
+      if (res && typeof (res as Promise<unknown>).then === 'function') {
+        (res as Promise<unknown>).then(() => {
+          if (!isCancelled) {
+            routineParamAppliedRef.current = routineParam;
+            stripRoutineParamFromUrl();
+          }
+        });
+        return () => {
+          isCancelled = true;
+        };
+      } else {
+        routineParamAppliedRef.current = routineParam;
+        stripRoutineParamFromUrl();
+      }
       return;
     }
 
@@ -122,11 +135,23 @@ export function useWorkoutUrlParams({
     );
 
     if (matchedDefault) {
-      routineParamAppliedRef.current = routineParam;
-      onSelectRoutine(matchedDefault.name);
-      stripRoutineParamFromUrl();
+      let isCancelled = false;
+      const res = onSelectRoutine(matchedDefault.name) as unknown;
+      if (res && typeof (res as Promise<unknown>).then === 'function') {
+        (res as Promise<unknown>).then(() => {
+          if (!isCancelled) {
+            routineParamAppliedRef.current = routineParam;
+            stripRoutineParamFromUrl();
+          }
+        });
+        return () => {
+          isCancelled = true;
+        };
+      } else {
+        routineParamAppliedRef.current = routineParam;
+        stripRoutineParamFromUrl();
+      }
     }
-
   }, [getSearchParams, templatesFetched, customTemplates, onSelectRoutine, stripRoutineParamFromUrl]);
 
   return {
