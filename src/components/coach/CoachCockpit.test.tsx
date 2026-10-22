@@ -797,6 +797,112 @@ describe('CoachCockpit', () => {
       expect(capturedNutritionGte).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
       expect(capturedNutritionGte!.length).toBeGreaterThan(10);
     });
+
+    it('queries athlete workouts with precise ISO start-of-day timestamp from getDayBounds to avoid boundary clipping', async () => {
+      let capturedWorkoutsGte: string | null = null;
+      let capturedWorkoutsColumn: string | null = null;
+
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'workouts') {
+          const b = createSupabaseBuilder('workouts', { data: [], error: null });
+          const origGte = b.gte.bind(b);
+          b.gte = vi.fn().mockImplementation((col: string, val: string) => {
+            capturedWorkoutsColumn = col;
+            capturedWorkoutsGte = val;
+            return origGte(col, val);
+          });
+          return b;
+        }
+        return defaultMock(table);
+      });
+
+      renderComponent();
+
+      await waitFor(() => {
+        expect(capturedWorkoutsColumn).toBe('date');
+        expect(capturedWorkoutsGte).not.toBeNull();
+      });
+
+      // Verification: must be full ISO timestamp ending with Z, not raw YYYY-MM-DD
+      expect(capturedWorkoutsGte).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(capturedWorkoutsGte!.length).toBeGreaterThan(10);
+    });
+
+    it('normalizes embedded set workout_date using athlete timezone', async () => {
+      const athleteTokyoLinks = [
+        {
+          athlete_id: 'ath-tokyo',
+          status: 'active',
+          linked_at: '2026-09-01T00:00:00Z',
+          athlete: { id: 'ath-tokyo', username: 'Kenji Sato', email: 'kenji@example.com', role: 'athlete', timezone: 'Asia/Tokyo' },
+        },
+      ];
+
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'coach_athlete_links') {
+          return createSupabaseBuilder('coach_athlete_links', {
+            data: athleteTokyoLinks,
+            error: null,
+          });
+        }
+        if (table === 'users') {
+          return createSupabaseBuilder('users', {
+            resolver: (b: any) => {
+              const idFilter = b.filters.find((f: any) => f.column === 'id');
+              if (idFilter && idFilter.value === 'ath-tokyo') {
+                return {
+                  id: 'ath-tokyo',
+                  email: 'kenji@example.com',
+                  username: 'Kenji Sato',
+                  role: 'athlete',
+                  timezone: 'Asia/Tokyo',
+                };
+              }
+              return {
+                id: 'coach-id',
+                email: 'coach@yourbody.fyi',
+                username: 'Coach Demo',
+                role: 'coach',
+                is_coach_mode: true,
+              };
+            },
+          });
+        }
+        if (table === 'workouts') {
+          return createSupabaseBuilder('workouts', {
+            resolver: () => [
+              {
+                id: 'w-tokyo-early',
+                name: 'Tokyo Morning Workout',
+                date: '2026-10-07T21:00:00.000Z', // 2026-10-08 06:00:00 JST (+09:00)
+                sets: [
+                  {
+                    id: 's-1',
+                    reps: 10,
+                    weight: 100,
+                    set_index: 0,
+                    created_at: '2026-10-07T21:05:00.000Z',
+                    exercise_id: 'ex-1',
+                    set_type: 'working',
+                  },
+                ],
+              },
+            ],
+            error: null,
+          });
+        }
+        return defaultMock(table);
+      });
+
+      renderComponent();
+
+      await waitFor(() => {
+        const cached = queryClient.getQueryData<any[]>(['coach_athlete_timeline_workouts', 'ath-tokyo', 14, 'Asia/Tokyo']);
+        expect(cached).toBeDefined();
+        expect(cached?.length).toBe(1);
+        expect(cached?.[0].sets?.[0]?.workout_date).toBe('2026-10-08');
+      });
+    });
   });
 
   it('surfaces visible error state with retry button on athlete workouts query failure and refetches on click', async () => {
