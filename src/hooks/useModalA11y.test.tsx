@@ -46,6 +46,29 @@ function Harness({ onClose, withNested = false }: { onClose: () => void; withNes
   );
 }
 
+function RovingHarness({ onClose = () => {} }: { onClose?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useModalA11y(open, onClose);
+  return (
+    <div>
+      <button data-testid="opener" onClick={() => setOpen(true)}>
+        Open
+      </button>
+      {open && (
+        <div ref={ref} role="dialog" aria-modal="true" data-testid="dialog">
+          <button data-testid="first">First</button>
+          <button data-testid="tabbable-last" tabIndex={0}>
+            Active Day
+          </button>
+          <button data-testid="trailing-negative" tabIndex={-1}>
+            Inactive Day
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 describe('useModalA11y', () => {
   it('moves focus to the first control, not to a destructive one further down', () => {
     render(<Harness onClose={() => {}} />);
@@ -116,5 +139,23 @@ describe('useModalA11y', () => {
     fireEvent.click(screen.getByTestId('close-nested'));
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('wraps Tab from the last tabbable control back to the first when trailing controls have tabIndex=-1', () => {
+    render(<RovingHarness />);
+    fireEvent.click(screen.getByTestId('opener'));
+
+    screen.getByTestId('tabbable-last').focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(screen.getByTestId('first'));
+  });
+
+  it('wraps Shift+Tab from first control to the last tabbable control when trailing controls have tabIndex=-1', () => {
+    render(<RovingHarness />);
+    fireEvent.click(screen.getByTestId('opener'));
+
+    screen.getByTestId('first').focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(screen.getByTestId('tabbable-last'));
   });
 });

@@ -67,7 +67,12 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
       }
       if (e.key !== 'Tab') return;
 
-      const list = focusables();
+      // Exclude elements with tabindex="-1" so roving-tabindex dialogs
+      // (like HistoryCalendarSheet where inactive day buttons have tabIndex=-1)
+      // do not treat an untabbable control as first/lastEl in the trap.
+      const list = focusables().filter(
+        (el) => el.getAttribute('tabindex') !== '-1'
+      );
       if (list.length === 0) return;
       const firstEl = list[0];
       const lastEl = list[list.length - 1];
