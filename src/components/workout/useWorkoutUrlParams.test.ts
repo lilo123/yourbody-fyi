@@ -286,6 +286,54 @@ describe('useWorkoutUrlParams (URL-1, URL-2)', () => {
 
     expect(onSelectRoutine).toHaveBeenCalledTimes(1);
   });
+
+  it('applies custom routine when customTemplates resolves after initial mount', () => {
+    const onSelectRoutine = vi.fn();
+    const customTemplates: RoutineTemplate[] = [
+      {
+        id: '11111111-2222-3333-4444-555555555555',
+        name: 'Custom Push Day',
+        user_id: 'u1',
+        is_master: false,
+        assigned_to: null,
+        created_at: '2026-09-01',
+      },
+    ];
+
+    window.history.replaceState(
+      null,
+      '',
+      '/workout?routine=11111111-2222-3333-4444-555555555555'
+    );
+
+    // Initial mount: templatesFetched is true, but customTemplates is empty
+    const { rerender } = renderHook(
+      ({ templates, fetched }) =>
+        useWorkoutUrlParams({
+          customTemplates: templates,
+          templatesFetched: fetched,
+          onSelectRoutine,
+          workoutDate: '2026-09-01',
+          onDateChange: vi.fn(),
+        }),
+      {
+        initialProps: { templates: [] as RoutineTemplate[], fetched: true },
+      }
+    );
+
+    expect(onSelectRoutine).not.toHaveBeenCalled();
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(true);
+
+    // Custom templates finish loading
+    rerender({ templates: customTemplates, fetched: true });
+
+    expect(onSelectRoutine).toHaveBeenCalledTimes(1);
+    expect(onSelectRoutine).toHaveBeenCalledWith(
+      'Custom Push Day',
+      customTemplates[0]
+    );
+    expect(new URLSearchParams(window.location.search).has('routine')).toBe(false);
+  });
 });
 
 

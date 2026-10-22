@@ -502,10 +502,9 @@ test.describe('Library Acceptance Proofs', () => {
 
     // Verify navigation to /workout, routine applied to DOM, and routine param consumed
     await page.waitForURL((url) => url.pathname === '/workout');
-    await expect(page.locator('[data-testid="routine-select-btn"]')).toContainText(tplName);
+    await expect(page.locator('[data-testid="routine-select-btn"]')).toContainText(tplName, { timeout: 15000 });
     await expect(page).not.toHaveURL(/routine=/);
   });
-
 
   // Proof 7: (7) at 320px: no horizontal overflow (scrollWidth<=clientWidth), all visible buttons in the list >=44x44, search input font-size >=16px
   test('Proof 7: 320px viewport ergonomics (no horizontal overflow, >=44x44 hit areas, >=16px search input)', async ({ browser }) => {

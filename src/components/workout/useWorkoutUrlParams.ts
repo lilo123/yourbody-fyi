@@ -104,7 +104,6 @@ export function useWorkoutUrlParams({
     if (!routineParam) return;
 
     if (routineParamAppliedRef.current === routineParam) return;
-    routineParamAppliedRef.current = routineParam;
 
     const trimmed = routineParam.trim();
     const matchedCustom =
@@ -112,6 +111,7 @@ export function useWorkoutUrlParams({
       customTemplates.find((template) => template.name.toLowerCase() === trimmed.toLowerCase());
 
     if (matchedCustom) {
+      routineParamAppliedRef.current = routineParam;
       onSelectRoutine(matchedCustom.name, matchedCustom);
       stripRoutineParamFromUrl();
       return;
@@ -122,9 +122,11 @@ export function useWorkoutUrlParams({
     );
 
     if (matchedDefault) {
+      routineParamAppliedRef.current = routineParam;
       onSelectRoutine(matchedDefault.name);
       stripRoutineParamFromUrl();
     }
+
   }, [getSearchParams, templatesFetched, customTemplates, onSelectRoutine, stripRoutineParamFromUrl]);
 
   return {
