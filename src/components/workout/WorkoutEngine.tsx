@@ -1,12 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
-import {
-  computeGhostSets,
-  getExerciseBenchmarks,
-  getDayOfWeekAbbr,
-  getLocalDateStr,
-} from '../../utils/ghostSets';
+import { computeGhostSets, getExerciseBenchmarks, getDayOfWeekAbbr, getLocalDateStr } from '../../utils/ghostSets';
 import { workoutSessionStore, type SetDraftInput } from '../../utils/workoutSessionStore';
 import { toDisplayWeight } from '../../utils/weight';
 import { Layers, Plus, Check, AlertCircle, RotateCcw } from 'lucide-react';
@@ -29,6 +24,7 @@ import { useWorkoutFinishReview } from './useWorkoutFinishReview';
 import { WorkoutEmptyState } from './WorkoutEmptyState';
 import { WorkoutDialogs } from './WorkoutDialogs';
 import type { CatalogExercise } from '../../lib/exercises';
+import { resolveCardBenchmarks } from './workoutEngineHelpers';
 
 export const WorkoutEngine: React.FC = () => {
   const { user, profile } = useAuth();
@@ -66,6 +62,7 @@ export const WorkoutEngine: React.FC = () => {
     isLogsError,
     logsError,
     refetchLogs,
+    benchmarks: allTimeBenchmarks,
   } = useWorkoutQueries(targetUserId, initialDate);
 
   // 3. Session Management (Routines, Exercises, Targets, Drafts)
@@ -472,7 +469,11 @@ export const WorkoutEngine: React.FC = () => {
                 const exerciseSetsToday = rawSets.filter(
                   (s) => s.id !== pendingSetId && (!s.id || !pendingDeletedSetIds.has(s.id))
                 );
-                const benchmarks = getExerciseBenchmarks(exName, userLogs, workoutDate, unit, profile?.pr_mode || 'weight');
+                const localBenchmarks = getExerciseBenchmarks(exName, userLogs, workoutDate, unit, profile?.pr_mode || 'weight');
+                const benchmarks = resolveCardBenchmarks(
+                  exName, allTimeBenchmarks, localBenchmarks,
+                  exercises, customTemplates, profile?.pr_mode || 'weight', unit
+                );
                 const isExpanded = expandedExercises.has(exName);
                 const targetCount = targetSetCounts[exName] || 3;
                 const ghostValues = computeGhostSets(exName, targetCount, userLogs, workoutDate, unit);
