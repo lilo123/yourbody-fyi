@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { LoginView } from './LoginView';
-import { BrowserRouter, MemoryRouter } from 'react-router-dom';
+import { LoginView, getSafeRedirectPath } from './LoginView';
+import { BrowserRouter, MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../../context/AuthContext';
 
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
+import { supabase } from '../../lib/supabase';
 import { expectNoA11yViolations } from '../../test/a11y';
 
 const mockSignInWithPassword = vi.fn();
@@ -33,6 +34,9 @@ describe('LoginView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMockHistory();
+    (supabase.from as any).mockImplementation((table: string) =>
+      createSupabaseBuilder(table, { id: 'test-user-id', role: 'athlete' })
+    );
     mockSignInWithPassword.mockResolvedValue({ data: { user: { id: 'test-user-id' } }, error: null });
     mockSignUp.mockResolvedValue({ data: { user: { id: 'test-user-id' } }, error: null });
     mockResetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
@@ -449,6 +453,267 @@ describe('LoginView', () => {
 
     expect(replaceStateSpy).toHaveBeenCalled();
     replaceStateSpy.mockRestore();
+  });
+
+  it('navigates to state.from path (/nutrition) after successful sign in', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: '/nutrition' } }]}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<LoginView />} />
+              <Route path="/workout" element={<div data-testid="workout-page">Workout</div>} />
+              <Route path="/nutrition" element={<div data-testid="nutrition-page">Nutrition</div>} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const emailInput = screen.getByPlaceholderText('you@example.com');
+    const passwordInput = screen.getByPlaceholderText('••••••••');
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    fireEvent.change(emailInput, { target: { value: 'athlete@yourbody.fyi' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nutrition-page')).toBeDefined();
+    });
+  });
+
+  describe('post-sign-in redirect and open-redirect defense', () => {
+    it('navigates to state.from location object with pathname and search query', async () => {
+      const { fireEvent } = await import('@testing-library/react');
+      let capturedLocation: any;
+      const NutritionSpy = () => {
+        const loc = useLocation();
+        capturedLocation = loc;
+        return <div data-testid="nutrition-page">{loc.pathname + loc.search}</div>;
+      };
+
+      const { container } = render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter
+            initialEntries={[
+              {
+                pathname: '/login',
+                state: { from: { pathname: '/nutrition', search: '?date=2026-10-22' } },
+              },
+            ]}
+          >
+            <AuthProvider>
+              <Routes>
+                <Route path="/login" element={<LoginView />} />
+                <Route path="/workout" element={<div data-testid="workout-page">Workout</div>} />
+                <Route path="/nutrition" element={<NutritionSpy />} />
+              </Routes>
+            </AuthProvider>
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+
+      const emailInput = screen.getByPlaceholderText('you@example.com');
+      const passwordInput = screen.getByPlaceholderText('••••••••');
+      const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+      fireEvent.change(emailInput, { target: { value: 'athlete@yourbody.fyi' } });
+      fireEvent.change(passwordInput, { target: { value: 'password123' } });
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('nutrition-page')).toBeDefined();
+      });
+      expect(capturedLocation.pathname).toBe('/nutrition');
+      expect(capturedLocation.search).toBe('?date=2026-10-22');
+    });
+
+    it('navigates non-coach to /workout when state.from targets /coach', async () => {
+      const { fireEvent } = await import('@testing-library/react');
+      const { container } = render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: '/coach' } }]}>
+            <AuthProvider>
+              <Routes>
+                <Route path="/login" element={<LoginView />} />
+                <Route path="/workout" element={<div data-testid="workout-page">Workout</div>} />
+                <Route path="/coach" element={<div data-testid="coach-page">Coach</div>} />
+              </Routes>
+            </AuthProvider>
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+
+      const emailInput = screen.getByPlaceholderText('you@example.com');
+      const passwordInput = screen.getByPlaceholderText('••••••••');
+      const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+      fireEvent.change(emailInput, { target: { value: 'athlete@yourbody.fyi' } });
+      fireEvent.change(passwordInput, { target: { value: 'password123' } });
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workout-page')).toBeDefined();
+      });
+      expect(screen.queryByTestId('coach-page')).toBeNull();
+    });
+
+    it('navigates coach to /coach when state.from targets /coach', async () => {
+      const { fireEvent } = await import('@testing-library/react');
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'users') {
+          return createSupabaseBuilder('users', { id: 'test-user-id', role: 'coach' });
+        }
+        return createSupabaseBuilder(table, []);
+      });
+
+      try {
+        const { container } = render(
+          <QueryClientProvider client={queryClient}>
+            <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: '/coach' } }]}>
+              <AuthProvider>
+                <Routes>
+                  <Route path="/login" element={<LoginView />} />
+                  <Route path="/workout" element={<div data-testid="workout-page">Workout</div>} />
+                  <Route path="/coach" element={<div data-testid="coach-page">Coach</div>} />
+                </Routes>
+              </AuthProvider>
+            </MemoryRouter>
+          </QueryClientProvider>
+        );
+
+        const emailInput = screen.getByPlaceholderText('you@example.com');
+        const passwordInput = screen.getByPlaceholderText('••••••••');
+        const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+        fireEvent.change(emailInput, { target: { value: 'coach@yourbody.fyi' } });
+        fireEvent.change(passwordInput, { target: { value: 'password123' } });
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('coach-page')).toBeDefined();
+        });
+      } finally {
+        (supabase.from as any).mockImplementation((table: string) =>
+          createSupabaseBuilder(table, { id: 'test-user-id', role: 'athlete' })
+        );
+      }
+    });
+
+    it('rejects open-redirect attempts: //evil.com, https://evil.com, and /\\evil', async () => {
+      const { fireEvent } = await import('@testing-library/react');
+      const maliciousTargets = ['//evil.com', 'https://evil.com', '/\\evil'];
+
+      for (const target of maliciousTargets) {
+        const { container, unmount } = render(
+          <QueryClientProvider client={queryClient}>
+            <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: target } }]}>
+              <AuthProvider>
+                <Routes>
+                  <Route path="/login" element={<LoginView />} />
+                  <Route path="/workout" element={<div data-testid="workout-page">Workout</div>} />
+                  <Route path="/nutrition" element={<div data-testid="nutrition-page">Nutrition</div>} />
+                </Routes>
+              </AuthProvider>
+            </MemoryRouter>
+          </QueryClientProvider>
+        );
+
+        const emailInput = screen.getByPlaceholderText('you@example.com');
+        const passwordInput = screen.getByPlaceholderText('••••••••');
+        const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+        fireEvent.change(emailInput, { target: { value: 'athlete@yourbody.fyi' } });
+        fireEvent.change(passwordInput, { target: { value: 'password123' } });
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('workout-page')).toBeDefined();
+        });
+
+        unmount();
+      }
+    });
+
+    it('rejects open-redirect attempts in location objects ({ pathname: ... })', async () => {
+      const { fireEvent } = await import('@testing-library/react');
+      const maliciousObjects = [
+        { pathname: '//evil.com' },
+        { pathname: 'https://evil.com' },
+        { pathname: '/\\evil' },
+        { pathname: '/login' },
+      ];
+
+      for (const targetObj of maliciousObjects) {
+        const { container, unmount } = render(
+          <QueryClientProvider client={queryClient}>
+            <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: targetObj } }]}>
+              <AuthProvider>
+                <Routes>
+                  <Route path="/login" element={<LoginView />} />
+                  <Route path="/workout" element={<div data-testid="workout-page">Workout</div>} />
+                  <Route path="/nutrition" element={<div data-testid="nutrition-page">Nutrition</div>} />
+                </Routes>
+              </AuthProvider>
+            </MemoryRouter>
+          </QueryClientProvider>
+        );
+
+        const emailInput = screen.getByPlaceholderText('you@example.com');
+        const passwordInput = screen.getByPlaceholderText('••••••••');
+        const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+        fireEvent.change(emailInput, { target: { value: 'athlete@yourbody.fyi' } });
+        fireEvent.change(passwordInput, { target: { value: 'password123' } });
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('workout-page')).toBeDefined();
+        });
+
+        unmount();
+      }
+    });
+
+    it('getSafeRedirectPath unit checks for relative paths, schemes, and roles', () => {
+      // Valid paths
+      expect(getSafeRedirectPath('/nutrition', 'athlete')).toBe('/nutrition');
+      expect(getSafeRedirectPath('/history', 'athlete')).toBe('/history');
+      expect(getSafeRedirectPath('/settings', 'athlete')).toBe('/settings');
+      expect(getSafeRedirectPath({ pathname: '/nutrition', search: '?q=1' }, 'athlete')).toBe(
+        '/nutrition?q=1'
+      );
+
+      // Open redirect and scheme injection attempts
+      expect(getSafeRedirectPath('//evil.com', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('https://evil.com', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('http://evil.com', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('/\\evil', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('/\\evil.com', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('javascript:alert(1)', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath({ pathname: '//evil.com' }, 'athlete')).toBeNull();
+      expect(getSafeRedirectPath({ pathname: 'https://evil.com' }, 'athlete')).toBeNull();
+      expect(getSafeRedirectPath({ pathname: '/\\evil' }, 'athlete')).toBeNull();
+
+      // Loop prevention
+      expect(getSafeRedirectPath('/login', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('/login?return=1', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath({ pathname: '/login' }, 'athlete')).toBeNull();
+
+      // Role authorization
+      expect(getSafeRedirectPath('/coach', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('/coach/athletes', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('/coach', 'coach')).toBe('/coach');
+      expect(getSafeRedirectPath('/coach?tab=athletes', 'coach')).toBe('/coach?tab=athletes');
+
+      // Empty / invalid input
+      expect(getSafeRedirectPath(null, 'athlete')).toBeNull();
+      expect(getSafeRedirectPath(undefined, 'athlete')).toBeNull();
+      expect(getSafeRedirectPath('', 'athlete')).toBeNull();
+      expect(getSafeRedirectPath({}, 'athlete')).toBeNull();
+    });
   });
 });
 
