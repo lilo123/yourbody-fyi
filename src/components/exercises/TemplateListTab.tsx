@@ -15,6 +15,7 @@ import { useToast } from '../../hooks/useToast';
 import { Tag } from '../common/Tag';
 import { Button } from '../common/Button';
 import { invalidateExerciseDomain } from '../../lib/invalidate';
+import { clearTemplateDetailCache } from '../workout/useWorkoutQueries';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -91,6 +92,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
         .eq('template_id', item.id)
         .eq('hidden_by', user?.id);
       if (error) throw error;
+      clearTemplateDetailCache(item.id);
       await invalidateExerciseDomain(queryClient, targetUserId);
     } catch (err: any) {
       setTemplateError(err?.message || 'Failed to unhide routine');
@@ -142,6 +144,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
           throw new Error('Routine template could not be deleted. You may not have permission to modify this template.');
         }
       }
+      clearTemplateDetailCache(item.id);
       await invalidateExerciseDomain(queryClient, targetUserId);
     },
     onError: (err: any) => {
@@ -525,6 +528,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
           setSourceTemplateId(null);
         }}
         onSuccess={async () => {
+          clearTemplateDetailCache(editingTemplate?.id);
           await invalidateExerciseDomain(queryClient, targetUserId);
         }}
       />
