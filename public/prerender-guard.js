@@ -35,7 +35,7 @@
       if (!options) return false;
       var path = normalizePath(options.pathname);
       var prerenderRoute = normalizePath(options.prerenderRoute || '/');
-      var isPublic = path === '/' || path === '/terms' || path === '/privacy' || path === '/refunds';
+      var isPublic = path === '/' || path === '/terms' || path === '/privacy' || path === '/refunds' || path === '/login';
       var isRouteMatch = path === prerenderRoute;
       return !options.hasUser && !options.isStandalone && isPublic && isRouteMatch;
     }

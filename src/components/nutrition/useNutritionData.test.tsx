@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { renderHook, waitFor, act, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useNutritionData, useMealUpdateToast } from './useNutritionData';
@@ -8,6 +8,7 @@ import * as toastHook from '../../hooks/useToast';
 import { getDayBounds, localCivilToUtcMs, isWithinDayBounds } from '../../utils/date';
 import type { CustomDish, CustomDishDetail } from '../../types/database';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
+import { restTimerStore } from '../../utils/restTimerStore';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -1774,6 +1775,69 @@ describe('useNutritionData (src/components/nutrition/useNutritionData.ts)', () =
           undoSpanTestId: 'undo-add-favorite-btn',
         })
       );
+    });
+  });
+
+  describe('rest timer render performance', () => {
+    it('renders stay constant while the timer ticks, and flip when it starts/stops', async () => {
+      vi.useFakeTimers();
+      restTimerStore.resetForTesting();
+
+      let renderCount = 0;
+      const Consumer = () => {
+        renderCount++;
+        const { isTimerActive } = useNutritionData({
+          targetUserId: 'user-123',
+          selectedDate: '2026-07-04',
+          timeZone: 'UTC',
+          profile: null,
+          onMutationSuccessReset: vi.fn(),
+          setStatus: vi.fn(),
+          setIsError: vi.fn(),
+        });
+        return <div data-testid="is-active">{String(isTimerActive)}</div>;
+      };
+
+      const { getByTestId } = render(
+        <QueryClientProvider client={queryClient}>
+          <Consumer />
+        </QueryClientProvider>
+      );
+
+      // Drain initial query resolution
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      expect(getByTestId('is-active').textContent).toBe('false');
+      const settledInitialRenders = renderCount;
+
+      // Start the timer: isTimerActive flips false -> true
+      act(() => {
+        restTimerStore.start(90);
+      });
+      expect(getByTestId('is-active').textContent).toBe('true');
+      expect(renderCount).toBe(settledInitialRenders + 1);
+      const activeTimerRenders = renderCount;
+
+      // Advance timers across 3 seconds of 1s ticks: renders must remain constant
+      for (let i = 0; i < 3; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+      }
+      expect(renderCount).toBe(activeTimerRenders);
+      expect(getByTestId('is-active').textContent).toBe('true');
+
+      // Stop the timer: isTimerActive flips true -> false
+      act(() => {
+        restTimerStore.stop();
+      });
+      expect(getByTestId('is-active').textContent).toBe('false');
+      expect(renderCount).toBe(activeTimerRenders + 1);
+
+      vi.useRealTimers();
+      restTimerStore.resetForTesting();
     });
   });
 });
