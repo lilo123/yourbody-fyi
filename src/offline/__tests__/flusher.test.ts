@@ -577,7 +577,7 @@ describe('Flusher & EnqueueAndAwait (§A4, §D)', () => {
     expect(opsA[0].error).toBeUndefined();
   });
 
-  it('16. getCurrentSessionUserId falls back to cached flusherSessionUserId only when getSession throws', async () => {
+  it('16. getSession() rejecting during flush does not let a flush proceed under the cached user', async () => {
     await enqueue({
       userId: userA,
       kind: 'workout.ensure',
@@ -588,10 +588,70 @@ describe('Flusher & EnqueueAndAwait (§A4, §D)', () => {
     (supabase.auth.getSession as any).mockRejectedValue(new Error('Network/storage failure'));
 
     const synced = await flushNow(userA);
-    expect(synced).toBe(1);
+    expect(synced).toBe(0);
 
     const opsA = await getOutboxOps(userA);
-    expect(opsA).toHaveLength(0);
+    expect(opsA).toHaveLength(1);
+    expect(opsA[0].state).toBe('pending');
+  });
+
+  it('17. flush started while sign-out is in progress leaves ops pending, not attention', async () => {
+    await enqueue({
+      userId: userA,
+      kind: 'workout.ensure',
+      payload: { clientWorkoutId: 'w-signout-42501', workout_date: '2026-09-30' },
+    });
+
+    setFlusherSessionUser(userA);
+
+    // Sign-out is clearing session: getSession rejects
+    (supabase.auth.getSession as any).mockRejectedValue(new Error('Session clearing during sign-out'));
+
+    // Replay call fails with 42501 RLS violation
+    ((supabase as any)['from']).mockReturnValue({
+      upsert: vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: '42501', message: 'Permission denied (RLS policy violation)' },
+      }),
+    });
+
+    const synced = await flushNow(userA);
+    expect(synced).toBe(0);
+
+    const opsA = await getOutboxOps(userA);
+    expect(opsA).toHaveLength(1);
+    expect(opsA[0].state).toBe('pending');
+    expect(opsA[0].error).toBeUndefined();
+  });
+
+  it('18. 403 Forbidden error during mid-flight sign out leaves ops pending, not attention', async () => {
+    await enqueue({
+      userId: userA,
+      kind: 'workout.ensure',
+      payload: { clientWorkoutId: 'w-inflight-403', workout_date: '2026-09-30' },
+    });
+
+    ((supabase as any)['from']).mockReturnValue({
+      upsert: vi.fn().mockImplementation(() => {
+        // While the replay request is in flight, user signs out (session becomes null)
+        (supabase.auth.getSession as any).mockResolvedValue({
+          data: { session: null },
+        });
+        setFlusherSessionUser(null);
+        return Promise.resolve({
+          data: null,
+          error: { status: 403, message: 'Forbidden' },
+        });
+      }),
+    });
+
+    const synced = await flushNow(userA);
+    expect(synced).toBe(0);
+
+    const opsA = await getOutboxOps(userA);
+    expect(opsA).toHaveLength(1);
+    expect(opsA[0].state).toBe('pending');
+    expect(opsA[0].error).toBeUndefined();
   });
 
   describe('Multi-tab Sync Broadcast (B.1, B.3)', () => {
