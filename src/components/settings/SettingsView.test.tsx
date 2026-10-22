@@ -7,6 +7,8 @@ import { ToastHost } from '../common/ToastHost';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../../context/AuthContext';
+import { AuthContext, type AuthContextType } from '../../context/AuthContextTypes';
+import type { UserProfile } from '../../types/database';
 import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
 import { expectNoA11yViolations } from '../../test/a11y';
@@ -809,6 +811,108 @@ describe('SettingsView', () => {
       await waitFor(() => {
         expect(selectSpy).toHaveBeenCalled();
         expect(screen.getByTestId('copy-prompt-error')).toBeDefined();
+      });
+    });
+  });
+
+  describe('profile refetch resync', () => {
+    const baseMockProfile: UserProfile = {
+      id: 'test-user-id',
+      email: 'athlete@yourbody.fyi',
+      username: 'Initial Athlete',
+      role: 'athlete',
+      target_calories: 2200,
+      target_protein: 160,
+      target_carbs: 220,
+      target_fat: 70,
+      target_fiber: 30,
+      auto_rest_timer: true,
+      rest_timer_seconds: 90,
+      created_at: '2026-01-01T00:00:00Z',
+      timezone: 'UTC',
+      weight_unit: 'lb',
+      pr_mode: 'weight',
+    };
+
+    const createMockAuth = (
+      profileOverrides: Partial<UserProfile> = {},
+      authOverrides: Partial<AuthContextType> = {}
+    ): AuthContextType => ({
+      user: { id: 'test-user-id', email: 'athlete@yourbody.fyi' } as any,
+      profile: { ...baseMockProfile, ...profileOverrides },
+      role: 'athlete',
+      viewMode: 'athlete',
+      isCoachMode: false,
+      loading: false,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      signOut: vi.fn(),
+      updateProfile: vi.fn().mockResolvedValue({ success: true }),
+      switchRole: vi.fn(),
+      refreshProfile: vi.fn(),
+      resendConfirmation: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      resetPassword: vi.fn(),
+      ...authOverrides,
+    });
+
+    it('resyncs rest timer length and sends refetched value on save when profile updates', async () => {
+      const updateProfileMock = vi.fn().mockResolvedValue({ success: true });
+      const initialAuth = createMockAuth(
+        { rest_timer_seconds: 90, auto_rest_timer: true, username: 'Initial Athlete' },
+        { updateProfile: updateProfileMock }
+      );
+
+      const { rerender } = render(
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthContext.Provider value={initialAuth}>
+              <ToastProvider>
+                <SettingsView />
+                <ToastHost />
+              </ToastProvider>
+            </AuthContext.Provider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      );
+
+      const select = screen.getByTestId('select-rest-duration') as HTMLSelectElement;
+      expect(select.value).toBe('90');
+
+      // Simulate profile refetch from another device with rest_timer_seconds changed to 180
+      const refetchedAuth = createMockAuth(
+        { rest_timer_seconds: 180, auto_rest_timer: false, username: 'Updated Athlete' },
+        { updateProfile: updateProfileMock }
+      );
+
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthContext.Provider value={refetchedAuth}>
+              <ToastProvider>
+                <SettingsView />
+                <ToastHost />
+              </ToastProvider>
+            </AuthContext.Provider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      );
+
+      expect((screen.getByTestId('select-rest-duration') as HTMLSelectElement).value).toBe('180');
+      expect(screen.getByTestId('toggle-auto-timer')).toHaveAttribute('aria-checked', 'false');
+      expect((screen.getByLabelText(/Display Name/i) as HTMLInputElement).value).toBe('Updated Athlete');
+
+      const saveBtn = screen.getByRole('button', { name: /Save Goals/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(updateProfileMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            rest_timer_seconds: 180,
+            auto_rest_timer: false,
+            username: 'Updated Athlete',
+          })
+        );
       });
     });
   });
