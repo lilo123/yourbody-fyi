@@ -3432,7 +3432,14 @@ describe('WorkoutEngine', () => {
 
         // Exactly 1 DELETE request sent
         expect(deleteSetSpy).toHaveBeenCalledTimes(1);
-        expect(deleteSetSpy).toHaveBeenCalledWith(expect.anything(), "set-edit-1");
+        expect(deleteSetSpy).toHaveBeenCalledWith(
+          expect.anything(),
+          "set-edit-1",
+          expect.objectContaining({
+            targetUserId: "00000000-0000-4000-8000-000000000001",
+            workoutDate: "2026-09-06",
+          })
+        );
       } finally {
         vi.useRealTimers();
       }
@@ -3504,7 +3511,14 @@ describe('WorkoutEngine', () => {
       await waitFor(() => {
         expect(deleteSetSpy).toHaveBeenCalledTimes(1);
       });
-      expect(deleteSetSpy).toHaveBeenCalledWith(expect.anything(), "set-edit-1");
+      expect(deleteSetSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        "set-edit-1",
+        expect.objectContaining({
+          targetUserId: "00000000-0000-4000-8000-000000000001",
+          workoutDate: "2026-09-06",
+        })
+      );
 
       // The row reverts to unlogged draft state with weight and reps prefilled
       await waitFor(() => {

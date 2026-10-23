@@ -54,6 +54,8 @@ vi.mock("../../lib/sets", async () => {
         set_type: updates.setType,
         rpe: updates.rpe,
         exercise_id: updates.exerciseId,
+        setIndex: updates.setIndex,
+        createdAt: updates.createdAt,
       });
       mockExpected(expected);
       const eqRes = mockUpdateEq("id", id);
@@ -62,21 +64,27 @@ vi.mock("../../lib/sets", async () => {
           if (res?.error) throw new Error(res.error.message || "Update failed");
           return {
             id,
+            workout_id: updates.workoutId || "workout-456",
             exercise_id: updates.exerciseId || "ex-1",
             weight: updates.weight ?? 185,
             reps: updates.reps ?? 8,
             rpe: updates.rpe ?? null,
             set_type: updates.setType || "working",
+            set_index: updates.setIndex ?? 1,
+            created_at: new Date().toISOString(),
           };
         });
       }
       return Promise.resolve({
         id,
+        workout_id: updates.workoutId || "workout-456",
         exercise_id: updates.exerciseId || "ex-1",
         weight: updates.weight ?? 185,
         reps: updates.reps ?? 8,
         rpe: updates.rpe ?? null,
         set_type: updates.setType || "working",
+        set_index: updates.setIndex ?? 1,
+        created_at: new Date().toISOString(),
       });
     }),
   };
@@ -495,6 +503,47 @@ describe("EditSetSheet", () => {
       );
     });
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("editing set 3 preserves set_index and created_at on save and does not write created_at to updateSet", async () => {
+    const originalCreatedAt = "2026-09-01T10:00:00Z";
+    const set3: WorkoutSet & { workout_date?: string; workout_name?: string } = {
+      ...mockSet,
+      id: "set-3",
+      set_index: 3,
+      created_at: originalCreatedAt,
+    };
+
+    renderSheet({ set: set3 });
+
+    const weightInput = screen.getByTestId("edit-set-weight-input");
+    fireEvent.change(weightInput, { target: { value: "205" } });
+
+    fireEvent.click(screen.getByTestId("save-set-btn"));
+
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalled();
+    });
+
+    expect(onSaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "set-3",
+        set_index: 3,
+        created_at: originalCreatedAt,
+        weight: 205,
+      })
+    );
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setIndex: 3,
+        weight: 205,
+      })
+    );
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        createdAt: expect.anything(),
+      })
+    );
   });
 
   it("displays mutation error message if update fails", async () => {
