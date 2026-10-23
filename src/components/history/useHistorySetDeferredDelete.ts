@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import type { WorkoutSet, Exercise } from "../../types/database";
 import { useDeferredDelete } from "../common/useDeferredDelete";
 import { invalidateWorkoutDerived } from "../../lib/invalidate";
+import { deleteSet } from "../../lib/sets";
 import type { UndoToastItem } from "../common/UndoToast";
 import type { HistorySet } from "./useHistoryData";
 import { useWeightUnit } from "../../hooks/useWeightUnit";
@@ -38,11 +39,13 @@ export function useHistorySetDeferredDelete({
   const { pending, schedule, undo, flush } = useDeferredDelete<WorkoutSet>({
     commit: async (item) => {
       if (!item.id) return;
-      const { error } = await supabase.from("sets").delete().eq("id", item.id);
-      if (error) {
-        setMutationError(error.message || "Failed to delete set.");
-        throw error;
-      }
+      const session = item.workout_id ? sessions.find((s) => s.id === item.workout_id) : undefined;
+      const workoutDate =
+        item.workout_date ||
+        session?.workout_date ||
+        session?.civil_date ||
+        (session?.date ? String(session.date).split('T')[0] : undefined);
+      await deleteSet(supabase, item.id, { targetUserId, workoutDate });
       await invalidateWorkoutDerived(queryClient, targetUserId);
       const workoutId = item.workout_id;
       if (workoutId) {
