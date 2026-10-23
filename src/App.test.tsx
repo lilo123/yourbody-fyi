@@ -137,47 +137,54 @@ describe('App Shell & Navigation', () => {
   });
 
   it('persists global rest timer pill across /workout, /nutrition, and /history navigation', async () => {
-    window.history.pushState({}, '', '/workout');
-    render(
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    );
+    vi.useFakeTimers({ shouldAdvanceTime: false, toFake: ['Date'] });
+    vi.setSystemTime(1_700_000_000_000);
+    try {
+      window.history.pushState({}, '', '/workout');
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
 
-    await waitFor(() => {
-      expect(screen.getByText('Yourbody.fyi')).toBeDefined();
-    });
+      await waitFor(() => {
+        expect(screen.getByText('Yourbody.fyi')).toBeDefined();
+      });
 
-    // Start timer globally
-    act(() => {
-      restTimerStore.start(90);
-    });
+      // Start timer globally
+      act(() => {
+        restTimerStore.start(90);
+      });
 
-    // Pill is visible on /workout
-    await waitFor(() => {
-      expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
-      expect(screen.getByTestId('rest-timer-display').textContent).toBe('1:30');
-    });
+      // Pill is visible on /workout
+      const pill = await screen.findByTestId('rest-timer-pill', {}, { timeout: 10000 });
+      expect(pill).toBeDefined();
+      await waitFor(() => {
+        expect(screen.getByTestId('rest-timer-display').textContent).toBe('1:30');
+      }, { timeout: 10000 });
 
-    // Navigate to /nutrition
-    const nutritionTab = await screen.findByTestId('nav-nutrition');
-    fireEvent.click(nutritionTab);
+      // Navigate to /nutrition
+      const nutritionTab = await screen.findByTestId('nav-nutrition');
+      fireEvent.click(nutritionTab);
 
-    await waitFor(() => {
-      expect(screen.getByText("Today's Nutrition")).toBeDefined();
-      expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
-      expect(screen.getByTestId('rest-timer-display')).toBeDefined();
-    }, { timeout: 10000 });
+      await waitFor(() => {
+        expect(screen.getByText("Today's Nutrition")).toBeDefined();
+        expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
+        expect(screen.getByTestId('rest-timer-display')).toBeDefined();
+      }, { timeout: 10000 });
 
-    // Navigate to /history
-    const historyTab = await screen.findByTestId('nav-history');
-    fireEvent.click(historyTab);
+      // Navigate to /history
+      const historyTab = await screen.findByTestId('nav-history');
+      fireEvent.click(historyTab);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('history-tab-workouts')).toBeDefined();
-      expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
-      expect(screen.getByTestId('rest-timer-display')).toBeDefined();
-    }, { timeout: 10000 });
+      await waitFor(() => {
+        expect(screen.getByTestId('history-tab-workouts')).toBeDefined();
+        expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
+        expect(screen.getByTestId('rest-timer-display')).toBeDefined();
+      }, { timeout: 10000 });
+    } finally {
+      vi.useRealTimers();
+    }
   }, 15000);
 
   it('renders Cyberpunk pulse spinner and retry button in ProtectedRoute when loading exceeds 2s', async () => {

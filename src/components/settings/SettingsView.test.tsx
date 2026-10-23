@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { SettingsView } from './SettingsView';
 import { ToastProvider } from '../../context/ToastContext';
 import { ToastHost } from '../common/ToastHost';
@@ -123,6 +124,42 @@ describe('SettingsView', () => {
       // banner, so an unscoped getByText matches two nodes.
       const banner = screen.getByTestId('settings-status-banner');
       expect(within(banner).getByText('Settings saved')).toBeDefined();
+    });
+  });
+
+  it('allows clearing and retyping macro goals without snapping to 0 or producing leading zero', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+    await screen.findByDisplayValue('Coach Demo');
+
+    const caloriesInput = screen.getByLabelText(/calories/i) as HTMLInputElement;
+    expect(caloriesInput.value).toBe('2400');
+
+    await user.clear(caloriesInput);
+    expect(caloriesInput.value).toBe('');
+
+    await user.type(caloriesInput, '2500');
+    expect(caloriesInput.value).toBe('2500');
+
+    const proteinInput = screen.getByLabelText(/protein/i) as HTMLInputElement;
+    expect(proteinInput.value).toBe('180');
+
+    await user.clear(proteinInput);
+    expect(proteinInput.value).toBe('');
+
+    await user.type(proteinInput, '5');
+    expect(proteinInput.value).toBe('5');
+
+    const saveBtn = screen.getByRole('button', { name: /Save Goals/i });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target_calories: 2500,
+          target_protein: 5,
+        })
+      );
     });
   });
 
