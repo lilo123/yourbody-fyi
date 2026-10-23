@@ -2,6 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useTemplateEditor, mapTemplateExercises } from './useTemplateEditor';
 import type { Exercise, RoutineTemplate } from '../../types/database';
+import { supabase } from '../../lib/supabase';
+
+vi.mock('../../lib/supabase', () => ({
+  supabase: {
+    rpc: vi.fn().mockResolvedValue({ data: { success: true }, error: null }),
+  },
+}));
 
 describe('useTemplateEditor & mapTemplateExercises', () => {
   const mockExercises: Exercise[] = [
@@ -152,5 +159,44 @@ describe('useTemplateEditor & mapTemplateExercises', () => {
     expect(result.current.templateExercises).toHaveLength(1);
     expect(result.current.templateExercises[0].exercise_id).toBe('ex-2');
     expect(result.current.reorderAnnouncement).toBe('Removed Bench Press from routine');
+  });
+
+  it('sends p_user_id as null when neither assignToAthleteId nor targetUserId is provided', async () => {
+    vi.mocked(supabase.rpc).mockClear();
+    const onClose = vi.fn();
+    const template: RoutineTemplate = {
+      id: 'tpl-1',
+      user_id: 'coach-1',
+      name: 'Coach Routine',
+      is_master: false,
+      assigned_to: null,
+      days_of_week: ['Mon'],
+      exercises: [
+        { id: 'i-1', exercise_id: 'ex-1', template_id: 'tpl-1', order_index: 0, target_sets: 3, target_reps: 10 },
+      ],
+      created_at: '',
+    };
+
+    const { result } = renderHook(() =>
+      useTemplateEditor({
+        isOpen: true,
+        template,
+        isFork: true,
+        onClose,
+        exercises: mockExercises,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      'save_routine_template',
+      expect.objectContaining({
+        p_name: 'Coach Routine',
+        p_user_id: null,
+      })
+    );
   });
 });
