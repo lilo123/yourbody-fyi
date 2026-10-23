@@ -73,6 +73,7 @@ vi.mock('../../lib/sets', async () => {
         set_type: updates.setType,
         rpe: updates.rpe,
         exercise_id: updates.exerciseId,
+        setIndex: updates.setIndex,
       });
       const eqRes = mockUpdateEq('id', id);
       if (eqRes) {
@@ -86,6 +87,8 @@ vi.mock('../../lib/sets', async () => {
             reps: updates.reps ?? 8,
             rpe: updates.rpe ?? null,
             set_type: updates.setType || 'working',
+            set_index: updates.setIndex ?? 1,
+            created_at: new Date().toISOString(),
           };
         });
       }
@@ -97,6 +100,8 @@ vi.mock('../../lib/sets', async () => {
         reps: updates.reps ?? 8,
         rpe: updates.rpe ?? null,
         set_type: updates.setType || 'working',
+        set_index: updates.setIndex ?? 1,
+        created_at: new Date().toISOString(),
       });
     }),
     deleteSet: vi.fn().mockImplementation((_client, id) => {
@@ -1293,6 +1298,101 @@ describe('HistoryView', () => {
       expect(screen.queryByTestId('edit-set-sheet')).toBeNull();
       expect(screen.queryByText(/no sets recorded/i)).toBeNull();
       expect(screen.getByText(/235 lbs × 9/i)).toBeDefined();
+    });
+
+    it('editing set 3 preserves SET 3 in UI and does not revert to SET 1', async () => {
+      (supabase.from as any).mockImplementation((table: string) => {
+        recordedTables.push(table);
+        if (table === 'profiles') {
+          return createSupabaseBuilder('profiles', {
+            data: [{ id: 'user-1', weight_unit: 'lb', view_mode: 'athlete' }],
+            error: null,
+          });
+        }
+        if (table === 'workouts') {
+          return createSupabaseBuilder('workouts', {
+            data: [{ id: 'w1', date: '2026-09-01', name: 'Chest & Back' }],
+            error: null,
+          });
+        }
+        if (table === 'sets') {
+          const b = createSupabaseBuilder('sets', {
+            data: [
+              {
+                id: 's1',
+                workout_id: 'w1',
+                exercise_id: 'Bench Press',
+                weight: 225,
+                reps: 8,
+                set_index: 1,
+                set_type: 'working',
+                rpe: null,
+                created_at: '2026-09-01T10:00:00Z',
+                workouts: { date: '2026-09-01', name: 'Chest & Back' },
+              },
+              {
+                id: 's2',
+                workout_id: 'w1',
+                exercise_id: 'Bench Press',
+                weight: 225,
+                reps: 8,
+                set_index: 2,
+                set_type: 'working',
+                rpe: null,
+                created_at: '2026-09-01T10:05:00Z',
+                workouts: { date: '2026-09-01', name: 'Chest & Back' },
+              },
+              {
+                id: 's3',
+                workout_id: 'w1',
+                exercise_id: 'Bench Press',
+                weight: 225,
+                reps: 8,
+                set_index: 3,
+                set_type: 'working',
+                rpe: null,
+                created_at: '2026-09-01T10:10:00Z',
+                workouts: { date: '2026-09-01', name: 'Chest & Back' },
+              },
+            ],
+            error: null,
+          });
+          b.delete = vi.fn().mockReturnValue({ eq: mockDeleteEq });
+          b.update = mockUpdate;
+          return b;
+        }
+        return createSupabaseBuilder(table, { data: [], error: null });
+      });
+
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('edit-set-btn-s3')).toBeDefined();
+        expect(screen.getByText('SET 3')).toBeDefined();
+      });
+
+      fireEvent.click(screen.getByTestId('edit-set-btn-s3'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('edit-set-sheet')).toBeDefined();
+      });
+
+      const weightInput = screen.getByTestId('edit-set-weight-input');
+      const repsInput = screen.getByTestId('edit-set-reps-input');
+      const saveBtn = screen.getByTestId('save-set-btn');
+
+      fireEvent.change(weightInput, { target: { value: '245' } });
+      fireEvent.change(repsInput, { target: { value: '10' } });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(mockUpdate).toHaveBeenCalled();
+        expect(mockUpdateEq).toHaveBeenCalledWith('id', 's3');
+      });
+
+      expect(screen.queryByTestId('edit-set-sheet')).toBeNull();
+      expect(screen.getByText(/245 lbs × 10/i)).toBeDefined();
+      expect(screen.getByText('SET 3')).toBeDefined();
     });
 
     it('opens EditSetSheet and triggers deferred delete with UndoToast without window.confirm', async () => {
