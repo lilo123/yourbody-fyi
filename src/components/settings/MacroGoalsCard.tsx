@@ -4,16 +4,16 @@ import { StatusBanner } from '../common/StatusBanner';
 import { DecimalInput } from '../nutrition/DecimalInput';
 
 interface MacroGoalsCardProps {
-  targetCalories: number;
-  setTargetCalories: (val: number) => void;
-  targetProtein: number;
-  setTargetProtein: (val: number) => void;
-  targetCarbs: number;
-  setTargetCarbs: (val: number) => void;
-  targetFat: number;
-  setTargetFat: (val: number) => void;
-  targetFiber: number;
-  setTargetFiber: (val: number) => void;
+  targetCalories: number | string;
+  setTargetCalories: (val: number | string) => void;
+  targetProtein: number | string;
+  setTargetProtein: (val: number | string) => void;
+  targetCarbs: number | string;
+  setTargetCarbs: (val: number | string) => void;
+  targetFat: number | string;
+  setTargetFat: (val: number | string) => void;
+  targetFiber: number | string;
+  setTargetFiber: (val: number | string) => void;
   loading: boolean;
   status: { type: 'success' | 'error'; message: string } | null;
   onSave: (e: React.FormEvent) => void;
@@ -68,7 +68,7 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
             type="number"
             inputMode="numeric"
             value={targetCalories}
-            onChange={(e) => setTargetCalories(Number(e.target.value))}
+            onChange={(e) => setTargetCalories(e.target.value === '' ? '' : Number(e.target.value))}
             aria-describedby={caloriesUnitId}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
@@ -83,8 +83,8 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
           </label>
           <DecimalInput
             id={proteinId}
-            value={targetProtein}
-            onChange={(val) => setTargetProtein(typeof val === 'number' && !Number.isNaN(val) ? val : 0)}
+            value={targetProtein === '' ? '' : Number(targetProtein)}
+            onChange={(val) => setTargetProtein(val === '' ? '' : (typeof val === 'number' && !Number.isNaN(val) ? val : 0))}
             aria-describedby={proteinUnitId}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
@@ -99,8 +99,8 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
           </label>
           <DecimalInput
             id={carbsId}
-            value={targetCarbs}
-            onChange={(val) => setTargetCarbs(typeof val === 'number' && !Number.isNaN(val) ? val : 0)}
+            value={targetCarbs === '' ? '' : Number(targetCarbs)}
+            onChange={(val) => setTargetCarbs(val === '' ? '' : (typeof val === 'number' && !Number.isNaN(val) ? val : 0))}
             aria-describedby={carbsUnitId}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
@@ -115,8 +115,8 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
           </label>
           <DecimalInput
             id={fatId}
-            value={targetFat}
-            onChange={(val) => setTargetFat(typeof val === 'number' && !Number.isNaN(val) ? val : 0)}
+            value={targetFat === '' ? '' : Number(targetFat)}
+            onChange={(val) => setTargetFat(val === '' ? '' : (typeof val === 'number' && !Number.isNaN(val) ? val : 0))}
             aria-describedby={fatUnitId}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
@@ -131,8 +131,8 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
           </label>
           <DecimalInput
             id={fiberId}
-            value={targetFiber}
-            onChange={(val) => setTargetFiber(typeof val === 'number' && !Number.isNaN(val) ? val : 0)}
+            value={targetFiber === '' ? '' : Number(targetFiber)}
+            onChange={(val) => setTargetFiber(val === '' ? '' : (typeof val === 'number' && !Number.isNaN(val) ? val : 0))}
             aria-describedby={fiberUnitId}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required
