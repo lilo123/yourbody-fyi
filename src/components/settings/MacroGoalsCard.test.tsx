@@ -205,4 +205,44 @@ describe('MacroGoalsCard accessibility', () => {
     fireEvent.click(saveButton);
     expect(onSave).toHaveBeenCalledTimes(1);
   });
+
+  it('calls setters with "" when inputs are cleared instead of coercing to 0', () => {
+    const setTargetCalories = vi.fn();
+    const setTargetProtein = vi.fn();
+    const setTargetCarbs = vi.fn();
+    const setTargetFat = vi.fn();
+    const setTargetFiber = vi.fn();
+
+    render(
+      <MacroGoalsCard
+        {...defaultProps}
+        setTargetCalories={setTargetCalories}
+        setTargetProtein={setTargetProtein}
+        setTargetCarbs={setTargetCarbs}
+        setTargetFat={setTargetFat}
+        setTargetFiber={setTargetFiber}
+      />
+    );
+
+    const calInput = screen.getByLabelText(/calories/i);
+    const proteinInput = screen.getByLabelText(/protein/i);
+    const carbsInput = screen.getByLabelText(/carbs/i);
+    const fatInput = screen.getByLabelText(/^fat/i);
+    const fiberInput = screen.getByLabelText(/fiber/i);
+
+    fireEvent.change(calInput, { target: { value: '' } });
+    expect(setTargetCalories).toHaveBeenCalledWith('');
+
+    fireEvent.change(proteinInput, { target: { value: '' } });
+    expect(setTargetProtein).toHaveBeenCalledWith('');
+
+    fireEvent.change(carbsInput, { target: { value: '' } });
+    expect(setTargetCarbs).toHaveBeenCalledWith('');
+
+    fireEvent.change(fatInput, { target: { value: '' } });
+    expect(setTargetFat).toHaveBeenCalledWith('');
+
+    fireEvent.change(fiberInput, { target: { value: '' } });
+    expect(setTargetFiber).toHaveBeenCalledWith('');
+  });
 });

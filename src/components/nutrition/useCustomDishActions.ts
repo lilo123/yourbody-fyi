@@ -87,6 +87,8 @@ export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | 
       carbs: it.carbs,
       fat: it.fat,
       fiber: it.fiber,
+      dishId: dish.id,
+      dishItemId: it.id,
     })
   );
 
@@ -107,6 +109,7 @@ export function buildItemsFromDish(dish: CustomDish, detail: CustomDishDetail | 
         carbs: dish.carbs,
         fat: dish.fat,
         fiber: dish.fiber,
+        dishId: dish.id,
       }),
     ];
   }
@@ -124,11 +127,26 @@ export function resolveCustomDishServing(
 ): { servingSize: number; servingUnit: string } {
   let servingSize = 1;
   let servingUnit = 'serving';
-  if (dish.kind === 'food') {
-    const items = detail?.items ?? dish.items;
-    if (items && items.length > 1) {
-      return { servingSize: 1, servingUnit: 'serving' };
+  const items = detail?.items ?? dish.items;
+  if (items && items.length > 1) {
+    return { servingSize: 1, servingUnit: 'serving' };
+  }
+  if (items && items.length === 1) {
+    const single = items[0];
+    if (
+      single &&
+      single.quantity != null &&
+      Number.isFinite(Number(single.quantity)) &&
+      Number(single.quantity) > 0 &&
+      single.unit
+    ) {
+      return {
+        servingSize: roundTo1Decimal(Number(single.quantity)),
+        servingUnit: single.unit,
+      };
     }
+  }
+  if (dish.kind !== 'recipe') {
     if (
       dish.serving_quantity != null &&
       Number.isFinite(Number(dish.serving_quantity)) &&
@@ -137,18 +155,6 @@ export function resolveCustomDishServing(
     ) {
       servingSize = roundTo1Decimal(Number(dish.serving_quantity));
       servingUnit = dish.serving_unit;
-    } else if (items && items.length === 1) {
-      const single = items[0];
-      if (
-        single &&
-        single.quantity != null &&
-        Number.isFinite(Number(single.quantity)) &&
-        Number(single.quantity) > 0 &&
-        single.unit
-      ) {
-        servingSize = roundTo1Decimal(Number(single.quantity));
-        servingUnit = single.unit;
-      }
     }
   }
   return { servingSize, servingUnit };
