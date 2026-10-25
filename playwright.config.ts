@@ -1,4 +1,28 @@
 import { defineConfig, devices } from '@playwright/test';
+import fs from 'node:fs';
+
+const useDevServer = Boolean(process.env.PW_DEV || process.env.VITE_DEV_SERVER);
+const defaultPort = useDevServer ? '5173' : '4173';
+const baseURL = process.env.BASE_URL || `http://localhost:${defaultPort}`;
+
+let port = defaultPort;
+try {
+  const parsed = new URL(baseURL);
+  if (parsed.port) {
+    port = parsed.port;
+  }
+} catch {
+  port = defaultPort;
+}
+
+const previewCommand =
+  process.env.CI && fs.existsSync('./dist/index.html')
+    ? `npx vite preview --port ${port} --strictPort`
+    : `npm run build && npx vite preview --port ${port} --strictPort`;
+
+const webServerCommand = useDevServer
+  ? `npx vite --port ${port} --strictPort`
+  : previewCommand;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -9,7 +33,8 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL,
+    serviceWorkers: 'block',
     trace: process.env.CI ? 'retain-on-failure' : 'off',
     screenshot: 'only-on-failure',
   },
@@ -56,8 +81,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
+    command: webServerCommand,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },

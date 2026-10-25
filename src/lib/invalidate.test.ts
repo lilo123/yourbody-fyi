@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { invalidateWorkoutDerived, invalidateExerciseDomain } from './invalidate';
+import {
+  invalidateWorkoutDerived,
+  invalidateExerciseDomain,
+  invalidateNutritionDerived,
+} from './invalidate';
 import type { InvalidationClient } from './invalidate';
 
 function createMockQueryClient() {
@@ -83,6 +87,30 @@ describe('Cache Invalidation Helpers (src/lib/invalidate.ts)', () => {
         ['exercise_catalog'],
         ['workout_sets', testUserId],
         ['routine_templates', testUserId],
+      ]);
+    });
+  });
+
+  describe('invalidateNutritionDerived', () => {
+    it('invalidates the base nutrition_logs key when userId is omitted', async () => {
+      const { client, invalidatedKeys } = createMockQueryClient();
+
+      await invalidateNutritionDerived(client);
+
+      expect(client.invalidateQueries).toHaveBeenCalledTimes(1);
+      expect(invalidatedKeys).toEqual([['nutrition_logs']]);
+    });
+
+    it('invalidates both base key and user-scoped key when userId is provided', async () => {
+      const { client, invalidatedKeys } = createMockQueryClient();
+      const testUserId = 'user-uuid-123';
+
+      await invalidateNutritionDerived(client, testUserId);
+
+      expect(client.invalidateQueries).toHaveBeenCalledTimes(2);
+      expect(invalidatedKeys).toEqual([
+        ['nutrition_logs'],
+        ['nutrition_logs', testUserId],
       ]);
     });
   });

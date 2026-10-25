@@ -115,6 +115,7 @@ export interface Workout {
   user_id: string;
   name: string | null;
   date: string;
+  workout_date?: string;
   created_at?: string;
   sets?: WorkoutSet[];
 }
