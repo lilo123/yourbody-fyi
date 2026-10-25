@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { useDeferredDelete } from '../common/useDeferredDelete';
 import type { UndoToastItem } from '../common/UndoToast';
 import type { WorkoutSet } from '../../types/database';
@@ -43,7 +44,25 @@ export function useSetDeletion({
   const pendingSet = pending?.item ?? null;
   const pendingSetId = pendingSet?.id ?? null;
 
-  const { show: showToast } = useToast();
+  const { show: showToast, dismiss } = useToast();
+
+  const pendingRef = useRef(pending);
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingRef.current) {
+        dismiss();
+      }
+    };
+  }, [dismiss]);
+
+  const flushDelete = () => {
+    flush();
+    dismiss();
+  };
 
   const scheduleDelete = (set: WorkoutSet) => {
     schedule(set, 'Set deleted');
@@ -79,7 +98,7 @@ export function useSetDeletion({
     pendingSetId,
     scheduleDelete,
     undoDelete: undo,
-    flushDelete: flush,
+    flushDelete,
     toast,
     isPending: Boolean(pending),
   };
