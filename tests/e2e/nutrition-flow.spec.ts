@@ -161,7 +161,10 @@ test.describe('Nutrition Flow E2E', () => {
     await page.fill('input[type="password"]', 'password123');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/workout');
-    await safeGoto(page, '/nutrition');
+    await expect(page.locator('[data-testid="routine-select-btn"]')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await page.locator('[data-testid="nav-nutrition"]').click();
+    await page.waitForURL('**/nutrition');
     await page.waitForSelector('text=Today\'s Nutrition');
   });
 
