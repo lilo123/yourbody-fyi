@@ -1073,4 +1073,114 @@ describe('CoachCockpit', () => {
     expect((rpcCall?.[1] as any)?.p_user_id).not.toBe('ath-1');
   });
 
+  it('resets macro inputs and prevents saving previous athlete targets when switching athlete with profile pending', async () => {
+    let athleteBPromiseResolve!: (val: any) => void;
+    const athleteBPromise = new Promise((resolve) => {
+      athleteBPromiseResolve = resolve;
+    });
+
+    const currentLinks = [
+      {
+        athlete_id: 'ath-1',
+        status: 'active',
+        linked_at: '2026-09-03T00:00:00Z',
+        athlete: { id: 'ath-1', username: 'Alex Johnson', email: 'alex@example.com', role: 'athlete' },
+      },
+      {
+        athlete_id: 'ath-2',
+        status: 'active',
+        linked_at: '2026-09-02T00:00:00Z',
+        athlete: { id: 'ath-2', username: 'Sam Taylor', email: 'sam@example.com', role: 'athlete' },
+      },
+    ];
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'coach_athlete_links') {
+        return createSupabaseBuilder('coach_athlete_links', {
+          data: currentLinks,
+          error: null,
+        });
+      }
+      if (table === 'users') {
+        return createSupabaseBuilder('users', {
+          resolver: (b: any) => {
+            const idFilter = b.filters.find((f: any) => f.column === 'id');
+            if (idFilter && idFilter.value === 'ath-2') {
+              return athleteBPromise;
+            }
+            if (idFilter && idFilter.value === 'ath-1') {
+              return {
+                id: 'ath-1',
+                email: 'alex@example.com',
+                username: 'Alex Johnson',
+                role: 'athlete',
+                target_calories: 2500,
+                target_protein: 190,
+                target_carbs: 250,
+                target_fat: 75,
+                target_fiber: 35,
+              };
+            }
+            return {
+              id: 'coach-id',
+              email: 'coach@yourbody.fyi',
+              username: 'Coach Demo',
+              role: 'coach',
+              is_coach_mode: true,
+              target_calories: 2200,
+              target_protein: 160,
+              target_carbs: 220,
+              target_fat: 70,
+              target_fiber: 30,
+            };
+          },
+        });
+      }
+      return defaultMock(table);
+    });
+
+    renderComponent();
+
+    // Athlete A loads with 2500 kcal
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('2500')).toBeDefined();
+    });
+    expect((screen.getByTestId('athlete-macro-cal') as HTMLInputElement).value).toBe('2500');
+
+    // Switch to Athlete B whose profile is pending
+    const athleteSelect = screen.getByTestId('coach-athlete-select');
+    fireEvent.change(athleteSelect, { target: { value: 'ath-2' } });
+
+    // Confirm-first assertions: inputs must NOT show Athlete A's values
+    const calInput = screen.getByTestId('athlete-macro-cal') as HTMLInputElement;
+    expect(calInput.value).not.toBe('2500');
+
+    // Save must NOT write Athlete A's values to Athlete B
+    const updateBtn = screen.getByTestId('update-athlete-macros-btn');
+    expect(updateBtn).toBeDisabled();
+    fireEvent.click(updateBtn);
+
+    expect(supabase.rpc).not.toHaveBeenCalledWith(
+      'update_athlete_macros',
+      expect.objectContaining({ p_athlete_id: 'ath-2' })
+    );
+
+    // Resolve Athlete B's profile
+    athleteBPromiseResolve({
+      id: 'ath-2',
+      email: 'sam@example.com',
+      username: 'Sam Taylor',
+      role: 'athlete',
+      target_calories: 1800,
+      target_protein: 130,
+      target_carbs: 180,
+      target_fat: 50,
+      target_fiber: 25,
+    });
+
+    await waitFor(() => {
+      expect((screen.getByTestId('athlete-macro-cal') as HTMLInputElement).value).toBe('1800');
+    });
+  });
+
 });
