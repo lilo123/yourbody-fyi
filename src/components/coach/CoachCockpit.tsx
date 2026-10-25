@@ -419,7 +419,7 @@ export const CoachCockpit: React.FC = () => {
           isOpen={isSheetOpen}
           onClose={() => { setIsSheetOpen(false); setEditingTemplate(null); }}
           template={editingTemplate}
-          assignToAthleteId={selectedAthleteId || undefined}
+          assignToAthleteId={editingTemplate ? undefined : (selectedAthleteId || undefined)}
           onSaved={() => {
             void invalidateExerciseDomain(queryClient, user?.id);
             queryClient.invalidateQueries({ queryKey: ['routine_templates'] });
