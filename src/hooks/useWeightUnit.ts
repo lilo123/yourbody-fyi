@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '../lib/supabase';
 import type { WeightUnit } from '../utils/weight';
+import { workoutSessionStore } from '../utils/workoutSessionStore';
 
 /**
  * Returns the currently active weight unit for the logged-in user.
@@ -52,6 +53,10 @@ export function useWeightUnitPreference(): UseWeightUnitPreferenceReturn {
           throw updateError;
         }
 
+        if (unit !== u) {
+          workoutSessionStore.convertDraftWeights(user.id, unit, u);
+        }
+
         await refreshProfile();
       } catch (err) {
         const msg = err instanceof Error ? err.message : (err as { message?: string })?.message || 'Failed to update weight unit';
@@ -61,7 +66,7 @@ export function useWeightUnitPreference(): UseWeightUnitPreferenceReturn {
         setIsSaving(false);
       }
     },
-    [user, refreshProfile]
+    [user, refreshProfile, unit]
   );
 
   return { unit, setUnit, isSaving, error };
