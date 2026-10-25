@@ -1,9 +1,12 @@
 import type { Persister, PersistedClient } from '@tanstack/react-query-persist-client';
 import type { Query } from '@tanstack/react-query';
 import { getOfflineDb, isDbClosedError } from './db';
+import { queryKeys } from '../lib/queryKeys';
 
 export const PERSIST_BUSTER = 'rq-v1';
 export const PERSIST_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000; // 8 days
+
+const WORKOUT_SETS_90D_SUBKEY = queryKeys.workoutSets.recent90d(undefined)[2];
 
 export const WHITELIST_ROOTS = [
   'exercises',
@@ -102,9 +105,15 @@ export function shouldDehydrateQuery(query: Query): boolean {
   }
 
   if (root === 'workout_sets') {
-    // byDate, recent90d, history_v2, exercise_history, calendar_month
+    // byDate, 90d (queryKeys.workoutSets.recent90d), recent90d, history_v2, exercise_history, calendar_month
     const sub = key[2];
-    if (sub === 'recent90d' || sub === 'history_v2' || sub === 'exercise_history' || sub === 'calendar_month') {
+    if (
+      sub === WORKOUT_SETS_90D_SUBKEY ||
+      sub === 'recent90d' ||
+      sub === 'history_v2' ||
+      sub === 'exercise_history' ||
+      sub === 'calendar_month'
+    ) {
       return true;
     }
     // Date-keyed: e.g. ['workout_sets', userId, '2026-09-30']

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Activity } from 'react';
+import React, { useState, useEffect, useRef, Activity, useSyncExternalStore } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
@@ -7,7 +7,7 @@ import { SkipToContentLink } from './components/common/SkipToContentLink';
 import { Header } from './components/common/Header';
 import { BottomNav } from './components/common/BottomNav';
 import { LoginView } from './components/auth/LoginView';
-import { GlobalRestTimerPill } from './components/common/GlobalRestTimerPill';
+import { restTimerStore } from './utils/restTimerStore';
 import { ToastProvider } from './context/ToastContext';
 import { ToastHost } from './components/common/ToastHost';
 import { UpdateBanner } from './pwa/UpdateBanner';
@@ -60,6 +60,21 @@ const RefundsPage = React.lazy(() =>
   import('./legal/RefundsPage').then((m) => ({ default: m.RefundsPage }))
 );
 const LandingView = React.lazy(() => import('./components/landing/LandingView'));
+
+let pillPromise: Promise<{ default: React.ComponentType<any> }> | null = null;
+function loadGlobalRestTimerPill() {
+  if (!pillPromise) {
+    pillPromise = import('./components/common/GlobalRestTimerPill')
+      .then((m) => ({ default: m.GlobalRestTimerPill }))
+      .catch((err) => {
+        pillPromise = null;
+        throw err;
+      });
+  }
+  return pillPromise;
+}
+
+const GlobalRestTimerPill = React.lazy(loadGlobalRestTimerPill);
 
 const LazyFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-12 text-cyan-400 text-xs">
@@ -167,6 +182,34 @@ function AppLayout() {
   const { user } = useAuth();
   const [canLoadPrompt, setCanLoadPrompt] = useState(hasLoggedFirstActivity);
   useOfflinePrefetch(user?.id);
+
+  const isRestTimerActive = useSyncExternalStore(
+    restTimerStore.subscribe,
+    restTimerStore.getIsActiveSnapshot,
+    restTimerStore.getIsActiveServerSnapshot
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const unsub = restTimerStore.subscribe(() => {
+      if (restTimerStore.getIsActiveSnapshot()) {
+        loadGlobalRestTimerPill();
+      }
+    });
+    const win = window as any;
+    const idleId = win.requestIdleCallback
+      ? win.requestIdleCallback(() => loadGlobalRestTimerPill(), { timeout: 3000 })
+      : setTimeout(() => loadGlobalRestTimerPill(), 1500);
+
+    return () => {
+      unsub();
+      if (win.cancelIdleCallback && typeof idleId === 'number') {
+        win.cancelIdleCallback(idleId);
+      } else {
+        clearTimeout(idleId);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!user || canLoadPrompt) return;
@@ -349,7 +392,11 @@ function AppLayout() {
           </Activity>
         )}
       </main>
-      <GlobalRestTimerPill />
+      {isRestTimerActive && (
+        <React.Suspense fallback={null}>
+          <GlobalRestTimerPill />
+        </React.Suspense>
+      )}
       <BottomNav />
     </div>
   );
