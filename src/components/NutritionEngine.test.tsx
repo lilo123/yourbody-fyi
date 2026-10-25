@@ -1318,13 +1318,13 @@ describe('NutritionEngine', () => {
     expect(screen.getByText('New Custom Dish')).toBeDefined();
 
     await userEvent.type(screen.getByPlaceholderText('e.g. Protein Oatmeal'), 'Salmon Rice Bowl');
-    const numberInputs = screen.getAllByPlaceholderText('0');
-    // Calories, Protein, Carbs, Fat, Fiber in modal
-    await userEvent.type(numberInputs[0], '550');
-    await userEvent.type(numberInputs[1], '42');
-    await userEvent.type(numberInputs[2], '60');
-    await userEvent.type(numberInputs[3], '12');
-    await userEvent.type(numberInputs[4], '4');
+    fireEvent.click(screen.getByTestId('dish-add-item'));
+    await userEvent.type(screen.getByTestId('dish-item-name'), 'Salmon Rice Bowl');
+    fireEvent.change(screen.getByTestId('dish-item-calories'), { target: { value: '550' } });
+    fireEvent.change(screen.getByTestId('dish-item-protein'), { target: { value: '42' } });
+    fireEvent.change(screen.getByTestId('dish-item-carbs'), { target: { value: '60' } });
+    fireEvent.change(screen.getByTestId('dish-item-fat'), { target: { value: '12' } });
+    fireEvent.change(screen.getByTestId('dish-item-fiber'), { target: { value: '4' } });
 
     // The free-text ingredients input is gone: it wrote straight back to the
     // deprecated column and destroyed breakdowns. A dish with no structured
@@ -1343,7 +1343,9 @@ describe('NutritionEngine', () => {
     expect(payload.calories).toBe(550);
     expect(payload.protein).toBe(42);
     expect(payload.fiber).toBe(4);
-    expect(payload.items).toBeNull();
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0].name).toBe('Salmon Rice Bowl');
+    expect(payload.items[0].calories).toBe(550);
     expect('ingredients' in payload).toBe(false);
   });
 
@@ -3015,7 +3017,7 @@ Total Fiber: 1 g`;
 
     await waitFor(() => {
       expect(screen.getByText('Edit Custom Dish')).toBeDefined();
-      expect(screen.getByDisplayValue('Macro Oats')).toBeDefined();
+      expect(screen.getAllByDisplayValue('Macro Oats').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByDisplayValue('350')).toBeDefined();
     });
   });
@@ -3462,7 +3464,7 @@ Total Fiber: 1 g`;
 
       // 2. Edit quantity to 595, calories to 627, protein to 76
       const modal = screen.getByTestId('custom-dish-modal');
-      const qtyInput = within(modal).getByPlaceholderText('e.g. 100') as HTMLInputElement;
+      const qtyInput = within(modal).getByTestId('dish-item-quantity') as HTMLInputElement;
       fireEvent.change(qtyInput, { target: { value: '595' } });
 
       const calInput = within(modal).getByLabelText('Calories') as HTMLInputElement;
