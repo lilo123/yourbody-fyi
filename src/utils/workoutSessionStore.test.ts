@@ -527,5 +527,39 @@ describe('workoutSessionStore', () => {
     expect(active?.workoutDate).toBe(pastDate);
     expect(active?.routineName).toBe('Past Session');
   });
+
+  it('21. convertDraftWeights converts numeric drafts across active sessions for a user and leaves BW untouched', () => {
+    const userId = 'user-convert-test';
+    const date = '2026-09-06';
+    workoutSessionStore.getOrInitSession(userId, date, {
+      routineName: 'Push Day',
+      exercises: ['Bench Press', 'Dips'],
+      targetSetCounts: { 'Bench Press': 2, Dips: 1 },
+      targetRepCounts: { 'Bench Press': 5, Dips: 10 },
+    });
+
+    workoutSessionStore.setDraftInput(userId, date, 'Bench Press', 1, { weight: '100', reps: '5' });
+    workoutSessionStore.setDraftInput(userId, date, 'Bench Press', 2, { weight: '50', reps: '8' });
+    workoutSessionStore.setDraftInput(userId, date, 'Dips', 1, { weight: 'BW', reps: '10' });
+    workoutSessionStore.flushPendingWrites();
+
+    // Convert kg -> lb
+    workoutSessionStore.convertDraftWeights(userId, 'kg', 'lb');
+
+    const sessionLb = workoutSessionStore.getSession(userId, date);
+    expect(sessionLb?.weightUnit).toBe('lb');
+    expect(sessionLb?.inputDrafts['Bench Press_1']).toEqual({ weight: '220.5', reps: '5' });
+    expect(sessionLb?.inputDrafts['Bench Press_2']).toEqual({ weight: '110', reps: '8' });
+    expect(sessionLb?.inputDrafts['Dips_1']).toEqual({ weight: 'BW', reps: '10' });
+
+    // Convert lb -> kg
+    workoutSessionStore.convertDraftWeights(userId, 'lb', 'kg');
+
+    const sessionKg = workoutSessionStore.getSession(userId, date);
+    expect(sessionKg?.weightUnit).toBe('kg');
+    expect(sessionKg?.inputDrafts['Bench Press_1']).toEqual({ weight: '100', reps: '5' });
+    expect(sessionKg?.inputDrafts['Bench Press_2']).toEqual({ weight: '49.9', reps: '8' });
+    expect(sessionKg?.inputDrafts['Dips_1']).toEqual({ weight: 'BW', reps: '10' });
+  });
 });
 

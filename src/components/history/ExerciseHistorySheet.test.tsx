@@ -597,4 +597,57 @@ describe('ExerciseHistorySheet', () => {
     expect(screen.getByText('205 lbs × 6')).toBeDefined();
     expect(screen.queryByTestId('exercise-history-set-set-squat-other')).toBeNull();
   });
+
+  it('filters out pending deleted sets from offline outbox (line 178 op.kind === set.delete)', async () => {
+    const pendingOpsSpy = vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue([
+      {
+        opId: 'op-del-set-1',
+        userId: 'test-user-123',
+        kind: 'set.delete',
+        payload: { id: 'set-to-delete' },
+        createdAt: new Date().toISOString(),
+        state: 'pending',
+      } as any,
+    ]);
+
+    const mockRows = [
+      {
+        workout_id: 'w-offline-delete-1',
+        civil_date: '2026-09-20',
+        workout_name: 'Chest Day',
+        set_id: 'set-to-delete',
+        set_index: 1,
+        weight: 225,
+        reps: 8,
+        rpe: 8,
+        created_at: '2026-09-20T10:00:00Z',
+        total_sessions: 1,
+      },
+      {
+        workout_id: 'w-offline-delete-1',
+        civil_date: '2026-09-20',
+        workout_name: 'Chest Day',
+        set_id: 'set-to-keep',
+        set_index: 2,
+        weight: 235,
+        reps: 6,
+        rpe: 8.5,
+        created_at: '2026-09-20T10:05:00Z',
+        total_sessions: 1,
+      },
+    ];
+
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: mockRows, error: null } as any);
+
+    renderComponent();
+
+    // The retained set must be visible
+    expect(await screen.findByTestId('exercise-history-set-set-to-keep')).toBeDefined();
+
+    // The set queued for deletion in outbox must be filtered out
+    expect(screen.queryByTestId('exercise-history-set-set-to-delete')).toBeNull();
+
+    pendingOpsSpy.mockRestore();
+  });
 });
+
