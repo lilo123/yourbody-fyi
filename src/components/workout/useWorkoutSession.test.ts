@@ -784,6 +784,40 @@ describe('useWorkoutSession', () => {
       expect(result.current.activeExercises).toEqual([]);
       expect(mockFetchTemplateDetail).not.toHaveBeenCalled();
     });
+
+    it('converts typed drafts when unit prop changes from kg to lb and lb to kg', () => {
+      const { result, rerender } = renderHook(
+        ({ unit }: { unit: 'kg' | 'lb' }) =>
+          useWorkoutSession({
+            ...defaultProps,
+            unit,
+          }),
+        { initialProps: { unit: 'kg' as 'kg' | 'lb' } }
+      );
+
+      act(() => {
+        result.current.handleAddExercise('Bench Press');
+        result.current.updateDraft('Bench Press', 1, 'weight', '100');
+        result.current.updateDraft('Bench Press', 1, 'reps', '5');
+        result.current.updateDraft('Bench Press', 2, 'weight', '50');
+        result.current.updateDraft('Bench Press', 2, 'reps', '8');
+      });
+
+      expect(result.current.inputDrafts['Bench Press_1']).toEqual({ weight: '100', reps: '5' });
+      expect(result.current.inputDrafts['Bench Press_2']).toEqual({ weight: '50', reps: '8' });
+
+      // Switch kg -> lb
+      rerender({ unit: 'lb' });
+
+      expect(result.current.inputDrafts['Bench Press_1']).toEqual({ weight: '220.5', reps: '5' });
+      expect(result.current.inputDrafts['Bench Press_2']).toEqual({ weight: '110', reps: '8' });
+
+      // Switch lb -> kg
+      rerender({ unit: 'kg' });
+
+      expect(result.current.inputDrafts['Bench Press_1']).toEqual({ weight: '100', reps: '5' });
+      expect(result.current.inputDrafts['Bench Press_2']).toEqual({ weight: '49.9', reps: '8' });
+    });
   });
 });
 
