@@ -476,6 +476,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.id, queryClient]);
 
   const signOut = useCallback(async () => {
+    setFlusherSessionUser(null);
     acceptedTermsUsersRef.current.clear();
     signedOutRef.current = true;
     userRef.current = null;
