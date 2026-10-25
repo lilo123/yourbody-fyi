@@ -304,7 +304,7 @@ export function parentMatchesItems(
 
 /**
  * Format serving portion for a single-item custom dish (e.g. "40 g").
- * Returns null if the dish is a recipe, has no items/portion, or multiple items.
+ * Returns null if the dish is a multi-item recipe, or has no items/portion.
  */
 export function getCustomDishPortion(dish: {
   kind?: string;
@@ -312,24 +312,17 @@ export function getCustomDishPortion(dish: {
   serving_unit?: string | null;
   items?: NutritionItem[] | null;
 }): string | null {
-  if (dish.kind === 'recipe') return null;
-  if (dish.kind === 'food') {
-    if (dish.serving_quantity != null && Number(dish.serving_quantity) > 0 && dish.serving_unit) {
-      return `${roundTo1Decimal(Number(dish.serving_quantity))} ${dish.serving_unit}`;
-    }
-    if (dish.items && dish.items.length === 1) {
-      const item = dish.items[0];
-      if (item && item.quantity != null && item.quantity > 0 && item.unit) {
-        return `${roundTo1Decimal(item.quantity)} ${item.unit}`;
-      }
-    }
-    return null;
-  }
+  if (dish.items && dish.items.length > 1) return null;
   if (dish.items && dish.items.length === 1) {
     const item = dish.items[0];
     if (item && item.quantity != null && item.quantity > 0 && item.unit) {
       return `${roundTo1Decimal(item.quantity)} ${item.unit}`;
     }
+    return null;
+  }
+  if (dish.kind === 'recipe') return null;
+  if (dish.serving_quantity != null && Number(dish.serving_quantity) > 0 && dish.serving_unit) {
+    return `${roundTo1Decimal(Number(dish.serving_quantity))} ${dish.serving_unit}`;
   }
   return null;
 }

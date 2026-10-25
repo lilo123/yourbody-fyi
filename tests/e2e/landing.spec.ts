@@ -206,6 +206,7 @@ test.describe('Landing Page & Root Route Decisions', () => {
   test('interactive hero demo logs set and appends new set row', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
+    await page.waitForFunction(() => !document.getElementById('prerender'));
 
     const logSetBtn = page.getByRole('button', { name: 'Log set' });
     await expect(logSetBtn).toBeVisible();
@@ -225,6 +226,7 @@ test.describe('Landing Page & Root Route Decisions', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
+    await page.waitForFunction(() => !document.getElementById('prerender'));
 
     const logSetBtn = page.getByRole('button', { name: 'Log set' });
     await expect(logSetBtn).toBeVisible();
@@ -240,6 +242,7 @@ test.describe('Landing Page & Root Route Decisions', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
+    await page.waitForFunction(() => !document.getElementById('prerender'));
 
     const logSetBtn = page.getByRole('button', { name: 'Log set' });
     await expect(logSetBtn).toBeVisible();

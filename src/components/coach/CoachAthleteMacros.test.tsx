@@ -152,4 +152,9 @@ describe('CoachAthleteMacros accessibility', () => {
     fireEvent.click(submitBtn);
     expect(onUpdateAthleteMacros).toHaveBeenCalledTimes(1);
   });
+
+  it('disables submit button when isLoading is true', () => {
+    render(<CoachAthleteMacros {...defaultProps} isLoading={true} />);
+    expect(screen.getByTestId('update-athlete-macros-btn')).toBeDisabled();
+  });
 });
