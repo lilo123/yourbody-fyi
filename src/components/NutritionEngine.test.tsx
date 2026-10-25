@@ -3599,6 +3599,353 @@ Total Fiber: 1 g`;
       expect(stagedCard.textContent).toContain('250 kcal');
       expect(stagedCard.textContent).not.toContain('200 kcal');
     });
+
+    describe('already-staged card resync on edit/delete', () => {
+      let mockInsert: ReturnType<typeof vi.fn>;
+      let currentDishes: any[];
+      let currentDetail: any;
+
+      beforeEach(() => {
+        mockInsert = vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: 'mock-log-id' }], error: null }),
+        });
+
+        currentDetail = {
+          id: 'dish-custom-a',
+          name: 'Protein Shake',
+          calories: 250,
+          protein: 30,
+          carbs: 10,
+          fat: 3,
+          fiber: 2,
+          kind: 'food',
+          use_count: 1,
+          serving_quantity: 1,
+          serving_unit: 'serving',
+          items: [
+            {
+              id: 'dish-item-a',
+              name: 'Protein Shake',
+              quantity: 1,
+              unit: 'unit',
+              displayPortion: '1 serving',
+              calories: 250,
+              protein: 30,
+              carbs: 10,
+              fat: 3,
+              fiber: 2,
+            },
+          ],
+          created_at: new Date().toISOString(),
+        };
+
+        currentDishes = [
+          {
+            id: 'dish-custom-a',
+            name: 'Protein Shake',
+            calories: 250,
+            protein: 30,
+            carbs: 10,
+            fat: 3,
+            fiber: 2,
+            kind: 'food',
+            use_count: 1,
+            serving_quantity: 1,
+            serving_unit: 'serving',
+            created_at: new Date().toISOString(),
+          },
+        ];
+
+        (supabase.from as any).mockImplementation((table: string) => {
+          if (table === 'custom_dishes') {
+            const dishBuilder = createSupabaseBuilder('custom_dishes', {
+              resolver: (resolverBuilder: any) => {
+                if (resolverBuilder.projection === 'id, items, ingredients, kind, notes') {
+                  return currentDetail;
+                }
+                return currentDishes;
+              },
+            });
+            (dishBuilder as any).update = (values: any) => ({
+              eq: (_col: string, id: string) => ({
+                select: async () => {
+                  const updatedRow = {
+                    ...currentDetail,
+                    ...values,
+                    id,
+                    serving_quantity: values.items?.[0]?.quantity ?? currentDetail.serving_quantity,
+                    serving_unit: values.items?.[0]?.unit ?? currentDetail.serving_unit,
+                  };
+                  currentDetail = updatedRow;
+                  currentDishes = [
+                    {
+                      id,
+                      name: values.name ?? currentDetail.name,
+                      calories: values.calories,
+                      protein: values.protein,
+                      carbs: values.carbs,
+                      fat: values.fat,
+                      fiber: values.fiber,
+                      kind: values.kind ?? 'food',
+                      serving_quantity: values.items?.[0]?.quantity ?? currentDetail.serving_quantity,
+                      serving_unit: values.items?.[0]?.unit ?? currentDetail.serving_unit,
+                      use_count: 1,
+                      created_at: new Date().toISOString(),
+                    },
+                  ];
+                  return { data: [updatedRow], error: null };
+                },
+              }),
+            });
+            (dishBuilder as any).delete = () => ({
+              eq: (_col: string, id: string) => {
+                currentDishes = currentDishes.filter((dishItem) => dishItem.id !== id);
+                return Promise.resolve({ data: null, error: null });
+              },
+            });
+            return dishBuilder;
+          }
+
+          const logBuilder = createSupabaseBuilder(table, { data: [], error: null });
+          if (table === 'nutrition_logs') {
+            (logBuilder as any).insert = mockInsert;
+          }
+          return logBuilder;
+        });
+      });
+
+      it('edit -> staged card shows new values and Log Meal sends them', async () => {
+        renderComponent();
+
+        // 1. Stage custom dish A on /nutrition
+        await waitFor(() => {
+          expect(screen.getByTestId('custom-dish-card-dish-custom-a')).toBeDefined();
+        });
+        fireEvent.click(screen.getByTestId('custom-dish-card-dish-custom-a'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+          expect(screen.getByTestId('staged-meal-card').textContent).toContain('250 kcal');
+        });
+
+        // 2. Open Custom Dishes, edit dish A (e.g. kcal/macros) and save
+        fireEvent.click(screen.getByTestId('edit-dish-btn-dish-custom-a'));
+        await waitFor(() => {
+          expect(screen.getByText('Edit Custom Dish')).toBeDefined();
+        });
+
+        const modal = screen.getByTestId('custom-dish-modal');
+        const calInput = within(modal).getByLabelText('Calories') as HTMLInputElement;
+        fireEvent.change(calInput, { target: { value: '350' } });
+
+        const proteinInput = within(modal).getByLabelText('Protein (g)') as HTMLInputElement;
+        fireEvent.change(proteinInput, { target: { value: '45' } });
+
+        fireEvent.click(screen.getByText('Save Dish'));
+
+        await waitFor(() => {
+          expect(screen.queryByText('Edit Custom Dish')).toBeNull();
+        });
+
+        // 3. Staged card picks up new values (350 kcal, 45 P)
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card').textContent).toContain('350 kcal');
+          expect(screen.getByTestId('staged-meal-card').textContent).not.toContain('250 kcal');
+        });
+
+        // And Log Meal sends the new values
+        const logBtn = screen.getByText(/Log Meal/);
+        fireEvent.click(logBtn);
+
+        await waitFor(() => {
+          expect(mockInsert).toHaveBeenCalled();
+        });
+
+        const loggedPayload = mockInsert.mock.calls[0][0][0];
+        expect(loggedPayload.calories).toBe(350);
+        expect(loggedPayload.protein).toBe(45);
+      });
+
+      it('hand-edited item not overwritten when dish is edited', async () => {
+        renderComponent();
+
+        // 1. Stage custom dish A
+        await waitFor(() => {
+          expect(screen.getByTestId('custom-dish-card-dish-custom-a')).toBeDefined();
+        });
+        fireEvent.click(screen.getByTestId('custom-dish-card-dish-custom-a'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+        });
+
+        // 2. Hand-edit the item's nutrition in the staged card
+        fireEvent.click(screen.getByTestId('component-actions'));
+        await waitFor(() => {
+          expect(screen.getByTestId('component-edit-nutrition')).toBeDefined();
+        });
+        fireEvent.click(screen.getByTestId('component-edit-nutrition'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('edit-item-calories-input')).toBeDefined();
+        });
+
+        const editCalInput = screen.getByTestId('edit-item-calories-input');
+        fireEvent.change(editCalInput, { target: { value: '400' } });
+
+        const editProteinInput = screen.getByTestId('edit-item-protein-input');
+        fireEvent.change(editProteinInput, { target: { value: '50' } });
+
+        fireEvent.click(screen.getByTestId('save-edit-item-nutrition-btn'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card').textContent).toContain('400 kcal');
+        });
+
+        // 3. Edit custom dish A in Custom Dishes modal (e.g. to 350 kcal, 45g protein)
+        fireEvent.click(screen.getByTestId('edit-dish-btn-dish-custom-a'));
+        await waitFor(() => {
+          expect(screen.getByText('Edit Custom Dish')).toBeDefined();
+        });
+
+        const modal = screen.getByTestId('custom-dish-modal');
+        const calInput = within(modal).getByLabelText('Calories') as HTMLInputElement;
+        fireEvent.change(calInput, { target: { value: '350' } });
+        const proteinInput = within(modal).getByLabelText('Protein (g)') as HTMLInputElement;
+        fireEvent.change(proteinInput, { target: { value: '45' } });
+
+        fireEvent.click(screen.getByText('Save Dish'));
+
+        await waitFor(() => {
+          expect(screen.queryByText('Edit Custom Dish')).toBeNull();
+        });
+
+        // 4. Staged item was hand-edited: must NOT be overwritten by the dish edit!
+        expect(screen.getByTestId('staged-meal-card').textContent).toContain('400 kcal');
+        expect(screen.getByTestId('staged-meal-card').textContent).not.toContain('350 kcal');
+      });
+
+      it('amount preserved and recomputed from new per-serving values', async () => {
+        renderComponent();
+
+        // 1. Stage custom dish A (1 serving = 250 kcal)
+        await waitFor(() => {
+          expect(screen.getByTestId('custom-dish-card-dish-custom-a')).toBeDefined();
+        });
+        fireEvent.click(screen.getByTestId('custom-dish-card-dish-custom-a'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('component-quantity-input')).toBeDefined();
+        });
+
+        // 2. Change quantity to 2 servings in staged card
+        const qtyInput = screen.getByTestId('component-quantity-input');
+        fireEvent.change(qtyInput, { target: { value: '2' } });
+        fireEvent.blur(qtyInput);
+
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card').textContent).toContain('500 kcal');
+        });
+
+        // 3. Edit dish A in Custom Dishes to 300 kcal (per 1 serving)
+        fireEvent.click(screen.getByTestId('edit-dish-btn-dish-custom-a'));
+        await waitFor(() => {
+          expect(screen.getByText('Edit Custom Dish')).toBeDefined();
+        });
+
+        const modal = screen.getByTestId('custom-dish-modal');
+        const calInput = within(modal).getByLabelText('Calories') as HTMLInputElement;
+        fireEvent.change(calInput, { target: { value: '300' } });
+
+        fireEvent.click(screen.getByText('Save Dish'));
+
+        await waitFor(() => {
+          expect(screen.queryByText('Edit Custom Dish')).toBeNull();
+        });
+
+        // 4. Staged card should preserve amount (2 servings) and recompute: 2 * 300 = 600 kcal
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card').textContent).toContain('600 kcal');
+        });
+        const updatedQtyInput = screen.getByTestId('component-quantity-input') as HTMLInputElement;
+        expect(updatedQtyInput.value).toBe('2');
+      });
+
+      it('delete leaves staged item as-is (no surprise removal)', async () => {
+        renderComponent();
+
+        // 1. Stage custom dish A
+        await waitFor(() => {
+          expect(screen.getByTestId('custom-dish-card-dish-custom-a')).toBeDefined();
+        });
+        fireEvent.click(screen.getByTestId('custom-dish-card-dish-custom-a'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+          expect(screen.getByTestId('staged-meal-card').textContent).toContain('250 kcal');
+        });
+
+        // 2. Delete dish A via edit modal
+        fireEvent.click(screen.getByTestId('edit-dish-btn-dish-custom-a'));
+        await waitFor(() => {
+          expect(screen.getByTestId('modal-delete-dish-btn')).toBeDefined();
+        });
+        fireEvent.click(screen.getByTestId('modal-delete-dish-btn'));
+
+        // Modal closes
+        await waitFor(() => {
+          expect(screen.queryByText('Edit Custom Dish')).toBeNull();
+        });
+
+        // 3. Staged card MUST still be present with its item intact
+        expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+        expect(screen.getByTestId('staged-meal-card').textContent).toContain('250 kcal');
+        expect(screen.getByText(/Log Meal/)).toBeDefined();
+      });
+
+      it('hand-typed meal name is kept when dish is renamed in modal', async () => {
+        renderComponent();
+
+        // 1. Stage custom dish A
+        await waitFor(() => {
+          expect(screen.getByTestId('custom-dish-card-dish-custom-a')).toBeDefined();
+        });
+        fireEvent.click(screen.getByTestId('custom-dish-card-dish-custom-a'));
+
+        await waitFor(() => {
+          expect(screen.getByTestId('dish-name-input')).toBeDefined();
+        });
+
+        // 2. Hand-type custom name into staged card
+        const dishNameInput = screen.getByTestId('dish-name-input') as HTMLInputElement;
+        fireEvent.change(dishNameInput, { target: { value: 'My Morning Special' } });
+        expect(dishNameInput.value).toBe('My Morning Special');
+
+        // 3. Edit custom dish A in modal: rename to 'Super Custom Dish A' and change calories to 350
+        fireEvent.click(screen.getByTestId('edit-dish-btn-dish-custom-a'));
+        await waitFor(() => {
+          expect(screen.getByText('Edit Custom Dish')).toBeDefined();
+        });
+
+        const modal = screen.getByTestId('custom-dish-modal');
+        const nameField = within(modal).getByLabelText('Dish Name') as HTMLInputElement;
+        fireEvent.change(nameField, { target: { value: 'Super Custom Dish A' } });
+        const calInput = within(modal).getByLabelText('Calories') as HTMLInputElement;
+        fireEvent.change(calInput, { target: { value: '350' } });
+
+        fireEvent.click(screen.getByText('Save Dish'));
+
+        await waitFor(() => {
+          expect(screen.queryByText('Edit Custom Dish')).toBeNull();
+        });
+
+        // 4. Staged card picks up new calories (350 kcal) but keeps the hand-typed name ('My Morning Special')
+        await waitFor(() => {
+          expect(screen.getByTestId('staged-meal-card').textContent).toContain('350 kcal');
+        });
+        expect((screen.getByTestId('dish-name-input') as HTMLInputElement).value).toBe('My Morning Special');
+      });
+    });
   });
 
 
