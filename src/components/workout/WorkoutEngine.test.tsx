@@ -1,6 +1,6 @@
 import * as setsLib from '../../lib/sets';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act, renderHook } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import userEvent from '@testing-library/user-event';
@@ -15,6 +15,7 @@ import { CoachProvider } from '../../context/CoachContext';
 import { ToastProvider } from '../../context/ToastContext';
 import { ToastHost } from '../common/ToastHost';
 import { useCoach } from '../../hooks/useCoach';
+import { useWeightUnitPreference } from '../../hooks/useWeightUnit';
 import { supabase } from '../../lib/supabase';
 import { getLocalDateStr } from '../../utils/ghostSets';
 import { isValidUUID, resolveRoutineAndExercises } from './workoutEngineHelpers';
@@ -3529,6 +3530,282 @@ describe('WorkoutEngine', () => {
       const repsInput = screen.getByTestId("ghost-reps-0-0") as HTMLInputElement;
       expect(weightInput.value).toBe("225");
       expect(repsInput.value).toBe("8");
+    });
+
+    it('converts typed-but-unlogged weight drafts when switching weight unit preference (e2e bug reproduction)', async () => {
+      let currentUnit: 'kg' | 'lb' = 'kg';
+      localStorage.setItem(
+        'yourbody_user',
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000001',
+          email: 'athlete@example.com',
+          username: 'athlete',
+          role: 'athlete',
+          weight_unit: 'kg',
+        })
+      );
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'workouts') {
+          return createSupabaseBuilder('workouts', { data: [{ id: 'workout-1' }], error: null });
+        }
+        if (table === 'users') {
+          const builder = createSupabaseBuilder('users', {
+            data: [{
+              id: '00000000-0000-4000-8000-000000000001',
+              email: 'athlete@example.com',
+              username: 'athlete',
+              role: 'athlete',
+              weight_unit: currentUnit,
+            }],
+            error: null,
+          });
+          const origUpdate = builder.update.bind(builder);
+          builder.update = (values: any) => {
+            if (values.weight_unit) {
+              currentUnit = values.weight_unit;
+            }
+            return origUpdate(values);
+          };
+          return builder;
+        }
+        return createSupabaseBuilder(table, { data: [], error: null });
+      });
+
+      const { unmount } = renderComponent();
+      await selectWorkoutA();
+
+      // Type 100 (user means 100 kg) and 5 reps into set 1
+      const weightInput = screen.getByTestId('ghost-weight-0-0');
+      const repsInput = screen.getByTestId('ghost-reps-0-0');
+      await userEvent.type(weightInput, '100');
+      await userEvent.type(repsInput, '5');
+
+      expect(weightInput).toHaveValue('100');
+      expect(repsInput).toHaveValue('5');
+
+      // Unmount WorkoutEngine (simulating navigating away to /settings)
+      unmount();
+
+      // Change unit preference through the real preference mechanism (useWeightUnitPreference -> setUnit('lb'))
+      const { result: prefResult } = renderHook(() => useWeightUnitPreference(), {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryClientProvider>
+        ),
+      });
+
+      await act(async () => {
+        await prefResult.current.setUnit('lb');
+      });
+
+      expect(currentUnit).toBe('lb');
+
+      // Remount WorkoutEngine (simulating navigating back to /workout)
+      renderComponent();
+
+      // The draft input should reflect the converted weight in lb (100 kg -> 220.5 lb)
+      await waitFor(() => {
+        expect(screen.getByTestId('ghost-weight-0-0')).toHaveValue('220.5');
+      });
+
+      // Commit the set
+      const commitBtn = screen.getByTestId('commit-set-btn-0-0');
+      fireEvent.click(commitBtn);
+
+      await waitFor(() => {
+        expect(mockEnqueueAndAwait).toHaveBeenCalled();
+      });
+
+      const op = mockEnqueueAndAwait.mock.calls[0][0];
+      expect(op.kind).toBe('set.create');
+      // Must be converted to 220.5 lb, NOT stored as 100 lb (which would be 45.4 kg)
+      expect(op.payload.weight).toBe(220.5);
+    });
+
+    it('converts typed-but-unlogged weight drafts from lb to kg when switching preference', async () => {
+      let currentUnit: 'kg' | 'lb' = 'lb';
+      localStorage.setItem(
+        'yourbody_user',
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000001',
+          email: 'athlete@example.com',
+          username: 'athlete',
+          role: 'athlete',
+          weight_unit: 'lb',
+        })
+      );
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'workouts') {
+          return createSupabaseBuilder('workouts', { data: [{ id: 'workout-1' }], error: null });
+        }
+        if (table === 'users') {
+          const builder = createSupabaseBuilder('users', {
+            data: [{
+              id: '00000000-0000-4000-8000-000000000001',
+              email: 'athlete@example.com',
+              username: 'athlete',
+              role: 'athlete',
+              weight_unit: currentUnit,
+            }],
+            error: null,
+          });
+          const origUpdate = builder.update.bind(builder);
+          builder.update = (values: any) => {
+            if (values.weight_unit) {
+              currentUnit = values.weight_unit;
+            }
+            return origUpdate(values);
+          };
+          return builder;
+        }
+        return createSupabaseBuilder(table, { data: [], error: null });
+      });
+
+      const { unmount } = renderComponent();
+      await selectWorkoutA();
+
+      // Type 225 (user means 225 lb) and 5 reps into set 1
+      const weightInput = screen.getByTestId('ghost-weight-0-0');
+      const repsInput = screen.getByTestId('ghost-reps-0-0');
+      await userEvent.type(weightInput, '225');
+      await userEvent.type(repsInput, '5');
+
+      expect(weightInput).toHaveValue('225');
+      expect(repsInput).toHaveValue('5');
+
+      unmount();
+
+      const { result: prefResult } = renderHook(() => useWeightUnitPreference(), {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryClientProvider>
+        ),
+      });
+
+      await act(async () => {
+        await prefResult.current.setUnit('kg');
+      });
+
+      expect(currentUnit).toBe('kg');
+
+      renderComponent();
+
+      // The draft input should reflect the converted weight in kg (225 lb -> 102.1 kg)
+      await waitFor(() => {
+        expect(screen.getByTestId('ghost-weight-0-0')).toHaveValue('102.1');
+      });
+
+      const commitBtn = screen.getByTestId('commit-set-btn-0-0');
+      fireEvent.click(commitBtn);
+
+      await waitFor(() => {
+        expect(mockEnqueueAndAwait).toHaveBeenCalled();
+      });
+
+      const op = mockEnqueueAndAwait.mock.calls[0][0];
+      expect(op.kind).toBe('set.create');
+      // 102.1 kg is converted to canonical lb (225.09...)
+      expect(op.payload.weight).toBeCloseTo(225.09, 1);
+    });
+
+    it('leaves BW draft untouched when switching weight unit preference', async () => {
+      let currentUnit: 'kg' | 'lb' = 'kg';
+      localStorage.setItem(
+        'yourbody_user',
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000001',
+          email: 'athlete@example.com',
+          username: 'athlete',
+          role: 'athlete',
+          weight_unit: 'kg',
+        })
+      );
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'workouts') {
+          return createSupabaseBuilder('workouts', { data: [{ id: 'workout-1' }], error: null });
+        }
+        if (table === 'users') {
+          const builder = createSupabaseBuilder('users', {
+            data: [{
+              id: '00000000-0000-4000-8000-000000000001',
+              email: 'athlete@example.com',
+              username: 'athlete',
+              role: 'athlete',
+              weight_unit: currentUnit,
+            }],
+            error: null,
+          });
+          const origUpdate = builder.update.bind(builder);
+          builder.update = (values: any) => {
+            if (values.weight_unit) {
+              currentUnit = values.weight_unit;
+            }
+            return origUpdate(values);
+          };
+          return builder;
+        }
+        return createSupabaseBuilder(table, { data: [], error: null });
+      });
+
+      // Pre-seed an active session with a bodyweight ('BW') draft
+      workoutSessionStore.getOrInitSession('00000000-0000-4000-8000-000000000001', '2026-09-06', {
+        routineName: 'Workout A (Push, Quads & Core)',
+        exercises: ['Incline Bench Press'],
+        targetSetCounts: { 'Incline Bench Press': 3 },
+        targetRepCounts: { 'Incline Bench Press': 8 },
+      });
+      workoutSessionStore.setDraftInput('00000000-0000-4000-8000-000000000001', '2026-09-06', 'Incline Bench Press', 1, {
+        weight: 'BW',
+        reps: '10',
+      });
+      workoutSessionStore.flushPendingWrites();
+
+      const { unmount } = renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('ghost-weight-0-0')).toHaveValue('BW');
+        expect(screen.getByTestId('ghost-reps-0-0')).toHaveValue('10');
+      });
+
+      unmount();
+
+      const { result: prefResult } = renderHook(() => useWeightUnitPreference(), {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryClientProvider>
+        ),
+      });
+
+      await act(async () => {
+        await prefResult.current.setUnit('lb');
+      });
+
+      expect(currentUnit).toBe('lb');
+
+      renderComponent();
+
+      // The draft input should still be 'BW'
+      await waitFor(() => {
+        expect(screen.getByTestId('ghost-weight-0-0')).toHaveValue('BW');
+      });
+
+      const commitBtn = screen.getByTestId('commit-set-btn-0-0');
+      fireEvent.click(commitBtn);
+
+      await waitFor(() => {
+        expect(mockEnqueueAndAwait).toHaveBeenCalled();
+      });
+
+      const op = mockEnqueueAndAwait.mock.calls[0][0];
+      expect(op.kind).toBe('set.create');
+      // Bodyweight set stores weight 0
+      expect(op.payload.weight).toBe(0);
     });
   });
 });
