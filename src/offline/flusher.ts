@@ -170,7 +170,7 @@ async function getCurrentSessionUserId(): Promise<string | null> {
     return data?.session?.user?.id || null;
   } catch {
     // Cannot verify session from supabase client (e.g. throws)
-    return flusherSessionUserId;
+    return null;
   }
 }
 
@@ -241,20 +241,17 @@ export async function flushNow(targetUserId?: string, callerOpId?: string): Prom
           retryAttempts = 0;
           setAuthRequiredStatus(false);
         } catch (rawError: any) {
-          const classified = classifyError(rawError);
-
-          // If an RLS violation (42501) occurs because the session user switched mid-request,
-          // treat as retryable (reset to pending) and stop the flush so it is not moved to attention.
-          // Real RLS violations (where current session user == op.userId) remain classified as PERMANENT.
-          const isRlsError = String(classified.code) === '42501' || String(rawError?.code) === '42501';
-          if (isRlsError) {
-            const currentSessionUser = await getCurrentSessionUserId();
-            if (!currentSessionUser || currentSessionUser !== op.userId) {
-              op.state = 'pending';
-              await updateOp(userId, op);
-              break;
-            }
+          // If the session user switched or signed out while the replay request was in flight,
+          // leave the op pending and stop the flush so it is not moved to attention or blocks dependents.
+          // Covers AUTH / 401 / 403 / 42501 alike. Real permanent errors for the active user proceed.
+          const currentSessionUser = await getCurrentSessionUserId();
+          if (!currentSessionUser || currentSessionUser !== op.userId) {
+            op.state = 'pending';
+            await updateOp(userId, op);
+            break;
           }
+
+          const classified = classifyError(rawError);
 
           if (classified.kind === 'TRANSIENT') {
             op.state = 'pending';
@@ -319,6 +316,12 @@ export async function flushNow(targetUserId?: string, callerOpId?: string): Prom
                 setAuthRequiredStatus(false);
                 continue;
               } catch (retryErr: any) {
+                const retrySessionUser = await getCurrentSessionUserId();
+                if (!retrySessionUser || retrySessionUser !== op.userId) {
+                  op.state = 'pending';
+                  await updateOp(userId, op);
+                  break;
+                }
                 const secondClassified = classifyError(retryErr);
                 if (secondClassified.kind === 'PERMANENT') {
                   op.state = 'attention';
