@@ -18,6 +18,7 @@ interface CoachAthleteMacrosProps {
   isUpdatingMacros: boolean;
   macroStatus: { type: 'success' | 'error'; message: string } | null;
   onUpdateAthleteMacros: (e: React.FormEvent) => void;
+  isLoading?: boolean;
 }
 
 export const CoachAthleteMacros: React.FC<CoachAthleteMacrosProps> = ({
@@ -35,6 +36,7 @@ export const CoachAthleteMacros: React.FC<CoachAthleteMacrosProps> = ({
   isUpdatingMacros,
   macroStatus,
   onUpdateAthleteMacros,
+  isLoading,
 }) => {
   const baseId = useId();
   const calId = `${baseId}-cal`;
@@ -160,7 +162,7 @@ export const CoachAthleteMacros: React.FC<CoachAthleteMacrosProps> = ({
 
       <button
         type="submit"
-        disabled={isUpdatingMacros}
+        disabled={isUpdatingMacros || Boolean(isLoading)}
         className="w-full bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 font-bold py-3 min-h-[44px] rounded-xl text-xs shadow-neon-cyan transition disabled:opacity-50 touch-manipulation flex items-center justify-center gap-2"
         data-testid="update-athlete-macros-btn"
       >

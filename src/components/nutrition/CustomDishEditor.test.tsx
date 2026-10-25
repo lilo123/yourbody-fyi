@@ -196,4 +196,38 @@ describe('CustomDishEditor', () => {
     );
     await expectNoA11yViolations(container);
   });
+
+  it('accepts decimal comma ("72,5") and decimal period ("72.5") on component macro inputs', () => {
+    const onChange = vi.fn();
+    render(<CustomDishEditor items={[item()]} onChange={onChange} />);
+
+    // Test decimal comma on calories, protein, carbs, fat, fiber
+    fireEvent.change(screen.getByTestId('dish-item-calories'), { target: { value: '72,5' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].calories).toBe(72.5);
+
+    onChange.mockClear();
+    fireEvent.change(screen.getByTestId('dish-item-protein'), { target: { value: '72,5' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].protein).toBe(72.5);
+
+    onChange.mockClear();
+    fireEvent.change(screen.getByTestId('dish-item-carbs'), { target: { value: '72,5' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].carbs).toBe(72.5);
+
+    onChange.mockClear();
+    fireEvent.change(screen.getByTestId('dish-item-fat'), { target: { value: '72,5' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].fat).toBe(72.5);
+
+    onChange.mockClear();
+    fireEvent.change(screen.getByTestId('dish-item-fiber'), { target: { value: '72,5' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].fiber).toBe(72.5);
+
+    // Test decimal period on macro inputs
+    onChange.mockClear();
+    fireEvent.change(screen.getByTestId('dish-item-calories'), { target: { value: '72.5' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].calories).toBe(72.5);
+
+    onChange.mockClear();
+    fireEvent.change(screen.getByTestId('dish-item-protein'), { target: { value: '72.5' } });
+    expect((onChange.mock.calls[0][0] as NutritionItem[])[0].protein).toBe(72.5);
+  });
 });
