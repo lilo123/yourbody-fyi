@@ -1,4 +1,4 @@
-import { createElement, useState, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
+import { createElement, useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import type { Database } from '../../types/supabase';
@@ -10,6 +10,8 @@ import {
   setFlusherSessionUser,
   type NutritionLogPayload,
 } from '../../offline';
+import { onSynced } from '../../offline/flusher';
+import { invalidateNutritionDerived } from '../../lib/invalidate';
 import { markFirstLogCompleted } from '../../pwa/installPromptEarly';
 
 export async function fetchDishDetail(dishId: string): Promise<CustomDishDetail | null> {
@@ -131,6 +133,14 @@ export function useNutritionData({
   setIsError,
 }: UseNutritionDataOptions) {
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const unsubscribe = onSynced(() => {
+      invalidateNutritionDerived(queryClient, targetUserId);
+    });
+    return unsubscribe;
+  }, [queryClient, targetUserId]);
+
   const { show: showToast, dismiss: dismissGlobalToast, activeToast: contextActiveToast } = useToast();
   const contextActiveToastRef = useRef(contextActiveToast);
   contextActiveToastRef.current = contextActiveToast;
@@ -345,7 +355,7 @@ export function useNutritionData({
       }
       setStatus('');
       setIsError(false);
-      queryClient.invalidateQueries({ queryKey: ['nutrition_logs', targetUserId] });
+      invalidateNutritionDerived(queryClient, targetUserId);
       if (created?.incrementDishId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
       }
