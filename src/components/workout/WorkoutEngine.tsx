@@ -103,6 +103,7 @@ export const WorkoutEngine: React.FC = () => {
     templatesFetched,
     userLogs,
     logsFetched,
+    unit,
   });
 
   const {

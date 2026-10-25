@@ -488,12 +488,19 @@ test.describe('YB6 Toast Bottom In Modal (D-YB6-5)', () => {
     await expect(nameInput).toBeVisible();
     await nameInput.fill(dishName);
 
-    const macroInputs = modal.locator('[data-testid="parent-macros"] input');
-    await expect(macroInputs.nth(0)).toBeVisible();
-    await macroInputs.nth(0).fill('250');
-    await macroInputs.nth(1).fill('20');
-    await macroInputs.nth(2).fill('20');
-    await macroInputs.nth(3).fill('5');
+    // Add component and fill macros
+    const addItemBtn = modal.locator('[data-testid="dish-add-item"]');
+    await expect(addItemBtn).toBeVisible();
+    await addItemBtn.click();
+
+    const compName = modal.locator('[data-testid="dish-item-name"]');
+    await expect(compName).toBeVisible();
+    await compName.fill(dishName);
+
+    await modal.locator('[data-testid="dish-item-calories"]').fill('250');
+    await modal.locator('[data-testid="dish-item-protein"]').fill('20');
+    await modal.locator('[data-testid="dish-item-carbs"]').fill('20');
+    await modal.locator('[data-testid="dish-item-fat"]').fill('5');
 
     // Save dish
     const saveBtn = modal.locator('button[type="submit"]:has-text("Save Dish")');
