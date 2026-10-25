@@ -28,6 +28,7 @@ import { enqueueAndAwait, applyPendingToDaySets } from '../../offline';
 import { useWorkoutPendingOps } from './useWorkoutPendingOps';
 import { useToast } from '../../hooks/useToast';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { convertDraftWeight, type WeightUnit } from '../../utils/weight';
 
 export interface UseWorkoutSessionOptions {
   targetUserId: string;
@@ -38,6 +39,7 @@ export interface UseWorkoutSessionOptions {
   userLogs: (WorkoutSet & { workout_date: string; workout_name?: string })[];
   logsFetched: boolean;
   onSessionRoutineChange?: () => void;
+  unit?: WeightUnit;
 }
 
 export function useWorkoutSession({
@@ -48,10 +50,12 @@ export function useWorkoutSession({
   templatesFetched,
   userLogs,
   logsFetched,
+  unit = 'lb',
 }: UseWorkoutSessionOptions) {
   const queryClient = useContext(QueryClientContext);
   const { show: showToast } = useToast();
   const isOnline = useOnlineStatus();
+
   const [workoutDate, setWorkoutDate] = useState<string>(() => {
     const activeSession = workoutSessionStore.getActiveSession(targetUserId);
     if (activeSession && activeSession.workoutDate) {
@@ -61,6 +65,15 @@ export function useWorkoutSession({
   });
 
   const initialSession = workoutSessionStore.getActiveSession(targetUserId, workoutDate);
+  if (initialSession?.weightUnit && initialSession.weightUnit !== unit) {
+    for (const draft of Object.values(initialSession.inputDrafts || {})) {
+      if (draft && draft.weight !== undefined) {
+        draft.weight = convertDraftWeight(draft.weight, initialSession.weightUnit, unit);
+      }
+    }
+    initialSession.weightUnit = unit;
+    workoutSessionStore.saveSession(initialSession, false);
+  }
   const initialState = getInitialRoutineState(initialSession, workoutDate);
 
   const [activeRoutineName, setActiveRoutineName] = useState<string>(initialState.activeRoutineName);
@@ -170,6 +183,16 @@ export function useWorkoutSession({
 
     const existingSession = workoutSessionStore.getActiveSession(targetUserId, workoutDate);
     if (existingSession) {
+      if (existingSession.weightUnit && existingSession.weightUnit !== unit) {
+        for (const draft of Object.values(existingSession.inputDrafts || {})) {
+          if (draft && draft.weight !== undefined) {
+            draft.weight = convertDraftWeight(draft.weight, existingSession.weightUnit, unit);
+          }
+        }
+        existingSession.weightUnit = unit;
+        workoutSessionStore.saveSession(existingSession, false);
+      }
+
       const hasUUIDs =
         existingSession.exercises.some(isUUID) ||
         existingSession.expandedExercises.some(isUUID) ||
@@ -232,7 +255,7 @@ export function useWorkoutSession({
       setInputDrafts({});
       setExpandedExercises(resolved.exercises.length > 0 ? new Set([resolved.exercises[0]]) : new Set());
     }
-  }, [workoutDate, targetUserId, templatesFetched, logsFetched, exercisesFetched, customTemplates, todaySets, exercises, getSetsForExerciseToday, activeRoutineName, activeExercises.length]);
+  }, [workoutDate, targetUserId, templatesFetched, logsFetched, exercisesFetched, customTemplates, todaySets, exercises, getSetsForExerciseToday, activeRoutineName, activeExercises.length, unit]);
 
   const {
     toggleAccordion,
@@ -621,7 +644,52 @@ export function useWorkoutSession({
         [draftKey]: updated,
       };
     });
-  }, [ensureSession, targetUserId, workoutDate]);
+
+    const session = workoutSessionStore.getSession(targetUserId, workoutDate);
+    if (session && session.weightUnit !== unit) {
+      session.weightUnit = unit;
+      workoutSessionStore.saveSession(session, false);
+    }
+  }, [ensureSession, targetUserId, workoutDate, unit]);
+
+  const prevUnitRef = useRef<WeightUnit>(unit);
+
+  useEffect(() => {
+    if (prevUnitRef.current !== unit) {
+      const fromUnit = prevUnitRef.current;
+      const toUnit = unit;
+      prevUnitRef.current = unit;
+
+      setInputDrafts((prev) => {
+        let changed = false;
+        const next: Record<string, SetDraftInput> = {};
+        for (const [key, draft] of Object.entries(prev)) {
+          if (!draft || draft.weight === undefined) {
+            next[key] = draft;
+            continue;
+          }
+          const convertedWeight = convertDraftWeight(draft.weight, fromUnit, toUnit);
+          if (convertedWeight !== draft.weight) {
+            changed = true;
+            next[key] = { ...draft, weight: convertedWeight };
+            const lastUnderscore = key.lastIndexOf('_');
+            const exName = lastUnderscore > 0 ? key.slice(0, lastUnderscore) : key;
+            const setIndex = lastUnderscore > 0 ? parseInt(key.slice(lastUnderscore + 1), 10) : 1;
+            workoutSessionStore.setDraftInput(targetUserId, workoutDate, exName, setIndex, next[key]);
+          } else {
+            next[key] = draft;
+          }
+        }
+        return changed ? next : prev;
+      });
+
+      const session = workoutSessionStore.getSession(targetUserId, workoutDate);
+      if (session) {
+        session.weightUnit = toUnit;
+        workoutSessionStore.saveSession(session, false);
+      }
+    }
+  }, [unit, targetUserId, workoutDate]);
 
   const handleClearWorkout = useCallback(() => {
     setActiveRoutineName('Free Workout');
