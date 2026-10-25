@@ -598,6 +598,245 @@ Deno.test("parse-nutrition should return 500 rather than mock 200 data during se
     }
 });
 
+Deno.test("parse-nutrition should return 503 rather than connection error when upstream Gemini returns 403 PERMISSION_DENIED", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            return new Response(
+                JSON.stringify({
+                    error: {
+                        code: 403,
+                        message: "The caller does not have permission",
+                        status: "PERMISSION_DENIED"
+                    }
+                }),
+                {
+                    status: 403,
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Had 2 scoops of whey protein" })
+        });
+
+        const res = await app.fetch(req);
+        const data = await res.json();
+        assertEquals(data.error, "AI service is temporarily unavailable. Please try again or switch to manual entry.");
+        assertEquals(res.status, 503);
+        assertEquals(data.code, "AI_SERVICE_UNAVAILABLE");
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) {
+            Deno.env.set("GEMINI_API_KEY", originalKey);
+        } else {
+            Deno.env.delete("GEMINI_API_KEY");
+        }
+    }
+});
+
+Deno.test("parse-nutrition: error containing '4030ms' or id 'req_401' is not classified as auth error", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            return new Response(
+                JSON.stringify({
+                    error: {
+                        code: 500,
+                        message: "Transient failure after 4030ms in request req_40192"
+                    }
+                }),
+                {
+                    status: 500,
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Had 2 scoops of whey protein" })
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 500);
+        const data = await res.json();
+        assertEquals(data.error, "Failed to parse meal nutrition. Please check your connection or use manual entry.");
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) {
+            Deno.env.set("GEMINI_API_KEY", originalKey);
+        } else {
+            Deno.env.delete("GEMINI_API_KEY");
+        }
+    }
+});
+
+Deno.test("parse-nutrition: first model 403 falls back to second model which succeeds with 200", async () => {
+    const originalKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.set("GEMINI_API_KEY", "test-key");
+
+    let callCount = 0;
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        if (urlString.includes("generativelanguage.googleapis.com")) {
+            callCount++;
+            if (callCount === 1) {
+                return new Response(
+                    JSON.stringify({
+                        error: {
+                            code: 403,
+                            message: "The caller does not have permission",
+                            status: "PERMISSION_DENIED"
+                        }
+                    }),
+                    {
+                        status: 403,
+                        headers: { "Content-Type": "application/json" }
+                    }
+                );
+            }
+            return new Response(
+                JSON.stringify({
+                    candidates: [
+                        {
+                            content: {
+                                parts: [
+                                    {
+                                        text: JSON.stringify({
+                                            is_food: true,
+                                            name: "Whey Protein Shake",
+                                            calories: 240,
+                                            protein: 48,
+                                            carbs: 4,
+                                            fat: 2,
+                                            fiber: 0,
+                                            items: [
+                                                {
+                                                    name: "Whey Protein",
+                                                    portion: "2 scoops",
+                                                    calories: 240,
+                                                    protein: 48,
+                                                    carbs: 4,
+                                                    fat: 2,
+                                                    fiber: 0
+                                                }
+                                            ],
+                                            explanation: "2 scoops whey protein"
+                                        })
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }),
+                {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
+        }
+        return originalFetch(input, init);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer valid-jwt-token" },
+            body: JSON.stringify({ input: "Had 2 scoops of whey protein" })
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 200);
+        const data = await res.json();
+        assertEquals(data.name, "Whey Protein Shake");
+        assertEquals(data.calories, 240);
+        assertEquals(data.protein, 48);
+        assertEquals(callCount >= 2, true);
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (originalKey) {
+            Deno.env.set("GEMINI_API_KEY", originalKey);
+        } else {
+            Deno.env.delete("GEMINI_API_KEY");
+        }
+    }
+});
+
+Deno.test("parse-nutrition: caller user auth failure returns 401 and is not classified as AI outage", async () => {
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: string | Request | URL): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ error: "Invalid token", message: "Invalid JWT token" }), {
+                status: 401,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input);
+    };
+
+    globalThis.fetch = mockFetch;
+
+    try {
+        const req = new Request("http://localhost/parse-nutrition", {
+            method: "POST",
+            headers: { "Authorization": "Bearer expired-user-jwt-401" },
+            body: JSON.stringify({ input: "Had 2 scoops of whey protein" })
+        });
+
+        const res = await app.fetch(req);
+        assertEquals(res.status, 401);
+        const data = await res.json();
+        assertEquals(data.error, "Unauthorized: Invalid token");
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 Deno.test("parse-nutrition handles conversational multi-dish meal input (Chicken Rice & Eggs) and elaborates dishes into components", async () => {
     const originalKey = Deno.env.get("GEMINI_API_KEY");
     Deno.env.set("GEMINI_API_KEY", "test-key");
