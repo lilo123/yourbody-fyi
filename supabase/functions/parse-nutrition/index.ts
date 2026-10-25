@@ -297,6 +297,22 @@ function isTimeoutError(err: any): boolean {
   );
 }
 
+function isAuthOrPermissionError(err: any): boolean {
+  if (!err) return false;
+  if (err.status === 401 || err.status === 403) return true;
+  if (err.statusCode === 401 || err.statusCode === 403) return true;
+  if (err.code === 401 || err.code === 403) return true;
+  if (err.code === 'PERMISSION_DENIED' || err.code === 'UNAUTHENTICATED') return true;
+  if (err.error?.code === 401 || err.error?.code === 403) return true;
+  if (err.error?.status === 'PERMISSION_DENIED' || err.error?.status === 'UNAUTHENTICATED') return true;
+  if (err.error?.code === 'PERMISSION_DENIED' || err.error?.code === 'UNAUTHENTICATED') return true;
+  if (err.response?.status === 401 || err.response?.status === 403) return true;
+  const msg = typeof err.message === 'string' ? err.message : '';
+  const errorMsg = typeof err.error?.message === 'string' ? err.error.message : '';
+  const combinedMsg = `${msg} ${errorMsg}`;
+  return /\[(401|403)\b|PERMISSION_DENIED|API key not valid|API_KEY_INVALID/i.test(combinedMsg);
+}
+
 async function refundQuota(
   supabaseUrl: string,
   userId: string | undefined,
@@ -853,6 +869,23 @@ CORE RESPONSIBILITIES & GUIDELINES:
                 ...corsHeaders,
                 'Content-Type': 'application/json',
                 'Retry-After': '15',
+              },
+            }
+          );
+        }
+
+        if (isAuthOrPermissionError(lastAiError)) {
+          await reportAiFailure(false);
+          return new Response(
+            JSON.stringify({
+              error: "AI service is temporarily unavailable. Please try again or switch to manual entry.",
+              code: "AI_SERVICE_UNAVAILABLE",
+            }),
+            {
+              status: 503,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'application/json',
               },
             }
           );
