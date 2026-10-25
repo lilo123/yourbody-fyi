@@ -12,6 +12,7 @@ import { setIdMapping, getIdMapping } from '../idmap';
 import { closeAllOfflineDbs, deleteOfflineDb } from '../db';
 import { QueryClient, type Query } from '@tanstack/react-query';
 import type { PersistedClient } from '@tanstack/react-query-persist-client';
+import { queryKeys } from '../../lib/queryKeys';
 
 describe('Cache Persister & Whitelist (§A3, §A9, §D)', () => {
   const userId = 'user-persist-1';
@@ -63,6 +64,18 @@ describe('Cache Persister & Whitelist (§A3, §A9, §D)', () => {
       expect(shouldDehydrateQuery(createMockQuery(['workout_sets', userId, 'history_v2', '30d', '2026-09-30']))).toBe(true);
       expect(shouldDehydrateQuery(createMockQuery(['workout_sets', userId, 'exercise_history', 'ex-1', '30d']))).toBe(true);
       expect(shouldDehydrateQuery(createMockQuery(['workout_sets', userId, 'calendar_month', '2026-09-01']))).toBe(true);
+    });
+
+    it('allows workout_sets query produced by queryKeys.workoutSets.recent90d factory', () => {
+      const recent90dKey = [...queryKeys.workoutSets.recent90d(userId)];
+      expect(shouldDehydrateQuery(createMockQuery(recent90dKey))).toBe(true);
+      expect(shouldDehydrateQuery(createMockQuery(recent90dKey, 'error'))).toBe(false);
+      expect(shouldDehydrateQuery(createMockQuery(recent90dKey, 'pending'))).toBe(false);
+    });
+
+    it('rejects unwhitelisted workout_sets sub-keys', () => {
+      expect(shouldDehydrateQuery(createMockQuery(['workout_sets', userId, 'all']))).toBe(false);
+      expect(shouldDehydrateQuery(createMockQuery(['workout_sets', userId, 'unknown_sub']))).toBe(false);
     });
 
     it('allows workouts.byDate, exercise_benchmarks, exercise_stats', () => {

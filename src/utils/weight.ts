@@ -54,6 +54,35 @@ export function convertWeight(weight: number, fromUnit: WeightUnit, toUnit: Weig
 }
 
 /**
+ * Converts an unlogged draft weight string between units.
+ * Leaves 'BW' and empty strings untouched.
+ * Numeric weights are converted using convertWeight rounding rules.
+ */
+export function convertDraftWeight(
+  draft: string,
+  fromUnit: WeightUnit,
+  toUnit: WeightUnit
+): string {
+  if (typeof draft !== 'string') return draft;
+  const trimmed = draft.trim();
+  if (trimmed === '' || trimmed.toUpperCase() === 'BW') {
+    return draft;
+  }
+  if (fromUnit === toUnit) {
+    return draft;
+  }
+
+  const normalized = trimmed.replace(',', '.');
+  const num = Number(normalized);
+  if (isNaN(num)) {
+    return draft;
+  }
+
+  const converted = convertWeight(num, fromUnit, toUnit);
+  return String(converted);
+}
+
+/**
  * Returns the canonical display unit label.
  * The 'lbs' literal lives ONLY here in product code.
  */

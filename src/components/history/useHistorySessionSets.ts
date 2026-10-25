@@ -10,6 +10,79 @@ export interface UseHistorySessionSetsOptions {
   queryClient: QueryClient;
 }
 
+function normalizeCachedSet(set: WorkoutSet | HistorySet, sessionId: string): HistorySet {
+  return {
+    ...set,
+    id: set.id || '',
+    workout_id: set.workout_id || sessionId,
+    exercise_id: set.exercise_id,
+    weight: Number(set.weight) || 0,
+    reps: Number(set.reps) || 0,
+    set_index: set.set_index ?? 0,
+    set_type: (set.set_type as WorkoutSet['set_type']) || 'working',
+    rpe: set.rpe ?? null,
+    workout_date: set.workout_date || '',
+    workout_name: set.workout_name || '',
+    created_at: set.created_at || '',
+  };
+}
+
+function findCachedSessionSets(
+  queryClient: QueryClient,
+  sessionId: string,
+  session?: HistorySession,
+  targetUserId?: string,
+  sessionDate?: string
+): HistorySet[] | null {
+  const direct = queryClient.getQueryData<HistorySet[]>(['session_sets', sessionId]);
+  if (direct && Array.isArray(direct)) {
+    if (direct.length > 0 || session?.set_count === 0) {
+      return direct;
+    }
+  }
+
+  if (session?.sets && session.sets.length > 0) {
+    const matching = session.sets.filter((set) => !set.workout_id || set.workout_id === sessionId);
+    if (matching.length > 0) {
+      return matching.map((set) => normalizeCachedSet(set, sessionId));
+    }
+  }
+
+  if (targetUserId) {
+    const ninetySets = queryClient.getQueryData<WorkoutSet[]>(['workout_sets', targetUserId, '90d']);
+    if (ninetySets && Array.isArray(ninetySets)) {
+      const matching = ninetySets.filter((set) => set.workout_id === sessionId);
+      if (matching.length > 0) {
+        return matching.map((set) => normalizeCachedSet(set, sessionId));
+      }
+    }
+
+    if (sessionDate) {
+      const dateSets = queryClient.getQueryData<WorkoutSet[]>(['workout_sets', targetUserId, sessionDate]);
+      if (dateSets && Array.isArray(dateSets)) {
+        const matching = dateSets.filter((set) => set.workout_id === sessionId);
+        if (matching.length > 0) {
+          return matching.map((set) => normalizeCachedSet(set, sessionId));
+        }
+      }
+    }
+
+    const allWorkoutQueries = queryClient.getQueriesData<unknown>({
+      queryKey: ['workout_sets', targetUserId],
+    });
+    for (const [, queryData] of allWorkoutQueries) {
+      if (Array.isArray(queryData)) {
+        const matching = queryData.filter((set: any) => set && set.workout_id === sessionId);
+        if (matching.length > 0) {
+          return matching.map((set) => normalizeCachedSet(set, sessionId));
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 export function useHistorySessionSets({
   targetUserId,
   sessions,
@@ -60,20 +133,37 @@ export function useHistorySessionSets({
       let rawSets: HistorySet[] = [];
 
       if (!isOfflineOnly) {
-        try {
-          rawSets = await queryClient.fetchQuery({
-            queryKey: ['session_sets', sessionId],
-            queryFn: () => fetchSessionSets(sessionId),
-            staleTime: 1000 * 60 * 5,
-          });
-        } catch (err) {
-          const cached = queryClient.getQueryData<HistorySet[]>(['session_sets', sessionId]);
-          if (cached) {
-            rawSets = cached;
-          } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            rawSets = [];
+        let fetchFailed = false;
+        let fetchError: unknown = null;
+
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          fetchFailed = true;
+          fetchError = new Error('Offline');
+        } else {
+          try {
+            rawSets = await queryClient.fetchQuery({
+              queryKey: ['session_sets', sessionId],
+              queryFn: () => fetchSessionSets(sessionId),
+              staleTime: 1000 * 60 * 5,
+            });
+          } catch (err) {
+            fetchFailed = true;
+            fetchError = err;
+          }
+        }
+
+        if (fetchFailed) {
+          const cachedSets = findCachedSessionSets(
+            queryClient,
+            sessionId,
+            session,
+            targetUserId,
+            sessionDate
+          );
+          if (cachedSets) {
+            rawSets = cachedSets;
           } else {
-            throw err;
+            throw fetchError;
           }
         }
       }
