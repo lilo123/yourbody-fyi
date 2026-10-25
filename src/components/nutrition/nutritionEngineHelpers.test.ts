@@ -7,13 +7,16 @@ import {
   updateStagedItemNutrition,
   reanchorStagedItem,
   scaleStagedMeal,
+  resyncStagedMealWithCustomDish,
   buildStagedMealFromManualData,
   useStagedCardFocus,
   isIdenticalItem,
   mergeOrAppendStagedItems,
   formatLenientHint,
   type StagedItem,
+  type StagedMeal,
 } from './nutritionEngineHelpers';
+import type { CustomDishDetail } from '../../types/database';
 import { scaleItemToQuantity } from '../../utils/itemModel';
 
 describe('buildStagedItem', () => {
@@ -1375,6 +1378,597 @@ describe('calorieCorrection clearing on edit/reanchor/scale', () => {
 
     const scaled = scaleStagedMeal(meal, 1.5);
     expect(scaled.items[0].calorieCorrection).toBeUndefined();
+  });
+});
+
+describe('resyncStagedMealWithCustomDish', () => {
+  it('returns meal untouched when no staged items match the updated dish id', () => {
+    const item = buildStagedItem({
+      name: 'Oats',
+      quantity: 50,
+      unit: 'g',
+      calories: 190,
+      protein: 7,
+      carbs: 32,
+      fat: 3,
+      fiber: 5,
+      dishId: 'dish-111',
+    });
+    const meal = {
+      name: 'Breakfast',
+      mealType: 'Breakfast',
+      explanation: '190 kcal (Oats)',
+      items: [item],
+      calories: 190,
+      protein: 7,
+      carbs: 32,
+      fat: 3,
+      fiber: 5,
+      servingSize: 50,
+      servingUnit: 'g',
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(meal, {
+      id: 'dish-999',
+      user_id: 'user-1',
+      name: 'Unrelated Dish',
+      calories: 400,
+      protein: 20,
+      carbs: 50,
+      fat: 10,
+      fiber: 4,
+      kind: 'food',
+      use_count: 0,
+    });
+
+    expect(resynced).toBe(meal);
+  });
+
+  it('resyncs staged item macros and base values to updated custom dish values', () => {
+    const item = buildStagedItem({
+      name: 'Protein Shake',
+      quantity: 1,
+      unit: 'unit',
+      calories: 200,
+      protein: 25,
+      carbs: 10,
+      fat: 2,
+      fiber: 1,
+      dishId: 'dish-shake',
+    });
+    const meal = {
+      name: 'Protein Shake',
+      mealType: 'Snack',
+      explanation: '200 kcal (Protein Shake)',
+      items: [item],
+      calories: 200,
+      protein: 25,
+      carbs: 10,
+      fat: 2,
+      fiber: 1,
+      servingSize: 1,
+      servingUnit: 'unit',
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(
+      meal,
+      {
+        id: 'dish-shake',
+        user_id: 'user-1',
+        name: 'Mega Shake',
+        calories: 320,
+        protein: 40,
+        carbs: 15,
+        fat: 4,
+        fiber: 2,
+        kind: 'food',
+        use_count: 1,
+        serving_quantity: 1,
+        serving_unit: 'unit',
+      },
+      {
+        id: 'dish-shake',
+        name: 'Protein Shake',
+      }
+    );
+
+    expect(resynced.name).toBe('Mega Shake');
+    expect(resynced.calories).toBe(320);
+    expect(resynced.protein).toBe(40);
+    expect(resynced.items[0].name).toBe('Mega Shake');
+    expect(resynced.items[0].calories).toBe(320);
+    expect(resynced.items[0].protein).toBe(40);
+    expect(resynced.items[0].baseCalories).toBe(320);
+    expect(resynced.items[0].baseProtein).toBe(40);
+  });
+
+  it('does NOT overwrite hand-edited items (userOverridden = true)', () => {
+    const originalItem = buildStagedItem({
+      name: 'Salad',
+      quantity: 1,
+      unit: 'unit',
+      calories: 150,
+      protein: 3,
+      carbs: 12,
+      fat: 5,
+      fiber: 4,
+      dishId: 'dish-salad',
+    });
+    const overriddenItem = updateStagedItemNutrition(originalItem, {
+      calories: 220,
+      protein: 10,
+      carbs: 15,
+      fat: 8,
+      fiber: 4,
+    });
+    expect(overriddenItem.userOverridden).toBe(true);
+
+    const meal = {
+      name: 'Salad',
+      mealType: 'Lunch',
+      explanation: '220 kcal (Salad)',
+      items: [overriddenItem],
+      calories: 220,
+      protein: 10,
+      carbs: 15,
+      fat: 8,
+      fiber: 4,
+      servingSize: 1,
+      servingUnit: 'unit',
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(meal, {
+      id: 'dish-salad',
+      user_id: 'user-1',
+      name: 'Updated Salad',
+      calories: 300,
+      protein: 20,
+      carbs: 20,
+      fat: 10,
+      fiber: 5,
+      kind: 'food',
+      use_count: 1,
+    });
+
+    expect(resynced.items[0].calories).toBe(220);
+    expect(resynced.items[0].protein).toBe(10);
+    expect(resynced.items[0].userOverridden).toBe(true);
+  });
+
+  it('preserves scaled quantity and recalculates macros from updated dish values', () => {
+    const item = buildStagedItem({
+      name: 'Rice',
+      quantity: 200,
+      unit: 'g',
+      calories: 260,
+      protein: 5,
+      carbs: 56,
+      fat: 1,
+      fiber: 1,
+      dishId: 'dish-rice',
+    });
+    // Base quantity was 100g, but user staged 200g
+    item.baseQuantity = 100;
+    item.baseCalories = 130;
+    item.baseProtein = 2.5;
+
+    const meal = {
+      name: 'Rice',
+      mealType: 'Dinner',
+      explanation: '260 kcal (Rice)',
+      items: [item],
+      calories: 260,
+      protein: 5,
+      carbs: 56,
+      fat: 1,
+      fiber: 1,
+      servingSize: 200,
+      servingUnit: 'g',
+    };
+
+    // Dish is updated: 100g now has 150 kcal, 3g protein
+    const resynced = resyncStagedMealWithCustomDish(meal, {
+      id: 'dish-rice',
+      user_id: 'user-1',
+      name: 'Brown Rice',
+      calories: 150,
+      protein: 3,
+      carbs: 60,
+      fat: 1,
+      fiber: 2,
+      kind: 'food',
+      use_count: 1,
+      serving_quantity: 100,
+      serving_unit: 'g',
+    });
+
+    expect(resynced.items[0].quantity).toBe(200);
+    expect(resynced.items[0].calories).toBe(300); // 200/100 * 150
+    expect(resynced.items[0].protein).toBe(6); // 200/100 * 3
+    expect(resynced.items[0].baseQuantity).toBe(100);
+    expect(resynced.items[0].baseCalories).toBe(150);
+  });
+
+  it('multi-item dish: removing an ingredient in dish edit does not turn removed item into duplicate of item 0', () => {
+    const item1 = buildStagedItem({
+      name: 'Chicken Breast',
+      quantity: 150,
+      unit: 'g',
+      calories: 240,
+      protein: 45,
+      carbs: 0,
+      fat: 5,
+      fiber: 0,
+      dishId: 'dish-chicken-rice',
+      dishItemId: 'item-chicken',
+    });
+    const item2 = buildStagedItem({
+      name: 'White Rice',
+      quantity: 200,
+      unit: 'g',
+      calories: 260,
+      protein: 5,
+      carbs: 56,
+      fat: 1,
+      fiber: 1,
+      dishId: 'dish-chicken-rice',
+      dishItemId: 'item-rice',
+    });
+
+    const meal: StagedMeal = {
+      name: 'Chicken and Rice',
+      mealType: 'Lunch',
+      explanation: '500 kcal (Chicken and Rice)',
+      items: [item1, item2],
+      calories: 500,
+      protein: 50,
+      carbs: 56,
+      fat: 6,
+      fiber: 1,
+      servingSize: 350,
+      servingUnit: 'g',
+    };
+
+    // User edits the dish: removes White Rice so the dish now only has Chicken Breast (updated to 200g, 320 kcal)
+    const updatedDish: CustomDishDetail = {
+      id: 'dish-chicken-rice',
+      user_id: 'user-1',
+      name: 'Just Chicken',
+      calories: 320,
+      protein: 60,
+      carbs: 0,
+      fat: 6,
+      fiber: 0,
+      kind: 'food',
+      use_count: 1,
+      serving_quantity: 200,
+      serving_unit: 'g',
+      items: [
+        {
+          id: 'item-chicken',
+          name: 'Chicken Breast',
+          quantity: 200,
+          unit: 'g',
+          calories: 320,
+          protein: 60,
+          carbs: 0,
+          fat: 6,
+          fiber: 0,
+        },
+      ],
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(meal, updatedDish, {
+      id: 'dish-chicken-rice',
+      name: 'Chicken and Rice',
+    });
+
+    // Chicken Breast was updated
+    expect(resynced.items).toHaveLength(2);
+    expect(resynced.items[0].name).toBe('Chicken Breast');
+    expect(resynced.items[0].calories).toBe(320);
+    expect(resynced.items[0].protein).toBe(60);
+
+    // White Rice (removed from dish) must remain exactly as it was, NOT duplicated to Chicken Breast
+    expect(resynced.items[1].name).toBe('White Rice');
+    expect(resynced.items[1].calories).toBe(260);
+    expect(resynced.items[1].protein).toBe(5);
+    expect(resynced.items[1].dishItemId).toBe('item-rice');
+
+    // Total calories reflects 320 (updated chicken) + 260 (kept rice) = 580
+    expect(resynced.calories).toBe(580);
+  });
+
+  it('3-item recipe staged, edit ingredient 2 grams in dish -> staged ingredient 2 updates, 1 and 3 unchanged, no duplicates; removed ingredient stays as it was', () => {
+    const item1 = buildStagedItem({
+      name: 'Rolled Oats',
+      quantity: 100,
+      unit: 'g',
+      calories: 380,
+      protein: 13,
+      carbs: 68,
+      fat: 7,
+      fiber: 10,
+      dishId: 'dish-recipe-3',
+      dishItemId: 'ing-1',
+    });
+    const item2 = buildStagedItem({
+      name: 'Peanut Butter',
+      quantity: 30,
+      unit: 'g',
+      calories: 180,
+      protein: 8,
+      carbs: 6,
+      fat: 15,
+      fiber: 2,
+      dishId: 'dish-recipe-3',
+      dishItemId: 'ing-2',
+    });
+    const item3 = buildStagedItem({
+      name: 'Honey',
+      quantity: 20,
+      unit: 'g',
+      calories: 60,
+      protein: 0,
+      carbs: 17,
+      fat: 0,
+      fiber: 0,
+      dishId: 'dish-recipe-3',
+      dishItemId: 'ing-3',
+    });
+
+    const meal: StagedMeal = {
+      name: 'Power Oatmeal',
+      mealType: 'Breakfast',
+      explanation: '620 kcal (Power Oatmeal)',
+      items: [item1, item2, item3],
+      calories: 620,
+      protein: 21,
+      carbs: 91,
+      fat: 22,
+      fiber: 12,
+      servingSize: 150,
+      servingUnit: 'g',
+    };
+
+    // User edits recipe in dish editor:
+    // - ing-1 (Rolled Oats) is unchanged (100g, 380 kcal)
+    // - ing-2 (Peanut Butter) grams edited from 30g to 45g (macros scaled to 270 kcal, 12g P)
+    // - ing-3 (Honey) was removed from the recipe in the dish editor
+    const updatedDish: CustomDishDetail = {
+      id: 'dish-recipe-3',
+      user_id: 'user-1',
+      name: 'Power Oatmeal',
+      calories: 650,
+      protein: 25,
+      carbs: 77,
+      fat: 29.5,
+      fiber: 13,
+      kind: 'recipe',
+      use_count: 1,
+      serving_quantity: 145,
+      serving_unit: 'g',
+      items: [
+        {
+          id: 'ing-1',
+          name: 'Rolled Oats',
+          quantity: 100,
+          unit: 'g',
+          calories: 380,
+          protein: 13,
+          carbs: 68,
+          fat: 7,
+          fiber: 10,
+        },
+        {
+          id: 'ing-2',
+          name: 'Peanut Butter',
+          quantity: 45,
+          unit: 'g',
+          calories: 270,
+          protein: 12,
+          carbs: 9,
+          fat: 22.5,
+          fiber: 3,
+        },
+      ],
+    };
+
+    const resynced = resyncStagedMealWithCustomDish(meal, updatedDish, {
+      id: 'dish-recipe-3',
+      name: 'Power Oatmeal',
+    });
+
+    expect(resynced.items).toHaveLength(3);
+
+    // Ingredient 1 is unchanged
+    expect(resynced.items[0].name).toBe('Rolled Oats');
+    expect(resynced.items[0].quantity).toBe(100);
+    expect(resynced.items[0].calories).toBe(380);
+    expect(resynced.items[0].protein).toBe(13);
+
+    // Ingredient 2 updated its grams and macros
+    expect(resynced.items[1].name).toBe('Peanut Butter');
+    expect(resynced.items[1].quantity).toBe(45);
+    expect(resynced.items[1].calories).toBe(270);
+    expect(resynced.items[1].protein).toBe(12);
+
+    // Ingredient 3 (removed in dish edit) stays exactly as it was
+    expect(resynced.items[2].name).toBe('Honey');
+    expect(resynced.items[2].quantity).toBe(20);
+    expect(resynced.items[2].calories).toBe(60);
+    expect(resynced.items[2].protein).toBe(0);
+
+    // Zero duplicates of ingredient 1 or 2
+    const oatsItems = resynced.items.filter((item) => item.name === 'Rolled Oats');
+    const pbItems = resynced.items.filter((item) => item.name === 'Peanut Butter');
+    expect(oatsItems).toHaveLength(1);
+    expect(pbItems).toHaveLength(1);
+
+    // Total calories: 380 + 270 + 60 = 710
+    expect(resynced.calories).toBe(710);
+  });
+
+  describe('single-item meal name and notes synchronization', () => {
+    it('(a) untouched name follows the dish rename', () => {
+      const item = buildStagedItem({
+        name: 'Classic Oatmeal',
+        quantity: 1,
+        unit: 'unit',
+        calories: 150,
+        protein: 5,
+        carbs: 27,
+        fat: 3,
+        fiber: 4,
+        dishId: 'dish-oats',
+      });
+      const meal: StagedMeal = {
+        name: 'Classic Oatmeal',
+        mealType: 'Breakfast',
+        explanation: '150 kcal (Classic Oatmeal)',
+        items: [item],
+        calories: 150,
+        protein: 5,
+        carbs: 27,
+        fat: 3,
+        fiber: 4,
+        servingSize: 1,
+        servingUnit: 'unit',
+        notes: 'Original note',
+      };
+
+      const previousDish = {
+        id: 'dish-oats',
+        name: 'Classic Oatmeal',
+        notes: 'Original note',
+      };
+
+      const updatedDish = {
+        id: 'dish-oats',
+        user_id: 'user-1',
+        name: 'Steel Cut Oatmeal',
+        calories: 170,
+        protein: 6,
+        carbs: 29,
+        fat: 3,
+        fiber: 5,
+        kind: 'food' as const,
+        use_count: 1,
+        notes: 'New recipe note',
+      };
+
+      const resynced = resyncStagedMealWithCustomDish(meal, updatedDish, previousDish);
+
+      expect(resynced.name).toBe('Steel Cut Oatmeal');
+      expect(resynced.notes).toBe('New recipe note');
+      expect(resynced.explanation).toContain('Steel Cut Oatmeal');
+    });
+
+    it('(b) hand-typed name is kept when dish is renamed', () => {
+      const item = buildStagedItem({
+        name: 'Classic Oatmeal',
+        quantity: 1,
+        unit: 'unit',
+        calories: 150,
+        protein: 5,
+        carbs: 27,
+        fat: 3,
+        fiber: 4,
+        dishId: 'dish-oats',
+      });
+      // User typed a custom name and custom notes into the staged card
+      const meal: StagedMeal = {
+        name: 'My Special Morning Bowl',
+        mealType: 'Breakfast',
+        explanation: '150 kcal (My Special Morning Bowl)',
+        items: [item],
+        calories: 150,
+        protein: 5,
+        carbs: 27,
+        fat: 3,
+        fiber: 4,
+        servingSize: 1,
+        servingUnit: 'unit',
+        notes: 'My custom notes added on card',
+      };
+
+      const previousDish = {
+        id: 'dish-oats',
+        name: 'Classic Oatmeal',
+        notes: 'Original note',
+      };
+
+      const updatedDish = {
+        id: 'dish-oats',
+        user_id: 'user-1',
+        name: 'Steel Cut Oatmeal',
+        calories: 170,
+        protein: 6,
+        carbs: 29,
+        fat: 3,
+        fiber: 5,
+        kind: 'food' as const,
+        use_count: 1,
+        notes: 'New recipe note',
+      };
+
+      const resynced = resyncStagedMealWithCustomDish(meal, updatedDish, previousDish);
+
+      // Hand-typed name and notes must be kept, not clobbered by updatedDish
+      expect(resynced.name).toBe('My Special Morning Bowl');
+      expect(resynced.notes).toBe('My custom notes added on card');
+      expect(resynced.explanation).toContain('My Special Morning Bowl');
+      // But macros are still resynced
+      expect(resynced.calories).toBe(170);
+      expect(resynced.protein).toBe(6);
+    });
+
+    it('does not overwrite name or notes if previousDish is unavailable', () => {
+      const item = buildStagedItem({
+        name: 'Classic Oatmeal',
+        quantity: 1,
+        unit: 'unit',
+        calories: 150,
+        protein: 5,
+        carbs: 27,
+        fat: 3,
+        fiber: 4,
+        dishId: 'dish-oats',
+      });
+      const meal: StagedMeal = {
+        name: 'Classic Oatmeal',
+        mealType: 'Breakfast',
+        explanation: '150 kcal (Classic Oatmeal)',
+        items: [item],
+        calories: 150,
+        protein: 5,
+        carbs: 27,
+        fat: 3,
+        fiber: 4,
+        servingSize: 1,
+        servingUnit: 'unit',
+        notes: 'Existing note',
+      };
+
+      const updatedDish = {
+        id: 'dish-oats',
+        user_id: 'user-1',
+        name: 'Steel Cut Oatmeal',
+        calories: 170,
+        protein: 6,
+        carbs: 29,
+        fat: 3,
+        fiber: 5,
+        kind: 'food' as const,
+        use_count: 1,
+        notes: 'New recipe note',
+      };
+
+      const resynced = resyncStagedMealWithCustomDish(meal, updatedDish);
+
+      expect(resynced.name).toBe('Classic Oatmeal');
+      expect(resynced.notes).toBe('Existing note');
+    });
   });
 });
 

@@ -199,4 +199,44 @@ describe('useTemplateEditor & mapTemplateExercises', () => {
       })
     );
   });
+
+  it('sends p_assigned_to and p_user_id when creating a new template for an athlete', async () => {
+    vi.mocked(supabase.rpc).mockClear();
+    const onClose = vi.fn();
+
+    const { result } = renderHook(() =>
+      useTemplateEditor({
+        isOpen: true,
+        template: null,
+        assignToAthleteId: 'ath-1',
+        onClose,
+        exercises: mockExercises,
+      })
+    );
+
+    act(() => {
+      result.current.setName('New Athlete Routine');
+      result.current.setTemplateExercises([
+        {
+          exercise_id: 'ex-1',
+          exercise_name: 'Bench Press',
+          target_sets: 3,
+          target_reps: 10,
+        },
+      ]);
+    });
+
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      'save_routine_template',
+      expect.objectContaining({
+        p_name: 'New Athlete Routine',
+        p_assigned_to: 'ath-1',
+        p_user_id: 'ath-1',
+      })
+    );
+  });
 });
