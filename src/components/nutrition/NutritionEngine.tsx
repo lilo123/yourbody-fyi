@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import type { NutritionLog, CustomDish } from '../../types/database';
+import type { NutritionLog, CustomDish, CustomDishDetail } from '../../types/database';
 import { getLocalDateStr, formatLocalTimestamp } from '../../utils/date';
 import { EditMealSheet } from './EditMealSheet';
 import { roundTo1Decimal, calculateRemainingFuel } from '../../utils/nutrition';
 import { itemsForPersist, sumItems, type NutritionItem } from '../../utils/itemModel';
 import { MealLogRow } from './MealLogRow';
 import { NutrientBreakdownModal, type BreakdownNutrient } from './NutrientBreakdownModal';
-import { stagedToItem, withSyncedServing, buildStagedMealFromManualData, useStagedCardFocus, type StagedMeal } from './nutritionEngineHelpers';
+import { stagedToItem, withSyncedServing, buildStagedMealFromManualData, useStagedCardFocus, resyncStagedMealWithCustomDish, type StagedMeal } from './nutritionEngineHelpers';
 import { loadStagedMealDraft } from './stagedMealDraft';
 import { useStagedMealDraft } from './useStagedMealDraft';
 import { Skeleton } from '../common/Skeleton';
@@ -60,6 +60,16 @@ export const NutritionEngine: React.FC = () => {
   const { textareaRef: aiTextareaRef, headingRef: sectionHeadingRef, decideFocusRestore, cardFocusProps } =
     useStagedCardFocus(Boolean(stagedMeal));
 
+  const handleCustomDishSaved = useCallback(
+    (
+      savedDish: CustomDishDetail,
+      previousDish?: CustomDishDetail | CustomDish | { id?: string; name?: string; notes?: string | null } | null
+    ) => {
+      setStagedMeal((current) => (current ? resyncStagedMealWithCustomDish(current, savedDish, previousDish) : current));
+    },
+    [setStagedMeal]
+  );
+
   const {
     customDishes, nutritionLogs, todayLogs, dailyTotals, targets, remainingFuel,
     mutation, deleteMutation, saveCustomDishMutation, deleteCustomDishMutation,
@@ -74,6 +84,7 @@ export const NutritionEngine: React.FC = () => {
       clearDraft(); ai.setSelectedPhoto(null); setShowManualForm(false);
       ai.setIsRateLimited(false); ai.setNlInput(''); manualMealForm.resetManualForm();
     },
+    onCustomDishSaved: handleCustomDishSaved,
     setStatus,
     setIsError,
   });
@@ -86,9 +97,7 @@ export const NutritionEngine: React.FC = () => {
   // Deferred delete for NutritionLog (6s window with UndoToast)
   const deferredMealDelete = useDeferredDelete<NutritionLog>({
     durationMs: 6000,
-    commit: async (log) => {
-      await deleteMutation.mutateAsync(log.id);
-    },
+    commit: async (log) => { await deleteMutation.mutateAsync(log.id); },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : (err as { message?: string })?.message || 'Error deleting meal';
       setStatus('Failed to delete meal: ' + msg);
@@ -99,9 +108,7 @@ export const NutritionEngine: React.FC = () => {
   // Deferred delete for CustomDish (6s window with UndoToast)
   const deferredDishDelete = useDeferredDelete<CustomDish>({
     durationMs: 6000,
-    commit: async (dish) => {
-      await deleteCustomDishMutation.mutateAsync(dish.id);
-    },
+    commit: async (dish) => { await deleteCustomDishMutation.mutateAsync(dish.id); },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : (err as { message?: string })?.message || 'Error deleting dish';
       setStatus('Failed to delete dish: ' + msg);
@@ -223,9 +230,7 @@ export const NutritionEngine: React.FC = () => {
           manualMealForm.manualProtein || manualMealForm.manualCarbs || manualMealForm.manualFat)
     );
     markFormDirty('manual-meal-form', isManualDirty);
-    return () => {
-      markFormDirty('manual-meal-form', false);
-    };
+    return () => { markFormDirty('manual-meal-form', false); };
   }, [showManualForm, manualMealForm.manualDishName, manualMealForm.manualCalories, manualMealForm.manualProtein, manualMealForm.manualCarbs, manualMealForm.manualFat]);
 
   // Owner safety rule: rescue legacy queued AI leftovers into meal text input
@@ -237,9 +242,7 @@ export const NutritionEngine: React.FC = () => {
     onDeleteDish: handleScheduleDishDelete,
     onDismissToast: dismissToast,
     fetchDishDetail,
-    onFetchError: (err, retry) => {
-      setDishFetchError({ message: err?.message || 'Failed to load dish details', retry });
-    },
+    onFetchError: (err, retry) => { setDishFetchError({ message: err?.message || 'Failed to load dish details', retry }); },
   });
 
   const applyStagedItemChange = (itemId: string, next: NutritionItem) => {
@@ -482,7 +485,6 @@ export const NutritionEngine: React.FC = () => {
         isPending={mutation.isPending}
       />
 
-
       {/* Logged Meals Timeline */}
       <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
@@ -515,9 +517,7 @@ export const NutritionEngine: React.FC = () => {
             isNutritionLogsError && (
               <button
                 type="button"
-                onClick={() => {
-                  void refetchNutritionLogs();
-                }}
+                onClick={() => { void refetchNutritionLogs(); }}
                 data-testid="retry-nutrition-btn"
                 className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold text-rose-200 bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 border border-rose-500/40 rounded-xl transition touch-manipulation min-h-[44px] min-w-[44px] shrink-0 cursor-pointer"
               >

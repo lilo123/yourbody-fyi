@@ -3,7 +3,20 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { CustomDishesModal } from './CustomDishesModal';
 import { expectNoA11yViolations, expectNoA11yViolationsForRules } from '../../test/a11y';
 
-function renderModal() {
+const mockItem = {
+  id: 'item-1',
+  name: 'Rolled oats',
+  quantity: 80,
+  unit: 'g' as const,
+  displayPortion: '1 cup',
+  calories: 300,
+  protein: 10,
+  carbs: 54,
+  fat: 5,
+  fiber: 8,
+};
+
+function renderModal(items = [mockItem]) {
   return render(
     <CustomDishesModal
       isOpen={true}
@@ -11,17 +24,17 @@ function renderModal() {
       editingDish={null}
       dishModalName="Protein Oatmeal"
       setDishModalName={vi.fn()}
-      dishModalCalories={400}
+      dishModalCalories={300}
       setDishModalCalories={vi.fn()}
-      dishModalProtein={30}
+      dishModalProtein={10}
       setDishModalProtein={vi.fn()}
-      dishModalCarbs={50}
+      dishModalCarbs={54}
       setDishModalCarbs={vi.fn()}
-      dishModalFat={8}
+      dishModalFat={5}
       setDishModalFat={vi.fn()}
-      dishModalFiber={6}
+      dishModalFiber={8}
       setDishModalFiber={vi.fn()}
-      dishModalItems={[]}
+      dishModalItems={items}
       setDishModalItems={vi.fn()}
       onSaveDish={vi.fn()}
       onDeleteDish={vi.fn()}
@@ -42,11 +55,13 @@ describe('CustomDishesModal', () => {
   it('associates all form labels with their controls', () => {
     renderModal();
     expect(screen.getByLabelText('Dish Name')).toBeDefined();
-    expect(screen.getByLabelText('Calories')).toBeDefined();
-    expect(screen.getByLabelText(/Protein/)).toBeDefined();
-    expect(screen.getByLabelText(/Carbs/)).toBeDefined();
-    expect(screen.getByLabelText(/Fat/)).toBeDefined();
-    expect(screen.getByLabelText(/Fiber/)).toBeDefined();
+    expect(screen.getByLabelText(/Component 1 name/)).toBeDefined();
+    expect(screen.getByLabelText(/Component 1 quantity/)).toBeDefined();
+    expect(screen.getByLabelText(/Component 1 Calories/)).toBeDefined();
+    expect(screen.getByLabelText(/Component 1 Protein/)).toBeDefined();
+    expect(screen.getByLabelText(/Component 1 Carbs/)).toBeDefined();
+    expect(screen.getByLabelText(/Component 1 Fat/)).toBeDefined();
+    expect(screen.getByLabelText(/Component 1 Fiber/)).toBeDefined();
   });
 
   it('renders two modals simultaneously without duplicate id violations', async () => {
@@ -107,260 +122,18 @@ describe('CustomDishesModal', () => {
     await expectNoA11yViolationsForRules(container, ['duplicate-id', 'label']);
   });
 
-  it('renders accessible food/recipe toggle and is keyboard-operable', async () => {
-    const setDishModalKind = vi.fn();
-    render(
-      <CustomDishesModal
-        isOpen={true}
-        onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="food"
-        setDishModalKind={setDishModalKind}
-        dishModalName="Protein Oatmeal"
-        setDishModalName={vi.fn()}
-        dishModalCalories={400}
-        setDishModalCalories={vi.fn()}
-        dishModalProtein={30}
-        setDishModalProtein={vi.fn()}
-        dishModalCarbs={50}
-        setDishModalCarbs={vi.fn()}
-        dishModalFat={8}
-        setDishModalFat={vi.fn()}
-        dishModalFiber={6}
-        setDishModalFiber={vi.fn()}
-        dishModalItems={[]}
-        setDishModalItems={vi.fn()}
-        onSaveDish={vi.fn()}
-        onDeleteDish={vi.fn()}
-        isSaving={false}
-        isDeleting={false}
-        customDishes={[]}
-        onOpenEditDishModal={vi.fn()}
-      />
-    );
-
-    const radioGroup = screen.getByRole('radiogroup', { name: /dish type/i });
-    expect(radioGroup).toBeDefined();
-
-    const foodRadio = screen.getByRole('radio', { name: /^food$/i });
-    const recipeRadio = screen.getByRole('radio', { name: /^recipe$/i });
-    expect(foodRadio).toBeDefined();
-    expect(recipeRadio).toBeDefined();
-    expect((foodRadio as HTMLInputElement).checked).toBe(true);
-    expect((recipeRadio as HTMLInputElement).checked).toBe(false);
-
-    // Keyboard operable: clicking/navigating triggers setDishModalKind
-    fireEvent.click(recipeRadio);
-    expect(setDishModalKind).toHaveBeenCalledWith('recipe');
-  });
-
-  it('satisfies the touch-target className contract (min-h-[44px]) on food and recipe radio wrapper labels', () => {
-    const { rerender } = render(
-      <CustomDishesModal
-        isOpen={true}
-        onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="food"
-        setDishModalKind={vi.fn()}
-        dishModalName=""
-        setDishModalName={vi.fn()}
-        dishModalCalories={0}
-        setDishModalCalories={vi.fn()}
-        dishModalProtein={0}
-        setDishModalProtein={vi.fn()}
-        dishModalCarbs={0}
-        setDishModalCarbs={vi.fn()}
-        dishModalFat={0}
-        setDishModalFat={vi.fn()}
-        dishModalFiber={0}
-        setDishModalFiber={vi.fn()}
-        dishModalItems={[]}
-        setDishModalItems={vi.fn()}
-        onSaveDish={vi.fn()}
-        onDeleteDish={vi.fn()}
-        isSaving={false}
-        isDeleting={false}
-        customDishes={[]}
-        onOpenEditDishModal={vi.fn()}
-      />
-    );
-
-    const foodRadio = screen.getByRole('radio', { name: /^food$/i });
-    const recipeRadio = screen.getByRole('radio', { name: /^recipe$/i });
-
-    const foodLabel = foodRadio.closest('label');
-    const recipeLabel = recipeRadio.closest('label');
-
-    expect(foodLabel).not.toBeNull();
-    expect(foodLabel?.className).toContain('min-h-[44px]');
-    expect(recipeLabel).not.toBeNull();
-    expect(recipeLabel?.className).toContain('min-h-[44px]');
-
-    rerender(
-      <CustomDishesModal
-        isOpen={true}
-        onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="recipe"
-        setDishModalKind={vi.fn()}
-        dishModalName=""
-        setDishModalName={vi.fn()}
-        dishModalCalories={0}
-        setDishModalCalories={vi.fn()}
-        dishModalProtein={0}
-        setDishModalProtein={vi.fn()}
-        dishModalCarbs={0}
-        setDishModalCarbs={vi.fn()}
-        dishModalFat={0}
-        setDishModalFat={vi.fn()}
-        dishModalFiber={0}
-        setDishModalFiber={vi.fn()}
-        dishModalItems={[]}
-        setDishModalItems={vi.fn()}
-        onSaveDish={vi.fn()}
-        onDeleteDish={vi.fn()}
-        isSaving={false}
-        isDeleting={false}
-        customDishes={[]}
-        onOpenEditDishModal={vi.fn()}
-      />
-    );
-
-    expect(foodRadio.closest('label')?.className).toContain('min-h-[44px]');
-    expect(recipeRadio.closest('label')?.className).toContain('min-h-[44px]');
-  });
-
-  it('blocks recipe to food transition while items exist and displays explanation', () => {
-    const mockItem = {
-      id: 'item-1',
-      name: 'Oats',
-      quantity: 50,
-      unit: 'g' as const,
-      calories: 190,
-      protein: 7,
-      carbs: 34,
-      fat: 3,
-      fiber: 5,
-    };
-
-    const { rerender } = render(
-      <CustomDishesModal
-        isOpen={true}
-        onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="recipe"
-        setDishModalKind={vi.fn()}
-        dishModalName="Oatmeal Bowl"
-        setDishModalName={vi.fn()}
-        dishModalCalories={190}
-        setDishModalCalories={vi.fn()}
-        dishModalProtein={7}
-        setDishModalProtein={vi.fn()}
-        dishModalCarbs={34}
-        setDishModalCarbs={vi.fn()}
-        dishModalFat={3}
-        setDishModalFat={vi.fn()}
-        dishModalFiber={5}
-        setDishModalFiber={vi.fn()}
-        dishModalItems={[mockItem, { ...mockItem, id: 'item-2', name: 'Almond Milk' }]}
-        setDishModalItems={vi.fn()}
-        onSaveDish={vi.fn()}
-        onDeleteDish={vi.fn()}
-        isSaving={false}
-        isDeleting={false}
-        customDishes={[]}
-        onOpenEditDishModal={vi.fn()}
-      />
-    );
-
-    const foodRadio = screen.getByRole('radio', { name: /^food$/i }) as HTMLInputElement;
-    expect(foodRadio.disabled).toBe(true);
-    expect(screen.getByText(/remove ingredients first to switch to food/i)).toBeDefined();
-
-    // When items are empty, transition to food is enabled
-    rerender(
-      <CustomDishesModal
-        isOpen={true}
-        onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="recipe"
-        setDishModalKind={vi.fn()}
-        dishModalName="Oatmeal Bowl"
-        setDishModalName={vi.fn()}
-        dishModalCalories={0}
-        setDishModalCalories={vi.fn()}
-        dishModalProtein={0}
-        setDishModalProtein={vi.fn()}
-        dishModalCarbs={0}
-        setDishModalCarbs={vi.fn()}
-        dishModalFat={0}
-        setDishModalFat={vi.fn()}
-        dishModalFiber={0}
-        setDishModalFiber={vi.fn()}
-        dishModalItems={[]}
-        setDishModalItems={vi.fn()}
-        onSaveDish={vi.fn()}
-        onDeleteDish={vi.fn()}
-        isSaving={false}
-        isDeleting={false}
-        customDishes={[]}
-        onOpenEditDishModal={vi.fn()}
-      />
-    );
-
-    const enabledFoodRadio = screen.getByRole('radio', { name: /^food$/i }) as HTMLInputElement;
-    expect(enabledFoodRadio.disabled).toBe(false);
-    expect(screen.queryByText(/remove ingredients first to switch to food/i)).toBeNull();
-  });
-
-  it('parent macros stay suppressed for a dish with items REGARDLESS of kind', () => {
+  it('direct parent macros are never rendered regardless of item count', () => {
     const mockItems = [
       { id: '1', name: 'Item 1', quantity: 100, unit: 'g' as const, calories: 100, protein: 10, carbs: 10, fat: 2, fiber: 1 },
       { id: '2', name: 'Item 2', quantity: 100, unit: 'g' as const, calories: 150, protein: 15, carbs: 15, fat: 3, fiber: 2 },
     ];
 
-    // Even if kind is 'food' (e.g. loaded dish), having items > 1 MUST suppress direct parent macro inputs
-    const { rerender } = render(
+    render(
       <CustomDishesModal
         isOpen={true}
         onClose={vi.fn()}
         editingDish={null}
-        dishModalKind="food"
-        setDishModalKind={vi.fn()}
-        dishModalName="Multi Item Food"
-        setDishModalName={vi.fn()}
-        dishModalCalories={250}
-        setDishModalCalories={vi.fn()}
-        dishModalProtein={25}
-        setDishModalProtein={vi.fn()}
-        dishModalCarbs={25}
-        setDishModalCarbs={vi.fn()}
-        dishModalFat={5}
-        setDishModalFat={vi.fn()}
-        dishModalFiber={3}
-        setDishModalFiber={vi.fn()}
-        dishModalItems={mockItems}
-        setDishModalItems={vi.fn()}
-        onSaveDish={vi.fn()}
-        onDeleteDish={vi.fn()}
-        isSaving={false}
-        isDeleting={false}
-        customDishes={[]}
-        onOpenEditDishModal={vi.fn()}
-      />
-    );
-
-    expect(screen.queryByTestId('parent-macros')).toBeNull();
-
-    // And if kind is 'recipe' with items > 1, direct parent macros are also suppressed
-    rerender(
-      <CustomDishesModal
-        isOpen={true}
-        onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="recipe"
-        setDishModalKind={vi.fn()}
-        dishModalName="Multi Item Recipe"
+        dishModalName="Multi Item Dish"
         setDishModalName={vi.fn()}
         dishModalCalories={250}
         setDishModalCalories={vi.fn()}
@@ -386,14 +159,12 @@ describe('CustomDishesModal', () => {
     expect(screen.queryByTestId('parent-macros')).toBeNull();
   });
 
-  it('only renders CustomDishEditor when kind is recipe', () => {
-    const { rerender } = render(
+  it('renders CustomDishEditor unconditionally', () => {
+    render(
       <CustomDishesModal
         isOpen={true}
         onClose={vi.fn()}
         editingDish={null}
-        dishModalKind="food"
-        setDishModalKind={vi.fn()}
         dishModalName="Single Food"
         setDishModalName={vi.fn()}
         dishModalCalories={200}
@@ -405,40 +176,6 @@ describe('CustomDishesModal', () => {
         dishModalFat={5}
         setDishModalFat={vi.fn()}
         dishModalFiber={2}
-        setDishModalFiber={vi.fn()}
-        dishModalItems={[]}
-        setDishModalItems={vi.fn()}
-        onSaveDish={vi.fn()}
-        onDeleteDish={vi.fn()}
-        isSaving={false}
-        isDeleting={false}
-        customDishes={[]}
-        onOpenEditDishModal={vi.fn()}
-      />
-    );
-
-    // For food, CustomDishEditor is NOT rendered
-    expect(screen.queryByTestId('custom-dish-editor')).toBeNull();
-
-    // For recipe, CustomDishEditor IS rendered
-    rerender(
-      <CustomDishesModal
-        isOpen={true}
-        onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="recipe"
-        setDishModalKind={vi.fn()}
-        dishModalName="Recipe Dish"
-        setDishModalName={vi.fn()}
-        dishModalCalories={0}
-        setDishModalCalories={vi.fn()}
-        dishModalProtein={0}
-        setDishModalProtein={vi.fn()}
-        dishModalCarbs={0}
-        setDishModalCarbs={vi.fn()}
-        dishModalFat={0}
-        setDishModalFat={vi.fn()}
-        dishModalFiber={0}
         setDishModalFiber={vi.fn()}
         dishModalItems={[]}
         setDishModalItems={vi.fn()}
@@ -645,141 +382,71 @@ describe('CustomDishesModal', () => {
     expect(screen.getByText('Protein Bowl')).toBeDefined();
   });
 
-  it('accepts decimal comma ("72,5") and decimal period ("72.5") on converted direct inputs (qty, calories, protein, carbs, fat, fiber)', () => {
-    const setDishModalQuantity = vi.fn();
-    const setDishModalCalories = vi.fn();
-    const setDishModalProtein = vi.fn();
-    const setDishModalCarbs = vi.fn();
-    const setDishModalFat = vi.fn();
-    const setDishModalFiber = vi.fn();
-    const onSaveDish = vi.fn((e: React.FormEvent) => e.preventDefault());
+  it('satisfies the touch-target className contract (min-h-[44px]) on remaining interactive controls', () => {
+    const dishes = [
+      {
+        id: 'dish-1',
+        user_id: 'user-1',
+        name: 'Avocado Toast',
+        calories: 320,
+        protein: 8,
+        carbs: 25,
+        fat: 18,
+        fiber: 6,
+        kind: 'food' as const,
+        use_count: 2,
+        notes: null,
+        created_at: '2026-09-01T12:00:00Z',
+      },
+    ];
 
-    const { rerender } = render(
+    render(
       <CustomDishesModal
         isOpen={true}
         onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="food"
-        dishModalName="Protein Oatmeal"
+        editingDish={dishes[0]}
+        dishModalName="Avocado Toast"
         setDishModalName={vi.fn()}
-        dishModalQuantity={100}
-        setDishModalQuantity={setDishModalQuantity}
-        dishModalCalories={400}
-        setDishModalCalories={setDishModalCalories}
-        dishModalProtein={30}
-        setDishModalProtein={setDishModalProtein}
-        dishModalCarbs={50}
-        setDishModalCarbs={setDishModalCarbs}
-        dishModalFat={8}
-        setDishModalFat={setDishModalFat}
+        dishModalCalories={320}
+        setDishModalCalories={vi.fn()}
+        dishModalProtein={8}
+        setDishModalProtein={vi.fn()}
+        dishModalCarbs={25}
+        setDishModalCarbs={vi.fn()}
+        dishModalFat={18}
+        setDishModalFat={vi.fn()}
         dishModalFiber={6}
-        setDishModalFiber={setDishModalFiber}
-        dishModalItems={[]}
+        setDishModalFiber={vi.fn()}
+        dishModalItems={[mockItem]}
         setDishModalItems={vi.fn()}
-        onSaveDish={onSaveDish}
+        onSaveDish={vi.fn()}
         onDeleteDish={vi.fn()}
         isSaving={false}
         isDeleting={false}
-        customDishes={[]}
+        customDishes={dishes}
         onOpenEditDishModal={vi.fn()}
       />
     );
 
-    const qtyInput = screen.getByLabelText(/qty/i);
-    const calInput = screen.getByLabelText('Calories');
-    const proInput = screen.getByLabelText(/protein/i);
-    const carbInput = screen.getByLabelText(/carbs/i);
-    const fatInput = screen.getByLabelText(/fat/i);
-    const fiberInput = screen.getByLabelText(/fiber/i);
+    // Modal action buttons
+    expect(screen.getByLabelText('Close dialog').className).toContain('min-h-[44px]');
+    expect(screen.getByRole('button', { name: /save dish/i }).className).toContain('min-h-[44px]');
+    expect(screen.getByRole('button', { name: /cancel/i }).className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('modal-delete-dish-btn').className).toContain('min-h-[44px]');
 
-    // Converted fields use type="text" and inputMode="decimal"
-    expect(qtyInput.getAttribute('type')).toBe('text');
-    expect(calInput.getAttribute('type')).toBe('text');
-    expect(proInput.getAttribute('type')).toBe('text');
-    expect(carbInput.getAttribute('type')).toBe('text');
-    expect(fatInput.getAttribute('type')).toBe('text');
-    expect(fiberInput.getAttribute('type')).toBe('text');
+    // Dish Name input
+    expect(screen.getByLabelText('Dish Name').className).toContain('min-h-[44px]');
 
-    expect(qtyInput.getAttribute('inputmode')).toBe('decimal');
-    expect(calInput.getAttribute('inputmode')).toBe('decimal');
-    expect(proInput.getAttribute('inputmode')).toBe('decimal');
-    expect(carbInput.getAttribute('inputmode')).toBe('decimal');
-    expect(fatInput.getAttribute('inputmode')).toBe('decimal');
-    expect(fiberInput.getAttribute('inputmode')).toBe('decimal');
+    // Component controls
+    expect(screen.getByTestId('dish-add-item').className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('dish-item-name').className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('dish-item-remove').className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('dish-item-quantity').className).toContain('min-h-[44px]');
+    expect(screen.getByTestId('dish-item-calories').className).toContain('min-h-[44px]');
 
-    // Test decimal comma "72,5"
-    fireEvent.change(qtyInput, { target: { value: '72,5' } });
-    expect(setDishModalQuantity).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(calInput, { target: { value: '72,5' } });
-    expect(setDishModalCalories).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(proInput, { target: { value: '72,5' } });
-    expect(setDishModalProtein).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(carbInput, { target: { value: '72,5' } });
-    expect(setDishModalCarbs).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(fatInput, { target: { value: '72,5' } });
-    expect(setDishModalFat).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(fiberInput, { target: { value: '72,5' } });
-    expect(setDishModalFiber).toHaveBeenCalledWith(72.5);
-
-    // Test decimal period "72.5"
-    fireEvent.change(qtyInput, { target: { value: '72.5' } });
-    expect(setDishModalQuantity).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(calInput, { target: { value: '72.5' } });
-    expect(setDishModalCalories).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(proInput, { target: { value: '72.5' } });
-    expect(setDishModalProtein).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(carbInput, { target: { value: '72.5' } });
-    expect(setDishModalCarbs).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(fatInput, { target: { value: '72.5' } });
-    expect(setDishModalFat).toHaveBeenCalledWith(72.5);
-
-    fireEvent.change(fiberInput, { target: { value: '72.5' } });
-    expect(setDishModalFiber).toHaveBeenCalledWith(72.5);
-
-    // Form submission verifies save handler
-    rerender(
-      <CustomDishesModal
-        isOpen={true}
-        onClose={vi.fn()}
-        editingDish={null}
-        dishModalKind="food"
-        dishModalName="Protein Oatmeal"
-        setDishModalName={vi.fn()}
-        dishModalQuantity={72.5}
-        setDishModalQuantity={setDishModalQuantity}
-        dishModalCalories={72.5}
-        setDishModalCalories={setDishModalCalories}
-        dishModalProtein={72.5}
-        setDishModalProtein={setDishModalProtein}
-        dishModalCarbs={72.5}
-        setDishModalCarbs={setDishModalCarbs}
-        dishModalFat={72.5}
-        setDishModalFat={setDishModalFat}
-        dishModalFiber={72.5}
-        setDishModalFiber={setDishModalFiber}
-        dishModalItems={[]}
-        setDishModalItems={vi.fn()}
-        onSaveDish={onSaveDish}
-        onDeleteDish={vi.fn()}
-        isSaving={false}
-        isDeleting={false}
-        customDishes={[]}
-        onOpenEditDishModal={vi.fn()}
-      />
-    );
-
-    const saveBtn = screen.getByRole('button', { name: /save dish/i });
-    fireEvent.click(saveBtn);
-    expect(onSaveDish).toHaveBeenCalledTimes(1);
+    // Saved dish row buttons
+    expect(screen.getByTitle('Edit').className).toContain('min-h-[44px]');
+    expect(screen.getByTitle('Delete').className).toContain('min-h-[44px]');
   });
 });
 
