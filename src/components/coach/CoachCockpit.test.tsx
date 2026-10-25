@@ -941,68 +941,6 @@ describe('CoachCockpit', () => {
     });
   });
 
-  it('resets macro inputs and prevents saving previous athlete targets when switching athlete with profile pending', async () => {
-    let athleteBPromiseResolve!: (val: any) => void;
-    const athleteBPromise = new Promise((resolve) => {
-      athleteBPromiseResolve = resolve;
-    });
-
-    const currentLinks = [
-      {
-        athlete_id: 'ath-1',
-        status: 'active',
-        linked_at: '2026-09-03T00:00:00Z',
-        athlete: { id: 'ath-1', username: 'Alex Johnson', email: 'alex@example.com', role: 'athlete' },
-      },
-      {
-        athlete_id: 'ath-2',
-        status: 'active',
-        linked_at: '2026-09-02T00:00:00Z',
-        athlete: { id: 'ath-2', username: 'Sam Taylor', email: 'sam@example.com', role: 'athlete' },
-      },
-    ];
-
-    (supabase.from as any).mockImplementation((table: string) => {
-      if (table === 'coach_athlete_links') {
-        return createSupabaseBuilder('coach_athlete_links', {
-          data: currentLinks,
-          error: null,
-        });
-      }
-      if (table === 'users') {
-        return createSupabaseBuilder('users', {
-          resolver: (b: any) => {
-            const idFilter = b.filters.find((f: any) => f.column === 'id');
-            if (idFilter && idFilter.value === 'ath-2') {
-              return athleteBPromise;
-            }
-            if (idFilter && idFilter.value === 'ath-1') {
-              return {
-                id: 'ath-1',
-                email: 'alex@example.com',
-                username: 'Alex Johnson',
-                role: 'athlete',
-                target_calories: 2500,
-                target_protein: 190,
-                target_carbs: 250,
-                target_fat: 75,
-                target_fiber: 35,
-              };
-            }
-            return {
-              id: 'coach-id',
-              email: 'coach@yourbody.fyi',
-              username: 'Coach Demo',
-              role: 'coach',
-              is_coach_mode: true,
-              target_calories: 2200,
-              target_protein: 160,
-              target_carbs: 220,
-              target_fat: 70,
-              target_fiber: 30,
-            };
-          },
-        });
   it('editing an existing master template with an athlete selected does not pass p_assigned_to to rpc', async () => {
     const masterTemplate = {
       id: 'tpl-master-1',
@@ -1100,6 +1038,109 @@ describe('CoachCockpit', () => {
 
     renderComponent();
 
+    await screen.findByText("Alice's Routine");
+
+    const editBtn = screen.getByRole('button', { name: /edit/i });
+    fireEvent.click(editBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-template-modal')).toBeDefined();
+    });
+
+    vi.mocked(supabase.rpc).mockClear();
+
+    const modal = screen.getByTestId('edit-template-modal');
+    const saveBtn = within(modal).getByTestId('save-template-btn');
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith(
+        'save_routine_template',
+        expect.objectContaining({
+          p_template_id: 'tpl-alice-1',
+          p_name: "Alice's Routine",
+          p_days_of_week: ['Tue', 'Thu'],
+          p_user_id: null,
+          p_is_master: false,
+        })
+      );
+    });
+
+    const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
+    expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
+    expect((rpcCall?.[1] as any)?.p_assigned_to).toBeUndefined();
+    expect((rpcCall?.[1] as any)?.p_user_id).toBeNull();
+    expect((rpcCall?.[1] as any)?.p_user_id).not.toBe('ath-1');
+  });
+
+  it('resets macro inputs and prevents saving previous athlete targets when switching athlete with profile pending', async () => {
+    let athleteBPromiseResolve!: (val: any) => void;
+    const athleteBPromise = new Promise((resolve) => {
+      athleteBPromiseResolve = resolve;
+    });
+
+    const currentLinks = [
+      {
+        athlete_id: 'ath-1',
+        status: 'active',
+        linked_at: '2026-09-03T00:00:00Z',
+        athlete: { id: 'ath-1', username: 'Alex Johnson', email: 'alex@example.com', role: 'athlete' },
+      },
+      {
+        athlete_id: 'ath-2',
+        status: 'active',
+        linked_at: '2026-09-02T00:00:00Z',
+        athlete: { id: 'ath-2', username: 'Sam Taylor', email: 'sam@example.com', role: 'athlete' },
+      },
+    ];
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'coach_athlete_links') {
+        return createSupabaseBuilder('coach_athlete_links', {
+          data: currentLinks,
+          error: null,
+        });
+      }
+      if (table === 'users') {
+        return createSupabaseBuilder('users', {
+          resolver: (b: any) => {
+            const idFilter = b.filters.find((f: any) => f.column === 'id');
+            if (idFilter && idFilter.value === 'ath-2') {
+              return athleteBPromise;
+            }
+            if (idFilter && idFilter.value === 'ath-1') {
+              return {
+                id: 'ath-1',
+                email: 'alex@example.com',
+                username: 'Alex Johnson',
+                role: 'athlete',
+                target_calories: 2500,
+                target_protein: 190,
+                target_carbs: 250,
+                target_fat: 75,
+                target_fiber: 35,
+              };
+            }
+            return {
+              id: 'coach-id',
+              email: 'coach@yourbody.fyi',
+              username: 'Coach Demo',
+              role: 'coach',
+              is_coach_mode: true,
+              target_calories: 2200,
+              target_protein: 160,
+              target_carbs: 220,
+              target_fat: 70,
+              target_fiber: 30,
+            };
+          },
+        });
+      }
+      return defaultMock(table);
+    });
+
+    renderComponent();
+
     // Athlete A loads with 2500 kcal
     await waitFor(() => {
       expect(screen.getByDisplayValue('2500')).toBeDefined();
@@ -1140,40 +1181,6 @@ describe('CoachCockpit', () => {
     await waitFor(() => {
       expect((screen.getByTestId('athlete-macro-cal') as HTMLInputElement).value).toBe('1800');
     });
-    await screen.findByText("Alice's Routine");
-
-    const editBtn = screen.getByRole('button', { name: /edit/i });
-    fireEvent.click(editBtn);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('edit-template-modal')).toBeDefined();
-    });
-
-    vi.mocked(supabase.rpc).mockClear();
-
-    const modal = screen.getByTestId('edit-template-modal');
-    const saveBtn = within(modal).getByTestId('save-template-btn');
-    fireEvent.click(saveBtn);
-
-    await waitFor(() => {
-      expect(supabase.rpc).toHaveBeenCalledWith(
-        'save_routine_template',
-        expect.objectContaining({
-          p_template_id: 'tpl-alice-1',
-          p_name: "Alice's Routine",
-          p_days_of_week: ['Tue', 'Thu'],
-          p_user_id: null,
-          p_is_master: false,
-        })
-      );
-    });
-
-    const rpcCall = vi.mocked(supabase.rpc).mock.calls.find((c) => c[0] === 'save_routine_template');
-    expect(rpcCall?.[1]).not.toHaveProperty('p_assigned_to');
-    expect((rpcCall?.[1] as any)?.p_assigned_to).toBeUndefined();
-    expect((rpcCall?.[1] as any)?.p_user_id).toBeNull();
-    expect((rpcCall?.[1] as any)?.p_user_id).not.toBe('ath-1');
   });
 
 });
-
