@@ -197,13 +197,37 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}-chromium
 
+      - name: Cache Playwright apt dependencies (Chromium)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-apt-cache
+        with:
+          path: ~/.cache/playwright-apt
+          key: ${{ runner.os }}-playwright-apt-debs-${{ hashFiles('package-lock.json') }}-chromium
+
       - name: Install Playwright browser (Chromium)
         run: |
+          echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-downloaded-packages
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "1";' | sudo tee -a /etc/apt/apt.conf.d/99keep-downloaded-packages
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          shopt -s nullglob
+          cached_debs=( ~/.cache/playwright-apt/*.deb )
+          if [ ${#cached_debs[@]} -gt 0 ]; then
+            sudo cp -n "${cached_debs[@]}" /var/cache/apt/archives/
+            sudo chown root:root /var/cache/apt/archives/*.deb
+            sudo chmod 644 /var/cache/apt/archives/*.deb
+          fi
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
             npx playwright install-deps chromium
           else
             npx playwright install --with-deps chromium
           fi
+          new_debs=( /var/cache/apt/archives/*.deb )
+          if [ ${#new_debs[@]} -gt 0 ]; then
+            mkdir -p ~/.cache/playwright-apt
+            sudo cp -n "${new_debs[@]}" ~/.cache/playwright-apt/
+            sudo chown -R $(id -u):$(id -g) ~/.cache/playwright-apt
+          fi
+          shopt -u nullglob
 
       - name: Run E2E tests (Desktop Chrome)
         run: npx playwright test tests/e2e --project='Desktop Chrome' --workers=1
@@ -267,13 +291,37 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}-webkit
 
+      - name: Cache Playwright apt dependencies (WebKit)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-apt-cache
+        with:
+          path: ~/.cache/playwright-apt
+          key: ${{ runner.os }}-playwright-apt-debs-${{ hashFiles('package-lock.json') }}-webkit
+
       - name: Install Playwright browser (WebKit)
         run: |
+          echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-downloaded-packages
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "1";' | sudo tee -a /etc/apt/apt.conf.d/99keep-downloaded-packages
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          shopt -s nullglob
+          cached_debs=( ~/.cache/playwright-apt/*.deb )
+          if [ ${#cached_debs[@]} -gt 0 ]; then
+            sudo cp -n "${cached_debs[@]}" /var/cache/apt/archives/
+            sudo chown root:root /var/cache/apt/archives/*.deb
+            sudo chmod 644 /var/cache/apt/archives/*.deb
+          fi
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
             npx playwright install-deps webkit
           else
             npx playwright install --with-deps webkit
           fi
+          new_debs=( /var/cache/apt/archives/*.deb )
+          if [ ${#new_debs[@]} -gt 0 ]; then
+            mkdir -p ~/.cache/playwright-apt
+            sudo cp -n "${new_debs[@]}" ~/.cache/playwright-apt/
+            sudo chown -R $(id -u):$(id -g) ~/.cache/playwright-apt
+          fi
+          shopt -u nullglob
 
       - name: Run E2E tests (Mobile Safari)
         run: npx playwright test tests/e2e --project='Mobile Safari' --workers=1
@@ -324,13 +372,37 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}-webkit
 
+      - name: Cache Playwright apt dependencies (WebKit)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-apt-cache
+        with:
+          path: ~/.cache/playwright-apt
+          key: ${{ runner.os }}-playwright-apt-debs-${{ hashFiles('package-lock.json') }}-webkit
+
       - name: Install Playwright browser (WebKit)
         run: |
+          echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-downloaded-packages
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "1";' | sudo tee -a /etc/apt/apt.conf.d/99keep-downloaded-packages
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          shopt -s nullglob
+          cached_debs=( ~/.cache/playwright-apt/*.deb )
+          if [ ${#cached_debs[@]} -gt 0 ]; then
+            sudo cp -n "${cached_debs[@]}" /var/cache/apt/archives/
+            sudo chown root:root /var/cache/apt/archives/*.deb
+            sudo chmod 644 /var/cache/apt/archives/*.deb
+          fi
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
             npx playwright install-deps webkit
           else
             npx playwright install --with-deps webkit
           fi
+          new_debs=( /var/cache/apt/archives/*.deb )
+          if [ ${#new_debs[@]} -gt 0 ]; then
+            mkdir -p ~/.cache/playwright-apt
+            sudo cp -n "${new_debs[@]}" ~/.cache/playwright-apt/
+            sudo chown -R $(id -u):$(id -g) ~/.cache/playwright-apt
+          fi
+          shopt -u nullglob
 
       - name: Run E2E tests (Narrow Safari 320px)
         run: npx playwright test tests/e2e --project='Narrow Safari (320px)' --workers=1
@@ -387,13 +459,37 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}-chromium
 
+      - name: Cache Playwright apt dependencies (Chromium)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: playwright-apt-cache
+        with:
+          path: ~/.cache/playwright-apt
+          key: ${{ runner.os }}-playwright-apt-debs-${{ hashFiles('package-lock.json') }}-chromium
+
       - name: Install Playwright browser (Chromium)
         run: |
+          echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-downloaded-packages
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "1";' | sudo tee -a /etc/apt/apt.conf.d/99keep-downloaded-packages
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          shopt -s nullglob
+          cached_debs=( ~/.cache/playwright-apt/*.deb )
+          if [ ${#cached_debs[@]} -gt 0 ]; then
+            sudo cp -n "${cached_debs[@]}" /var/cache/apt/archives/
+            sudo chown root:root /var/cache/apt/archives/*.deb
+            sudo chmod 644 /var/cache/apt/archives/*.deb
+          fi
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
             npx playwright install-deps chromium
           else
             npx playwright install --with-deps chromium
           fi
+          new_debs=( /var/cache/apt/archives/*.deb )
+          if [ ${#new_debs[@]} -gt 0 ]; then
+            mkdir -p ~/.cache/playwright-apt
+            sudo cp -n "${new_debs[@]}" ~/.cache/playwright-apt/
+            sudo chown -R $(id -u):$(id -g) ~/.cache/playwright-apt
+          fi
+          shopt -u nullglob
 
       - name: Run visual density gate
         run: npm run test:density
