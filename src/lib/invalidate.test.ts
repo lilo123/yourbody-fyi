@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
-import { invalidateWorkoutDerived, invalidateExerciseDomain } from './invalidate';
+import {
+  invalidateWorkoutDerived,
+  invalidateExerciseDomain,
+  invalidateNutritionDerived,
+} from './invalidate';
 import type { InvalidationClient } from './invalidate';
 import { queryKeys } from './queryKeys';
 import { clearTemplateDetailCache } from '../components/workout/useWorkoutQueries';
@@ -143,6 +147,30 @@ describe('Cache Invalidation Helpers (src/lib/invalidate.ts)', () => {
     it('clears in-memory template detail cache when clearTemplateDetailCache is invoked at save/delete call sites', () => {
       expect(() => clearTemplateDetailCache('tpl-chest-day')).not.toThrow();
       expect(() => clearTemplateDetailCache(undefined)).not.toThrow();
+    });
+  });
+
+  describe('invalidateNutritionDerived', () => {
+    it('invalidates the base nutrition_logs key when userId is omitted', async () => {
+      const { client, invalidatedKeys } = createMockQueryClient();
+
+      await invalidateNutritionDerived(client);
+
+      expect(client.invalidateQueries).toHaveBeenCalledTimes(1);
+      expect(invalidatedKeys).toEqual([['nutrition_logs']]);
+    });
+
+    it('invalidates both base key and user-scoped key when userId is provided', async () => {
+      const { client, invalidatedKeys } = createMockQueryClient();
+      const testUserId = 'user-uuid-123';
+
+      await invalidateNutritionDerived(client, testUserId);
+
+      expect(client.invalidateQueries).toHaveBeenCalledTimes(2);
+      expect(invalidatedKeys).toEqual([
+        ['nutrition_logs'],
+        ['nutrition_logs', testUserId],
+      ]);
     });
   });
 });

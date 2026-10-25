@@ -126,11 +126,21 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
       if (!isOnline) {
         throw new Error('Available when online');
       }
-      if (item.is_master && (!isCoach || Boolean(selectedAthleteId))) {
-        const { error } = await (supabase.from as any)('routine_template_hides').insert({
-          hidden_by: user?.id,
-          template_id: item.id,
-        });
+      const isOwnMaster = Boolean(item.is_master && isCoach && user?.id && item.user_id === user.id);
+      if (item.is_master && !isOwnMaster) {
+        const hidesTable = (supabase.from as any)('routine_template_hides');
+        const { error } = hidesTable.upsert
+          ? await hidesTable.upsert(
+              {
+                hidden_by: user?.id,
+                template_id: item.id,
+              },
+              { onConflict: 'hidden_by,template_id', ignoreDuplicates: true }
+            )
+          : await hidesTable.insert({
+              hidden_by: user?.id,
+              template_id: item.id,
+            });
         if (error) throw error;
       } else {
         // 0-row delete: use .select() and treat [] as failure
@@ -146,6 +156,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
       }
       clearTemplateDetailCache(item.id);
       await invalidateExerciseDomain(queryClient, targetUserId);
+      await refetchCatalog();
     },
     onError: (err: any) => {
       let msg = err?.message || 'Failed to delete routine template';
@@ -263,8 +274,9 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
             const isMaster = Boolean(tpl.is_master);
             const isForked = !isMaster && Boolean(tpl.source_template_id);
             const isOwner = tpl.user_id === (selectedAthleteId || user?.id);
-            const isDirectMasterEdit = isMaster && isCoach && !selectedAthleteId;
-            const isMasterHidable = isMaster && !isDirectMasterEdit;
+            const isOwnMaster = isMaster && Boolean(isCoach && user?.id && tpl.user_id === user.id);
+            const isDirectMasterEdit = isMaster && isCoach && (!selectedAthleteId || isOwnMaster);
+            const isMasterHidable = isMaster && !isOwnMaster;
             const canEdit = !isMaster ? (isOwner || isCoach) : true;
             const canCustomize = (isMaster && (!isCoach || Boolean(selectedAthleteId))) || (!isMaster && !isOwner && !isCoach);
             const canDelete = !isMaster ? (isOwner || isCoach) : true;
@@ -530,6 +542,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
         onSuccess={async () => {
           clearTemplateDetailCache(editingTemplate?.id);
           await invalidateExerciseDomain(queryClient, targetUserId);
+          await refetchCatalog();
         }}
       />
     </div>

@@ -112,3 +112,33 @@ export async function invalidateExerciseDomain(
 
   await Promise.all(promises);
 }
+
+/**
+ * Invalidates all queries derived from nutrition writes (log, edit, delete) or outbox sync.
+ *
+ * Union of query keys mapped from existing mutation onSuccess handlers:
+ * - 'nutrition_logs' (src/components/nutrition/useNutritionData.ts:348; src/components/history/useHistoryData.ts:129)
+ *
+ * When target userId is present, also invalidates user-scoped queries:
+ * - ['nutrition_logs', userId] (src/components/nutrition/useNutritionData.ts:348)
+ *
+ * @param queryClient - The TanStack QueryClient instance
+ * @param userId - Optional target user/athlete UUID
+ */
+export async function invalidateNutritionDerived(
+  queryClient: InvalidationClient,
+  userId?: string
+): Promise<void> {
+  const promises: Promise<unknown>[] = [
+    queryClient.invalidateQueries({ queryKey: queryKeys.nutritionLogs.all }),
+  ];
+
+  if (userId) {
+    promises.push(
+      queryClient.invalidateQueries({ queryKey: queryKeys.nutritionLogs.byUser(userId) })
+    );
+  }
+
+  await Promise.all(promises);
+}
+

@@ -911,9 +911,7 @@ INSERT INTO public.custom_dishes (
       expect(result.current.dishModalProtein).toBe(50);
     });
 
-    it('CustomDishesModal renders checkbox only when editingDish is present, on by default, and reveals hint when off', () => {
-      const onScaleChange = vi.fn();
-
+    it('CustomDishesModal does not render direct scale checkbox since Recipe editor is used', () => {
       // Case A: New dish (editingDish is null) -> checkbox is NOT rendered
       const { rerender } = render(
         <CustomDishesModal
@@ -946,7 +944,7 @@ INSERT INTO public.custom_dishes (
       expect(screen.queryByLabelText('Scale nutrition with amount')).toBeNull();
       expect(screen.queryByTestId('scale-nutrition-hint')).toBeNull();
 
-      // Case B: Edit dish (editingDish is present) -> checkbox IS rendered and checked by default
+      // Case B: Edit dish (editingDish is present) -> direct scale checkbox is also NOT rendered
       rerender(
         <CustomDishesModal
           isOpen={true}
@@ -974,25 +972,17 @@ INSERT INTO public.custom_dishes (
           isDeleting={false}
           customDishes={[singleItemDishWithItems]}
           onOpenEditDishModal={vi.fn()}
-          onScaleNutritionChange={onScaleChange}
         />
       );
 
-      const checkbox = screen.getByLabelText('Scale nutrition with amount') as HTMLInputElement;
-      expect(checkbox).toBeDefined();
-      expect(checkbox.checked).toBe(true);
-      expect(screen.queryByText('Nutrition stays the same; only the serving size changes')).toBeNull();
-
-      // Uncheck checkbox -> hint appears
-      fireEvent.click(checkbox);
-      expect(screen.getByText('Nutrition stays the same; only the serving size changes')).toBeDefined();
-      expect(onScaleChange).toHaveBeenCalledWith(false);
+      expect(screen.queryByLabelText('Scale nutrition with amount')).toBeNull();
+      expect(screen.queryByTestId('scale-nutrition-hint')).toBeNull();
     });
   });
 
   describe('6. UnitChip choices (g / ml / unit) in CustomDishesModal (L-1)', () => {
-    it('renders UnitChip and allows selecting canonical choices g, ml, unit', () => {
-      const onUnitChange = vi.fn();
+    it('renders UnitChip in component row and allows selecting canonical choices g, ml, unit', () => {
+      const setDishModalItems = vi.fn();
 
       render(
         <CustomDishesModal
@@ -1001,9 +991,6 @@ INSERT INTO public.custom_dishes (
           editingDish={singleItemDishWithItems}
           dishModalName="Whey Protein"
           setDishModalName={vi.fn()}
-          dishModalQuantity={40}
-          dishModalUnit="g"
-          onUnitChange={onUnitChange}
           dishModalCalories={140}
           setDishModalCalories={vi.fn()}
           dishModalProtein={30}
@@ -1015,7 +1002,7 @@ INSERT INTO public.custom_dishes (
           dishModalFiber={0}
           setDishModalFiber={vi.fn()}
           dishModalItems={singleItemDishWithItems.items || []}
-          setDishModalItems={vi.fn()}
+          setDishModalItems={setDishModalItems}
           onSaveDish={vi.fn()}
           onDeleteDish={vi.fn()}
           isSaving={false}
@@ -1025,8 +1012,8 @@ INSERT INTO public.custom_dishes (
         />
       );
 
-      // Unit chip button is rendered
-      const chip = screen.getByTestId('custom-dish-unit-chip');
+      // Unit chip button is rendered in the component editor
+      const chip = screen.getByTestId('dish-item-unit');
       expect(chip).toBeDefined();
       expect(chip.textContent).toContain('g');
 
@@ -1040,7 +1027,9 @@ INSERT INTO public.custom_dishes (
 
       // Click 'ml' option
       fireEvent.click(screen.getByTestId('unit-option-ml'));
-      expect(onUnitChange).toHaveBeenCalledWith('ml');
+      expect(setDishModalItems).toHaveBeenCalledWith([
+        expect.objectContaining({ unit: 'ml' }),
+      ]);
     });
   });
 

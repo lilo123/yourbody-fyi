@@ -28,12 +28,12 @@ const SETS_PAGE_LIMIT = 500;
 
 export const CoachCockpit: React.FC = () => {
   const { user } = useAuth();
-  const { selectedAthleteId, selectedAthlete, athletes, switchAthlete } = useCoach();
+  const { selectedAthleteId, selectedAthlete, athletes, switchAthlete, refreshAthletes } = useCoach();
   const queryClient = useQueryClient();
   const isOnline = useOnlineStatus();
 
   const {
-    data: athleteProfile, isError: isAthleteProfileError,
+    data: athleteProfile, isLoading: isAthleteProfileLoading, isError: isAthleteProfileError,
     error: athleteProfileError, refetch: refetchAthleteProfile,
   } = useQuery({
     queryKey: ['athlete_profile', selectedAthleteId],
@@ -182,11 +182,26 @@ export const CoachCockpit: React.FC = () => {
   const editedFieldsRef = useRef<Set<string>>(new Set());
   const loadedAthleteIdRef = useRef<string | null>(null);
 
-  useEffect(() => { loadedAthleteIdRef.current = null; editedFieldsRef.current.clear(); }, [selectedAthleteId]);
+  const isProfileLoading = Boolean(isAthleteProfileLoading || !athleteProfile || athleteProfile.id !== selectedAthleteId || loadedAthleteIdRef.current !== selectedAthleteId);
+  const isProfileLoadingRef = useRef(isProfileLoading);
+  useEffect(() => {
+    isProfileLoadingRef.current = isProfileLoading;
+  });
+
+  useEffect(() => {
+    loadedAthleteIdRef.current = null;
+    editedFieldsRef.current.clear();
+    setAthleteCal('');
+    setAthletePro('');
+    setAthleteCarb('');
+    setAthleteFat('');
+    setAthleteFiber('');
+    setMacroStatus(null);
+  }, [selectedAthleteId]);
 
   /* oxlint-disable react/set-state-in-effect */
   useEffect(() => {
-    if (athleteProfile && loadedAthleteIdRef.current !== selectedAthleteId) {
+    if (athleteProfile && athleteProfile.id === selectedAthleteId && loadedAthleteIdRef.current !== selectedAthleteId) {
       loadedAthleteIdRef.current = selectedAthleteId;
       if (!editedFieldsRef.current.has('cal')) setAthleteCal(athleteProfile.target_calories ?? 2200);
       if (!editedFieldsRef.current.has('pro')) setAthletePro(athleteProfile.target_protein ?? 160);
@@ -204,7 +219,7 @@ export const CoachCockpit: React.FC = () => {
 
   const handleUpdateAthleteMacros = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAthleteId) return;
+    if (!selectedAthleteId || isProfileLoadingRef.current) return;
     if (!isOnline) {
       setMacroStatus({ type: 'error', message: 'Coach features need a connection' });
       return;
@@ -244,14 +259,16 @@ export const CoachCockpit: React.FC = () => {
 
   const handleConfirmDisconnect = async () => {
     if (!selectedAthleteId || isDisconnecting) return;
+    const athleteToDisconnect = selectedAthleteId;
     setIsDisconnecting(true);
     setDisconnectStatus(null);
     try {
-      const { error } = await supabase.rpc('disconnect_coach', { target_athlete_id: selectedAthleteId });
+      const { error } = await supabase.rpc('disconnect_coach', { target_athlete_id: athleteToDisconnect });
       if (error) throw error;
       setShowDisconnectConfirm(false);
-      queryClient.invalidateQueries({ queryKey: ['coach_athletes'] });
-      switchAthlete('');
+      await refreshAthletes();
+      const remaining = athletes.filter((a) => a.id !== athleteToDisconnect);
+      switchAthlete(remaining[0]?.id || '');
     } catch (err: unknown) {
       console.error('Failed to disconnect athlete:', err);
       const message = err instanceof Error ? err.message : (err as { message?: string })?.message || 'Failed to disconnect athlete';
@@ -348,6 +365,7 @@ export const CoachCockpit: React.FC = () => {
           onUpdateAthleteMacros={handleUpdateAthleteMacros}
           isUpdatingMacros={isUpdatingMacros}
           macroStatus={macroStatus}
+          isLoading={isProfileLoading}
         />
       </div>
 
@@ -417,7 +435,7 @@ export const CoachCockpit: React.FC = () => {
           isOpen={isSheetOpen}
           onClose={() => { setIsSheetOpen(false); setEditingTemplate(null); }}
           template={editingTemplate}
-          assignToAthleteId={selectedAthleteId || undefined}
+          assignToAthleteId={editingTemplate ? undefined : (selectedAthleteId || undefined)}
           onSaved={() => {
             clearTemplateDetailCache(editingTemplate?.id);
             void invalidateExerciseDomain(queryClient, user?.id);
