@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef, Activity } from 'react';
+import React, { useState, useEffect, useRef, Activity, useSyncExternalStore } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { CoachProvider } from './context/CoachContext';
+import { SkipToContentLink } from './components/common/SkipToContentLink';
 import { Header } from './components/common/Header';
 import { BottomNav } from './components/common/BottomNav';
 import { LoginView } from './components/auth/LoginView';
-import { GlobalRestTimerPill } from './components/common/GlobalRestTimerPill';
+import { restTimerStore } from './utils/restTimerStore';
 import { ToastProvider } from './context/ToastContext';
 import { ToastHost } from './components/common/ToastHost';
 import { UpdateBanner } from './pwa/UpdateBanner';
@@ -59,6 +60,21 @@ const RefundsPage = React.lazy(() =>
   import('./legal/RefundsPage').then((m) => ({ default: m.RefundsPage }))
 );
 const LandingView = React.lazy(() => import('./components/landing/LandingView'));
+
+let pillPromise: Promise<{ default: React.ComponentType<any> }> | null = null;
+function loadGlobalRestTimerPill() {
+  if (!pillPromise) {
+    pillPromise = import('./components/common/GlobalRestTimerPill')
+      .then((m) => ({ default: m.GlobalRestTimerPill }))
+      .catch((err) => {
+        pillPromise = null;
+        throw err;
+      });
+  }
+  return pillPromise;
+}
+
+const GlobalRestTimerPill = React.lazy(loadGlobalRestTimerPill);
 
 const LazyFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-12 text-cyan-400 text-xs">
@@ -165,6 +181,34 @@ function AppLayout() {
   const [canLoadPrompt, setCanLoadPrompt] = useState(hasLoggedFirstActivity);
   useOfflinePrefetch(user?.id);
 
+  const isRestTimerActive = useSyncExternalStore(
+    restTimerStore.subscribe,
+    restTimerStore.getIsActiveSnapshot,
+    restTimerStore.getIsActiveServerSnapshot
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const unsub = restTimerStore.subscribe(() => {
+      if (restTimerStore.getIsActiveSnapshot()) {
+        loadGlobalRestTimerPill();
+      }
+    });
+    const win = window as any;
+    const idleId = win.requestIdleCallback
+      ? win.requestIdleCallback(() => loadGlobalRestTimerPill(), { timeout: 3000 })
+      : setTimeout(() => loadGlobalRestTimerPill(), 1500);
+
+    return () => {
+      unsub();
+      if (win.cancelIdleCallback && typeof idleId === 'number') {
+        win.cancelIdleCallback(idleId);
+      } else {
+        clearTimeout(idleId);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!user || canLoadPrompt) return;
     const unsub = onFirstLogRecorded(() => setCanLoadPrompt(true));
@@ -255,6 +299,7 @@ function AppLayout() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-zinc-950 text-zinc-100 selection:bg-cyan-500/20 selection:text-cyan-300">
+      <SkipToContentLink />
       <Header />
       <UpdateBanner />
       {user && canLoadPrompt && (
@@ -262,7 +307,11 @@ function AppLayout() {
           <DeferredInstallPrompt />
         </React.Suspense>
       )}
-      <main className={`flex-1 max-w-xl w-full mx-auto p-4 ${user ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]' : 'pb-8'}`}>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={`flex-1 max-w-xl w-full mx-auto p-4 focus:outline-none ${user ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]' : 'pb-8'}`}
+      >
         <React.Suspense fallback={<LazyFallback />}>
           <Routes>
             <Route path="/" element={<RootRoute />} />
@@ -341,7 +390,11 @@ function AppLayout() {
           </Activity>
         )}
       </main>
-      <GlobalRestTimerPill />
+      {isRestTimerActive && (
+        <React.Suspense fallback={null}>
+          <GlobalRestTimerPill />
+        </React.Suspense>
+      )}
       <BottomNav />
     </div>
   );

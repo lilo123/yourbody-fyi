@@ -120,6 +120,9 @@ describe('TemplateListTab - Routine Features', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearMockHistory();
+    mockUser.id = 'user-athlete-1';
+    mockCoachState.isCoach = false;
+    mockCoachState.selectedAthleteId = null;
     vi.mocked(useOnlineStatus).mockReturnValue(true);
     (supabase.rpc as any).mockImplementation((fn: string) => {
       if (fn === 'get_routine_catalog') {
@@ -886,6 +889,256 @@ describe('TemplateListTab - Routine Features', () => {
       const resetBtn = await screen.findByTestId('reset-template-tpl-forked-1');
       expect(resetBtn).toBeDisabled();
       expect(resetBtn.getAttribute('title')).toBe('Available when online');
+    });
+  });
+
+  describe('Catalog Query Error Handling', () => {
+    it('renders error banner with retry button on catalog query rejection and triggers refetch on click', async () => {
+      let fail = true;
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          if (fail) {
+            return Promise.reject(new Error('Network error loading catalog'));
+          }
+          return Promise.resolve({ data: mockTemplates, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent();
+
+      // Error banner displays with error message
+      const errorBanner = await screen.findByTestId('template-action-error');
+      expect(errorBanner).toBeDefined();
+      expect(errorBanner.textContent).toContain('Network error loading catalog');
+
+      // The templates list area does not render empty state or template cards
+      expect(screen.queryByTestId('template-card-tpl-push')).toBeNull();
+      expect(screen.queryByText(/No routine templates found/)).toBeNull();
+
+      // Retry button is rendered
+      const retryBtn = screen.getByTestId('retry-templates-btn');
+      expect(retryBtn).toBeDefined();
+      expect(retryBtn.textContent).toContain('Retry');
+
+      // Clicking retry triggers refetch and succeeds
+      fail = false;
+      fireEvent.click(retryBtn);
+
+      // Now templates should render
+      const templateTitle = await screen.findByText('Chest & Triceps Push');
+      expect(templateTitle).toBeDefined();
+      expect(screen.queryByTestId('retry-templates-btn')).toBeNull();
+    });
+  });
+
+  describe('Coach Own Master Actions & Idempotent Hide', () => {
+    it('(a) coach with linked athlete editing own master saves in-place with new days and NOT a fork', async () => {
+      mockUser.id = 'user-coach-1';
+      mockCoachState.isCoach = true;
+      mockCoachState.selectedAthleteId = 'athlete-linked-1';
+
+      const mockCoachMasterTemplate: RoutineTemplate = {
+        id: 'tpl-coach-master-1',
+        user_id: 'user-coach-1',
+        name: 'Coach Master Routine',
+        is_master: true,
+        assigned_to: null,
+        days_of_week: ['Mon', 'Wed'],
+        exercises: [
+          {
+            id: 'te-c1',
+            template_id: 'tpl-coach-master-1',
+            exercise_id: 'ex-bench',
+            order_index: 0,
+            target_sets: 3,
+            target_reps: 10,
+            exercise: { name: 'Barbell Bench Press' },
+          },
+        ],
+      };
+
+      const mockRpc = vi.fn().mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockCoachMasterTemplate], error: null });
+        }
+        if (fn === 'save_routine_template') {
+          return Promise.resolve({ data: { id: 'tpl-coach-master-1' }, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+      vi.mocked(supabase.rpc).mockImplementation(mockRpc);
+
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'routine_templates') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    ...mockCoachMasterTemplate,
+                    updated_at: '2026-10-25T00:00:00Z',
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          } as any;
+        }
+        return {} as any;
+      });
+
+      renderComponent({ targetUserId: 'user-coach-1' });
+
+      const editBtn = await screen.findByTestId('edit-template-tpl-coach-master-1');
+      expect(editBtn).toBeDefined();
+
+      fireEvent.click(editBtn);
+
+      await screen.findByTestId('edit-template-modal');
+
+      const wedPill = await screen.findByTestId('day-pill-Wed');
+      fireEvent.click(wedPill);
+
+      const saveBtn = screen.getByTestId('save-template-btn');
+      await act(async () => {
+        fireEvent.click(saveBtn);
+      });
+
+      expect(mockRpc).toHaveBeenCalledWith(
+        'save_routine_template',
+        expect.objectContaining({
+          p_template_id: 'tpl-coach-master-1',
+          p_days_of_week: ['Mon'],
+        })
+      );
+      const saveCall = mockRpc.mock.calls.find((call) => call[0] === 'save_routine_template');
+      expect(saveCall?.[1]?.p_source_template_id).toBeUndefined();
+    });
+
+    it('(b) coach with linked athlete deleting own master really deletes it from routine_templates and not hides', async () => {
+      vi.useFakeTimers();
+
+      mockUser.id = 'user-coach-1';
+      mockCoachState.isCoach = true;
+      mockCoachState.selectedAthleteId = 'athlete-linked-1';
+
+      const mockCoachMasterTemplate: RoutineTemplate = {
+        id: 'tpl-coach-master-1',
+        user_id: 'user-coach-1',
+        name: 'Coach Master Routine',
+        is_master: true,
+        assigned_to: null,
+        days_of_week: ['Mon'],
+        exercises: [],
+      };
+
+      const mockDeleteSelect = vi.fn().mockResolvedValue({
+        data: [{ id: 'tpl-coach-master-1' }],
+        error: null,
+      });
+      const mockEq = vi.fn().mockReturnValue({ select: mockDeleteSelect });
+      const mockDelete = vi.fn().mockReturnValue({ eq: mockEq });
+
+      const mockHidesInsert = vi.fn().mockResolvedValue({ data: null, error: null });
+      const mockHidesUpsert = vi.fn().mockResolvedValue({ data: null, error: null });
+
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'routine_templates') {
+          return { delete: mockDelete } as any;
+        }
+        if (table === 'routine_template_hides') {
+          return { insert: mockHidesInsert, upsert: mockHidesUpsert } as any;
+        }
+        return {} as any;
+      });
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockCoachMasterTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ targetUserId: 'user-coach-1', deleteTimeoutMs: 6000 });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      const deleteBtn = screen.getByTestId('delete-template-tpl-coach-master-1');
+      expect(deleteBtn).toBeDefined();
+
+      fireEvent.click(deleteBtn);
+
+      await act(async () => {
+        vi.advanceTimersByTime(6100);
+      });
+
+      expect(mockDelete).toHaveBeenCalled();
+      expect(mockEq).toHaveBeenCalledWith('id', 'tpl-coach-master-1');
+      expect(mockHidesInsert).not.toHaveBeenCalled();
+      expect(mockHidesUpsert).not.toHaveBeenCalled();
+    });
+
+    it('(c) athlete deleting unowned master twice uses idempotent upsert without error banner', async () => {
+      vi.useFakeTimers();
+
+      mockUser.id = 'user-athlete-1';
+      mockCoachState.isCoach = false;
+      mockCoachState.selectedAthleteId = null;
+
+      const mockUnownedMaster: RoutineTemplate = {
+        id: 'tpl-system-master-1',
+        user_id: 'system-user',
+        name: 'System Master Routine',
+        is_master: true,
+        assigned_to: null,
+        days_of_week: ['Tue'],
+        exercises: [],
+      };
+
+      const mockHidesUpsert = vi.fn().mockResolvedValue({ data: null, error: null });
+      const mockHidesInsert = vi.fn().mockRejectedValue({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "routine_template_hides_pkey"',
+      });
+
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'routine_template_hides') {
+          return { upsert: mockHidesUpsert, insert: mockHidesInsert } as any;
+        }
+        return {} as any;
+      });
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockUnownedMaster], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ deleteTimeoutMs: 6000 });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      const deleteBtn = screen.getByTestId('delete-template-tpl-system-master-1');
+      fireEvent.click(deleteBtn);
+
+      await act(async () => {
+        vi.advanceTimersByTime(6100);
+      });
+
+      expect(mockHidesUpsert).toHaveBeenCalledWith(
+        {
+          hidden_by: 'user-athlete-1',
+          template_id: 'tpl-system-master-1',
+        },
+        { onConflict: 'hidden_by,template_id', ignoreDuplicates: true }
+      );
+      expect(screen.queryByTestId('template-action-error')).toBeNull();
     });
   });
 });

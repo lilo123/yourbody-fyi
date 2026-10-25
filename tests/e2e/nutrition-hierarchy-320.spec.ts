@@ -283,4 +283,24 @@ test.describe('Nutrition hierarchy at 320px', () => {
     await modal.locator('[data-testid="close-breakdown-modal-btn"]').click();
     await expect(modal).not.toBeVisible();
   });
+
+  test('log food header text and manual entry button maintain >= 12px clearance at 320px', async ({ page }) => {
+    const manualBtn = page.locator('button:has-text("Manual Entry")');
+    await expect(manualBtn).toBeVisible();
+    const subtitle = page.locator('text=Describe what you ate in natural language');
+    await expect(subtitle).toBeVisible();
+
+    const btnBox = (await manualBtn.boundingBox())!;
+    const subBox = (await subtitle.boundingBox())!;
+    expect(btnBox).not.toBeNull();
+    expect(subBox).not.toBeNull();
+
+    const gap = btnBox.x - (subBox.x + subBox.width);
+    expect(gap).toBeGreaterThanOrEqual(12);
+
+    // No intersection
+    const horizOverlap = (subBox.x + subBox.width > btnBox.x) && (subBox.x < btnBox.x + btnBox.width);
+    const vertOverlap = (subBox.y + subBox.height > btnBox.y) && (subBox.y < btnBox.y + btnBox.height);
+    expect(horizOverlap && vertOverlap).toBe(false);
+  });
 });

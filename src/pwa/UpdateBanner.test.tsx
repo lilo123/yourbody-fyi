@@ -10,6 +10,8 @@ import {
 } from './useAppUpdate';
 import {
   markFormDirty,
+  registerUpdateBlocker,
+  unregisterUpdateBlocker,
   resetUpdateSafetyForTesting,
 } from './updateSafety';
 import { workoutSessionStore, type ActiveWorkoutSession } from '../utils/workoutSessionStore';
@@ -154,6 +156,41 @@ describe('UpdateBanner Component per D-YB2-3', () => {
 
     expect(reloadBtn).not.toBeDisabled();
     expect(screen.queryByTestId('update-block-reason')).toBeNull();
+  });
+
+  it('when AI parse is in flight: reload button is disabled and displays AI analysis in progress', async () => {
+    vi.useFakeTimers();
+    const mockApplyUpdate = vi.fn().mockResolvedValue(undefined);
+    setUpdateSWFnForTesting(mockApplyUpdate);
+    registerUpdateBlocker('nutrition-ai-analyze', () => 'AI analysis in progress');
+
+    renderWithProviders(<UpdateBanner />);
+
+    act(() => {
+      setUpdateAvailableForTesting(true);
+    });
+
+    const reloadBtn = screen.getByTestId('update-reload-btn');
+    expect(reloadBtn).toBeDisabled();
+
+    const reasonEl = screen.getByTestId('update-block-reason');
+    expect(reasonEl).toHaveTextContent('AI analysis in progress');
+
+    await act(async () => {
+      fireEvent.click(reloadBtn);
+    });
+
+    expect(mockApplyUpdate).not.toHaveBeenCalled();
+
+    // AI parse finishes
+    unregisterUpdateBlocker('nutrition-ai-analyze');
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(reloadBtn).not.toBeDisabled();
+    expect(screen.queryByTestId('update-block-reason')).toBeNull();
+    vi.useRealTimers();
   });
 
   it('when soft blocked by workout draft: opens ConfirmDialog and Keep logging keeps draft & banner', async () => {
