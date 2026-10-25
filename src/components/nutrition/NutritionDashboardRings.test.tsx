@@ -242,4 +242,11 @@ describe('NutritionDashboardRings', () => {
     fireEvent.blur(dateInput);
     expect(dateInput.value).toBe('2026-09-22');
   });
+
+  it('has accessible name for the date input', () => {
+    renderDashboard();
+    const dateInput = screen.getByLabelText('Nutrition date');
+    expect(dateInput).toBe(screen.getByTestId('nutrition-date-input'));
+    expect(dateInput.getAttribute('aria-label')).toBe('Nutrition date');
+  });
 });

@@ -161,6 +161,19 @@ export function newId(): string {
   });
 }
 
+async function getCurrentSessionUserId(): Promise<string | null> {
+  try {
+    if (!activeSupabaseClient?.auth?.getSession) {
+      return flusherSessionUserId;
+    }
+    const { data } = await activeSupabaseClient.auth.getSession();
+    return data?.session?.user?.id || null;
+  } catch {
+    // Cannot verify session from supabase client (e.g. throws)
+    return null;
+  }
+}
+
 /**
  * Flush all pending outbox operations for a user in strict seq order.
  * Enforces outbox owner verification and navigator.locks concurrency control.
@@ -173,19 +186,7 @@ export async function flushNow(targetUserId?: string, callerOpId?: string): Prom
 
   await runWithMutex(userId, async () => {
     // 1. Owner check: verify current authenticated user matches userId
-    let sessionUser: string | null = null;
-    try {
-      const {
-        data: { session },
-      } = await activeSupabaseClient.auth.getSession();
-      sessionUser = session?.user?.id || null;
-    } catch {
-      // Cannot verify session from supabase client
-    }
-    if (!sessionUser) {
-      sessionUser = flusherSessionUserId;
-    }
-
+    const sessionUser = await getCurrentSessionUserId();
     if (!sessionUser || sessionUser !== userId) {
       // Owner check failed: do not flush!
       return;
@@ -208,10 +209,20 @@ export async function flushNow(targetUserId?: string, callerOpId?: string): Prom
           continue;
         }
 
+        // Re-check session user before processing each op: abort flush if user switched or signed out
+        const currentSessionUser = await getCurrentSessionUserId();
+        if (!currentSessionUser || currentSessionUser !== userId) {
+          break;
+        }
+
         const db = await getOfflineDb(userId);
         const op = await db.get('outbox', pendingOp.opId);
         if (!op || op.state === 'attention' || op.blockedBy) {
           continue;
+        }
+
+        if (op.userId && op.userId !== currentSessionUser) {
+          break;
         }
 
         op.state = 'inflight';
@@ -230,6 +241,16 @@ export async function flushNow(targetUserId?: string, callerOpId?: string): Prom
           retryAttempts = 0;
           setAuthRequiredStatus(false);
         } catch (rawError: any) {
+          // If the session user switched or signed out while the replay request was in flight,
+          // leave the op pending and stop the flush so it is not moved to attention or blocks dependents.
+          // Covers AUTH / 401 / 403 / 42501 alike. Real permanent errors for the active user proceed.
+          const currentSessionUser = await getCurrentSessionUserId();
+          if (!currentSessionUser || currentSessionUser !== op.userId) {
+            op.state = 'pending';
+            await updateOp(userId, op);
+            break;
+          }
+
           const classified = classifyError(rawError);
 
           if (classified.kind === 'TRANSIENT') {
@@ -295,6 +316,12 @@ export async function flushNow(targetUserId?: string, callerOpId?: string): Prom
                 setAuthRequiredStatus(false);
                 continue;
               } catch (retryErr: any) {
+                const retrySessionUser = await getCurrentSessionUserId();
+                if (!retrySessionUser || retrySessionUser !== op.userId) {
+                  op.state = 'pending';
+                  await updateOp(userId, op);
+                  break;
+                }
                 const secondClassified = classifyError(retryErr);
                 if (secondClassified.kind === 'PERMANENT') {
                   op.state = 'attention';

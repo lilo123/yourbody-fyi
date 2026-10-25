@@ -72,4 +72,30 @@ describe('SyncToastBridge', () => {
     syncCallback!(0);
     expect(mockShow).not.toHaveBeenCalled();
   });
+
+  it('defers sync notice when an undo toast is active and flushes when cleared', () => {
+    vi.mocked(useToast).mockReturnValue({
+      show: mockShow,
+      activeToast: { kind: 'undo' } as any,
+    } as any);
+
+    const { rerender } = render(<SyncToastBridge />);
+    expect(syncCallback).toBeDefined();
+
+    syncCallback!(2);
+    expect(mockShow).not.toHaveBeenCalled();
+
+    // Rerender with activeToast cleared (e.g. dismissed or expired)
+    vi.mocked(useToast).mockReturnValue({
+      show: mockShow,
+      activeToast: null,
+    } as any);
+    rerender(<SyncToastBridge />);
+
+    expect(mockShow).toHaveBeenCalledTimes(1);
+    expect(mockShow).toHaveBeenCalledWith({
+      message: 'Synced 2 changes',
+      kind: 'success',
+    });
+  });
 });
