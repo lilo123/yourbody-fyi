@@ -461,11 +461,14 @@ export async function enqueue<K extends OpKind>(input: {
 
     case 'cancelled': {
       // Find ops that were removed
-      const remainingIds = new Set(compaction.ops.map((o) => o.opId));
+      const remainingIds = new Set(compaction.ops.map((op) => op.opId));
       for (const op of existingOps) {
         if (!remainingIds.has(op.opId)) {
           await outboxStore.delete(op.opId);
         }
+      }
+      if (compaction.compactedOp) {
+        await outboxStore.put(compaction.compactedOp);
       }
       await tx.done;
       bumpMutationGen(userId);
