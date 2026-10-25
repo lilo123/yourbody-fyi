@@ -720,4 +720,68 @@ describe('Outbox Storage, Ordering & Dependent Blocking (§A4, §D)', () => {
       delete (realDb as any).getAll;
     }
   });
+
+  it('18. offline batch compaction: deleting a set from a pending batch persists the compacted batch to IndexedDB', async () => {
+    await enqueue({
+      userId: userA,
+      kind: 'set.batchCreate',
+      payload: {
+        workoutRef: 'w-1',
+        sets: [
+          {
+            id: 's-1',
+            exercise_id: 'ex-1',
+            weight: 100,
+            reps: 10,
+            set_index: 1,
+            set_type: 'working',
+            created_at: '2026-09-30T10:00:00Z',
+          },
+          {
+            id: 's-2',
+            exercise_id: 'ex-1',
+            weight: 105,
+            reps: 10,
+            set_index: 2,
+            set_type: 'working',
+            created_at: '2026-09-30T10:02:00Z',
+          },
+          {
+            id: 's-3',
+            exercise_id: 'ex-1',
+            weight: 110,
+            reps: 8,
+            set_index: 3,
+            set_type: 'working',
+            created_at: '2026-09-30T10:04:00Z',
+          },
+        ],
+      },
+    });
+
+    // Delete set 2 while still pending offline
+    await enqueue({
+      userId: userA,
+      kind: 'set.delete',
+      payload: { id: 's-2' },
+    });
+
+    // Simulate reload / reconnection by closing connections and resetting in-memory cache
+    await closeAllOfflineDbs();
+    resetOutboxForTesting();
+
+    // Re-read directly from the persistent IndexedDB store
+    const db = await dbModule.getOfflineDb(userA);
+    const persistedOps = await db.getAll('outbox');
+
+    expect(persistedOps).toHaveLength(1);
+    const persistedBatch = persistedOps[0];
+    expect(persistedBatch.kind).toBe('set.batchCreate');
+    if (persistedBatch.kind === 'set.batchCreate') {
+      const persistedSetIds = persistedBatch.payload.sets.map((item) => item.id);
+      expect(persistedSetIds).toEqual(['s-1', 's-3']);
+      expect(persistedSetIds).not.toContain('s-2');
+    }
+  });
 });
+
