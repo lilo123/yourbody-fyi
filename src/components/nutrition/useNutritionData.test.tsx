@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { renderHook, waitFor, act, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useNutritionData, useMealUpdateToast } from './useNutritionData';
@@ -8,10 +8,18 @@ import * as toastHook from '../../hooks/useToast';
 import { getDayBounds, localCivilToUtcMs, isWithinDayBounds } from '../../utils/date';
 import type { CustomDish, CustomDishDetail } from '../../types/database';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
+import { restTimerStore } from '../../utils/restTimerStore';
+import { enqueue } from '../../offline/outbox';
+import { flushNow, setFlusherSessionUser, setFlusherSupabaseClient } from '../../offline/flusher';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    },
   },
 }));
 
@@ -1774,6 +1782,161 @@ describe('useNutritionData (src/components/nutrition/useNutritionData.ts)', () =
           undoSpanTestId: 'undo-add-favorite-btn',
         })
       );
+    });
+  });
+
+  describe('rest timer render performance', () => {
+    it('renders stay constant while the timer ticks, and flip when it starts/stops', async () => {
+      vi.useFakeTimers();
+      restTimerStore.resetForTesting();
+
+      let renderCount = 0;
+      const Consumer = () => {
+        renderCount++;
+        const { isTimerActive } = useNutritionData({
+          targetUserId: 'user-123',
+          selectedDate: '2026-07-04',
+          timeZone: 'UTC',
+          profile: null,
+          onMutationSuccessReset: vi.fn(),
+          setStatus: vi.fn(),
+          setIsError: vi.fn(),
+        });
+        return <div data-testid="is-active">{String(isTimerActive)}</div>;
+      };
+
+      const { getByTestId } = render(
+        <QueryClientProvider client={queryClient}>
+          <Consumer />
+        </QueryClientProvider>
+      );
+
+      // Drain initial query resolution
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      expect(getByTestId('is-active').textContent).toBe('false');
+      const settledInitialRenders = renderCount;
+
+      // Start the timer: isTimerActive flips false -> true
+      act(() => {
+        restTimerStore.start(90);
+      });
+      expect(getByTestId('is-active').textContent).toBe('true');
+      expect(renderCount).toBe(settledInitialRenders + 1);
+      const activeTimerRenders = renderCount;
+
+      // Advance timers across 3 seconds of 1s ticks: renders must remain constant
+      for (let i = 0; i < 3; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+      }
+      expect(renderCount).toBe(activeTimerRenders);
+      expect(getByTestId('is-active').textContent).toBe('true');
+
+      // Stop the timer: isTimerActive flips true -> false
+      act(() => {
+        restTimerStore.stop();
+      });
+      expect(getByTestId('is-active').textContent).toBe('false');
+      expect(renderCount).toBe(activeTimerRenders + 1);
+
+      vi.useRealTimers();
+      restTimerStore.resetForTesting();
+    });
+  });
+
+  describe('offline meal reconnect sync freshness', () => {
+    it('meals logged offline remain visible after reconnect flush without manual refresh', async () => {
+      const targetUserId = 'user-offline-sync-1';
+      const targetDate = '2026-10-19';
+      const timeZone = 'America/New_York';
+
+      setFlusherSupabaseClient(supabase);
+      (supabase.auth.getSession as any).mockResolvedValue({
+        data: { session: { user: { id: targetUserId } } },
+      });
+      (supabase.auth.getUser as any).mockResolvedValue({
+        data: { user: { id: targetUserId } },
+      });
+      setFlusherSessionUser(targetUserId);
+
+      let serverLogs: any[] = [];
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'nutrition_logs') {
+          const builder = createSupabaseBuilder(table, {
+            resolver: (b: any) => {
+              if (b.upsertedData !== undefined) {
+                const row = b.upsertedData;
+                serverLogs = [
+                  {
+                    ...row,
+                    created_at: new Date().toISOString(),
+                    has_components: false,
+                  },
+                ];
+                return { data: [{ id: row.id }], error: null };
+              }
+              return { data: serverLogs, error: null };
+            },
+          });
+          return builder as any;
+        }
+        return createSupabaseBuilder(table, { data: [], error: null }) as any;
+      });
+
+      const offlineMealId = 'meal-offline-reconnect-1';
+      await enqueue({
+        userId: targetUserId,
+        kind: 'nutrition.log',
+        payload: {
+          id: offlineMealId,
+          user_id: targetUserId,
+          food_name: 'Offline Oatmeal',
+          calories: 300,
+          protein: 10,
+          carbs: 50,
+          fat: 4,
+          fiber: 6,
+          meal_type: 'Breakfast',
+          logged_date: targetDate,
+          logged_at: '2026-10-19T09:00:00.000Z',
+        },
+      });
+
+      const { result } = renderHook(
+        () =>
+          useNutritionData({
+            targetUserId,
+            selectedDate: targetDate,
+            timeZone,
+            profile: null,
+            onMutationSuccessReset: vi.fn(),
+            setStatus: vi.fn(),
+            setIsError: vi.fn(),
+          }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.todayLogs).toHaveLength(1);
+        expect(result.current.todayLogs[0].food_name).toBe('Offline Oatmeal');
+      });
+
+      const syncedCount = await flushNow(targetUserId);
+
+      expect(syncedCount).toBe(1);
+      const { getOutboxOps } = await import('../../offline');
+      const remainingOps = await getOutboxOps(targetUserId);
+      expect(remainingOps).toHaveLength(0);
+
+      await waitFor(() => {
+        expect(result.current.todayLogs).toHaveLength(1);
+        expect(result.current.todayLogs[0].food_name).toBe('Offline Oatmeal');
+        expect(result.current.todayLogs[0].pending).toBe(false);
+      });
     });
   });
 });

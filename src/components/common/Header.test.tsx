@@ -14,6 +14,7 @@ import {
 } from '../../offline/outbox';
 
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
+import { supabase } from '../../lib/supabase';
 
 const { mockUserProfile } = vi.hoisted(() => ({
   mockUserProfile: {
@@ -49,6 +50,12 @@ describe('Header connection status badge', () => {
     vi.clearAllMocks();
     clearMockHistory();
     localStorage.clear();
+    (supabase.auth.getUser as any).mockResolvedValue({
+      data: { user: { id: 'test-user', email: 'coach@yourbody.fyi' } },
+    });
+    (supabase.auth.getSession as any).mockResolvedValue({
+      data: { session: { user: { id: 'test-user', email: 'coach@yourbody.fyi' } } },
+    });
     mockUserProfile.id = 'test-user';
     mockUserProfile.role = 'coach';
     mockUserProfile.email = 'coach@yourbody.fyi';
@@ -464,6 +471,10 @@ describe('Header connection status badge', () => {
   });
 
   describe('YB3: header polish unit tests', () => {
+    beforeEach(() => {
+      localStorage.setItem('yourbody_user', JSON.stringify({ id: 'test-user', email: 'coach@yourbody.fyi' }));
+    });
+
     it('YB3: Brand name uses text-sm (<sm) and tagline has quieter styling with max-[359px]:hidden', () => {
       const { container } = renderHeader();
       const brand = container.querySelector('[data-testid="brand-name"]');
@@ -598,6 +609,26 @@ describe('Header connection status badge', () => {
         expect(innerVisual?.className).toContain('h-9');
         expect(innerVisual?.className).toContain('rounded-full');
       }
+    });
+
+    it('brand link points to /workout when signed in and to / when signed out', async () => {
+      // 1. Signed-in state
+      const { unmount } = renderHeader();
+      const signedInLink = screen.getByTestId('brand-link');
+      expect(signedInLink.getAttribute('href')).toBe('/workout');
+      unmount();
+
+      // 2. Signed-out state
+      localStorage.clear();
+      (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
+      (supabase.auth.getSession as any).mockResolvedValue({ data: { session: null } });
+
+      renderHeader();
+
+      await waitFor(() => {
+        const signedOutLink = screen.getByTestId('brand-link');
+        expect(signedOutLink.getAttribute('href')).toBe('/');
+      });
     });
   });
 });

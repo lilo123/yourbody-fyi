@@ -1,14 +1,11 @@
-import React, { memo, useId, useState } from 'react';
+import React, { memo, useId } from 'react';
 import type { CustomDish, CustomDishKind } from '../../types/database';
 import { getCustomDishPortion, type NutritionItem } from '../../utils/itemModel';
-import { roundTo1Decimal, formatCalories, formatMacro } from '../../utils/nutrition';
+import { formatCalories, formatMacro } from '../../utils/nutrition';
 import { getDishIcon } from '../../utils/dishIcons';
 import { Star, X, Trash2, Edit2 } from 'lucide-react';
 import { CustomDishEditor } from './CustomDishEditor';
-import { DecimalInput } from './DecimalInput';
 import { NotesField } from './NotesField';
-import { UnitChip } from './UnitChip';
-import { mapLegacyUnit } from './legacyUnitMapping';
 import { useModalA11y } from '../../hooks/useModalA11y';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
@@ -29,16 +26,16 @@ export interface CustomDishesModalProps {
   scaleNutritionWithAmount?: boolean;
   setScaleNutritionWithAmount?: (val: boolean) => void;
   onScaleNutritionChange?: (val: boolean) => void;
-  dishModalCalories: number | '';
-  setDishModalCalories: (val: number | '') => void;
-  dishModalProtein: number | '';
-  setDishModalProtein: (val: number | '') => void;
-  dishModalCarbs: number | '';
-  setDishModalCarbs: (val: number | '') => void;
-  dishModalFat: number | '';
-  setDishModalFat: (val: number | '') => void;
-  dishModalFiber: number | '';
-  setDishModalFiber: (val: number | '') => void;
+  dishModalCalories?: number | '';
+  setDishModalCalories?: (val: number | '') => void;
+  dishModalProtein?: number | '';
+  setDishModalProtein?: (val: number | '') => void;
+  dishModalCarbs?: number | '';
+  setDishModalCarbs?: (val: number | '') => void;
+  dishModalFat?: number | '';
+  setDishModalFat?: (val: number | '') => void;
+  dishModalFiber?: number | '';
+  setDishModalFiber?: (val: number | '') => void;
   dishModalNotes?: string;
   setDishModalNotes?: (val: string) => void;
   dishModalItems: NutritionItem[];
@@ -55,29 +52,8 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
   isOpen,
   onClose,
   editingDish,
-  dishModalKind = 'food',
-  setDishModalKind = () => {},
   dishModalName,
   setDishModalName,
-  dishModalQuantity = '',
-  setDishModalQuantity = () => {},
-  dishModalUnit = 'g',
-  setDishModalUnit = () => {},
-  onQuantityChange,
-  onUnitChange,
-  scaleNutritionWithAmount,
-  setScaleNutritionWithAmount,
-  onScaleNutritionChange,
-  dishModalCalories,
-  setDishModalCalories,
-  dishModalProtein,
-  setDishModalProtein,
-  dishModalCarbs,
-  setDishModalCarbs,
-  dishModalFat,
-  setDishModalFat,
-  dishModalFiber,
-  setDishModalFiber,
   dishModalNotes = '',
   setDishModalNotes = () => {},
   dishModalItems,
@@ -91,46 +67,11 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
 }) => {
   const baseId = useId();
   const nameId = `${baseId}-dish-name`;
-  const qtyId = `${baseId}-quantity`;
-  const calId = `${baseId}-calories`;
-  const proteinId = `${baseId}-protein`;
-  const carbsId = `${baseId}-carbs`;
-  const fatId = `${baseId}-fat`;
-  const fiberId = `${baseId}-fiber`;
-
-  const [prevOpenDish, setPrevOpenDish] = useState<{ isOpen: boolean; dishId?: string }>({
-    isOpen,
-    dishId: editingDish?.id,
-  });
-  const [internalScale, setInternalScale] = useState(true);
-
-  if (prevOpenDish.isOpen !== isOpen || prevOpenDish.dishId !== editingDish?.id) {
-    setPrevOpenDish({ isOpen, dishId: editingDish?.id });
-    if (isOpen) {
-      setInternalScale(true);
-    }
-  }
-
-  const isScaleEnabled =
-    scaleNutritionWithAmount !== undefined ? scaleNutritionWithAmount : internalScale;
-
-  const handleScaleToggle = (checked: boolean) => {
-    setInternalScale(checked);
-    onScaleNutritionChange?.(checked);
-    setScaleNutritionWithAmount?.(checked);
-  };
 
   const dishModalRef = useModalA11y(isOpen, onClose);
   const isOnline = useOnlineStatus();
 
-  const isFoodDisabled = dishModalKind === 'recipe' && dishModalItems.length > 1;
-  const showDirectMacros = dishModalKind !== 'recipe' && dishModalItems.length <= 1;
-  // A new recipe derives its totals from its components, so it renders none of
-  // the `required` parent-macro inputs. With zero components there is nothing to
-  // derive from either, and the form would submit a silent all-zero dish. An
-  // existing dish already has macros seeded, so it stays editable.
-  const recipeNeedsIngredient =
-    !editingDish && dishModalKind === 'recipe' && dishModalItems.length === 0;
+  const recipeNeedsIngredient = dishModalItems.length === 0;
 
   if (!isOpen) return null;
 
@@ -178,264 +119,14 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
             />
           </div>
 
-          {/* Dish Type toggle: Food vs Recipe */}
-          <div>
-            <span
-              id={`${baseId}-kind-label`}
-              className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1"
-            >
-              Dish Type
-            </span>
-            <div
-              role="radiogroup"
-              aria-labelledby={`${baseId}-kind-label`}
-              className="grid grid-cols-2 gap-2"
-            >
-              <label
-                className={`flex items-center justify-center gap-2 p-2.5 min-h-[44px] rounded-xl border text-xs font-bold transition ${
-                  isFoodDisabled
-                    ? 'opacity-50 cursor-not-allowed bg-zinc-950/50 border-zinc-800 text-zinc-400'
-                    : dishModalKind === 'food'
-                    ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300 cursor-pointer'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white cursor-pointer'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name={`${baseId}-kind`}
-                  value="food"
-                  checked={dishModalKind === 'food'}
-                  disabled={isFoodDisabled}
-                  onChange={() => setDishModalKind('food')}
-                  className="accent-cyan-500 min-w-[16px] min-h-[16px]"
-                />
-                <span>Food</span>
-              </label>
-              <label
-                className={`flex items-center justify-center gap-2 p-2.5 min-h-[44px] rounded-xl border text-xs font-bold cursor-pointer transition ${
-                  dishModalKind === 'recipe'
-                    ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name={`${baseId}-kind`}
-                  value="recipe"
-                  checked={dishModalKind === 'recipe'}
-                  onChange={() => setDishModalKind('recipe')}
-                  className="accent-cyan-500 min-w-[16px] min-h-[16px]"
-                />
-                <span>Recipe</span>
-              </label>
-            </div>
-            {isFoodDisabled && (
-              <p className="text-xs text-zinc-400 mt-1">
-                Remove ingredients first to switch to Food.
-              </p>
-            )}
-          </div>
-
-          {/* Once a dish has a real breakdown its totals are Σ(components);
-              showing editable parent macros would invite a value the DB
-              sum constraint then rejects. */}
-          {showDirectMacros && (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label
-                    htmlFor={qtyId}
-                    className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1"
-                  >
-                    Qty
-                  </label>
-                  <DecimalInput
-                    id={qtyId}
-                    step="any"
-                    min="0"
-                    value={dishModalQuantity}
-                    onChange={(val) => {
-                      const next = val;
-                      if (onQuantityChange) {
-                        onQuantityChange(next, isScaleEnabled);
-                      } else {
-                        setDishModalQuantity(next);
-                      }
-                    }}
-                    placeholder="e.g. 100"
-                    className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
-                  />
-                </div>
-                <div>
-                  <span
-                    className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1"
-                  >
-                    Unit
-                  </span>
-                  <div className="flex min-h-[44px] items-center">
-                    <UnitChip
-                      value={mapLegacyUnit(dishModalUnit)}
-                      onChange={(next) => {
-                        if (onUnitChange) {
-                          onUnitChange(next);
-                        } else {
-                          setDishModalUnit(next);
-                        }
-                      }}
-                      testId="custom-dish-unit-chip"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {Boolean(editingDish) && (
-                <div className="space-y-1">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-300">
-                    <input
-                      type="checkbox"
-                      data-testid="scale-nutrition-checkbox"
-                      checked={isScaleEnabled}
-                      onChange={(e) => handleScaleToggle(e.target.checked)}
-                      className="accent-cyan-500 rounded min-w-[16px] min-h-[16px]"
-                    />
-                    <span>Scale nutrition with amount</span>
-                  </label>
-                  {!isScaleEnabled && (
-                    <p data-testid="scale-nutrition-hint" className="text-xs text-zinc-400">
-                      Nutrition stays the same; only the serving size changes
-                    </p>
-                  )}
-                </div>
-              )}
-              <div data-testid="parent-macros" className="grid grid-cols-6 sm:grid-cols-5 gap-2">
-              <div className="col-span-2 sm:col-span-1">
-                <label
-                  htmlFor={calId}
-                  className="block text-xs font-bold text-amber-400 uppercase tracking-wider mb-1"
-                >
-                  Calories
-                </label>
-                <DecimalInput
-                  id={calId}
-                  step="any"
-                  value={dishModalCalories === '' ? '' : roundTo1Decimal(dishModalCalories)}
-                  onChange={(val) =>
-                    setDishModalCalories(
-                      val === '' || (typeof val === 'number' && Number.isNaN(val))
-                        ? val
-                        : roundTo1Decimal(val)
-                    )
-                  }
-                  placeholder="0"
-                  className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
-                  required
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label
-                  htmlFor={proteinId}
-                  className="block text-xs font-bold text-cyan-400 uppercase tracking-wider mb-1"
-                >
-                  Protein (g)
-                </label>
-                <DecimalInput
-                  id={proteinId}
-                  step="any"
-                  value={dishModalProtein === '' ? '' : roundTo1Decimal(dishModalProtein)}
-                  onChange={(val) =>
-                    setDishModalProtein(
-                      val === '' || (typeof val === 'number' && Number.isNaN(val))
-                        ? val
-                        : roundTo1Decimal(val)
-                    )
-                  }
-                  placeholder="0"
-                  className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
-                  required
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label
-                  htmlFor={carbsId}
-                  className="block text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1"
-                >
-                  Carbs (g)
-                </label>
-                <DecimalInput
-                  id={carbsId}
-                  step="any"
-                  value={dishModalCarbs === '' ? '' : roundTo1Decimal(dishModalCarbs)}
-                  onChange={(val) =>
-                    setDishModalCarbs(
-                      val === '' || (typeof val === 'number' && Number.isNaN(val))
-                        ? val
-                        : roundTo1Decimal(val)
-                    )
-                  }
-                  placeholder="0"
-                  className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
-                  required
-                />
-              </div>
-              <div className="col-span-3 sm:col-span-1">
-                <label
-                  htmlFor={fatId}
-                  className="block text-xs font-bold text-violet-400 uppercase tracking-wider mb-1"
-                >
-                  Fat (g)
-                </label>
-                <DecimalInput
-                  id={fatId}
-                  step="any"
-                  value={dishModalFat === '' ? '' : roundTo1Decimal(dishModalFat)}
-                  onChange={(val) =>
-                    setDishModalFat(
-                      val === '' || (typeof val === 'number' && Number.isNaN(val))
-                        ? val
-                        : roundTo1Decimal(val)
-                    )
-                  }
-                  placeholder="0"
-                  className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
-                  required
-                />
-              </div>
-              <div className="col-span-3 sm:col-span-1">
-                <label
-                  htmlFor={fiberId}
-                  className="block text-xs font-bold text-teal-400 uppercase tracking-wider mb-1"
-                >
-                  Fiber (g)
-                </label>
-                <DecimalInput
-                  id={fiberId}
-                  step="any"
-                  value={dishModalFiber === '' ? '' : roundTo1Decimal(dishModalFiber)}
-                  onChange={(val) =>
-                    setDishModalFiber(
-                      val === '' || (typeof val === 'number' && Number.isNaN(val))
-                        ? val
-                        : roundTo1Decimal(val)
-                    )
-                  }
-                  placeholder="0"
-                  className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2 text-base tabular-nums font-bold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center min-h-[44px]"
-                />
-              </div>
-            </div>
-          </>
-          )}
-
-          {dishModalKind === 'recipe' && (
-            <CustomDishEditor items={dishModalItems} onChange={setDishModalItems} />
-          )}
+          <CustomDishEditor items={dishModalItems} onChange={setDishModalItems} />
 
           {recipeNeedsIngredient && (
             <p
               data-testid="recipe-needs-ingredient"
               className="text-xs font-bold text-amber-400"
             >
-              Add at least one ingredient, or switch to Food to enter macros directly.
+              Add at least one component.
             </p>
           )}
 

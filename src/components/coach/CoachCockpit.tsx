@@ -28,7 +28,7 @@ const SETS_PAGE_LIMIT = 500;
 
 export const CoachCockpit: React.FC = () => {
   const { user } = useAuth();
-  const { selectedAthleteId, selectedAthlete, athletes, switchAthlete } = useCoach();
+  const { selectedAthleteId, selectedAthlete, athletes, switchAthlete, refreshAthletes } = useCoach();
   const queryClient = useQueryClient();
   const isOnline = useOnlineStatus();
 
@@ -244,14 +244,16 @@ export const CoachCockpit: React.FC = () => {
 
   const handleConfirmDisconnect = async () => {
     if (!selectedAthleteId || isDisconnecting) return;
+    const athleteToDisconnect = selectedAthleteId;
     setIsDisconnecting(true);
     setDisconnectStatus(null);
     try {
-      const { error } = await supabase.rpc('disconnect_coach', { target_athlete_id: selectedAthleteId });
+      const { error } = await supabase.rpc('disconnect_coach', { target_athlete_id: athleteToDisconnect });
       if (error) throw error;
       setShowDisconnectConfirm(false);
-      queryClient.invalidateQueries({ queryKey: ['coach_athletes'] });
-      switchAthlete('');
+      await refreshAthletes();
+      const remaining = athletes.filter((a) => a.id !== athleteToDisconnect);
+      switchAthlete(remaining[0]?.id || '');
     } catch (err: unknown) {
       console.error('Failed to disconnect athlete:', err);
       const message = err instanceof Error ? err.message : (err as { message?: string })?.message || 'Failed to disconnect athlete';
@@ -417,7 +419,7 @@ export const CoachCockpit: React.FC = () => {
           isOpen={isSheetOpen}
           onClose={() => { setIsSheetOpen(false); setEditingTemplate(null); }}
           template={editingTemplate}
-          assignToAthleteId={selectedAthleteId || undefined}
+          assignToAthleteId={editingTemplate ? undefined : (selectedAthleteId || undefined)}
           onSaved={() => {
             void invalidateExerciseDomain(queryClient, user?.id);
             queryClient.invalidateQueries({ queryKey: ['routine_templates'] });

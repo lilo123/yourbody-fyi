@@ -1,4 +1,4 @@
-import { createElement, useState, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
+import { createElement, useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import type { Database } from '../../types/supabase';
@@ -10,6 +10,8 @@ import {
   setFlusherSessionUser,
   type NutritionLogPayload,
 } from '../../offline';
+import { onSynced } from '../../offline/flusher';
+import { invalidateNutritionDerived } from '../../lib/invalidate';
 import { markFirstLogCompleted } from '../../pwa/installPromptEarly';
 
 export async function fetchDishDetail(dishId: string): Promise<CustomDishDetail | null> {
@@ -75,6 +77,10 @@ export interface UseNutritionDataOptions {
   profile: UserProfile | null;
   timeZone?: string;
   onMutationSuccessReset: () => void;
+  onCustomDishSaved?: (
+    dish: CustomDishDetail,
+    previousDish?: CustomDishDetail | CustomDish | { id?: string; name?: string; notes?: string | null } | null
+  ) => void;
   setStatus: (s: string) => void;
   setIsError: (e: boolean) => void;
 }
@@ -127,10 +133,21 @@ export function useNutritionData({
   profile,
   timeZone,
   onMutationSuccessReset,
+  onCustomDishSaved,
   setStatus,
   setIsError,
 }: UseNutritionDataOptions) {
   const queryClient = useQueryClient();
+  const onCustomDishSavedRef = useRef(onCustomDishSaved);
+  onCustomDishSavedRef.current = onCustomDishSaved;
+
+  useEffect(() => {
+    const unsubscribe = onSynced(() => {
+      invalidateNutritionDerived(queryClient, targetUserId);
+    });
+    return unsubscribe;
+  }, [queryClient, targetUserId]);
+
   const { show: showToast, dismiss: dismissGlobalToast, activeToast: contextActiveToast } = useToast();
   const contextActiveToastRef = useRef(contextActiveToast);
   contextActiveToastRef.current = contextActiveToast;
@@ -345,7 +362,7 @@ export function useNutritionData({
       }
       setStatus('');
       setIsError(false);
-      queryClient.invalidateQueries({ queryKey: ['nutrition_logs', targetUserId] });
+      invalidateNutritionDerived(queryClient, targetUserId);
       if (created?.incrementDishId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
       }
@@ -479,21 +496,30 @@ export function useNutritionData({
       if (savedRow?.id && targetUserId) {
         const fullKey = queryKeys.customDishes.fullByUser(targetUserId);
         const currentFull = queryClient.getQueryData<CustomDishDetail[]>(fullKey);
+        const listKey = queryKeys.customDishes.byUser(targetUserId);
+        const currentList = queryClient.getQueryData<CustomDish[]>(listKey);
+        const previousDish =
+          currentFull?.find((dishItem) => dishItem.id === savedRow.id) ??
+          currentList?.find((dishItem) => dishItem.id === savedRow.id) ??
+          null;
+        const previousDishSnapshot = previousDish ? { ...previousDish } : null;
+
+        let updatedFullRow: CustomDishDetail = savedRow as any as CustomDishDetail;
         if (currentFull) {
           const idx = currentFull.findIndex((d) => d.id === savedRow.id);
           const nextFull = [...currentFull];
           if (idx >= 0) {
             nextFull[idx] = { ...nextFull[idx], ...(savedRow as any) };
+            updatedFullRow = nextFull[idx];
           } else {
             nextFull.unshift(savedRow as any as CustomDishDetail);
+            updatedFullRow = nextFull[0];
           }
           queryClient.setQueryData(fullKey, nextFull);
         } else {
           queryClient.setQueryData(fullKey, [savedRow as any as CustomDishDetail]);
         }
 
-        const listKey = queryKeys.customDishes.byUser(targetUserId);
-        const currentList = queryClient.getQueryData<CustomDish[]>(listKey);
         if (currentList) {
           const rawItems = (savedRow as any).items;
           const serving_quantity =
@@ -516,6 +542,7 @@ export function useNutritionData({
           }
           queryClient.setQueryData(listKey, nextList);
         }
+        onCustomDishSavedRef.current?.(updatedFullRow, previousDishSnapshot);
       }
       showToast({ message: 'Custom dish saved', kind: 'success' });
       setStatus('');
@@ -710,12 +737,11 @@ export function useNutritionData({
     [dismissToast, deleteMutation, showToast]
   );
 
-  const timerState = useSyncExternalStore(
+  const isTimerActive = useSyncExternalStore(
     restTimerStore.subscribe,
-    restTimerStore.getSnapshot,
-    restTimerStore.getServerSnapshot
+    restTimerStore.getIsActiveSnapshot,
+    restTimerStore.getIsActiveServerSnapshot
   );
-  const isTimerActive = timerState.isRunning || timerState.isPaused;
 
   return {
     customDishes,

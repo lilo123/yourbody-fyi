@@ -137,47 +137,54 @@ describe('App Shell & Navigation', () => {
   });
 
   it('persists global rest timer pill across /workout, /nutrition, and /history navigation', async () => {
-    window.history.pushState({}, '', '/workout');
-    render(
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    );
+    vi.useFakeTimers({ shouldAdvanceTime: false, toFake: ['Date'] });
+    vi.setSystemTime(1_700_000_000_000);
+    try {
+      window.history.pushState({}, '', '/workout');
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
 
-    await waitFor(() => {
-      expect(screen.getByText('Yourbody.fyi')).toBeDefined();
-    });
+      await waitFor(() => {
+        expect(screen.getByText('Yourbody.fyi')).toBeDefined();
+      });
 
-    // Start timer globally
-    act(() => {
-      restTimerStore.start(90);
-    });
+      // Start timer globally
+      act(() => {
+        restTimerStore.start(90);
+      });
 
-    // Pill is visible on /workout
-    await waitFor(() => {
-      expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
-      expect(screen.getByTestId('rest-timer-display').textContent).toBe('1:30');
-    });
+      // Pill is visible on /workout
+      const pill = await screen.findByTestId('rest-timer-pill', {}, { timeout: 10000 });
+      expect(pill).toBeDefined();
+      await waitFor(() => {
+        expect(screen.getByTestId('rest-timer-display').textContent).toBe('1:30');
+      }, { timeout: 10000 });
 
-    // Navigate to /nutrition
-    const nutritionTab = await screen.findByTestId('nav-nutrition');
-    fireEvent.click(nutritionTab);
+      // Navigate to /nutrition
+      const nutritionTab = await screen.findByTestId('nav-nutrition');
+      fireEvent.click(nutritionTab);
 
-    await waitFor(() => {
-      expect(screen.getByText("Today's Nutrition")).toBeDefined();
-      expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
-      expect(screen.getByTestId('rest-timer-display')).toBeDefined();
-    }, { timeout: 10000 });
+      await waitFor(() => {
+        expect(screen.getByText("Today's Nutrition")).toBeDefined();
+        expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
+        expect(screen.getByTestId('rest-timer-display')).toBeDefined();
+      }, { timeout: 10000 });
 
-    // Navigate to /history
-    const historyTab = await screen.findByTestId('nav-history');
-    fireEvent.click(historyTab);
+      // Navigate to /history
+      const historyTab = await screen.findByTestId('nav-history');
+      fireEvent.click(historyTab);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('history-tab-workouts')).toBeDefined();
-      expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
-      expect(screen.getByTestId('rest-timer-display')).toBeDefined();
-    }, { timeout: 10000 });
+      await waitFor(() => {
+        expect(screen.getByTestId('history-tab-workouts')).toBeDefined();
+        expect(screen.getByTestId('rest-timer-pill')).toBeDefined();
+        expect(screen.getByTestId('rest-timer-display')).toBeDefined();
+      }, { timeout: 10000 });
+    } finally {
+      vi.useRealTimers();
+    }
   }, 15000);
 
   it('renders Cyberpunk pulse spinner and retry button in ProtectedRoute when loading exceeds 2s', async () => {
@@ -513,6 +520,88 @@ describe('App Shell & Navigation', () => {
         unmount();
       });
     }
+  });
+
+  describe('WCAG 2.4.1 Skip to main content link', () => {
+    const TABBABLE_SELECTOR = [
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([disabled]):not([type="hidden"])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(', ');
+
+    it('signed-in app shell: skip link is first tabbable element, has href="#main-content", and target main exists', async () => {
+      const cachedProfile = {
+        id: 'test-user-id',
+        email: 'coach@yourbody.fyi',
+        username: 'Coach Demo',
+        role: 'coach',
+        target_calories: 2400,
+        target_protein: 180,
+        target_carbs: 240,
+        target_fat: 70,
+        target_fiber: 30,
+      };
+      localStorage.setItem('yourbody_user', JSON.stringify(cachedProfile));
+      window.history.pushState({}, '', '/workout');
+
+      const { container } = render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole('link', { name: 'Skip to main content' })).toBeInTheDocument();
+      });
+
+      const skipLink = screen.getByRole('link', { name: 'Skip to main content' });
+      expect(skipLink.getAttribute('href')).toBe('#main-content');
+      expect(skipLink.className).toContain('sr-only');
+      expect(skipLink.className).toContain('focus:not-sr-only');
+
+      const tabbableElements = container.querySelectorAll(TABBABLE_SELECTOR);
+      expect(tabbableElements.length).toBeGreaterThan(0);
+      expect(tabbableElements[0]).toBe(skipLink);
+
+      const mainLandmark = container.querySelector('#main-content');
+      expect(mainLandmark).not.toBeNull();
+      expect(mainLandmark?.tagName.toLowerCase()).toBe('main');
+      expect(mainLandmark?.getAttribute('tabindex')).toBe('-1');
+    });
+
+    it('public landing shell: skip link is first tabbable element, has href="#main-content", and target main exists', async () => {
+      (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
+      (supabase.auth.getSession as any).mockResolvedValue({ data: { session: null } });
+      localStorage.clear();
+      window.history.pushState({}, '', '/');
+
+      const { container } = render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole('link', { name: 'Skip to main content' })).toBeInTheDocument();
+      });
+
+      const skipLink = screen.getByRole('link', { name: 'Skip to main content' });
+      expect(skipLink.getAttribute('href')).toBe('#main-content');
+      expect(skipLink.className).toContain('sr-only');
+      expect(skipLink.className).toContain('focus:not-sr-only');
+
+      const tabbableElements = container.querySelectorAll(TABBABLE_SELECTOR);
+      expect(tabbableElements.length).toBeGreaterThan(0);
+      expect(tabbableElements[0]).toBe(skipLink);
+
+      const mainLandmark = container.querySelector('#main-content');
+      expect(mainLandmark).not.toBeNull();
+      expect(mainLandmark?.tagName.toLowerCase()).toBe('main');
+      expect(mainLandmark?.getAttribute('tabindex')).toBe('-1');
+    });
   });
 });
 
