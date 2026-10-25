@@ -34,9 +34,9 @@ export const HiddenRoutineList: React.FC<HiddenRoutineListProps> = ({
             disabled={!isOnline}
             title={!isOnline ? 'Available when online' : 'Unhide'}
             data-testid={`unhide-template-${template.id}`}
-            aria-label="Unhide"
+            aria-label={`Unhide ${template.name}`}
             onClick={() => onUnhide(template)}
-            className="px-3 py-1.5 min-h-[36px] bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-semibold text-xs rounded-lg transition touch-manipulation cursor-pointer disabled:opacity-50"
+            className="px-2.5 py-1 min-h-[44px] min-w-[44px] flex items-center justify-center gap-1 text-xs font-semibold rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 transition touch-manipulation cursor-pointer disabled:opacity-50"
           >
             Unhide
           </button>
