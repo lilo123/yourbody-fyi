@@ -224,6 +224,29 @@ describe('parseNutrition', () => {
     await expect(parseNutrition({ text: 'test' })).rejects.toThrow('Internal edge function failure');
   });
 
+  it('unwraps 503 AI_SERVICE_UNAVAILABLE error with friendly message and code', async () => {
+    (supabase.functions.invoke as any).mockResolvedValue({
+      data: null,
+      error: {
+        context: {
+          status: 503,
+          clone: () => ({
+            json: async () => ({
+              error: 'AI service is temporarily unavailable. Please try again or switch to manual entry.',
+              code: 'AI_SERVICE_UNAVAILABLE',
+            }),
+          }),
+        },
+      },
+    });
+
+    await expect(parseNutrition({ text: 'meal' })).rejects.toMatchObject({
+      message: 'AI service is temporarily unavailable. Please try again or switch to manual entry.',
+      status: 503,
+      code: 'AI_SERVICE_UNAVAILABLE',
+    });
+  });
+
   it('rejects oversized photo payload client-side before invoking edge function', async () => {
     const oversizePhoto = {
       base64: 'largebase64',
