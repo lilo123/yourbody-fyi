@@ -79,9 +79,38 @@ describe('Prerender Output and Configuration', () => {
       expect(html).toContain('min-h-[100dvh]');
     });
 
-    it('defines PRERENDER_ROUTES covering all four public paths', () => {
+    it('renders "/login" containing Sign In heading, Header, email and password inputs', () => {
+      const html = renderRoute('/login');
+      expect(html).toContain('Yourbody.fyi');
+      expect(html).toContain('Sign In');
+      expect(html).toContain('Email Address');
+      expect(html).toContain('login-email');
+      expect(html).toContain('login-password');
+      expect(html).toContain('flex-1 max-w-xl w-full mx-auto p-4 pb-8');
+      expect(html).toContain('min-h-[100dvh]');
+    });
+
+    it('renders static "/login" with disabled inputs, disabled submit, method="post", and no password value', () => {
+      const html = renderRoute('/login');
+      // Belt-and-braces POST guard with no action prevents pre-hydration GET submission
+      expect(html).toContain('method="post"');
+      expect(html).not.toMatch(/<form[^>]*action=/i);
+
+      // Email and password inputs must be disabled prior to client hydration
+      expect(html).toMatch(/<input[^>]*id="login-email"[^>]*disabled/);
+      expect(html).toMatch(/<input[^>]*id="login-password"[^>]*disabled/);
+
+      // Submit button must be disabled
+      expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
+
+      // Password input must have no password value populated
+      expect(html).toMatch(/<input[^>]*id="login-password"[^>]*value=""/);
+      expect(html).not.toMatch(/<input[^>]*id="login-password"[^>]*value="[^"]+"/);
+    });
+
+    it('defines PRERENDER_ROUTES covering all five public paths', () => {
       const paths = PRERENDER_ROUTES.map((r) => r.path);
-      expect(paths).toEqual(['/', '/terms', '/privacy', '/refunds']);
+      expect(paths).toEqual(['/', '/terms', '/privacy', '/refunds', '/login']);
     });
 
     it('renders exactly one h1 per prerendered public route for SEO compliance', () => {
@@ -116,6 +145,7 @@ describe('Prerender Output and Configuration', () => {
       expect(guardContent).toContain('/terms');
       expect(guardContent).toContain('/privacy');
       expect(guardContent).toContain('/refunds');
+      expect(guardContent).toContain('/login');
       expect(guardContent).toContain('standalone');
       // Exact Supabase auth key regex excluding PKCE code-verifier
       expect(guardContent).toContain('AUTH_KEY_REGEX = /^sb-[a-zA-Z0-9_.-]+-auth-token$/');
@@ -179,7 +209,7 @@ describe('Prerender Output and Configuration', () => {
       expect(indexHtml).toContain('visibility: hidden');
     });
 
-    it('removes #prerender via useLayoutEffect across LandingView and legal pages', () => {
+    it('removes #prerender via useLayoutEffect across LandingView, legal pages, and LoginView', () => {
       const landingSrc = fs.readFileSync(path.join(rootDir, 'src/components/landing/LandingView.tsx'), 'utf8');
       expect(landingSrc).toContain('useLayoutEffect');
       expect(landingSrc).toContain("document.getElementById('prerender')?.remove()");
@@ -189,6 +219,10 @@ describe('Prerender Output and Configuration', () => {
         expect(legalSrc).toContain('useLayoutEffect');
         expect(legalSrc).toContain("document.getElementById('prerender')?.remove()");
       }
+
+      const loginSrc = fs.readFileSync(path.join(rootDir, 'src/components/auth/LoginView.tsx'), 'utf8');
+      expect(loginSrc).toContain('useLayoutEffect');
+      expect(loginSrc).toContain("document.getElementById('prerender')?.remove()");
     });
   });
 
@@ -224,6 +258,18 @@ describe('Prerender Output and Configuration', () => {
       expect(distRefunds).toContain('data-prerender-route="/refunds"');
       expect(distRefunds).toMatch(/<meta\s+name=["']prerender-route["']\s+content=["']\/refunds["']/);
       expect(distRefunds).toContain('Refund Policy');
+
+      const distLogin = fs.readFileSync(path.join(distDir, 'login.html'), 'utf8');
+      expect(distLogin).toContain('id="prerender"');
+      expect(distLogin).toContain('data-prerender-route="/login"');
+      expect(distLogin).toMatch(/<meta\s+name=["']prerender-route["']\s+content=["']\/login["']/);
+      expect(distLogin).toContain('Sign In');
+      expect(distLogin).toContain('method="post"');
+      expect(distLogin).not.toMatch(/<form[^>]*action=/i);
+      expect(distLogin).toMatch(/<input[^>]*id="login-email"[^>]*disabled/);
+      expect(distLogin).toMatch(/<input[^>]*id="login-password"[^>]*disabled/);
+      expect(distLogin).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
+      expect(distLogin).not.toMatch(/<input[^>]*id="login-password"[^>]*value="[^"]+"/);
 
       expect(fs.existsSync(path.join(distDir, 'prerender-guard.js'))).toBe(true);
     });
@@ -335,11 +381,14 @@ describe('Prerender Output and Configuration', () => {
       expect(normalizePath('/privacy.html')).toBe('/privacy');
       expect(normalizePath('/refunds')).toBe('/refunds');
       expect(normalizePath('/refunds/')).toBe('/refunds');
+      expect(normalizePath('/login')).toBe('/login');
+      expect(normalizePath('/login/')).toBe('/login');
+      expect(normalizePath('/login.html')).toBe('/login');
       expect(normalizePath('/workout')).toBe('/workout');
       expect(normalizePath('/workout/')).toBe('/workout');
     });
 
-    it('guard logic for /, /index.html, /terms, /terms/, /privacy, /refunds, /workout (signed-in vs signed-out)', () => {
+    it('guard logic for /, /index.html, /terms, /terms/, /privacy, /refunds, /login, /workout (signed-in vs signed-out)', () => {
       const { shouldKeepPrerender } = loadGuard();
 
       // Case 1: Landing page document (prerenderRoute = '/')
@@ -352,12 +401,13 @@ describe('Prerender Output and Configuration', () => {
       expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/', hasUser: true })).toBe(false);
       expect(shouldKeepPrerender({ pathname: '/index.html', prerenderRoute: '/', hasUser: true })).toBe(false);
 
-      // SW navigateFallback scenario: index.html served at legal or app paths
+      // SW navigateFallback scenario: index.html served at legal, login, or app paths
       // Mismatch between current pathname and prerenderRoute '/' hides prerender immediately
       expect(shouldKeepPrerender({ pathname: '/terms', prerenderRoute: '/', hasUser: false })).toBe(false);
       expect(shouldKeepPrerender({ pathname: '/terms/', prerenderRoute: '/', hasUser: false })).toBe(false);
       expect(shouldKeepPrerender({ pathname: '/privacy', prerenderRoute: '/', hasUser: false })).toBe(false);
       expect(shouldKeepPrerender({ pathname: '/refunds', prerenderRoute: '/', hasUser: false })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/login', prerenderRoute: '/', hasUser: false })).toBe(false);
       expect(shouldKeepPrerender({ pathname: '/workout', prerenderRoute: '/', hasUser: false })).toBe(false);
 
       // Case 2: Terms document (prerenderRoute = '/terms')
@@ -379,7 +429,14 @@ describe('Prerender Output and Configuration', () => {
       expect(shouldKeepPrerender({ pathname: '/refunds', prerenderRoute: '/refunds', hasUser: true })).toBe(false);
       expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/refunds', hasUser: false })).toBe(false);
 
-      // Case 5: Non-public routes like /workout always hide prerender
+      // Case 5: Login document (prerenderRoute = '/login')
+      expect(shouldKeepPrerender({ pathname: '/login', prerenderRoute: '/login', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/login/', prerenderRoute: '/login', hasUser: false })).toBe(true);
+      expect(shouldKeepPrerender({ pathname: '/login', prerenderRoute: '/login', hasUser: true })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/', prerenderRoute: '/login', hasUser: false })).toBe(false);
+      expect(shouldKeepPrerender({ pathname: '/workout', prerenderRoute: '/login', hasUser: false })).toBe(false);
+
+      // Case 6: Non-public routes like /workout always hide prerender
       expect(shouldKeepPrerender({ pathname: '/workout', prerenderRoute: '/workout', hasUser: false })).toBe(false);
       expect(shouldKeepPrerender({ pathname: '/workout', prerenderRoute: '/workout', hasUser: true })).toBe(false);
     });

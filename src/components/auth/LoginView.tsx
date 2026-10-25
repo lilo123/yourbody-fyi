@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Zap, AlertCircle, Eye, EyeOff, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
@@ -12,9 +12,19 @@ const InAppBrowserBanner = React.lazy(() =>
 
 type AuthMode = 'signin' | 'register' | 'check_email' | 'forgot_password';
 
-export const LoginView: React.FC = () => {
+export interface LoginViewProps {
+  prerenderDisabled?: boolean;
+}
+
+export const LoginView: React.FC<LoginViewProps> = ({ prerenderDisabled = false }) => {
   const { signIn, signUp, requestPasswordReset, resendConfirmation } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const routeMessage =
+    typeof (location.state as { message?: unknown } | null)?.message === 'string'
+      ? (location.state as { message: string }).message
+      : '';
 
   const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
@@ -23,10 +33,32 @@ export const LoginView: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
-  const [infoMsg, setInfoMsg] = useState('');
+  const [infoMsg, setInfoMsg] = useState(routeMessage);
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  React.useLayoutEffect(() => {
+    document.getElementById('prerender')?.remove();
+  }, []);
+
+  useEffect(() => {
+    if (routeMessage) {
+      setInfoMsg(routeMessage);
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        try {
+          const currentState = window.history.state;
+          if (currentState && typeof currentState === 'object') {
+            window.history.replaceState({ ...currentState, usr: null }, document.title);
+          } else {
+            window.history.replaceState({}, document.title);
+          }
+        } catch {
+          // ignore history access issues in restricted environments
+        }
+      }
+    }
+  }, [routeMessage]);
 
   useEffect(() => {
     let timer: any;
@@ -214,7 +246,11 @@ export const LoginView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form
+            method={prerenderDisabled ? 'post' : undefined}
+            onSubmit={handleSubmit}
+            className="space-y-4"
+          >
             <div>
               <label
                 htmlFor="login-email"
@@ -229,6 +265,7 @@ export const LoginView: React.FC = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 autoComplete="email"
+                disabled={prerenderDisabled}
                 className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-3 text-base sm:text-sm font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none transition"
                 required
               />
@@ -250,6 +287,7 @@ export const LoginView: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     autoComplete={mode === 'register' ? "new-password" : "current-password"}
+                    disabled={prerenderDisabled}
                     className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-3 pr-12 text-base sm:text-sm font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none transition"
                     required
                   />
@@ -281,6 +319,7 @@ export const LoginView: React.FC = () => {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     autoComplete="new-password"
+                    disabled={prerenderDisabled}
                     className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-3 pr-12 text-base sm:text-sm font-semibold focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none transition"
                     required
                   />
@@ -350,7 +389,7 @@ export const LoginView: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading || (mode === 'register' && isTermsConsentEnabled() && !termsAccepted)}
+              disabled={prerenderDisabled || loading || (mode === 'register' && isTermsConsentEnabled() && !termsAccepted)}
               className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3 min-h-[44px] rounded-xl uppercase tracking-wider text-xs shadow-[0_0_15px_rgba(6,182,212,0.3)] active:scale-95 transition disabled:opacity-50"
             >
               {loading ? (mode === 'register' ? 'Creating Account...' : mode === 'signin' ? 'Signing in...' : 'Processing...') : (

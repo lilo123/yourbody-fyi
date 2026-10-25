@@ -1,4 +1,4 @@
-import { createElement, useState, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
+import { createElement, useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import type { Database } from '../../types/supabase';
@@ -10,6 +10,8 @@ import {
   setFlusherSessionUser,
   type NutritionLogPayload,
 } from '../../offline';
+import { onSynced } from '../../offline/flusher';
+import { invalidateNutritionDerived } from '../../lib/invalidate';
 import { markFirstLogCompleted } from '../../pwa/installPromptEarly';
 
 export async function fetchDishDetail(dishId: string): Promise<CustomDishDetail | null> {
@@ -138,6 +140,14 @@ export function useNutritionData({
   const queryClient = useQueryClient();
   const onCustomDishSavedRef = useRef(onCustomDishSaved);
   onCustomDishSavedRef.current = onCustomDishSaved;
+
+  useEffect(() => {
+    const unsubscribe = onSynced(() => {
+      invalidateNutritionDerived(queryClient, targetUserId);
+    });
+    return unsubscribe;
+  }, [queryClient, targetUserId]);
+
   const { show: showToast, dismiss: dismissGlobalToast, activeToast: contextActiveToast } = useToast();
   const contextActiveToastRef = useRef(contextActiveToast);
   contextActiveToastRef.current = contextActiveToast;
@@ -352,7 +362,7 @@ export function useNutritionData({
       }
       setStatus('');
       setIsError(false);
-      queryClient.invalidateQueries({ queryKey: ['nutrition_logs', targetUserId] });
+      invalidateNutritionDerived(queryClient, targetUserId);
       if (created?.incrementDishId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.customDishes.byUser(targetUserId) });
       }
@@ -727,12 +737,11 @@ export function useNutritionData({
     [dismissToast, deleteMutation, showToast]
   );
 
-  const timerState = useSyncExternalStore(
+  const isTimerActive = useSyncExternalStore(
     restTimerStore.subscribe,
-    restTimerStore.getSnapshot,
-    restTimerStore.getServerSnapshot
+    restTimerStore.getIsActiveSnapshot,
+    restTimerStore.getIsActiveServerSnapshot
   );
-  const isTimerActive = timerState.isRunning || timerState.isPaused;
 
   return {
     customDishes,

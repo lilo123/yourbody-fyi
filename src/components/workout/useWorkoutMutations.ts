@@ -357,7 +357,8 @@ export function useWorkoutMutations({
 
   const deleteSetMutation = useMutation({
     mutationFn: async (setId: string) => {
-      await deleteSet(supabase, setId);
+      const effectiveUserId = await resolveUserId();
+      await deleteSet(supabase, setId, { targetUserId: effectiveUserId, workoutDate });
     },
     onMutate: async (setId: string) => {
       const effectiveUserId = targetUserId || "";

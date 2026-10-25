@@ -93,7 +93,8 @@ export const Header: React.FC = () => {
         <div className="max-w-xl mx-auto px-4 flex items-center justify-between">
           {/* Brand */}
           <Link
-            to="/workout"
+            to={user ? '/workout' : '/'}
+            data-testid="brand-link"
             className="flex items-center gap-2 min-w-0 min-h-[44px] group relative before:absolute before:inset-0 before:min-w-[44px] before:min-h-[44px] before:content-['']"
           >
             <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
