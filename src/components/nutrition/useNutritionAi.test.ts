@@ -519,6 +519,45 @@ describe('useNutritionAi quota exceeded handling', () => {
       expect(onFallbackToManual).not.toHaveBeenCalled();
     });
 
+    it('sets status to AI service unavailable without connection message on upstream 503 AI_SERVICE_UNAVAILABLE', async () => {
+      const upstreamErr: any = new Error(
+        'AI service is temporarily unavailable. Please try again or switch to manual entry.'
+      );
+      upstreamErr.status = 503;
+      upstreamErr.code = 'AI_SERVICE_UNAVAILABLE';
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(upstreamErr);
+
+      const { result } = setupHook();
+
+      await act(async () => {
+        await result.current.handleForceAiAnalyze('4 eggs');
+      });
+
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(setStatus).toHaveBeenCalledWith(
+        'AI service unavailable: AI service is temporarily unavailable. Please try again or switch to manual entry.'
+      );
+      expect(setStatus).not.toHaveBeenCalledWith(expect.stringContaining('check your connection'));
+      expect(onFallbackToManual).not.toHaveBeenCalled();
+    });
+
+    it('preserves connection message on true offline network failure', async () => {
+      const netErr = new TypeError('Failed to fetch');
+      vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(netErr);
+
+      const { result } = setupHook();
+
+      await act(async () => {
+        await result.current.handleAnalyze({
+          overrideText: 'complex meal query with multiple ingredients that cannot be parsed locally',
+        });
+      });
+
+      expect(setIsError).toHaveBeenCalledWith(true);
+      expect(setStatus).toHaveBeenCalledWith('AI needs a connection: use quick log');
+      expect(onFallbackToManual).toHaveBeenCalled();
+    });
+
     it('does NOT call onFallbackToManual when handleForceAiAnalyze fails with network error', async () => {
       const netErr = new TypeError('Failed to fetch');
       vi.spyOn(parseNutritionModule, 'parseNutrition').mockRejectedValueOnce(netErr);
