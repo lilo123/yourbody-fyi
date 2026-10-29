@@ -242,13 +242,14 @@ describe('CustomDishEditor', () => {
       );
 
       const checkbox = screen.getByTestId('scale-nutrition-checkbox') as HTMLInputElement;
-      expect(checkbox).toBeDefined();
+      expect(checkbox).toBeInTheDocument();
       expect(checkbox.checked).toBe(true);
-      expect(screen.queryByTestId('scale-nutrition-hint')).toBeNull();
+      expect(screen.queryByTestId('scale-nutrition-hint')).not.toBeInTheDocument();
 
       fireEvent.click(checkbox);
       expect(checkbox.checked).toBe(false);
       const hint = screen.getByTestId('scale-nutrition-hint');
+      expect(hint).toBeInTheDocument();
       expect(hint.textContent).toBe('Nutrition stays the same; only the serving size changes');
     });
 
@@ -386,6 +387,64 @@ describe('CustomDishEditor', () => {
       expect(Math.abs(totals.carbs - sumCarbs)).toBeLessThanOrEqual(0.05 * updatedItems.length);
       expect(Math.abs(totals.fat - sumFat)).toBeLessThanOrEqual(0.05 * updatedItems.length);
       expect(Math.abs(totals.fiber - sumFiber)).toBeLessThanOrEqual(0.05 * updatedItems.length);
+    });
+
+    it('2-component dish, untick component 1, change component 2 Qty -> component 2 still scales; component 1 does not', () => {
+      const onChange = vi.fn();
+
+      const items = [
+        item({
+          id: 'c1',
+          name: 'Oats',
+          quantity: 1,
+          calories: 100,
+          protein: 10,
+          carbs: 20,
+          fat: 5,
+          fiber: 2,
+        }),
+        item({
+          id: 'c2',
+          name: 'Whey',
+          quantity: 1,
+          calories: 120,
+          protein: 24,
+          carbs: 2,
+          fat: 1,
+          fiber: 0,
+        }),
+      ];
+
+      render(
+        <CustomDishEditor
+          items={items}
+          onChange={onChange}
+          isEditing={true}
+        />
+      );
+
+      const checkboxes = screen.getAllByTestId('scale-nutrition-checkbox');
+      // Untick component 1
+      fireEvent.click(checkboxes[0]);
+
+      // Now change component 2 Qty 1 -> 2
+      const qtyInputs = screen.getAllByTestId('dish-item-quantity');
+      fireEvent.change(qtyInputs[1], { target: { value: '2' } });
+
+      expect(onChange).toHaveBeenCalled();
+      const updated = onChange.mock.calls[0][0] as NutritionItem[];
+      // Component 2 MUST still scale (calories: 240, protein: 48)
+      expect(updated[1].quantity).toBe(2);
+      expect(updated[1].calories).toBe(240);
+      expect(updated[1].protein).toBe(48);
+
+      // And component 1 must not scale if its quantity changes
+      onChange.mockClear();
+      fireEvent.change(qtyInputs[0], { target: { value: '2' } });
+      const updatedC1 = onChange.mock.calls[0][0] as NutritionItem[];
+      expect(updatedC1[0].quantity).toBe(2);
+      expect(updatedC1[0].calories).toBe(100);
+      expect(updatedC1[0].protein).toBe(10);
     });
   });
 });

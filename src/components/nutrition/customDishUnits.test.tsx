@@ -976,13 +976,115 @@ INSERT INTO public.custom_dishes (
       );
 
       const checkbox = screen.getByLabelText('Scale nutrition with amount') as HTMLInputElement;
-      expect(checkbox).toBeDefined();
+      expect(checkbox).toBeInTheDocument();
       expect(checkbox.checked).toBe(true);
-      expect(screen.queryByText('Nutrition stays the same; only the serving size changes')).toBeNull();
+      expect(screen.queryByText('Nutrition stays the same; only the serving size changes')).not.toBeInTheDocument();
 
       // Uncheck checkbox -> hint appears
       fireEvent.click(checkbox);
-      expect(screen.getByText('Nutrition stays the same; only the serving size changes')).toBeDefined();
+      expect(screen.getByText('Nutrition stays the same; only the serving size changes')).toBeInTheDocument();
+    });
+
+    it('saved custom dish preserves parent=sum check (chk_cd_parent_equals_items_sum) against sum of saved items', async () => {
+      const onSaveDish = vi.fn();
+      const multiItemDish: CustomDish = {
+        id: 'multi-dish-1',
+        user_id: 'user-1',
+        name: 'Oatmeal Bowl',
+        calories: 190,
+        protein: 14,
+        carbs: 23,
+        fat: 13,
+        fiber: 3,
+        kind: 'recipe',
+        use_count: 1,
+        items: [
+          {
+            id: 'item-1',
+            name: 'Oats',
+            quantity: 1,
+            unit: 'unit',
+            calories: 100,
+            protein: 10,
+            carbs: 20,
+            fat: 5,
+            fiber: 2,
+          },
+          {
+            id: 'item-2',
+            name: 'Peanut Butter',
+            quantity: 1,
+            unit: 'unit',
+            calories: 90,
+            protein: 4,
+            carbs: 3,
+            fat: 8,
+            fiber: 1,
+          },
+        ],
+      };
+
+      const { result } = renderHook(() =>
+        useCustomDishModal({
+          onSaveDish,
+          onDeleteDish: vi.fn(),
+          onDismissToast: vi.fn(),
+          fetchDishDetail: vi.fn().mockResolvedValue(multiItemDish),
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleOpenEditDishModal(multiItemDish);
+      });
+
+      // Scale first component (quantity 1 -> 2, calories 100 -> 200, protein 10 -> 20, carbs 20 -> 40, fat 5 -> 10, fiber 2 -> 4)
+      act(() => {
+        result.current.setDishModalItems([
+          {
+            ...multiItemDish.items![0],
+            quantity: 2,
+            calories: 200,
+            protein: 20,
+            carbs: 40,
+            fat: 10,
+            fiber: 4,
+          },
+          multiItemDish.items![1],
+        ]);
+      });
+
+      act(() => {
+        result.current.handleSaveCustomDishModal({ preventDefault: vi.fn() } as any);
+      });
+
+      expect(onSaveDish).toHaveBeenCalledTimes(1);
+      const { dishPayload } = onSaveDish.mock.calls[0][0];
+      const savedItems = dishPayload.items;
+
+      // Verify saved items
+      expect(savedItems).toHaveLength(2);
+      expect(savedItems[0].calories).toBe(200);
+      expect(savedItems[1].calories).toBe(90);
+
+      // Verify saved parent macros match sum of saved items
+      const sumSavedCalories = savedItems.reduce((acc: number, it: any) => acc + it.calories, 0);
+      const sumSavedProtein = savedItems.reduce((acc: number, it: any) => acc + it.protein, 0);
+      const sumSavedCarbs = savedItems.reduce((acc: number, it: any) => acc + it.carbs, 0);
+      const sumSavedFat = savedItems.reduce((acc: number, it: any) => acc + it.fat, 0);
+      const sumSavedFiber = savedItems.reduce((acc: number, it: any) => acc + it.fiber, 0);
+
+      expect(dishPayload.calories).toBe(290);
+      expect(dishPayload.protein).toBe(24);
+      expect(dishPayload.carbs).toBe(43);
+      expect(dishPayload.fat).toBe(18);
+      expect(dishPayload.fiber).toBe(5);
+
+      // Parent equals sum of items invariant check (chk_cd_parent_equals_items_sum: <= 0.05 * count)
+      expect(Math.abs(dishPayload.calories - sumSavedCalories)).toBeLessThanOrEqual(0.05 * savedItems.length);
+      expect(Math.abs(dishPayload.protein - sumSavedProtein)).toBeLessThanOrEqual(0.05 * savedItems.length);
+      expect(Math.abs(dishPayload.carbs - sumSavedCarbs)).toBeLessThanOrEqual(0.05 * savedItems.length);
+      expect(Math.abs(dishPayload.fat - sumSavedFat)).toBeLessThanOrEqual(0.05 * savedItems.length);
+      expect(Math.abs(dishPayload.fiber - sumSavedFiber)).toBeLessThanOrEqual(0.05 * savedItems.length);
     });
   });
 

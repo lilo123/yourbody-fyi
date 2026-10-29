@@ -64,8 +64,6 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
   isDeleting,
   customDishes,
   onOpenEditDishModal,
-  scaleNutritionWithAmount,
-  onScaleNutritionChange,
 }) => {
   const baseId = useId();
   const nameId = `${baseId}-dish-name`;
@@ -126,8 +124,6 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
             items={dishModalItems}
             onChange={setDishModalItems}
             isEditing={Boolean(editingDish)}
-            scaleNutritionWithAmount={scaleNutritionWithAmount}
-            onScaleNutritionChange={onScaleNutritionChange}
           />
 
           {recipeNeedsIngredient && (

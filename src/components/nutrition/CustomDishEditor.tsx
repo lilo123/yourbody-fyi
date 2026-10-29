@@ -10,8 +10,6 @@ export interface CustomDishEditorProps {
   items: NutritionItem[];
   onChange: (next: NutritionItem[]) => void;
   isEditing?: boolean;
-  scaleNutritionWithAmount?: boolean;
-  onScaleNutritionChange?: (val: boolean) => void;
 }
 
 let seq = 0;
@@ -46,8 +44,6 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({
   items,
   onChange,
   isEditing = false,
-  scaleNutritionWithAmount = true,
-  onScaleNutritionChange,
 }) => {
   const baseId = useId();
   const listRef = useRef<HTMLDivElement>(null);
@@ -71,7 +67,6 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({
 
   const handleScaleToggle = (itemKey: string, checked: boolean) => {
     setScaleMap((prev) => ({ ...prev, [itemKey]: checked }));
-    onScaleNutritionChange?.(checked);
     if (!checked) {
       const currentItem = items.find((entry, idx) => (entry.id || String(idx)) === itemKey);
       if (currentItem && currentItem.quantity > 0) {
@@ -86,7 +81,7 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({
     if (!currentItem) return;
 
     const itemKey = currentItem.id || String(index);
-    const isScaleEnabled = isEditing && (scaleMap[itemKey] ?? scaleNutritionWithAmount ?? true);
+    const isScaleEnabled = isEditing && (scaleMap[itemKey] ?? true);
 
     if (isScaleEnabled) {
       const baseline = baselinesRef.current.get(itemKey) ?? currentItem;
@@ -191,7 +186,9 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({
         {items.map((item, index) => {
           const itemKey = item.id || String(index);
           const qtyId = `${baseId}-item-${itemKey}-qty`;
-          const isItemScaleEnabled = isEditing && (scaleMap[itemKey] ?? scaleNutritionWithAmount ?? true);
+          const scaleId = `${baseId}-item-${itemKey}-scale`;
+          const hintId = `${baseId}-item-${itemKey}-scale-hint`;
+          const isItemScaleEnabled = isEditing && (scaleMap[itemKey] ?? true);
           return (
             <div
               key={item.id}
@@ -221,18 +218,27 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({
 
               {isEditing && (
                 <div className="space-y-1">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-300">
+                  <label
+                    htmlFor={scaleId}
+                    className="flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-300"
+                  >
                     <input
+                      id={scaleId}
                       type="checkbox"
                       data-testid="scale-nutrition-checkbox"
                       checked={isItemScaleEnabled}
                       onChange={(e) => handleScaleToggle(itemKey, e.target.checked)}
+                      aria-describedby={!isItemScaleEnabled ? hintId : undefined}
                       className="accent-cyan-500 rounded min-w-[16px] min-h-[16px]"
                     />
                     <span>Scale nutrition with amount</span>
                   </label>
                   {!isItemScaleEnabled && (
-                    <p data-testid="scale-nutrition-hint" className="text-xs text-zinc-400">
+                    <p
+                      id={hintId}
+                      data-testid="scale-nutrition-hint"
+                      className="text-xs text-zinc-400"
+                    >
                       Nutrition stays the same; only the serving size changes
                     </p>
                   )}
