@@ -692,15 +692,23 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
       }
     }
 
-    const fallbackDefaults = DEFAULT_WORKOUT_TEMPLATES.filter(
-      (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
-    );
+    const hasCatalogLoaded =
+      (Boolean(targetUserId && isValidUUID(targetUserId)) &&
+        (rawTemplatesFetched ||
+          Boolean(queryClient.getQueryData(['routine_templates', targetUserId, 'workout'])))) ||
+      customTemplates.some((t) => t.is_master);
+
+    const fallbackDefaults = !hasCatalogLoaded
+      ? DEFAULT_WORKOUT_TEMPLATES.filter(
+          (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
+        )
+      : [];
 
     return {
       custom: dedupedCustom,
       defaults: fallbackDefaults,
     };
-  }, [customTemplates]);
+  }, [customTemplates, rawTemplatesFetched, queryClient, targetUserId]);
 
   return {
     exercises,

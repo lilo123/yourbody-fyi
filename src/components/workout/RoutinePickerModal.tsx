@@ -112,9 +112,10 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
     }
   }
 
-  const fallbackDefaults = defaultTemplates.filter(
-    (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
-  );
+  const hasCatalogData = templatesToDisplay.length > 0;
+  const fallbackDefaults = hasCatalogData
+    ? []
+    : defaultTemplates.filter((dt) => !seenCustomNames.has(dt.name.trim().toLowerCase()));
 
   return (
     <AccessibleModal
