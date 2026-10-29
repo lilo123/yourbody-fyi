@@ -119,7 +119,12 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
             />
           </div>
 
-          <CustomDishEditor items={dishModalItems} onChange={setDishModalItems} />
+          <CustomDishEditor
+            key={editingDish?.id ?? 'new'}
+            items={dishModalItems}
+            onChange={setDishModalItems}
+            isEditing={Boolean(editingDish)}
+          />
 
           {recipeNeedsIngredient && (
             <p
