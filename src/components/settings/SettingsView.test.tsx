@@ -811,6 +811,46 @@ describe('SettingsView', () => {
         expect(screen.getByTestId('copy-prompt-error')).toBeDefined();
       });
     });
+
+    it('respects zero macro targets from profile without replacing them with defaults', async () => {
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'users') {
+          const b = createSupabaseBuilder('users', {
+            data: {
+              id: 'test-coach-id',
+              email: 'athlete@yourbody.fyi',
+              username: 'Zero Macro Athlete',
+              role: 'athlete',
+              is_coach_mode: false,
+              target_calories: 2000,
+              target_protein: 0,
+              target_carbs: 0,
+              target_fat: 0,
+              target_fiber: 0,
+            },
+            error: null,
+          });
+          b.upsert = mockUpsert;
+          return b;
+        }
+        return createSupabaseBuilder(table, { data: [], error: null });
+      });
+
+      renderComponent();
+      await screen.findByDisplayValue('Zero Macro Athlete');
+
+      const caloriesInput = screen.getByLabelText(/calories/i) as HTMLInputElement;
+      const proteinInput = screen.getByLabelText(/protein/i) as HTMLInputElement;
+      const carbsInput = screen.getByLabelText(/carbs/i) as HTMLInputElement;
+      const fatInput = screen.getByLabelText(/fat/i) as HTMLInputElement;
+      const fiberInput = screen.getByLabelText(/fiber/i) as HTMLInputElement;
+
+      expect(caloriesInput.value).toBe('2000');
+      expect(proteinInput.value).toBe('0');
+      expect(carbsInput.value).toBe('0');
+      expect(fatInput.value).toBe('0');
+      expect(fiberInput.value).toBe('0');
+    });
   });
 });
 
