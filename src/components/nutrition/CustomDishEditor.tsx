@@ -1,14 +1,17 @@
-import React, { useRef, useId } from 'react';
+import React, { useRef, useId, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { formatCalories, formatMacro, roundTo1Decimal } from '../../utils/nutrition';
 import { parseDecimalInput, shortUnitLabel, type CanonicalUnit } from '../../utils/unitConverter';
-import { sumItems, MAX_ITEMS, type NutritionItem } from '../../utils/itemModel';
+import { sumItems, scaleItemToQuantity, MAX_ITEMS, type NutritionItem } from '../../utils/itemModel';
 import { UnitChip } from './UnitChip';
 import { DecimalInput } from './DecimalInput';
 
 export interface CustomDishEditorProps {
   items: NutritionItem[];
   onChange: (next: NutritionItem[]) => void;
+  isEditing?: boolean;
+  scaleNutritionWithAmount?: boolean;
+  onScaleNutritionChange?: (val: boolean) => void;
 }
 
 let seq = 0;
@@ -39,20 +42,99 @@ const MACRO_FIELDS = [
  * deliberately has no scroll region of its own: the modal already scrolls and
  * there is already one nested scroller in it.
  */
-export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({ items, onChange }) => {
+export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({
+  items,
+  onChange,
+  isEditing = false,
+  scaleNutritionWithAmount = true,
+  onScaleNutritionChange,
+}) => {
   const baseId = useId();
   const listRef = useRef<HTMLDivElement>(null);
   const addRef = useRef<HTMLButtonElement>(null);
   const totals = sumItems(items);
 
+  const [scaleMap, setScaleMap] = useState<Record<string, boolean>>({});
+  const baselinesRef = useRef<Map<string, NutritionItem>>(new Map());
+
+  // Record baselines for any items not yet snapshotted
+  items.forEach((entry, idx) => {
+    const key = entry.id || String(idx);
+    if (!baselinesRef.current.has(key)) {
+      baselinesRef.current.set(key, { ...entry });
+    }
+  });
+
   const patch = (index: number, next: Partial<NutritionItem>) => {
-    onChange(items.map((it, i) => (i === index ? { ...it, ...next } : it)));
+    onChange(items.map((entry, itemIdx) => (itemIdx === index ? { ...entry, ...next } : entry)));
+  };
+
+  const handleScaleToggle = (itemKey: string, checked: boolean) => {
+    setScaleMap((prev) => ({ ...prev, [itemKey]: checked }));
+    onScaleNutritionChange?.(checked);
+    if (!checked) {
+      const currentItem = items.find((entry, idx) => (entry.id || String(idx)) === itemKey);
+      if (currentItem && currentItem.quantity > 0) {
+        baselinesRef.current.set(itemKey, { ...currentItem });
+      }
+    }
+  };
+
+  const patchQuantity = (index: number, val: number | string) => {
+    const num = typeof val === 'number' && Number.isFinite(val) ? Math.max(0, roundTo1Decimal(val)) : 0;
+    const currentItem = items[index];
+    if (!currentItem) return;
+
+    const itemKey = currentItem.id || String(index);
+    const isScaleEnabled = isEditing && (scaleMap[itemKey] ?? scaleNutritionWithAmount ?? true);
+
+    if (isScaleEnabled) {
+      const baseline = baselinesRef.current.get(itemKey) ?? currentItem;
+      const scaled = scaleItemToQuantity(baseline, num);
+      const nextItem: NutritionItem = {
+        ...currentItem,
+        quantity: num,
+        calories: roundTo1Decimal(scaled.calories),
+        protein: roundTo1Decimal(scaled.protein),
+        carbs: roundTo1Decimal(scaled.carbs),
+        fat: roundTo1Decimal(scaled.fat),
+        fiber: roundTo1Decimal(scaled.fiber),
+      };
+      onChange(items.map((entry, itemIdx) => (itemIdx === index ? nextItem : entry)));
+    } else {
+      baselinesRef.current.set(itemKey, {
+        ...currentItem,
+        quantity: num,
+      });
+      patch(index, { quantity: num });
+    }
   };
 
   const patchMacro = (index: number, key: (typeof MACRO_FIELDS)[number]['key'], val: string | number) => {
     // Round to at most 1 decimal place. An unusable entry clears to 0 rather than poisoning the parent sum.
-    const n = typeof val === 'number' ? val : (parseDecimalInput(val, { allowNegative: true }) ?? Number(val));
-    patch(index, { [key]: val === '' ? 0 : Number.isFinite(n) ? Math.max(0, roundTo1Decimal(n)) : 0 } as Partial<NutritionItem>);
+    const parsedNumber = typeof val === 'number' ? val : (parseDecimalInput(val, { allowNegative: true }) ?? Number(val));
+    const nextVal = val === '' ? 0 : Number.isFinite(parsedNumber) ? Math.max(0, roundTo1Decimal(parsedNumber)) : 0;
+    const currentItem = items[index];
+    if (currentItem) {
+      const itemKey = currentItem.id || String(index);
+      baselinesRef.current.set(itemKey, {
+        ...currentItem,
+        [key]: nextVal,
+      });
+    }
+    patch(index, { [key]: nextVal } as Partial<NutritionItem>);
+  };
+
+  const patchUnit = (index: number, unit: CanonicalUnit) => {
+    const currentItem = items[index];
+    if (currentItem) {
+      const itemKey = currentItem.id || String(index);
+      baselinesRef.current.set(itemKey, {
+        ...currentItem,
+        unit,
+      });
+    }
+    patch(index, { unit });
   };
 
   const remove = (index: number) => {
@@ -109,6 +191,7 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({ items, onCha
         {items.map((item, index) => {
           const itemKey = item.id || String(index);
           const qtyId = `${baseId}-item-${itemKey}-qty`;
+          const isItemScaleEnabled = isEditing && (scaleMap[itemKey] ?? scaleNutritionWithAmount ?? true);
           return (
             <div
               key={item.id}
@@ -136,6 +219,26 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({ items, onCha
                 </button>
               </div>
 
+              {isEditing && (
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-300">
+                    <input
+                      type="checkbox"
+                      data-testid="scale-nutrition-checkbox"
+                      checked={isItemScaleEnabled}
+                      onChange={(e) => handleScaleToggle(itemKey, e.target.checked)}
+                      className="accent-cyan-500 rounded min-w-[16px] min-h-[16px]"
+                    />
+                    <span>Scale nutrition with amount</span>
+                  </label>
+                  {!isItemScaleEnabled && (
+                    <p data-testid="scale-nutrition-hint" className="text-xs text-zinc-400">
+                      Nutrition stays the same; only the serving size changes
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-6 gap-1.5">
                 <div className="col-span-2">
                   <label
@@ -149,10 +252,7 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({ items, onCha
                     data-testid="dish-item-quantity"
                     aria-label={`Component ${index + 1} quantity`}
                     value={roundTo1Decimal(item.quantity)}
-                    onChange={(val) => {
-                      const num = typeof val === 'number' && Number.isFinite(val) ? roundTo1Decimal(val) : 0;
-                      patch(index, { quantity: num });
-                    }}
+                    onChange={(val) => patchQuantity(index, val)}
                     className="min-h-[44px] w-full rounded-xl border border-border-interactive bg-zinc-950 p-2 text-center text-base tabular-nums font-bold text-white outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50"
                   />
                 </div>
@@ -163,7 +263,7 @@ export const CustomDishEditor: React.FC<CustomDishEditorProps> = ({ items, onCha
                   <div className="flex min-h-[44px] items-center">
                     <UnitChip
                       value={item.unit}
-                      onChange={(unit: CanonicalUnit) => patch(index, { unit })}
+                      onChange={(unit: CanonicalUnit) => patchUnit(index, unit)}
                       testId="dish-item-unit"
                     />
                   </div>

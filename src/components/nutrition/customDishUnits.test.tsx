@@ -911,7 +911,7 @@ INSERT INTO public.custom_dishes (
       expect(result.current.dishModalProtein).toBe(50);
     });
 
-    it('CustomDishesModal does not render direct scale checkbox since Recipe editor is used', () => {
+    it('CustomDishesModal renders checkbox only when editingDish is present, on by default, and reveals hint when off', () => {
       // Case A: New dish (editingDish is null) -> checkbox is NOT rendered
       const { rerender } = render(
         <CustomDishesModal
@@ -944,7 +944,7 @@ INSERT INTO public.custom_dishes (
       expect(screen.queryByLabelText('Scale nutrition with amount')).toBeNull();
       expect(screen.queryByTestId('scale-nutrition-hint')).toBeNull();
 
-      // Case B: Edit dish (editingDish is present) -> direct scale checkbox is also NOT rendered
+      // Case B: Edit dish (editingDish is present) -> checkbox IS rendered and checked by default
       rerender(
         <CustomDishesModal
           isOpen={true}
@@ -975,8 +975,14 @@ INSERT INTO public.custom_dishes (
         />
       );
 
-      expect(screen.queryByLabelText('Scale nutrition with amount')).toBeNull();
-      expect(screen.queryByTestId('scale-nutrition-hint')).toBeNull();
+      const checkbox = screen.getByLabelText('Scale nutrition with amount') as HTMLInputElement;
+      expect(checkbox).toBeDefined();
+      expect(checkbox.checked).toBe(true);
+      expect(screen.queryByText('Nutrition stays the same; only the serving size changes')).toBeNull();
+
+      // Uncheck checkbox -> hint appears
+      fireEvent.click(checkbox);
+      expect(screen.getByText('Nutrition stays the same; only the serving size changes')).toBeDefined();
     });
   });
 

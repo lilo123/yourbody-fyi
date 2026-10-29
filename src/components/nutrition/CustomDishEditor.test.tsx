@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CustomDishEditor } from './CustomDishEditor';
-import type { NutritionItem } from '../../utils/itemModel';
+import { sumItems, type NutritionItem } from '../../utils/itemModel';
 import { expectNoA11yViolations } from '../../test/a11y';
 
 function item(over: Partial<NutritionItem> = {}): NutritionItem {
@@ -230,4 +230,163 @@ describe('CustomDishEditor', () => {
     fireEvent.change(screen.getByTestId('dish-item-protein'), { target: { value: '72.5' } });
     expect((onChange.mock.calls[0][0] as NutritionItem[])[0].protein).toBe(72.5);
   });
+
+  describe('Scale nutrition in recipe editor', () => {
+    it('checkbox renders when editing a dish, default ticked, and reveals hint when unticked', () => {
+      render(
+        <CustomDishEditor
+          items={[item()]}
+          onChange={() => {}}
+          isEditing={true}
+        />
+      );
+
+      const checkbox = screen.getByTestId('scale-nutrition-checkbox') as HTMLInputElement;
+      expect(checkbox).toBeDefined();
+      expect(checkbox.checked).toBe(true);
+      expect(screen.queryByTestId('scale-nutrition-hint')).toBeNull();
+
+      fireEvent.click(checkbox);
+      expect(checkbox.checked).toBe(false);
+      const hint = screen.getByTestId('scale-nutrition-hint');
+      expect(hint.textContent).toBe('Nutrition stays the same; only the serving size changes');
+    });
+
+    it('Qty 1->2 with it ticked doubles that component macros', () => {
+      const onChange = vi.fn();
+      render(
+        <CustomDishEditor
+          items={[
+            item({
+              quantity: 1,
+              calories: 100,
+              protein: 10,
+              carbs: 20,
+              fat: 5,
+              fiber: 2,
+            }),
+          ]}
+          onChange={onChange}
+          isEditing={true}
+        />
+      );
+
+      fireEvent.change(screen.getByTestId('dish-item-quantity'), { target: { value: '2' } });
+
+      expect(onChange).toHaveBeenCalled();
+      const updated = onChange.mock.calls[0][0] as NutritionItem[];
+      expect(updated[0].quantity).toBe(2);
+      expect(updated[0].calories).toBe(200);
+      expect(updated[0].protein).toBe(20);
+      expect(updated[0].carbs).toBe(40);
+      expect(updated[0].fat).toBe(10);
+      expect(updated[0].fiber).toBe(4);
+    });
+
+    it('unticked leaves macros unchanged when Qty changes', () => {
+      const onChange = vi.fn();
+      render(
+        <CustomDishEditor
+          items={[
+            item({
+              quantity: 1,
+              calories: 100,
+              protein: 10,
+              carbs: 20,
+              fat: 5,
+              fiber: 2,
+            }),
+          ]}
+          onChange={onChange}
+          isEditing={true}
+        />
+      );
+
+      // Untick the checkbox
+      const checkbox = screen.getByTestId('scale-nutrition-checkbox');
+      fireEvent.click(checkbox);
+
+      // Change quantity 1 -> 2
+      fireEvent.change(screen.getByTestId('dish-item-quantity'), { target: { value: '2' } });
+
+      expect(onChange).toHaveBeenCalled();
+      const updated = onChange.mock.calls[0][0] as NutritionItem[];
+      expect(updated[0].quantity).toBe(2);
+      expect(updated[0].calories).toBe(100);
+      expect(updated[0].protein).toBe(10);
+      expect(updated[0].carbs).toBe(20);
+      expect(updated[0].fat).toBe(5);
+      expect(updated[0].fiber).toBe(2);
+    });
+
+    it('saved dish passes the parent=sum check after scaling component quantity', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(
+        <CustomDishEditor
+          items={[
+            item({
+              id: 'c1',
+              quantity: 1,
+              calories: 100,
+              protein: 10,
+              carbs: 20,
+              fat: 5,
+              fiber: 2,
+            }),
+            item({
+              id: 'c2',
+              name: 'Peanut Butter',
+              quantity: 1,
+              calories: 90,
+              protein: 4,
+              carbs: 3,
+              fat: 8,
+              fiber: 1,
+            }),
+          ]}
+          onChange={onChange}
+          isEditing={true}
+        />
+      );
+
+      // Scale first component Qty 1 -> 2 (doubles c1 to 200/20/40/10/4)
+      const qtyInputs = screen.getAllByTestId('dish-item-quantity');
+      fireEvent.change(qtyInputs[0], { target: { value: '2' } });
+
+      expect(onChange).toHaveBeenCalled();
+      const updatedItems = onChange.mock.calls[0][0] as NutritionItem[];
+      expect(updatedItems[0].quantity).toBe(2);
+      expect(updatedItems[0].calories).toBe(200);
+
+      // Re-render with updated items to check totals
+      rerender(
+        <CustomDishEditor
+          items={updatedItems}
+          onChange={onChange}
+          isEditing={true}
+        />
+      );
+
+      const totals = sumItems(updatedItems);
+      // c1 (200, 20, 40, 10, 4) + c2 (90, 4, 3, 8, 1) = 290 cal, 24 pro, 43 carbs, 18 fat, 5 fiber
+      expect(totals.calories).toBe(290);
+      expect(totals.protein).toBe(24);
+      expect(totals.carbs).toBe(43);
+      expect(totals.fat).toBe(18);
+      expect(totals.fiber).toBe(5);
+
+      // Parent equals sum of items invariant check (chk_cd_parent_equals_items_sum)
+      const sumCal = updatedItems.reduce((acc, it) => acc + it.calories, 0);
+      const sumPro = updatedItems.reduce((acc, it) => acc + it.protein, 0);
+      const sumCarbs = updatedItems.reduce((acc, it) => acc + it.carbs, 0);
+      const sumFat = updatedItems.reduce((acc, it) => acc + it.fat, 0);
+      const sumFiber = updatedItems.reduce((acc, it) => acc + it.fiber, 0);
+      expect(Math.abs(totals.calories - sumCal)).toBeLessThanOrEqual(0.05 * updatedItems.length);
+      expect(Math.abs(totals.protein - sumPro)).toBeLessThanOrEqual(0.05 * updatedItems.length);
+      expect(Math.abs(totals.carbs - sumCarbs)).toBeLessThanOrEqual(0.05 * updatedItems.length);
+      expect(Math.abs(totals.fat - sumFat)).toBeLessThanOrEqual(0.05 * updatedItems.length);
+      expect(Math.abs(totals.fiber - sumFiber)).toBeLessThanOrEqual(0.05 * updatedItems.length);
+    });
+  });
 });
+
