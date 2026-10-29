@@ -60,10 +60,7 @@ export function resolveRoutineAndExercises(
   removedExercises: string[] = [],
   hasLoadedCatalog?: boolean
 ): ResolvedRoutineResult {
-  const hasCatalog =
-    hasLoadedCatalog !== undefined
-      ? hasLoadedCatalog
-      : customTemplates.some((t) => t.is_master);
+  const hasCatalog = Boolean(hasLoadedCatalog);
   let resolvedRoutine = 'Rest Day';
   let resolvedExList: string[] = [];
   let resolvedTargets: Record<string, number> = {};
@@ -255,10 +252,7 @@ export function checkIsScheduledRoutineDirty({
   targetRepCounts?: Record<string, number>;
   hasLoadedCatalog?: boolean;
 }): boolean {
-  const hasCatalog =
-    hasLoadedCatalog !== undefined
-      ? hasLoadedCatalog
-      : customTemplates.some((t) => t.is_master);
+  const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
   const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
   const scheduledDef = !hasCatalog

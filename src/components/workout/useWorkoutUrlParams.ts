@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { RoutineTemplate } from '../../types/database';
-import { DEFAULT_WORKOUT_TEMPLATES } from '../../utils/ghostSets';
 
 export function isValidCivilDate(str: string | null): boolean {
   if (!str || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
@@ -22,6 +21,7 @@ export interface UseWorkoutUrlParamsOptions {
   workoutDate: string;
   onDateChange: (newDate: string) => void;
   targetUserId?: string;
+  hasLoadedCatalog?: boolean;
 }
 
 export function useWorkoutUrlParams({
@@ -31,7 +31,9 @@ export function useWorkoutUrlParams({
   workoutDate,
   onDateChange,
   targetUserId,
+  hasLoadedCatalog,
 }: UseWorkoutUrlParamsOptions) {
+  const isCatalogLoaded = hasLoadedCatalog !== undefined ? hasLoadedCatalog : templatesFetched;
   const dateParamAppliedRef = useRef(false);
   const routineParamAppliedRef = useRef<string | null>(null);
   const lastTargetUserRef = useRef(targetUserId);
@@ -80,7 +82,7 @@ export function useWorkoutUrlParams({
 
   // 3. Routine param handling
   useEffect(() => {
-    if (!templatesFetched) return;
+    if (!isCatalogLoaded) return;
 
     const searchParams = getSearchParams();
     const routineParam = searchParams.get('routine');
@@ -99,14 +101,8 @@ export function useWorkoutUrlParams({
       return;
     }
 
-    const matchedDefault = DEFAULT_WORKOUT_TEMPLATES.find(
-      (t) => t.name.toLowerCase() === trimmed.toLowerCase()
-    );
-
-    if (matchedDefault) {
-      onSelectRoutine(matchedDefault.name);
-    }
-  }, [getSearchParams, templatesFetched, customTemplates, onSelectRoutine]);
+    // ?routine= must not resolve through DEFAULT_WORKOUT_TEMPLATES once the catalog is loaded
+  }, [getSearchParams, isCatalogLoaded, customTemplates, onSelectRoutine]);
 
   return {
     syncDateToUrl,

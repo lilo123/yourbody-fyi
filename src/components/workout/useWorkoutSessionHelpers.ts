@@ -117,15 +117,14 @@ export function getInitialRoutineState(
   initialSession: ActiveWorkoutSession | null | undefined,
   workoutDate: string,
   customTemplates?: RoutineTemplate[],
-  hasLoadedCatalog?: boolean
+  hasLoadedCatalog?: boolean,
+  isCatalogPending?: boolean
 ) {
-  const hasCatalog =
-    hasLoadedCatalog !== undefined
-      ? hasLoadedCatalog
-      : Boolean(customTemplates && customTemplates.some((t) => t.is_master));
+  const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
   const scheduledCustom = customTemplates?.find((t) => t.days_of_week?.includes(dayAbbr));
-  const scheduledDef = !hasCatalog
+  const canUseDefaults = !hasCatalog && !isCatalogPending;
+  const scheduledDef = canUseDefaults
     ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
         t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
       )

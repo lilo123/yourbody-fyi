@@ -1035,18 +1035,7 @@ describe('WorkoutEngine', () => {
       if (table === 'sets') {
         return { insert: mockInsert };
       }
-      return {
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-          order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          or: vi.fn().mockResolvedValue({ data: [], error: null }),
-          in: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-        }),
-      };
+      return createSupabaseBuilder(table, { data: [], error: null });
     });
 
     renderComponent();
@@ -2667,6 +2656,9 @@ describe('WorkoutEngine', () => {
               error: null,
             });
           }
+          if (fn === 'get_routine_catalog') {
+            return Promise.resolve({ data: defaultMasterTemplates, error: null });
+          }
           return Promise.resolve({ data: [], error: null });
         });
 
@@ -2805,6 +2797,9 @@ describe('WorkoutEngine', () => {
               ],
               error: null,
             });
+          }
+          if (fn === 'get_routine_catalog') {
+            return Promise.resolve({ data: defaultMasterTemplates, error: null });
           }
           return Promise.resolve({ data: [], error: null });
         });

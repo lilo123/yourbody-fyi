@@ -1,15 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import type { RoutineTemplate, Exercise } from '../../types/database';
 import { DEFAULT_WORKOUT_TEMPLATES } from '../../utils/ghostSets';
-import { resolveRoutineAndExercises } from './workoutEngineHelpers';
-import { useWorkoutQueries } from './useWorkoutQueries';
+import { resolveRoutineAndExercises, checkIsScheduledRoutineDirty } from './workoutEngineHelpers';
+import { getInitialRoutineState } from './useWorkoutSessionHelpers';
+import { useWorkoutSession } from './useWorkoutSession';
+import { useWorkoutUrlParams } from './useWorkoutUrlParams';
 import { RoutinePickerModal } from './RoutinePickerModal';
-import { supabase } from '../../lib/supabase';
+import { workoutSessionStore } from '../../utils/workoutSessionStore';
 import * as pendingOpsModule from './useWorkoutPendingOps';
+import * as onlineModule from '../../hooks/useOnlineStatus';
 
 const mockCatalog: Exercise[] = [
   { id: 'ex-incline', name: 'Incline Bench Press', body_parts: ['Chest'] },
@@ -37,133 +40,81 @@ const pullRoutine: RoutineTemplate = {
   ],
 };
 
+const customLegDay: RoutineTemplate = {
+  id: 'tpl-custom-leg',
+  name: 'My Custom Leg Day',
+  is_master: false,
+  user_id: '00000000-0000-0000-0000-000000000001',
+  assigned_to: null,
+  days_of_week: ['Wed'],
+  exercises: [],
+};
+
 describe('Hidden routines stay hidden (confirm-first tests)', () => {
   let queryClient: QueryClient;
   const targetUserId = '00000000-0000-0000-0000-000000000001';
 
   beforeEach(() => {
     vi.clearAllMocks();
+    workoutSessionStore.resetForTesting();
     queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
       },
     });
     vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue([]);
+    vi.spyOn(onlineModule, 'useOnlineStatus').mockReturnValue(true);
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }) =>
     React.createElement(QueryClientProvider, { client: queryClient }, children);
 
-  describe('(1) catalog without "Push, Quads, & Core - Reduced"', () => {
-    it('schedule does not pick "Push, Quads, & Core - Reduced" on Monday or Thursday', () => {
-      // 2026-10-19 is Monday; catalog only contains Pull routine (Tue/Fri)
-      const mondayRes = resolveRoutineAndExercises(
-        '2026-10-19',
-        [],
-        [pullRoutine],
-        mockCatalog,
-        [],
-        true
-      );
-      expect(mondayRes.routineName).not.toBe('Push, Quads, & Core - Reduced');
-      expect(mondayRes.routineName).toBe('Rest Day');
-
-      // 2026-10-22 is Thursday
-      const thursdayRes = resolveRoutineAndExercises(
-        '2026-10-22',
-        [],
-        [pullRoutine],
-        mockCatalog,
-        [],
-        true
-      );
-      expect(thursdayRes.routineName).not.toBe('Push, Quads, & Core - Reduced');
-      expect(thursdayRes.routineName).toBe('Rest Day');
-    });
-
-    it('picker does not show "Push, Quads, & Core - Reduced" when catalog omits it', async () => {
-      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
-        if (table === 'exercises') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({ data: mockCatalog, error: null }),
-                  range: vi.fn().mockResolvedValue({ data: mockCatalog, error: null }),
-                }),
-              }),
-            }),
-          } as any;
-        }
-        if (table === 'routine_templates') {
-          return {
-            select: vi.fn().mockReturnValue({
-              or: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({
-                    data: [pullRoutine],
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          } as any;
-        }
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          gte: vi.fn().mockReturnThis(),
-          lte: vi.fn().mockReturnThis(),
-          or: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        } as any;
-      });
-
+  describe('(1) useWorkoutSession integration and dirty checking', () => {
+    it('passes customTemplates and loaded flag into session resolution; Monday does not pick deleted routine', () => {
+      // 2026-10-19 is Monday. Catalog has loaded (templatesFetched = true) with only pullRoutine.
       const { result } = renderHook(
-        () => useWorkoutQueries(targetUserId, '2026-10-19'),
+        () =>
+          useWorkoutSession({
+            targetUserId,
+            exercises: mockCatalog,
+            exercisesFetched: true,
+            customTemplates: [pullRoutine],
+            templatesFetched: true,
+            userLogs: [],
+            logsFetched: true,
+            hasLoadedCatalog: true,
+          }),
         { wrapper }
       );
 
-      await waitFor(() => {
-        expect(result.current.templatesFetched).toBe(true);
+      // On Monday, with pullRoutine (Tue/Fri) and no push routine, resolves to Rest Day
+      expect(result.current.activeRoutineName).not.toBe('Push, Quads, & Core - Reduced');
+      expect(result.current.activeRoutineName).toBe('Rest Day');
+      expect(result.current.isScheduledRoutineDirty).toBe(false);
+    });
+
+    it('checkIsScheduledRoutineDirty evaluates against catalog schedule without injecting defaults', () => {
+      const isDirty = checkIsScheduledRoutineDirty({
+        workoutDate: '2026-10-19', // Monday
+        activeRoutineName: 'Rest Day',
+        activeExercises: [],
+        customTemplates: [pullRoutine],
+        exercises: mockCatalog,
+        inputDrafts: {},
+        hasLoadedCatalog: true,
       });
-
-      // availableRoutines.defaults must NOT contain "Push, Quads, & Core - Reduced"
-      const pushDefault = result.current.availableRoutines.defaults.find(
-        (t) => t.name === 'Push, Quads, & Core - Reduced'
-      );
-      expect(pushDefault).toBeUndefined();
-
-      // In the rendered picker modal with availableRoutines passed:
-      render(
-        <QueryClientProvider client={queryClient}>
-          <RoutinePickerModal
-            isOpen={true}
-            onClose={() => {}}
-            onReloadScheduledRoutine={() => {}}
-            onSelectRoutine={() => {}}
-            activeRoutineName="Rest Day"
-            currentDayAbbr="Mon"
-            customTemplates={result.current.availableRoutines.custom}
-            defaultTemplates={result.current.availableRoutines.defaults}
-            exercises={mockCatalog}
-          />
-        </QueryClientProvider>
-      );
-
-      expect(screen.queryByText('Push, Quads, & Core - Reduced')).toBeNull();
+      // Monday scheduledName resolves to 'Rest Day' (not Push template), so active 'Rest Day' is not dirty
+      expect(isDirty).toBe(false);
     });
   });
 
-  describe('(2) catalog loaded but empty', () => {
-    it('schedule resolves to Rest Day with no defaults injected', () => {
-      // Catalog has loaded (templatesFetched = true) but contains 0 templates
+  describe('(2) hiding all masters (catalog has custom-only or empty)', () => {
+    it('schedule on Monday resolves to Rest Day with custom-only templates, never falling back to defaults', () => {
+      // Catalog has loaded (hasLoadedCatalog = true), but user hid every master routine
       const res = resolveRoutineAndExercises(
-        '2026-10-19',
+        '2026-10-19', // Monday
         [],
-        [],
+        [customLegDay], // only a Wednesday custom routine
         mockCatalog,
         [],
         true
@@ -173,85 +124,134 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
       expect(res.exercises).toEqual([]);
     });
 
-    it('picker injects no defaults when catalog is loaded and empty', async () => {
-      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
-        if (table === 'exercises') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({ data: mockCatalog, error: null }),
-                  range: vi.fn().mockResolvedValue({ data: mockCatalog, error: null }),
-                }),
-              }),
-            }),
-          } as any;
-        }
-        if (table === 'routine_templates') {
-          return {
-            select: vi.fn().mockReturnValue({
-              or: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({
-                    data: [],
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          } as any;
-        }
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          gte: vi.fn().mockReturnThis(),
-          lte: vi.fn().mockReturnThis(),
-          or: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        } as any;
-      });
+    it('getInitialRoutineState resolves to Rest Day when masters are hidden', () => {
+      const state = getInitialRoutineState(
+        null,
+        '2026-10-19',
+        [customLegDay],
+        true // hasLoadedCatalog
+      );
+      expect(state.activeRoutineName).toBe('Rest Day');
+      expect(state.activeExercises).toEqual([]);
+    });
 
-      const { result } = renderHook(
-        () => useWorkoutQueries(targetUserId, '2026-10-19'),
-        { wrapper }
+    it('picker shows no default routines when all masters are hidden', () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[customLegDay]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={true}
+          />
+        </QueryClientProvider>
       );
 
-      await waitFor(() => {
-        expect(result.current.templatesFetched).toBe(true);
-      });
-
-      expect(result.current.availableRoutines.defaults).toEqual([]);
-      expect(result.current.availableRoutines.custom).toEqual([]);
+      expect(screen.queryByText('Push, Quads, & Core - Reduced')).toBeNull();
+      expect(screen.queryByText('Pull, Hamstring, & Core - Reduced')).toBeNull();
+      expect(screen.getByText('My Custom Leg Day')).toBeDefined();
     });
   });
 
-  describe('(3) no catalog data (cold offline)', () => {
-    it('schedule still falls back to defaults on cold offline start', () => {
-      // hasLoadedCatalog is false (no catalog data loaded / cached)
-      const res = resolveRoutineAndExercises(
-        '2026-10-19',
-        [],
-        [],
-        mockCatalog,
-        [],
-        false
+  describe('(3) ?routine= URL parameter handling', () => {
+    it('does not resolve through DEFAULT_WORKOUT_TEMPLATES once catalog is loaded', () => {
+      const onSelectRoutine = vi.fn();
+
+      // Mock searchParams with ?routine=Push, Quads, & Core - Reduced
+      window.history.pushState({}, '', '/workout?routine=Push%2C+Quads%2C+%26+Core+-+Reduced');
+
+      renderHook(() =>
+        useWorkoutUrlParams({
+          customTemplates: [pullRoutine],
+          templatesFetched: true,
+          hasLoadedCatalog: true,
+          onSelectRoutine,
+          workoutDate: '2026-10-19',
+          onDateChange: vi.fn(),
+          targetUserId,
+        })
       );
-      expect(res.routineName).toBe('Push, Quads, & Core - Reduced');
-      expect(res.exercises).toEqual(DEFAULT_WORKOUT_TEMPLATES[0].exercises);
-      expect(res.targetSets).toEqual(DEFAULT_WORKOUT_TEMPLATES[0].targetSets);
+
+      // Must not call onSelectRoutine with the deleted master routine
+      expect(onSelectRoutine).not.toHaveBeenCalledWith('Push, Quads, & Core - Reduced');
+      expect(onSelectRoutine).not.toHaveBeenCalled();
+
+      // Clean up URL
+      window.history.pushState({}, '', '/workout');
+    });
+  });
+
+  describe('(5) fresh online start with catalog PENDING vs cold offline', () => {
+    it('online pending: picker shows no defaults and initial state does not lock a default into a draft', () => {
+      // While catalog query is pending online:
+      const state = getInitialRoutineState(
+        null,
+        '2026-10-19', // Monday
+        [],
+        false, // hasLoadedCatalog
+        true // isCatalogPending
+      );
+      // Must not auto-schedule default routine into state or draft while pending
+      expect(state.activeRoutineName).toBe('Rest Day');
+      expect(state.activeExercises).toEqual([]);
+
+      // In picker modal while pending:
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={false}
+            isCatalogPending={true}
+          />
+        </QueryClientProvider>
+      );
+      expect(screen.queryByText('Push, Quads, & Core - Reduced')).toBeNull();
     });
 
-    it('picker still shows defaults when cold offline with no cached data', () => {
-      // Query has not fetched and cache is empty
-      const { result } = renderHook(
-        () => useWorkoutQueries(targetUserId, '2026-10-19'),
-        { wrapper }
+    it('cold offline start: picker shows defaults and initial state falls back to defaults', () => {
+      // True cold offline start: not loaded and not pending
+      const state = getInitialRoutineState(
+        null,
+        '2026-10-19', // Monday
+        [],
+        false, // hasLoadedCatalog
+        false // isCatalogPending
       );
+      expect(state.activeRoutineName).toBe('Push, Quads, & Core - Reduced');
+      expect(state.activeExercises).toEqual(DEFAULT_WORKOUT_TEMPLATES[0].exercises);
 
-      expect(result.current.templatesFetched).toBe(false);
-      expect(result.current.availableRoutines.defaults).toEqual(DEFAULT_WORKOUT_TEMPLATES);
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={false}
+            isCatalogPending={false}
+          />
+        </QueryClientProvider>
+      );
+      expect(screen.getByText('Push, Quads, & Core - Reduced')).toBeDefined();
     });
   });
 });
