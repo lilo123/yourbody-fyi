@@ -58,17 +58,25 @@ async function selectWorkoutA(page: Page) {
   const routineBtn = page.locator('[data-testid="routine-select-btn"]');
   await expect(chooseBtn.or(routineBtn).first()).toBeVisible({ timeout: 15000 });
 
+  let openedModal = false;
   if (await chooseBtn.isVisible()) {
-    await chooseBtn.click();
-    await page.locator('[data-testid="routine-picker-modal"] button:has-text("Workout A (Push, Quads & Core)")').click();
-    await page.locator('[data-testid="routine-picker-modal"]').waitFor({ state: 'hidden' });
-  } else {
+    try {
+      await chooseBtn.click({ timeout: 3000 });
+      openedModal = true;
+    } catch {
+      // Element detached during catalog load race; fall back to routineBtn
+    }
+  }
+  if (!openedModal) {
     const text = await routineBtn.textContent();
     if (!text?.includes('Workout A')) {
       await routineBtn.click();
-      await page.locator('[data-testid="routine-picker-modal"] button:has-text("Workout A (Push, Quads & Core)")').click();
-      await page.locator('[data-testid="routine-picker-modal"]').waitFor({ state: 'hidden' });
+      openedModal = true;
     }
+  }
+  if (openedModal) {
+    await page.locator('[data-testid="routine-picker-modal"] button:has-text("Workout A (Push, Quads & Core)")').click();
+    await page.locator('[data-testid="routine-picker-modal"]').waitFor({ state: 'hidden' });
   }
   await expect(page.locator('[data-testid="exercise-card-0"]')).toBeVisible({ timeout: 15000 });
 }

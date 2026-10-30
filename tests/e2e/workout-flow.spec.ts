@@ -53,8 +53,24 @@ test.describe('Workout Flow E2E', () => {
   test('interacts with workout sets, draft inputs, and commit action', async ({ page }) => {
     // If on Rest Day, click Choose Routine to select Workout A so exercise set cards appear
     const chooseRoutineBtn = page.locator('button:has-text("Choose Routine")');
+    const routineSelectBtn = page.locator('[data-testid="routine-select-btn"]');
+    let openedModal = false;
     if (await chooseRoutineBtn.isVisible()) {
-      await chooseRoutineBtn.click();
+      try {
+        await chooseRoutineBtn.click({ timeout: 3000 });
+        openedModal = true;
+      } catch {
+        // Element detached during catalog load race; fall back to routineSelectBtn
+      }
+    }
+    if (!openedModal) {
+      const routineText = await routineSelectBtn.textContent();
+      if (!routineText?.includes('Workout A (Push, Quads & Core)')) {
+        await routineSelectBtn.click();
+        openedModal = true;
+      }
+    }
+    if (openedModal) {
       await page.click('button:has-text("Workout A (Push, Quads & Core)")');
       await expect(page.locator('[data-testid="exercise-card-0"]')).toBeVisible();
     }
@@ -90,15 +106,24 @@ test.describe('Workout Flow E2E', () => {
     const chooseRoutineBtn = page.locator('button:has-text("Choose Routine")');
     await expect(page.locator('[data-testid="routine-select-btn"], button:has-text("Choose Routine")').first()).toBeVisible();
 
+    let openedModal = false;
     if (await chooseRoutineBtn.isVisible()) {
-      await chooseRoutineBtn.click();
-      await page.click('button:has-text("Workout A (Push, Quads & Core)")');
-    } else {
+      try {
+        await chooseRoutineBtn.click({ timeout: 3000 });
+        openedModal = true;
+      } catch {
+        // Element detached during catalog load race; fall back to routineSelectBtn
+      }
+    }
+    if (!openedModal) {
       const routineText = await routineSelectBtn.textContent();
       if (!routineText?.includes('Workout A (Push, Quads & Core)')) {
         await routineSelectBtn.click();
-        await page.click('button:has-text("Workout A (Push, Quads & Core)")');
+        openedModal = true;
       }
+    }
+    if (openedModal) {
+      await page.click('button:has-text("Workout A (Push, Quads & Core)")');
     }
 
     const firstCard = page.locator('[data-testid="exercise-card-0"]');
