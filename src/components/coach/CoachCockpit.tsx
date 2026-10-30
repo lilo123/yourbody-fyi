@@ -96,12 +96,13 @@ export const CoachCockpit: React.FC = () => {
     enabled: Boolean(selectedAthleteId) && selectedAthleteId.length > 0,
     queryFn: async () => {
       if (!selectedAthleteId) return [];
+      const { startOfDay } = getDayBounds(daysAgoStr, athleteTimeZone);
       // payload-gate: accepted-list — athlete workout detail in cockpit, measured 682 B on /coach (source: docs/evidence/perf-trace-results.json, route /coach, the workouts query). Cite that retained path, never a runId — this file is in scripts/perf-payload-sources.json, so editing this comment retires the run whose id was written here. Bounded: the sets embed is bounded per workout by COACH_SETS_PER_WORKOUT_LIMIT with a truncation warning. PostgREST applies an embedded limit per parent row, so a generous cap is inert: measured against the bench-athlete fixture, caps of 500 and 2000 return byte-identical responses to no cap at all (119,655 B embed, /coach 176,395 B, OVER the 153,600 B ceiling), while cap 200 gives 62,475 B and /coach 119,215 B. See the cap table in useWorkoutQueries.ts. Open item: this bounds the tail, not the worst case; the structural fix is lazy-loading sets on expand like /history. Do not insert lines between this comment and the query: payload check resolves annotations by proximity, and this file is at its 600-line budget.
       const { data: workoutsData, error: wErr } = await supabase
         .from('workouts')
         .select(WORKOUT_WITH_SETS_PROJECTION)
         .eq('user_id', selectedAthleteId)
-        .gte('date', daysAgoStr)
+        .gte('date', startOfDay)
         .order('date', { ascending: false })
         .limit(100)
         .limit(COACH_SETS_PER_WORKOUT_LIMIT, { referencedTable: 'sets' });
@@ -117,7 +118,7 @@ export const CoachCockpit: React.FC = () => {
             ...s,
             set_type: ((s as any).set_type as SetType) || 'working',
             workout_id: w.id,
-            workout_date: normalizeDateStr(w.date || s.created_at),
+            workout_date: normalizeDateStr(w.date || s.created_at, athleteTimeZone),
             workout_name: w.name || 'Workout Session',
             exercise_name: resolveExerciseLabel((s as any).exercise?.name || exercises.find((e) => e.id === s.exercise_id || e.name === s.exercise_id)?.name || DEFAULT_EXERCISES_LIST.find((e) => e.id === s.exercise_id || e.name === s.exercise_id)?.name || (s as { exercise_name?: string }).exercise_name || s.exercise_id),
             weight: s.weight ?? 0,
