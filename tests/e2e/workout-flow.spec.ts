@@ -1,4 +1,48 @@
+import { execSync } from 'child_process';
 import { test, expect, type Page } from '@playwright/test';
+
+const DB_URL =
+  process.env.DATABASE_URL ||
+  'postgresql://postgres:postgres@127.0.0.1:58822/postgres';
+
+function getPsqlCommand(): string {
+  if (process.env.DATABASE_URL) {
+    let parsed: URL;
+    try {
+      parsed = new URL(process.env.DATABASE_URL);
+    } catch {
+      return `psql "${process.env.DATABASE_URL}" -v ON_ERROR_STOP=1`;
+    }
+    if (
+      (parsed.port && parsed.port !== '58822') ||
+      (parsed.hostname && parsed.hostname !== '127.0.0.1' && parsed.hostname !== 'localhost')
+    ) {
+      return `psql -h "${parsed.hostname}" -p "${parsed.port || '5432'}" -U "${parsed.username || 'postgres'}" -d "${parsed.pathname.slice(1) || 'postgres'}" -v ON_ERROR_STOP=1`;
+    }
+  }
+  return `psql "${DB_URL}" -v ON_ERROR_STOP=1`;
+}
+
+function cleanupPollutedWorkouts() {
+  const sql = `
+    DELETE FROM public.sets
+    WHERE workout_id IN (
+      SELECT id FROM public.workouts
+      WHERE user_id = (SELECT id FROM public.users WHERE email = 'athlete@yourbody.fyi')
+        AND name <> 'Push Day Benchmark'
+    );
+    DELETE FROM public.workouts
+    WHERE user_id = (SELECT id FROM public.users WHERE email = 'athlete@yourbody.fyi')
+      AND name <> 'Push Day Benchmark';
+  `;
+  try {
+    const cmd = getPsqlCommand();
+    execSync(cmd, { input: sql, encoding: 'utf8' });
+  } catch (err) {
+    console.error('[workout-flow] Error cleaning up polluted workouts:', err);
+    throw err;
+  }
+}
 
 async function selectWorkoutA(page: Page) {
   const chooseBtn = page.locator('button:has-text("Choose Routine")');
@@ -32,12 +76,17 @@ test.describe('Workout Flow E2E', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
+    cleanupPollutedWorkouts();
     await page.goto('/login');
     await page.fill('input[type="email"]', 'athlete@yourbody.fyi');
     await page.fill('input[type="password"]', 'password123');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/workout');
     await page.waitForLoadState('networkidle');
+  });
+
+  test.afterAll(() => {
+    cleanupPollutedWorkouts();
   });
 
   test('loads workout engine with sticky rest timer and exercise routines', async ({ page }) => {
@@ -83,7 +132,6 @@ test.describe('Workout Flow E2E', () => {
     await selectWorkoutA(page);
 
     const commitBtn = page.locator('button[title*="Commit Set"]').first();
-    const deleteBtn = page.locator('button[title*="Delete set"]').first();
 
     if (await commitBtn.isVisible()) {
       const weightInput = page.locator('input[inputmode="decimal"]').first();
@@ -93,10 +141,14 @@ test.describe('Workout Flow E2E', () => {
         await repsInput.fill('10');
         await commitBtn.click();
         await expect(page.locator('[data-testid="rest-timer-pill"]')).toBeVisible();
+
+        // Unlog the set to restore pristine benchmark state
+        const unlogBtn = page.locator('[data-testid^="unlog-set-btn-"]').first();
+        if (await unlogBtn.isVisible()) {
+          await unlogBtn.click();
+          await expect(commitBtn).toBeVisible();
+        }
       }
-    } else if (await deleteBtn.isVisible()) {
-      await deleteBtn.click();
-      await expect(page.locator('button[title*="Commit Set"]').first()).toBeVisible();
     }
 
     // Verify navigating to History view
