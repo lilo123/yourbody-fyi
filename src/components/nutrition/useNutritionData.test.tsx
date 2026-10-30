@@ -1846,6 +1846,74 @@ describe('useNutritionData (src/components/nutrition/useNutritionData.ts)', () =
       vi.useRealTimers();
       restTimerStore.resetForTesting();
     });
+
+    it('respects zero macro targets (target_carbs: 0, target_protein: 0, target_fat: 0) instead of falling back to defaults', async () => {
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        return createSupabaseBuilder(table, { data: [], error: null }) as any;
+      });
+
+      const { result } = renderHook(
+        () =>
+          useNutritionData({
+            targetUserId: 'user-123',
+            selectedDate: '2026-07-04',
+            timeZone: 'America/New_York',
+            profile: {
+              id: 'user-123',
+              email: 'athlete@example.com',
+              username: 'Zero Macro Athlete',
+              role: 'athlete',
+              target_calories: 2000,
+              target_protein: 0,
+              target_carbs: 0,
+              target_fat: 0,
+              target_fiber: 0,
+            } as any,
+            onMutationSuccessReset: vi.fn(),
+            setStatus: vi.fn(),
+            setIsError: vi.fn(),
+          }),
+        { wrapper }
+      );
+
+      expect(result.current.targets.calories).toBe(2000);
+      expect(result.current.targets.protein).toBe(0);
+      expect(result.current.targets.carbs).toBe(0);
+      expect(result.current.targets.fat).toBe(0);
+      expect(result.current.targets.fiber).toBe(0);
+    });
+
+    it('falls back calories to 2200 default when target_calories is 0 or unset', async () => {
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        return createSupabaseBuilder(table, { data: [], error: null }) as any;
+      });
+
+      const { result } = renderHook(
+        () =>
+          useNutritionData({
+            targetUserId: 'user-123',
+            selectedDate: '2026-07-04',
+            timeZone: 'America/New_York',
+            profile: {
+              id: 'user-123',
+              email: 'athlete@example.com',
+              username: 'Athlete',
+              role: 'athlete',
+              target_calories: 0,
+              target_protein: 150,
+              target_carbs: 200,
+              target_fat: 70,
+              target_fiber: 30,
+            } as any,
+            onMutationSuccessReset: vi.fn(),
+            setStatus: vi.fn(),
+            setIsError: vi.fn(),
+          }),
+        { wrapper }
+      );
+
+      expect(result.current.targets.calories).toBe(2200);
+    });
   });
 
   describe('offline meal reconnect sync freshness', () => {
