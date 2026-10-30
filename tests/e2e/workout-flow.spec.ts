@@ -1,4 +1,32 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function selectWorkoutA(page: Page) {
+  const chooseBtn = page.locator('button:has-text("Choose Routine")');
+  const routineBtn = page.locator('[data-testid="routine-select-btn"]');
+  await expect(chooseBtn.or(routineBtn).first()).toBeVisible({ timeout: 15000 });
+
+  let openedModal = false;
+  if (await chooseBtn.isVisible()) {
+    try {
+      await chooseBtn.click({ timeout: 3000 });
+      openedModal = true;
+    } catch {
+      // Element detached during catalog load race; fall back to routineBtn
+    }
+  }
+  if (!openedModal) {
+    const text = await routineBtn.textContent();
+    if (!text?.includes('Workout A')) {
+      await routineBtn.click();
+      openedModal = true;
+    }
+  }
+  if (openedModal) {
+    await page.locator('[data-testid="routine-picker-modal"] button:has-text("Workout A (Push, Quads & Core)")').click();
+    await page.locator('[data-testid="routine-picker-modal"]').waitFor({ state: 'hidden' });
+  }
+  await expect(page.locator('[data-testid="exercise-card-0"]')).toBeVisible({ timeout: 15000 });
+}
 
 test.describe('Workout Flow E2E', () => {
   test.describe.configure({ mode: 'serial' });
@@ -9,6 +37,7 @@ test.describe('Workout Flow E2E', () => {
     await page.fill('input[type="password"]', 'password123');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/workout');
+    await page.waitForLoadState('networkidle');
   });
 
   test('loads workout engine with sticky rest timer and exercise routines', async ({ page }) => {
@@ -51,29 +80,7 @@ test.describe('Workout Flow E2E', () => {
   });
 
   test('interacts with workout sets, draft inputs, and commit action', async ({ page }) => {
-    // If on Rest Day, click Choose Routine to select Workout A so exercise set cards appear
-    const chooseRoutineBtn = page.locator('button:has-text("Choose Routine")');
-    const routineSelectBtn = page.locator('[data-testid="routine-select-btn"]');
-    let openedModal = false;
-    if (await chooseRoutineBtn.isVisible()) {
-      try {
-        await chooseRoutineBtn.click({ timeout: 3000 });
-        openedModal = true;
-      } catch {
-        // Element detached during catalog load race; fall back to routineSelectBtn
-      }
-    }
-    if (!openedModal) {
-      const routineText = await routineSelectBtn.textContent();
-      if (!routineText?.includes('Workout A (Push, Quads & Core)')) {
-        await routineSelectBtn.click();
-        openedModal = true;
-      }
-    }
-    if (openedModal) {
-      await page.click('button:has-text("Workout A (Push, Quads & Core)")');
-      await expect(page.locator('[data-testid="exercise-card-0"]')).toBeVisible();
-    }
+    await selectWorkoutA(page);
 
     const commitBtn = page.locator('button[title*="Commit Set"]').first();
     const deleteBtn = page.locator('button[title*="Delete set"]').first();
@@ -101,30 +108,7 @@ test.describe('Workout Flow E2E', () => {
     // Assert no query error banner is displayed
     await expect(page.locator('[data-testid="workout-logs-error"]')).not.toBeVisible();
 
-    // Wait for routine controls to render
-    const routineSelectBtn = page.locator('[data-testid="routine-select-btn"]');
-    const chooseRoutineBtn = page.locator('button:has-text("Choose Routine")');
-    await expect(page.locator('[data-testid="routine-select-btn"], button:has-text("Choose Routine")').first()).toBeVisible();
-
-    let openedModal = false;
-    if (await chooseRoutineBtn.isVisible()) {
-      try {
-        await chooseRoutineBtn.click({ timeout: 3000 });
-        openedModal = true;
-      } catch {
-        // Element detached during catalog load race; fall back to routineSelectBtn
-      }
-    }
-    if (!openedModal) {
-      const routineText = await routineSelectBtn.textContent();
-      if (!routineText?.includes('Workout A (Push, Quads & Core)')) {
-        await routineSelectBtn.click();
-        openedModal = true;
-      }
-    }
-    if (openedModal) {
-      await page.click('button:has-text("Workout A (Push, Quads & Core)")');
-    }
+    await selectWorkoutA(page);
 
     const firstCard = page.locator('[data-testid="exercise-card-0"]');
     await expect(firstCard).toBeVisible();
