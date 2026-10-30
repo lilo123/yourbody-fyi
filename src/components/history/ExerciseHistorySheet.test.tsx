@@ -6,6 +6,7 @@ import React from 'react';
 import { ExerciseHistorySheet } from './ExerciseHistorySheet';
 import { supabase } from '../../lib/supabase';
 import * as pendingOpsModule from '../workout/useWorkoutPendingOps';
+import type { OutboxOp } from '../../offline/types';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: {
@@ -508,6 +509,93 @@ describe('ExerciseHistorySheet', () => {
     const summary = screen.getByTestId('exercise-sheet-pr-summary');
     expect(summary.textContent).toContain('e1RM');
     expect(summary.className).toContain('max-w-full');
+  });
+
+  it('overlays queued set.batchCreate sets into exercise history rows', async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: [], error: null } as any);
+
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-batch-1',
+        userId: 'test-user-123',
+        seq: 1,
+        createdAt: '2026-09-20T10:00:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'set.batchCreate',
+        payload: {
+          workoutRef: 'w-sess-batch',
+          sets: [
+            {
+              id: 'set-batch-1',
+              exercise_id: 'ex-bench',
+              weight: 225,
+              reps: 8,
+              set_index: 1,
+              set_type: 'working',
+              rpe: 8,
+              created_at: '2026-09-20T10:00:00Z',
+            },
+          ],
+        },
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+
+    renderComponent();
+
+    expect(await screen.findByTestId('exercise-history-set-set-batch-1')).toBeDefined();
+    expect(screen.getByText('225 lbs × 8')).toBeDefined();
+  });
+
+  it('filters set.batchCreate to only include sets matching the current exercise', async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: [], error: null } as any);
+
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-batch-multi',
+        userId: 'test-user-123',
+        seq: 1,
+        createdAt: '2026-09-20T10:00:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'set.batchCreate',
+        payload: {
+          workoutRef: 'w-sess-multi',
+          sets: [
+            {
+              id: 'set-bench-match',
+              exercise_id: 'ex-bench',
+              weight: 205,
+              reps: 6,
+              set_index: 1,
+              set_type: 'working',
+              rpe: 7.5,
+              created_at: '2026-09-20T10:00:00Z',
+            },
+            {
+              id: 'set-squat-other',
+              exercise_id: 'ex-squat',
+              weight: 315,
+              reps: 5,
+              set_index: 2,
+              set_type: 'working',
+              rpe: 8,
+              created_at: '2026-09-20T10:05:00Z',
+            },
+          ],
+        },
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+
+    renderComponent();
+
+    expect(await screen.findByTestId('exercise-history-set-set-bench-match')).toBeDefined();
+    expect(screen.getByText('205 lbs × 6')).toBeDefined();
+    expect(screen.queryByTestId('exercise-history-set-set-squat-other')).toBeNull();
   });
 
   it('filters out pending deleted sets from offline outbox (line 178 op.kind === set.delete)', async () => {
