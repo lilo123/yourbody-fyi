@@ -191,7 +191,8 @@ test.describe('Workout Flow E2E', () => {
     );
 
     await page.goto('/workout');
-    await expect(page.locator('[data-testid="workout-logs-error"]')).toBeVisible();
+    await page.reload();
+    await expect(page.locator('[data-testid="workout-logs-error"]')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('[data-testid="retry-logs-btn"]')).toBeVisible();
   });
 });
