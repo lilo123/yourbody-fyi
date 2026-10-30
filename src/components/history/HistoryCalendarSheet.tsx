@@ -110,6 +110,11 @@ export const HistoryCalendarSheet: React.FC<HistoryCalendarSheetProps> = ({
       } else if (op.kind === 'set.create') {
         const d = op.payload.created_at?.slice(0, 10);
         if (d) set.add(d);
+      } else if (op.kind === 'set.batchCreate') {
+        for (const s of op.payload.sets) {
+          const d = s.created_at?.slice(0, 10);
+          if (d) set.add(d);
+        }
       }
     }
     return set;

@@ -152,4 +152,33 @@ describe('DayTotalRow', () => {
     const calCell = screen.getByTestId('day-total-calories');
     expect(calCell).toHaveClass('whitespace-nowrap');
   });
+
+  it('does not apply over styling when targets are not provided, but flags over styling when target is 0 and intake > 0', () => {
+    const { unmount } = render(
+      <DayTotalRow
+        macroColumns={columns}
+        mealTotals={mealTotals}
+        dailyTotals={{ calories: 1000, protein: 60, carbs: 100, fat: 35, fiber: 10 }}
+      />
+    );
+
+    // No targets provided -> none of the cells should have text-rose-400
+    for (const col of columns) {
+      expect(screen.getByTestId(`day-total-${col}`)).not.toHaveClass('text-rose-400');
+    }
+
+    unmount();
+
+    // Now render with target 0 for carbs and intake > 0
+    render(
+      <DayTotalRow
+        macroColumns={columns}
+        mealTotals={{ calories: 100, protein: 10, carbs: 15, fat: 5, fiber: 2 }}
+        targets={{ carbs: 0 }}
+      />
+    );
+
+    expect(screen.getByTestId('day-total-carbs')).toHaveClass('text-rose-400');
+    expect(screen.getByTestId('day-total-over-carbs')).toHaveTextContent('over target by 15 C');
+  });
 });
