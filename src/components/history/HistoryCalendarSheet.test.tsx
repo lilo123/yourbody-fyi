@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HistoryCalendarSheet } from './HistoryCalendarSheet';
+import * as pendingOpsModule from '../workout/useWorkoutPendingOps';
+import type { OutboxOp } from '../../offline/types';
 import {
   createSupabaseBuilder,
   getRecordedSelects,
@@ -194,5 +196,90 @@ describe('HistoryCalendarSheet', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
 
     expect(mockOnClose).toHaveBeenCalled();
+  });
+
+  it('renders workout dot for date with queued set.batchCreate ops', async () => {
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-batch-1',
+        userId: mockUserId,
+        seq: 1,
+        createdAt: '2026-10-18T10:00:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'set.batchCreate',
+        payload: {
+          workoutRef: 'w-sess-batch',
+          sets: [
+            {
+              id: 'set-batch-1',
+              exercise_id: 'ex-bench',
+              weight: 225,
+              reps: 8,
+              set_index: 1,
+              set_type: 'working',
+              rpe: 8,
+              created_at: '2026-10-18T10:00:00Z',
+            },
+          ],
+        },
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+
+    renderComponent({
+      sessionDates: ['2026-10-01'],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workout-dot-2026-10-18')).toBeDefined();
+    });
+  });
+
+  it('renders workout dots for multiple distinct dates present in a set.batchCreate op', async () => {
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-batch-multi-dates',
+        userId: mockUserId,
+        seq: 1,
+        createdAt: '2026-10-15T10:00:00Z',
+        state: 'pending',
+        attempts: 0,
+        kind: 'set.batchCreate',
+        payload: {
+          workoutRef: 'w-sess-dates',
+          sets: [
+            {
+              id: 'set-d1',
+              exercise_id: 'ex-bench',
+              weight: 225,
+              reps: 8,
+              set_index: 1,
+              created_at: '2026-10-15T10:00:00Z',
+            },
+            {
+              id: 'set-d2',
+              exercise_id: 'ex-bench',
+              weight: 225,
+              reps: 8,
+              set_index: 2,
+              created_at: '2026-10-16T10:00:00Z',
+            },
+          ],
+        },
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+
+    renderComponent({
+      sessionDates: ['2026-10-01'],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workout-dot-2026-10-15')).toBeDefined();
+      expect(screen.getByTestId('workout-dot-2026-10-16')).toBeDefined();
+    });
   });
 });
