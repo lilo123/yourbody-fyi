@@ -97,4 +97,24 @@ describe('wipeUserData', () => {
 
     expect(order).toEqual(['stopPersisting', 'deleteOfflineDb', 'queryClientClear']);
   });
+
+  it('clears coach roster and selected athlete keys on account wipe', async () => {
+    const coachUserId = '11111111-1111-4111-8111-111111111111';
+    const athleteId = '22222222-2222-4222-8222-222222222222';
+
+    localStorage.setItem(
+      'yourbody_athletes',
+      JSON.stringify([
+        { id: athleteId, name: 'Jane Athlete', email: 'jane@example.com', status: 'Active' },
+      ])
+    );
+    localStorage.setItem('yourbody_selected_athlete', athleteId);
+
+    vi.spyOn(offlineDbModule, 'deleteOfflineDb').mockResolvedValue();
+
+    await wipeUserData(coachUserId);
+
+    expect(localStorage.getItem('yourbody_athletes')).toBeNull();
+    expect(localStorage.getItem('yourbody_selected_athlete')).toBeNull();
+  });
 });

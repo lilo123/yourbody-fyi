@@ -187,4 +187,88 @@ describe('macroStorySummary builder', () => {
     expect(summary.overflowCount).toBe(0);
     expect(summary.totalMealsCount).toBe(0);
   });
+
+  it('respects zero macro targets without dividing by zero (e.g. keto carbs target = 0g)', () => {
+    const summary = buildMacroStoryData({
+      date: '2026-10-12',
+      totals: {
+        calories: 1800,
+        protein: 150,
+        carbs: 10,
+        fat: 130,
+        fiber: 5,
+      },
+      targets: {
+        calories: 1800,
+        protein: 150,
+        carbs: 0,
+        fat: 130,
+        fiber: 5,
+      },
+      meals: [],
+    });
+
+    expect(summary.hasTargets).toBe(true);
+    expect(summary.carbs.target).toBe(0);
+    expect(summary.carbs.targetFormatted).toBe('0g');
+    expect(summary.carbs.isOver).toBe(true);
+    expect(summary.carbs.percentage).toBeNull();
+  });
+
+  it('handles 0g target with 0g consumed (not over, percentage null)', () => {
+    const summary = buildMacroStoryData({
+      date: '2026-10-12',
+      totals: {
+        carbs: 0,
+      },
+      targets: {
+        carbs: 0,
+      },
+    });
+
+    expect(summary.hasTargets).toBe(true);
+    expect(summary.carbs.current).toBe(0);
+    expect(summary.carbs.currentFormatted).toBe('0g');
+    expect(summary.carbs.target).toBe(0);
+    expect(summary.carbs.targetFormatted).toBe('0g');
+    expect(summary.carbs.isOver).toBe(false);
+    expect(summary.carbs.percentage).toBeNull();
+  });
+
+  it('supports target_carbs: 0 from profile properties', () => {
+    const summary = buildMacroStoryData({
+      date: '2026-10-12',
+      totals: { carbs: 5 },
+      targets: {
+        target_calories: 2000,
+        target_protein: 160,
+        target_carbs: 0,
+        target_fat: 80,
+      },
+    });
+
+    expect(summary.hasTargets).toBe(true);
+    expect(summary.carbs.target).toBe(0);
+    expect(summary.carbs.targetFormatted).toBe('0g');
+    expect(summary.carbs.isOver).toBe(true);
+    expect(summary.carbs.percentage).toBeNull();
+  });
+
+  it('does not treat empty string, boolean, or non-numeric target values as targets', () => {
+    const summary = buildMacroStoryData({
+      date: '2026-10-12',
+      totals: { carbs: 50 },
+      targets: {
+        carbs: '' as unknown as number,
+        fat: false as unknown as number,
+        protein: null,
+      },
+    });
+
+    expect(summary.hasTargets).toBe(false);
+    expect(summary.carbs.target).toBeNull();
+    expect(summary.carbs.targetFormatted).toBeNull();
+    expect(summary.fat.target).toBeNull();
+    expect(summary.protein.target).toBeNull();
+  });
 });

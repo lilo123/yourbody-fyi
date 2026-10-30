@@ -173,6 +173,25 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
           created_at: op.payload.created_at || new Date().toISOString(),
           total_sessions: 0,
         });
+      } else if (op.kind === 'set.batchCreate') {
+        const info = workoutRefDateMap.get(op.payload.workoutRef);
+        for (const s of op.payload.sets) {
+          if (s.exercise_id === exercise.id) {
+            const civilDate = info?.date || s.created_at?.slice(0, 10) || '';
+            pendingSets.push({
+              workout_id: op.payload.workoutRef,
+              civil_date: civilDate,
+              workout_name: info?.name || 'Workout',
+              set_id: s.id,
+              set_index: s.set_index ?? 0,
+              weight: Number(s.weight) || 0,
+              reps: Number(s.reps) || 0,
+              rpe: s.rpe ?? null,
+              created_at: s.created_at || new Date().toISOString(),
+              total_sessions: 0,
+            });
+          }
+        }
       } else if (op.kind === 'set.update') {
         updatedSets.set(op.payload.id, op.payload.patch);
       } else if (op.kind === 'set.delete') {
