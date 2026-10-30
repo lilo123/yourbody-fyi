@@ -45,6 +45,7 @@ function cleanupPollutedWorkouts() {
 }
 
 async function selectWorkoutA(page: Page) {
+  await page.waitForLoadState('networkidle');
   const chooseBtn = page.locator('button:has-text("Choose Routine")');
   const routineBtn = page.locator('[data-testid="routine-select-btn"]');
   await expect(chooseBtn.or(routineBtn).first()).toBeVisible({ timeout: 15000 });
@@ -82,7 +83,6 @@ test.describe('Workout Flow E2E', () => {
     await page.fill('input[type="password"]', 'password123');
     await page.click('button[type="submit"]');
     await page.waitForURL('**/workout');
-    await page.waitForLoadState('networkidle');
   });
 
   test.afterAll(() => {
@@ -190,8 +190,15 @@ test.describe('Workout Flow E2E', () => {
       })
     );
 
+    await page.goto('/history');
+    await page.evaluate(() => {
+      try {
+        window.indexedDB.deleteDatabase('yourbody-offline-a0000000-0000-0000-0000-000000000002');
+      } catch {
+        // ignore
+      }
+    });
     await page.goto('/workout');
-    await page.reload();
     await expect(page.locator('[data-testid="workout-logs-error"]')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('[data-testid="retry-logs-btn"]')).toBeVisible();
   });
