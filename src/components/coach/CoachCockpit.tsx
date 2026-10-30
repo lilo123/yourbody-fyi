@@ -7,7 +7,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import type { Exercise, RoutineTemplate, UserProfile, NutritionLog, SetType } from '../../types/database';
 import { DEFAULT_EXERCISES_LIST, normalizeDateStr } from '../../utils/ghostSets';
 import { getDayBounds } from '../../utils/date';
-import { WORKOUT_WITH_SETS_PROJECTION, COACH_SETS_PER_WORKOUT_LIMIT, warnIfCoachSetsTruncated } from '../workout/useWorkoutQueries';
+import { WORKOUT_WITH_SETS_PROJECTION, COACH_SETS_PER_WORKOUT_LIMIT, warnIfCoachSetsTruncated, clearTemplateDetailCache } from '../workout/useWorkoutQueries';
 import { Shield, AlertCircle, RotateCcw, Layers, Plus } from 'lucide-react';
 import { CoachAthleteSwitcher } from './CoachAthleteSwitcher';
 import { CoachAthleteTimeline, type CoachWorkoutSet } from './CoachAthleteTimeline';
@@ -438,6 +438,7 @@ export const CoachCockpit: React.FC = () => {
           template={editingTemplate}
           assignToAthleteId={editingTemplate ? undefined : (selectedAthleteId || undefined)}
           onSaved={() => {
+            clearTemplateDetailCache(editingTemplate?.id);
             void invalidateExerciseDomain(queryClient, user?.id);
             queryClient.invalidateQueries({ queryKey: ['routine_templates'] });
             queryClient.invalidateQueries({ queryKey: queryKeys.routineCatalog.all });
