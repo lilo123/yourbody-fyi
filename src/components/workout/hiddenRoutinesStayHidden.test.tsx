@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -56,6 +56,8 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-19T12:00:00Z'));
     workoutSessionStore.resetForTesting();
     queryClient = new QueryClient({
       defaultOptions: {
@@ -64,6 +66,10 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
     });
     vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue([]);
     vi.spyOn(onlineModule, 'useOnlineStatus').mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }) =>
