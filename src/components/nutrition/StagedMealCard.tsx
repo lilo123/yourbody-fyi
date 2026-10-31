@@ -51,6 +51,30 @@ export interface StagedMealCardProps {
   isAnalyzing?: boolean;
 }
 
+function syncMealAfterItemChange(
+  stagedMeal: StagedMeal,
+  updatedItems: StagedItem[]
+): StagedMeal {
+  const totals = recomputeStagedTotals(updatedItems);
+  const single = updatedItems.length === 1 ? updatedItems[0] : null;
+  return {
+    ...stagedMeal,
+    items: updatedItems,
+    ...totals,
+    ...(single
+      ? {
+          explanation: `${formatCalories(totals.calories)} kcal (${stagedMeal.name})`,
+          ...(single.quantity > 0
+            ? {
+                servingSize: single.quantity,
+                servingUnit: single.unit,
+              }
+            : {}),
+        }
+      : {}),
+  };
+}
+
 export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
   mode = 'stage',
   isDirty = false,
@@ -397,24 +421,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                   const updatedItems = stagedMeal.items.map((it) =>
                     it.id === item.id ? reanchorStagedItem(it, next) : it
                   );
-                  const totals = recomputeStagedTotals(updatedItems);
-                  const single = updatedItems.length === 1 ? updatedItems[0] : null;
-                  onUpdateStagedMeal({
-                    ...stagedMeal,
-                    items: updatedItems,
-                    ...totals,
-                    ...(single
-                      ? {
-                          explanation: `${formatCalories(totals.calories)} kcal (${stagedMeal.name})`,
-                          ...(single.quantity > 0
-                            ? {
-                                servingSize: single.quantity,
-                                servingUnit: single.unit,
-                              }
-                            : {}),
-                        }
-                      : {}),
-                  });
+                  onUpdateStagedMeal(syncMealAfterItemChange(stagedMeal, updatedItems));
                 }}
                 onRemove={() => onDeleteItem(item.id)}
                 onSaveToQuickLog={() => onSaveItemAsCustomDish(item)}
@@ -422,12 +429,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                   const updatedItems = stagedMeal.items.map((it) =>
                     it.id === item.id ? updateStagedItemNutrition(it, edited) : it
                   );
-                  const totals = recomputeStagedTotals(updatedItems);
-                  onUpdateStagedMeal({
-                    ...stagedMeal,
-                    items: updatedItems,
-                    ...totals,
-                  });
+                  onUpdateStagedMeal(syncMealAfterItemChange(stagedMeal, updatedItems));
                 }}
               />
               {item.calorieCorrection && (

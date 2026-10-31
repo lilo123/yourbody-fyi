@@ -5,12 +5,13 @@ import { WorkoutSessionHistory } from './WorkoutSessionHistory';
 import type { HistorySession } from './useWorkoutHistory';
 
 let mockWeightUnit: 'lb' | 'kg' = 'lb';
+let mockPrMode: 'weight' | 'e1rm' = 'weight';
 let mockIsOnline = true;
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'test-user-1' },
-    profile: { id: 'test-user-1', weight_unit: mockWeightUnit },
+    profile: { id: 'test-user-1', weight_unit: mockWeightUnit, pr_mode: mockPrMode },
   }),
 }));
 
@@ -44,6 +45,7 @@ describe('WorkoutSessionHistory', () => {
 
   beforeEach(() => {
     mockWeightUnit = 'lb';
+    mockPrMode = 'weight';
     mockIsOnline = true;
   });
 
@@ -403,7 +405,45 @@ describe('WorkoutSessionHistory', () => {
       mockSessions[0],
       [],
       'lb',
-      expect.any(Function)
+      expect.any(Function),
+      undefined,
+      'weight'
+    );
+
+    shareSpy.mockRestore();
+  });
+
+  it('passes user pr_mode e1rm to shareWorkoutStory when selected', async () => {
+    mockPrMode = 'e1rm';
+    const shareStoryModule = await import('../../utils/workoutStoryShare');
+    const shareSpy = vi.spyOn(shareStoryModule, 'shareWorkoutStory').mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <WorkoutSessionHistory
+          displayedSessions={mockSessions}
+          exercises={[]}
+          timeRange="all"
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+          onLoadMore={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    const overflowTrigger = screen.getByRole('button', { name: /Session actions for Leg Day/i });
+    fireEvent.click(overflowTrigger);
+
+    const shareBtn = screen.getByTestId('share-session-session-1');
+    fireEvent.click(shareBtn);
+
+    expect(shareSpy).toHaveBeenCalledWith(
+      mockSessions[0],
+      [],
+      'lb',
+      expect.any(Function),
+      undefined,
+      'e1rm'
     );
 
     shareSpy.mockRestore();
