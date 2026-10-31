@@ -357,4 +357,53 @@ describe('AddItemsComposer', () => {
 
     expect(await screen.findByTestId('upgrade-sheet')).toBeDefined();
   });
+
+  it('forwards quota to onParsed when parseNutrition returns quota metadata', async () => {
+    const mockQuota = {
+      remaining: 4,
+      limit: 10,
+      used: 6,
+      period: 'day',
+      resetsAt: '2026-10-31T00:00:00Z',
+    };
+    (parseNutritionModule.parseNutrition as any).mockResolvedValueOnce({
+      items: [
+        {
+          id: 'item-1',
+          name: 'Apple',
+          calories: 80,
+          protein: 0.3,
+          carbs: 21,
+          fat: 0.2,
+          fiber: 4,
+          portion: '1 apple',
+          quantity: 1,
+          unit: 'unit',
+          baseQuantity: 1,
+          baseCalories: 80,
+          baseProtein: 0.3,
+          baseCarbs: 21,
+          baseFat: 0.2,
+          baseFiber: 4,
+          portionMultiplier: 1,
+        },
+      ],
+      calories: 80,
+      quota: mockQuota,
+    });
+
+    const onParsed = vi.fn();
+    render(<AddItemsComposer {...defaultProps} onParsed={onParsed} />);
+
+    const textarea = screen.getByRole('textbox', { name: 'Add items' });
+    fireEvent.change(textarea, { target: { value: '1 apple' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+
+    await waitFor(() => {
+      expect(onParsed).toHaveBeenCalledWith(
+        expect.any(Array),
+        mockQuota
+      );
+    });
+  });
 });

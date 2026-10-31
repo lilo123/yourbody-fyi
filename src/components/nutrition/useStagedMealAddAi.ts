@@ -6,17 +6,20 @@ import {
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
+import type { AiQuotaInfo } from './parseNutrition';
 
 export interface UseStagedMealAddAiOptions {
   stagedMeal: StagedMeal | null;
   setStagedMeal: (m: StagedMeal | null) => void;
   triggerToast?: (dish: { name: string; calories: number | null }, options?: any) => void;
+  onQuotaUpdate?: (quota: AiQuotaInfo) => void;
 }
 
 export function useStagedMealAddAi({
   stagedMeal,
   setStagedMeal,
   triggerToast,
+  onQuotaUpdate,
 }: UseStagedMealAddAiOptions) {
   const latestStagedMealRef = useRef<StagedMeal | null>(stagedMeal);
 
@@ -25,7 +28,7 @@ export function useStagedMealAddAi({
   }, [stagedMeal]);
 
   const handleAddParsedItems = useCallback(
-    (items: StagedItem[], mealAtStart?: StagedMeal) => {
+    (items: StagedItem[], mealAtStart?: StagedMeal, quota?: AiQuotaInfo) => {
       const currentStaged = latestStagedMealRef.current;
       if (!currentStaged) {
         // Discarded or logged while parsing -> drop silently
@@ -36,6 +39,10 @@ export function useStagedMealAddAi({
         return;
       }
 
+      if (quota && onQuotaUpdate) {
+        onQuotaUpdate(quota);
+      }
+
       const mergedItems = mergeOrAppendStagedItems(currentStaged.items, items);
       const tot = recomputeStagedTotals(mergedItems);
       const nextStagedMeal: StagedMeal = {
@@ -43,6 +50,7 @@ export function useStagedMealAddAi({
         items: mergedItems,
         ...tot,
         explanation: currentStaged.explanation,
+        ...(quota ? { quota } : {}),
       };
 
       latestStagedMealRef.current = nextStagedMeal;
@@ -73,7 +81,7 @@ export function useStagedMealAddAi({
         }
       );
     },
-    [setStagedMeal, triggerToast]
+    [setStagedMeal, triggerToast, onQuotaUpdate]
   );
 
   return {
