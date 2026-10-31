@@ -14,7 +14,7 @@ import {
 } from '../../utils/ghostSets';
 import { formatSet } from '../../utils/weight';
 import type { ExerciseBenchmarks } from '../../types/database';
-import { isValidUUID } from './workoutEngineHelpers';
+import { isValidUUID, isDefaultRoutineHidden } from './workoutEngineHelpers';
 import { fetchAllVisibleExercises } from '../../lib/exercises';
 import {
   applyPendingToDaySets,
@@ -322,7 +322,11 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
   const currentDayAbbr =
     getDayOfWeekAbbr(workoutDate) || ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
 
-  const { data: rawTemplates = [], isFetched: rawTemplatesFetched } = useQuery({
+  const {
+    data: rawTemplates = [],
+    isFetched: rawTemplatesFetched,
+    isError: rawTemplatesError,
+  } = useQuery({
     queryKey: ['routine_templates', targetUserId, 'workout'],
     enabled: Boolean(targetUserId),
     queryFn: async () => {
@@ -365,7 +369,7 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
           }
         }
 
-        if (!rpcFailed && allTemplates.length > 0) {
+        if (!rpcFailed) {
           return allTemplates;
         }
       }
@@ -741,29 +745,95 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
     });
   }, [rawTemplates, resolvedTemplateId, templateDetail]);
 
-  const templatesFetched =
-    rawTemplatesFetched && logsFetched && (!resolvedTemplateId || detailFetched);
+  const isTestDummy = Boolean(targetUserId && !isValidUUID(targetUserId));
+
+  const hasCachedData = Boolean(
+    targetUserId &&
+      isValidUUID(targetUserId) &&
+      queryClient.getQueryData(['routine_templates', targetUserId, 'workout'])
+  );
+
+  const hasCatalogLoaded = isTestDummy
+    ? customTemplates.some((t) => t.is_master)
+    : Boolean(
+        targetUserId &&
+          isValidUUID(targetUserId) &&
+          (rawTemplatesFetched || hasCachedData)
+      );
+
+  const isCatalogPending = isTestDummy
+    ? false
+    : Boolean(
+        targetUserId &&
+          isValidUUID(targetUserId) &&
+          !hasCatalogLoaded &&
+          isOnline &&
+          !rawTemplatesError &&
+          !rawTemplatesFetched
+      );
+
+  const templatesFetched = isTestDummy
+    ? rawTemplatesFetched && logsFetched && (!resolvedTemplateId || detailFetched)
+    : hasCatalogLoaded && logsFetched && (!resolvedTemplateId || detailFetched);
+
+  const { data: hiddenTemplates = [] } = useQuery({
+    queryKey: ['routine_templates', targetUserId, 'hidden'],
+    enabled: Boolean(targetUserId && isValidUUID(targetUserId)),
+    queryFn: async () => {
+      if (!targetUserId || !isValidUUID(targetUserId)) return [];
+      if (typeof (supabase as any).rpc === 'function') {
+        try {
+          const { data, error } = await (supabase.rpc as any)('get_hidden_routine_templates', {
+            p_user_id: targetUserId,
+          });
+          if (error) {
+            console.warn('[useWorkoutQueries] get_hidden_routine_templates RPC warning:', error);
+            return [];
+          }
+          return ((data || []) as unknown) as RoutineTemplate[];
+        } catch (err) {
+          console.warn('[useWorkoutQueries] get_hidden_routine_templates RPC warning:', err);
+          return [];
+        }
+      }
+      return [];
+    },
+  });
+
+  const hiddenRoutineNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const template of hiddenTemplates) {
+      if (template?.name) names.add(template.name.trim().toLowerCase());
+    }
+    return names;
+  }, [hiddenTemplates]);
 
   const availableRoutines = useMemo(() => {
     const seenCustomNames = new Set<string>();
     const dedupedCustom: RoutineTemplate[] = [];
-    for (const t of customTemplates) {
-      const norm = t.name.trim().toLowerCase();
+    for (const template of customTemplates) {
+      const norm = template.name.trim().toLowerCase();
       if (!seenCustomNames.has(norm)) {
         seenCustomNames.add(norm);
-        dedupedCustom.push(t);
+        dedupedCustom.push(template);
       }
     }
 
-    const fallbackDefaults = DEFAULT_WORKOUT_TEMPLATES.filter(
-      (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
-    );
+    const canUseDefaults = !isCatalogPending;
+
+    const fallbackDefaults = canUseDefaults
+      ? DEFAULT_WORKOUT_TEMPLATES.filter(
+          (defaultTemplate) =>
+            !seenCustomNames.has(defaultTemplate.name.trim().toLowerCase()) &&
+            !isDefaultRoutineHidden(defaultTemplate.name, customTemplates, hiddenRoutineNames, hasCatalogLoaded)
+        )
+      : [];
 
     return {
       custom: dedupedCustom,
       defaults: fallbackDefaults,
     };
-  }, [customTemplates]);
+  }, [customTemplates, hasCatalogLoaded, isCatalogPending, hiddenRoutineNames]);
 
   return {
     exercises,
@@ -776,6 +846,10 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
     benchmarksError,
     customTemplates,
     templatesFetched,
+    hasCatalogLoaded,
+    isCatalogPending,
+    hiddenRoutineNames,
+    hiddenTemplates,
     userLogs,
     todaySets,
     logsFetched,
