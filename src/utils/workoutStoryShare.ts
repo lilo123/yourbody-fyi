@@ -1,14 +1,53 @@
-import type { HistorySession } from '../components/history/useWorkoutHistory';
-import type { Exercise } from '../types/database';
+import type { HistorySession, HistorySet } from '../components/history/useWorkoutHistory';
+import type { Exercise, WorkoutSet } from '../types/database';
 import type { WeightUnit } from './weight';
 import type { ToastOptions } from '../hooks/useToast';
 import type { PrMode } from '../lib/prComparator';
+import type { QueryClient } from '@tanstack/react-query';
 import { fetchSessionSets } from '../components/history/useWorkoutHistory';
 import { buildWorkoutStoryData, type WorkoutStoryData } from './workoutStorySummary';
 
 export interface ShareWorkoutStoryDeps {
   renderToBlob?: (data: WorkoutStoryData) => Promise<Blob>;
   prMode?: PrMode;
+  cachedSets?: (WorkoutSet & { exercise_name?: string })[];
+  queryClient?: QueryClient;
+  fetchSessionSets?: (workoutId: string) => Promise<HistorySet[]>;
+}
+
+export function getCachedSetsFromQueryClient(
+  queryClient: QueryClient,
+  sessionId: string
+): HistorySet[] | null {
+  const direct = queryClient.getQueryData<HistorySet[]>(['session_sets', sessionId]);
+  if (direct && Array.isArray(direct) && direct.length > 0) {
+    return direct;
+  }
+
+  const allSessionQueries = queryClient.getQueriesData<HistorySet[]>({
+    queryKey: ['session_sets'],
+  });
+  for (const [key, data] of allSessionQueries) {
+    if (key[1] === sessionId && Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+  }
+
+  const allWorkoutQueries = queryClient.getQueriesData<unknown>({
+    queryKey: ['workout_sets'],
+  });
+  for (const [, queryData] of allWorkoutQueries) {
+    if (Array.isArray(queryData)) {
+      const matching = queryData.filter(
+        (candidateSet: any) => candidateSet && candidateSet.workout_id === sessionId
+      );
+      if (matching.length > 0) {
+        return matching as HistorySet[];
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function shareWorkoutStory(
@@ -22,14 +61,56 @@ export async function shareWorkoutStory(
   try {
     const resolvedPrMode: PrMode = prMode === 'e1rm' || deps?.prMode === 'e1rm' ? 'e1rm' : 'weight';
 
-    // 1. Fetch sets if not already loaded on session
+    // 1. Resolve sets: use session.sets, cached sets from deps, query cache, or network fetch
     let sets = session.sets;
     if (!sets || sets.length === 0) {
-      try {
-        sets = await fetchSessionSets(session.id);
-      } catch {
-        // Fall back to empty sets if fetch fails
-        sets = [];
+      if (deps?.cachedSets && deps.cachedSets.length > 0) {
+        sets = deps.cachedSets as HistorySet[];
+      } else if (deps?.queryClient) {
+        const cached = getCachedSetsFromQueryClient(deps.queryClient, session.id);
+        if (cached && cached.length > 0) {
+          sets = cached;
+        }
+      }
+    }
+
+    if (!sets || sets.length === 0) {
+      const isOfflineOnly = session.id.startsWith('offline-');
+      if (!isOfflineOnly) {
+        try {
+          const fetcher = deps?.fetchSessionSets || fetchSessionSets;
+          sets = await fetcher(session.id);
+        } catch {
+          // Network failure: fall back to cached sets before empty array
+          if (deps?.cachedSets && deps.cachedSets.length > 0) {
+            sets = deps.cachedSets as HistorySet[];
+          } else if (deps?.queryClient) {
+            const cached = getCachedSetsFromQueryClient(deps.queryClient, session.id);
+            sets = cached && cached.length > 0 ? cached : [];
+          } else {
+            sets = [];
+          }
+        }
+      } else {
+        if (deps?.cachedSets && deps.cachedSets.length > 0) {
+          sets = deps.cachedSets as HistorySet[];
+        } else if (deps?.queryClient) {
+          const cached = getCachedSetsFromQueryClient(deps.queryClient, session.id);
+          sets = cached && cached.length > 0 ? cached : [];
+        } else {
+          sets = [];
+        }
+      }
+    }
+
+    if (!sets || sets.length === 0) {
+      if (deps?.cachedSets && deps.cachedSets.length > 0) {
+        sets = deps.cachedSets as HistorySet[];
+      } else if (deps?.queryClient) {
+        const cached = getCachedSetsFromQueryClient(deps.queryClient, session.id);
+        if (cached && cached.length > 0) {
+          sets = cached;
+        }
       }
     }
 

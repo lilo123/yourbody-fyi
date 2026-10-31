@@ -271,5 +271,44 @@ describe('workoutStorySummary pure functions', () => {
       });
       expect(dataDefault.exercises[0].bestSetFormatted).toBe('220 lbs × 1');
     });
+
+    it('resolves default catalog exercise names (e0000000-...) when not present in DB exercises array', () => {
+      const sets: (WorkoutSet & { exercise_name?: string })[] = [
+        {
+          id: '1',
+          workout_id: 'w1',
+          exercise_id: 'e0000000-0000-0000-0000-000000000001',
+          weight: 185,
+          reps: 5,
+          set_index: 1,
+          set_type: 'working',
+          created_at: '2026-09-22T10:00:00Z',
+          workout_date: '2026-09-22',
+        },
+        {
+          id: '2',
+          workout_id: 'w1',
+          exercise_id: 'e0000000-0000-0000-0000-000000000002',
+          weight: 35,
+          reps: 12,
+          set_index: 2,
+          set_type: 'working',
+          created_at: '2026-09-22T10:05:00Z',
+          workout_date: '2026-09-22',
+        },
+      ];
+
+      const data = buildWorkoutStoryData({
+        sessionName: 'Default Catalog Workout',
+        workoutDate: '2026-09-22',
+        sets,
+        exercises: [],
+        unit: 'lb',
+      });
+
+      expect(data.exercises).toHaveLength(2);
+      expect(data.exercises[0].name).toBe('Incline Bench Press');
+      expect(data.exercises[1].name).toBe('Cable Lateral Raises');
+    });
   });
 });
