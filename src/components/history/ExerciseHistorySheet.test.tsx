@@ -649,5 +649,45 @@ describe('ExerciseHistorySheet', () => {
 
     pendingOpsSpy.mockRestore();
   });
+
+  it('groups offline pending sets under local civil date when workout.ensure is absent (evening west of UTC)', async () => {
+    const prevTz = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+      // 18:30 PDT on 2026-10-31 -> UTC is 2026-11-01T01:30:00.000Z
+      const createdAt = '2026-11-01T01:30:00.000Z';
+      const pendingOps: OutboxOp[] = [
+        {
+          opId: 'op-evening-set',
+          userId: 'test-user-123',
+          seq: 1,
+          createdAt,
+          kind: 'set.create',
+          payload: {
+            id: 'set-evening-1',
+            workoutRef: 'w-synced-server-workout', // No pending workout.ensure
+            exercise_id: 'ex-bench',
+            weight: 225,
+            reps: 8,
+            set_index: 0,
+            created_at: createdAt,
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+      vi.mocked(supabase.rpc).mockResolvedValue({ data: [], error: null } as any);
+
+      renderComponent({ timeZone: 'America/Los_Angeles' });
+
+      // Local civil date in America/Los_Angeles is Oct 31, not Nov 1
+      expect(await screen.findByText(/Oct 31/)).toBeDefined();
+      expect(screen.queryByText(/Nov 1/)).toBeNull();
+    } finally {
+      process.env.TZ = prevTz;
+    }
+  });
 });
 

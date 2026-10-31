@@ -19,8 +19,14 @@ import {
   type HistoryRange,
   type ExerciseHistorySet,
 } from './useWorkoutHistory';
-import { formatShortDate, normalizeDateStr, getDayOfWeekAbbr } from '../../utils/date';
+import { formatShortDate, normalizeDateStr, getDayOfWeekAbbr, getLocalDateStr } from '../../utils/date';
 import { useWorkoutPendingOps } from '../workout/useWorkoutPendingOps';
+
+function getSetLocalDate(createdAt?: string | null): string {
+  if (!createdAt) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(createdAt)) return createdAt;
+  return getLocalDateStr(new Date(createdAt)) || createdAt.slice(0, 10);
+}
 
 export interface ExerciseHistorySheetProps {
   open: boolean;
@@ -160,7 +166,7 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
     for (const op of pendingOps) {
       if (op.kind === 'set.create' && op.payload.exercise_id === exercise.id) {
         const info = workoutRefDateMap.get(op.payload.workoutRef);
-        const civilDate = info?.date || op.payload.created_at?.slice(0, 10) || '';
+        const civilDate = info?.date || getSetLocalDate(op.payload.created_at);
         pendingSets.push({
           workout_id: op.payload.workoutRef,
           civil_date: civilDate,
@@ -177,7 +183,7 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
         const info = workoutRefDateMap.get(op.payload.workoutRef);
         for (const s of op.payload.sets) {
           if (s.exercise_id === exercise.id) {
-            const civilDate = info?.date || s.created_at?.slice(0, 10) || '';
+            const civilDate = info?.date || getSetLocalDate(s.created_at);
             pendingSets.push({
               workout_id: op.payload.workoutRef,
               civil_date: civilDate,

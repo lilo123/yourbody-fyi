@@ -282,4 +282,48 @@ describe('HistoryCalendarSheet', () => {
       expect(screen.getByTestId('workout-dot-2026-10-16')).toBeDefined();
     });
   });
+
+  it('places workout dot on local civil date for evening offline sets west of UTC', async () => {
+    const prevTz = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+      // 18:30 PDT on 2026-10-31 -> UTC is 2026-11-01T01:30:00.000Z
+      const createdAt = '2026-11-01T01:30:00.000Z';
+      const pendingOps: OutboxOp[] = [
+        {
+          opId: 'op-cal-evening',
+          userId: mockUserId,
+          seq: 1,
+          createdAt,
+          state: 'pending',
+          attempts: 0,
+          kind: 'set.create',
+          payload: {
+            id: 'set-cal-evening-1',
+            workoutRef: 'w-synced-server-workout',
+            exercise_id: 'ex-bench',
+            weight: 225,
+            reps: 8,
+            set_index: 0,
+            created_at: createdAt,
+          },
+        },
+      ];
+
+      vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+
+      renderComponent({
+        sessionDates: [],
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workout-dot-2026-10-31')).toBeDefined();
+      });
+
+      // Must not place dot on tomorrow (Nov 1)
+      expect(screen.queryByTestId('workout-dot-2026-11-01')).toBeNull();
+    } finally {
+      process.env.TZ = prevTz;
+    }
+  });
 });

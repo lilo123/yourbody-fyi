@@ -4,6 +4,13 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sheet } from '../common/Sheet';
 import { supabase } from '../../lib/supabase';
 import { useWorkoutPendingOps } from '../workout/useWorkoutPendingOps';
+import { getLocalDateStr } from '../../utils/date';
+
+function getSetLocalDate(createdAt?: string | null): string {
+  if (!createdAt) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(createdAt)) return createdAt;
+  return getLocalDateStr(new Date(createdAt)) || createdAt.slice(0, 10);
+}
 
 export interface HistoryCalendarSheetProps {
   open: boolean;
@@ -104,15 +111,21 @@ export const HistoryCalendarSheet: React.FC<HistoryCalendarSheetProps> = ({
         if (w.workout_date) set.add(w.workout_date);
       }
     }
+    const workoutRefDateMap = new Map<string, string>();
+    for (const op of pendingOps) {
+      if (op.kind === 'workout.ensure' && op.payload.clientWorkoutId && op.payload.workout_date) {
+        workoutRefDateMap.set(op.payload.clientWorkoutId, op.payload.workout_date);
+      }
+    }
     for (const op of pendingOps) {
       if (op.kind === 'workout.ensure' && op.payload.workout_date) {
         set.add(op.payload.workout_date);
       } else if (op.kind === 'set.create') {
-        const d = op.payload.created_at?.slice(0, 10);
+        const d = workoutRefDateMap.get(op.payload.workoutRef) || getSetLocalDate(op.payload.created_at);
         if (d) set.add(d);
       } else if (op.kind === 'set.batchCreate') {
         for (const s of op.payload.sets) {
-          const d = s.created_at?.slice(0, 10);
+          const d = workoutRefDateMap.get(op.payload.workoutRef) || getSetLocalDate(s.created_at);
           if (d) set.add(d);
         }
       }
