@@ -370,4 +370,36 @@ describe('useHistoryMealDeferredDelete (RD-7 contract)', () => {
     expect(mockDeleteFn).toHaveBeenCalledTimes(2);
     expect(mockDeleteFn).toHaveBeenLastCalledWith(secondMeal.id);
   });
+
+  it('delete when targetUserId is undefined resolves active user from meal and invalidates nutrition queries', async () => {
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    queryClient.setQueryData(['nutrition_logs', mockMeal.user_id, 'history_window'], [{ id: mockMeal.id }]);
+    queryClient.setQueryData(['nutrition_logs'], [{ id: mockMeal.id }]);
+
+    const { result } = renderHook(
+      () =>
+        useHistoryMealDeferredDelete({
+          targetUserId: undefined,
+          setMutationError,
+          isActive: true,
+          meals: [mockMeal],
+        }),
+      { wrapper }
+    );
+
+    act(() => {
+      result.current.handleDeleteMealRequested(mockMeal);
+    });
+
+    await act(async () => {
+      result.current.flushDelete();
+    });
+
+    expect(deleteCachedLogItems).toHaveBeenCalledWith(mockMeal.id);
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['nutrition_logs', undefined] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['nutrition_logs'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['nutrition_logs', mockMeal.user_id] });
+    expect(queryClient.getQueryState(['nutrition_logs', mockMeal.user_id, 'history_window'])?.isInvalidated).toBe(true);
+  });
 });
+

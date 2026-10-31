@@ -6,7 +6,8 @@ import { useNutritionData, useMealUpdateToast } from './useNutritionData';
 import { supabase } from '../../lib/supabase';
 import * as toastHook from '../../hooks/useToast';
 import { getDayBounds, localCivilToUtcMs, isWithinDayBounds } from '../../utils/date';
-import type { CustomDish, CustomDishDetail } from '../../types/database';
+import type { CustomDish, CustomDishDetail, NutritionLog } from '../../types/database';
+import type { NutritionItem } from '../../utils/itemModel';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
 import { restTimerStore } from '../../utils/restTimerStore';
 import { enqueue } from '../../offline/outbox';
@@ -532,6 +533,68 @@ describe('useNutritionData (src/components/nutrition/useNutritionData.ts)', () =
     expect(capturedUpdatedData).not.toBeNull();
     expect(capturedUpdatedData.calories).toBe(220);
     expect(capturedUpdatedData.items).toHaveLength(1);
+  });
+
+  it('scaleLogMutation: invalidates canonical nutrition derived queries after rescaling', async () => {
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const targetUserId = 'user-scale-inval';
+    const mealLog: NutritionLog = {
+      id: 'log-scale-inval-1',
+      user_id: targetUserId,
+      food_name: 'Chicken Rice',
+      calories: 400,
+      protein: 30,
+      carbs: 40,
+      fat: 10,
+      fiber: 2,
+      logged_at: '2026-09-16T12:00:00.000Z',
+      logged_date: '2026-09-16',
+    };
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'nutrition_logs') {
+        const builder = createSupabaseBuilder('nutrition_logs', { data: [mealLog], error: null });
+        builder.update = vi.fn().mockReturnValue(builder);
+        builder.eq = vi.fn().mockReturnValue(builder);
+        return builder as any;
+      }
+      return createSupabaseBuilder(table, { data: [], error: null }) as any;
+    });
+
+    const { result } = renderHook(
+      () =>
+        useNutritionData({
+          targetUserId,
+          selectedDate: '2026-09-16',
+          profile: null,
+          onMutationSuccessReset: vi.fn(),
+          setStatus: vi.fn(),
+          setIsError: vi.fn(),
+        }),
+      { wrapper }
+    );
+
+    const activeItems: NutritionItem[] = [
+      {
+        id: 'it-1',
+        name: 'Chicken',
+        portion: '100g',
+        quantity: 100,
+        unit: 'g',
+        calories: 200,
+        protein: 25,
+        carbs: 0,
+        fat: 5,
+        fiber: 0,
+      },
+    ];
+
+    await result.current.scaleLogMutation.mutateAsync({
+      log: mealLog,
+      items: activeItems,
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['nutrition_logs'] });
   });
 
   it('scaleLogMutation: throws error when attempting to rescale a meal without component items', async () => {

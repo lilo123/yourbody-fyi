@@ -389,7 +389,7 @@ export function useNutritionData({
       return logId;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nutrition_logs', targetUserId] });
+      invalidateNutritionDerived(queryClient, targetUserId);
       setStatus('Meal deleted');
       setIsError(false);
     },
@@ -445,8 +445,9 @@ export function useNutritionData({
       if (error) throw error;
       logItemsMemoryCache.set(log.id, activeItems);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nutrition_logs', targetUserId] });
+    onSuccess: (_data, variables) => {
+      const resolvedUserId = targetUserId || variables?.log?.user_id;
+      invalidateNutritionDerived(queryClient, resolvedUserId);
     },
     onError: (err: unknown) => {
       const message =

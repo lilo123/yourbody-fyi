@@ -7,6 +7,7 @@ import { deleteCachedLogItems } from '../nutrition/useNutritionData';
 import { formatCalories } from '../../utils/nutrition';
 import { useToast } from '../../hooks/useToast';
 import type { UndoToastItem } from '../common/UndoToast';
+import { invalidateNutritionDerived } from '../../lib/invalidate';
 
 export interface UseHistoryMealDeferredDeleteOptions {
   targetUserId?: string;
@@ -33,7 +34,8 @@ export function useHistoryMealDeferredDelete({
         throw error;
       }
       deleteCachedLogItems(item.id);
-      await queryClient.invalidateQueries({ queryKey: ['nutrition_logs', targetUserId] });
+      const resolvedUserId = targetUserId || item.user_id;
+      await invalidateNutritionDerived(queryClient, resolvedUserId);
     },
     onError: (err: unknown) => {
       const msg =
