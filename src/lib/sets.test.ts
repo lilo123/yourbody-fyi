@@ -628,7 +628,7 @@ describe('sets data layer writers (src/lib/sets.ts)', () => {
         expect.objectContaining({
           userId: 'athlete-user-123',
           kind: 'set.delete',
-          payload: { id: 's-1' },
+          payload: { id: 's-1', workoutDate: '2026-10-18' },
         })
       );
       expect(mockClient['from']).not.toHaveBeenCalled();
