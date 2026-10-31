@@ -195,9 +195,9 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
   const ownerDashboardEnabled = useFeatureFlag('owner_dashboard_enabled');
   const [username, setUsername] = useState(profile?.username || '');
   const [targetCalories, setTargetCalories] = useState<number | string>(profile?.target_calories || 2200);
-  const [targetProtein, setTargetProtein] = useState<number | string>(profile?.target_protein || 160);
-  const [targetCarbs, setTargetCarbs] = useState<number | string>(profile?.target_carbs || 220);
-  const [targetFat, setTargetFat] = useState<number | string>(profile?.target_fat || 70);
+  const [targetProtein, setTargetProtein] = useState<number | string>(profile?.target_protein ?? 160);
+  const [targetCarbs, setTargetCarbs] = useState<number | string>(profile?.target_carbs ?? 220);
+  const [targetFat, setTargetFat] = useState<number | string>(profile?.target_fat ?? 70);
   const [targetFiber, setTargetFiber] = useState<number | string>(profile?.target_fiber ?? 30);
   const [autoRestTimer, setAutoRestTimer] = useState<boolean>(() => {
     if (profile?.auto_rest_timer !== undefined) return profile.auto_rest_timer;
