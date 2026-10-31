@@ -7,6 +7,8 @@ import { ToastHost } from '../common/ToastHost';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../../context/AuthContext';
+import { AuthContext, type AuthContextType } from '../../context/AuthContextTypes';
+import type { UserProfile } from '../../types/database';
 import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
 import { expectNoA11yViolations } from '../../test/a11y';
@@ -809,6 +811,148 @@ describe('SettingsView', () => {
       await waitFor(() => {
         expect(selectSpy).toHaveBeenCalled();
         expect(screen.getByTestId('copy-prompt-error')).toBeDefined();
+      });
+    });
+
+    it('respects zero macro targets from profile without replacing them with defaults', async () => {
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === 'users') {
+          const b = createSupabaseBuilder('users', {
+            data: {
+              id: 'test-coach-id',
+              email: 'athlete@yourbody.fyi',
+              username: 'Zero Macro Athlete',
+              role: 'athlete',
+              is_coach_mode: false,
+              target_calories: 2000,
+              target_protein: 0,
+              target_carbs: 0,
+              target_fat: 0,
+              target_fiber: 0,
+            },
+            error: null,
+          });
+          b.upsert = mockUpsert;
+          return b;
+        }
+        return createSupabaseBuilder(table, { data: [], error: null });
+      });
+
+      renderComponent();
+      await screen.findByDisplayValue('Zero Macro Athlete');
+
+      const caloriesInput = screen.getByLabelText(/calories/i) as HTMLInputElement;
+      const proteinInput = screen.getByLabelText(/protein/i) as HTMLInputElement;
+      const carbsInput = screen.getByLabelText(/carbs/i) as HTMLInputElement;
+      const fatInput = screen.getByLabelText(/fat/i) as HTMLInputElement;
+      const fiberInput = screen.getByLabelText(/fiber/i) as HTMLInputElement;
+
+      expect(caloriesInput.value).toBe('2000');
+      expect(proteinInput.value).toBe('0');
+      expect(carbsInput.value).toBe('0');
+      expect(fatInput.value).toBe('0');
+      expect(fiberInput.value).toBe('0');
+    });
+  });
+
+  describe('profile refetch resync', () => {
+    const baseMockProfile: UserProfile = {
+      id: 'test-user-id',
+      email: 'athlete@yourbody.fyi',
+      username: 'Initial Athlete',
+      role: 'athlete',
+      target_calories: 2200,
+      target_protein: 160,
+      target_carbs: 220,
+      target_fat: 70,
+      target_fiber: 30,
+      auto_rest_timer: true,
+      rest_timer_seconds: 90,
+      created_at: '2026-01-01T00:00:00Z',
+      timezone: 'UTC',
+      weight_unit: 'lb',
+      pr_mode: 'weight',
+    };
+
+    const createMockAuth = (
+      profileOverrides: Partial<UserProfile> = {},
+      authOverrides: Partial<AuthContextType> = {}
+    ): AuthContextType => ({
+      user: { id: 'test-user-id', email: 'athlete@yourbody.fyi' } as any,
+      profile: { ...baseMockProfile, ...profileOverrides },
+      role: 'athlete',
+      viewMode: 'athlete',
+      isCoachMode: false,
+      loading: false,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      signOut: vi.fn(),
+      updateProfile: vi.fn().mockResolvedValue({ success: true }),
+      switchRole: vi.fn(),
+      refreshProfile: vi.fn(),
+      resendConfirmation: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      resetPassword: vi.fn(),
+      ...authOverrides,
+    });
+
+    it('resyncs rest timer length and sends refetched value on save when profile updates', async () => {
+      const updateProfileMock = vi.fn().mockResolvedValue({ success: true });
+      const initialAuth = createMockAuth(
+        { rest_timer_seconds: 90, auto_rest_timer: true, username: 'Initial Athlete' },
+        { updateProfile: updateProfileMock }
+      );
+
+      const { rerender } = render(
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthContext.Provider value={initialAuth}>
+              <ToastProvider>
+                <SettingsView />
+                <ToastHost />
+              </ToastProvider>
+            </AuthContext.Provider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      );
+
+      const select = screen.getByTestId('select-rest-duration') as HTMLSelectElement;
+      expect(select.value).toBe('90');
+
+      // Simulate profile refetch from another device with rest_timer_seconds changed to 180
+      const refetchedAuth = createMockAuth(
+        { rest_timer_seconds: 180, auto_rest_timer: false, username: 'Updated Athlete' },
+        { updateProfile: updateProfileMock }
+      );
+
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthContext.Provider value={refetchedAuth}>
+              <ToastProvider>
+                <SettingsView />
+                <ToastHost />
+              </ToastProvider>
+            </AuthContext.Provider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      );
+
+      expect((screen.getByTestId('select-rest-duration') as HTMLSelectElement).value).toBe('180');
+      expect(screen.getByTestId('toggle-auto-timer')).toHaveAttribute('aria-checked', 'false');
+      expect((screen.getByLabelText(/Display Name/i) as HTMLInputElement).value).toBe('Updated Athlete');
+
+      const saveBtn = screen.getByRole('button', { name: /Save Goals/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(updateProfileMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            rest_timer_seconds: 180,
+            auto_rest_timer: false,
+            username: 'Updated Athlete',
+          })
+        );
       });
     });
   });

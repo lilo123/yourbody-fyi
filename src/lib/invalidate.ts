@@ -72,6 +72,7 @@ export async function invalidateWorkoutDerived(
  * Union of query keys mapped from existing exercise/template mutation onSuccess handlers:
  * - 'exercises' (src/components/exercises/EditExerciseModal.tsx:103; src/components/exercises/ExercisesView.tsx:150, 174, 522)
  * - 'routine_templates' (src/components/exercises/EditExerciseModal.tsx:104; src/components/exercises/ExercisesView.tsx:185, 538; src/components/coach/CoachCockpit.tsx:357)
+ * - 'routine_template_detail' (src/components/workout/useWorkoutQueries.ts:117, 660)
  * - 'workout_sets' (src/components/exercises/EditExerciseModal.tsx:105)
  *
  * When target userId is present, also invalidates user-scoped queries:
@@ -90,6 +91,8 @@ export async function invalidateExerciseDomain(
     queryClient.invalidateQueries({ queryKey: queryKeys.exercises.all }),
     // src/components/exercises/EditExerciseModal.tsx:104; src/components/exercises/ExercisesView.tsx:185, 538; src/components/coach/CoachCockpit.tsx:357
     queryClient.invalidateQueries({ queryKey: queryKeys.routineTemplates.all }),
+    // src/components/workout/useWorkoutQueries.ts:117, 660
+    queryClient.invalidateQueries({ queryKey: queryKeys.routineTemplateDetail.all }),
     // src/components/exercises/EditExerciseModal.tsx:105
     queryClient.invalidateQueries({ queryKey: queryKeys.workoutSets.all }),
     // src/components/exercises/ExerciseListTab.tsx: catalog search and filtering RPC
