@@ -26,19 +26,26 @@ vi.mock('../lib/supabase', () => ({
 interface TestConsumerProps {
   onSignOutReady?: (signOut: () => Promise<void>) => void;
   onRefreshProfileReady?: (refreshProfile: () => Promise<void>) => void;
+  onUpdateProfileReady?: (
+    updateProfile: (updates: Partial<UserProfile>) => Promise<{ success: boolean; error?: string }>
+  ) => void;
 }
 
 const TestConsumer: React.FC<TestConsumerProps> = ({
   onSignOutReady,
   onRefreshProfileReady,
+  onUpdateProfileReady,
 }) => {
-  const { user, profile, loading, signOut, refreshProfile } = useAuth();
+  const { user, profile, loading, signOut, refreshProfile, updateProfile } = useAuth();
   React.useEffect(() => {
     onSignOutReady?.(signOut);
   }, [onSignOutReady, signOut]);
   React.useEffect(() => {
     onRefreshProfileReady?.(refreshProfile);
   }, [onRefreshProfileReady, refreshProfile]);
+  React.useEffect(() => {
+    onUpdateProfileReady?.(updateProfile);
+  }, [onUpdateProfileReady, updateProfile]);
   return (
     <div>
       <div data-testid="auth-loading">{loading ? 'true' : 'false'}</div>
@@ -1107,5 +1114,142 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
       warnSpy.mockRestore();
     });
   });
+
+  describe('updateProfile billing and protected field protection', () => {
+    it('updateProfile sends only user-editable columns and never sends billing fields to supabase', async () => {
+      const profileWithBilling: UserProfile = {
+        ...mockProfile,
+        plan: 'pro',
+        paid_until: '2027-01-01T00:00:00Z',
+        trial_ends_at: '2026-12-01T00:00:00Z',
+        billing_customer_id: 'cus_profile_123',
+        coach_tier: 'pro',
+        max_athletes: 10,
+      };
+      localStorage.setItem('yourbody_user', JSON.stringify(profileWithBilling));
+
+      let capturedPayload: any = null;
+      let capturedMethod: string | null = null;
+      let updateProfileFn: ((updates: Partial<UserProfile>) => Promise<any>) | null = null;
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        const builder = createSupabaseBuilder(table, profileWithBilling);
+        const origUpsert = builder.upsert.bind(builder);
+        const origUpdate = builder.update.bind(builder);
+        builder.upsert = (values: any, options?: any) => {
+          capturedMethod = 'upsert';
+          capturedPayload = values;
+          return origUpsert(values, options);
+        };
+        builder.update = (values: any, options?: any) => {
+          capturedMethod = 'update';
+          capturedPayload = values;
+          return origUpdate(values, options);
+        };
+        return builder;
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TestConsumer onUpdateProfileReady={(fn) => { updateProfileFn = fn; }} />
+          </AuthProvider>
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+      });
+
+      await act(async () => {
+        await updateProfileFn!({
+          target_calories: 2500,
+          plan: 'basic' as any,
+          paid_until: '2030-01-01T00:00:00Z' as any,
+          trial_ends_at: '2030-01-01T00:00:00Z' as any,
+          billing_customer_id: 'cus_unauthorized' as any,
+        });
+      });
+
+      expect(capturedPayload).not.toHaveProperty('plan');
+      expect(capturedPayload).not.toHaveProperty('paid_until');
+      expect(capturedPayload).not.toHaveProperty('trial_ends_at');
+      expect(capturedPayload).not.toHaveProperty('billing_customer_id');
+      expect(capturedPayload).not.toHaveProperty('role');
+      expect(capturedPayload).not.toHaveProperty('coach_tier');
+      expect(capturedPayload).not.toHaveProperty('max_athletes');
+      expect(capturedMethod).toBe('upsert');
+      expect(capturedPayload).toEqual({ id: 'cached-user-123', target_calories: 2500 });
+    });
+
+    it('saving settings when cached profile contains billing fields never sends them to supabase', async () => {
+      const profileWithBilling: UserProfile = {
+        ...mockProfile,
+        plan: 'pro',
+        paid_until: '2027-01-01T00:00:00Z',
+        trial_ends_at: '2026-12-01T00:00:00Z',
+        billing_customer_id: 'cus_profile_123',
+        coach_tier: 'pro',
+        max_athletes: 10,
+      };
+      localStorage.setItem('yourbody_user', JSON.stringify(profileWithBilling));
+
+      let capturedPayload: any = null;
+      let capturedMethod: string | null = null;
+      let updateProfileFn: ((updates: Partial<UserProfile>) => Promise<any>) | null = null;
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        const builder = createSupabaseBuilder(table, profileWithBilling);
+        const origUpsert = builder.upsert.bind(builder);
+        const origUpdate = builder.update.bind(builder);
+        builder.upsert = (values: any, options?: any) => {
+          capturedMethod = 'upsert';
+          capturedPayload = values;
+          return origUpsert(values, options);
+        };
+        builder.update = (values: any, options?: any) => {
+          capturedMethod = 'update';
+          capturedPayload = values;
+          return origUpdate(values, options);
+        };
+        return builder;
+      });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TestConsumer onUpdateProfileReady={(fn) => { updateProfileFn = fn; }} />
+          </AuthProvider>
+        </QueryClientProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+      });
+
+      // User changes auto rest timer in settings
+      await act(async () => {
+        await updateProfileFn!({
+          auto_rest_timer: false,
+          rest_timer_seconds: 120,
+        });
+      });
+
+      expect(capturedPayload).not.toHaveProperty('plan');
+      expect(capturedPayload).not.toHaveProperty('paid_until');
+      expect(capturedPayload).not.toHaveProperty('trial_ends_at');
+      expect(capturedPayload).not.toHaveProperty('billing_customer_id');
+      expect(capturedPayload).not.toHaveProperty('role');
+      expect(capturedPayload).not.toHaveProperty('coach_tier');
+      expect(capturedPayload).not.toHaveProperty('max_athletes');
+      expect(capturedMethod).toBe('upsert');
+      expect(capturedPayload).toEqual({
+        id: 'cached-user-123',
+        auto_rest_timer: false,
+        rest_timer_seconds: 120,
+      });
+    });
+  });
 });
+
 
