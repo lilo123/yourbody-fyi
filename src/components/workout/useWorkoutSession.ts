@@ -35,6 +35,8 @@ import { convertDraftWeight, type WeightUnit } from '../../utils/weight';
 
 export interface UseWorkoutSessionOptions {
   targetUserId: string;
+  workoutDate?: string;
+  setWorkoutDate?: React.Dispatch<React.SetStateAction<string>>;
   exercises: Exercise[];
   exercisesFetched: boolean;
   customTemplates: RoutineTemplate[];
@@ -50,6 +52,8 @@ export interface UseWorkoutSessionOptions {
 
 export function useWorkoutSession({
   targetUserId,
+  workoutDate: externalWorkoutDate,
+  setWorkoutDate: externalSetWorkoutDate,
   exercises,
   exercisesFetched,
   customTemplates,
@@ -82,13 +86,26 @@ export function useWorkoutSession({
     return new Set<string>();
   }, [hiddenRoutineNames, queryClient, targetUserId]);
 
-  const [workoutDate, setWorkoutDate] = useState<string>(() => {
+  const [internalWorkoutDate, setInternalWorkoutDate] = useState<string>(() => {
     const activeSession = workoutSessionStore.getActiveSession(targetUserId);
     if (activeSession && activeSession.workoutDate) {
       return activeSession.workoutDate;
     }
     return getLocalDateStr(new Date());
   });
+
+  const handleSetWorkoutDate = useCallback<React.Dispatch<React.SetStateAction<string>>>(
+    (action) => {
+      setInternalWorkoutDate(action);
+      if (externalSetWorkoutDate) {
+        externalSetWorkoutDate(action);
+      }
+    },
+    [externalSetWorkoutDate]
+  );
+
+  const workoutDate = externalWorkoutDate ?? internalWorkoutDate;
+  const setWorkoutDate = externalSetWorkoutDate ? handleSetWorkoutDate : setInternalWorkoutDate;
 
   const initialSession = workoutSessionStore.getActiveSession(targetUserId, workoutDate);
   if (initialSession?.weightUnit && initialSession.weightUnit !== unit) {

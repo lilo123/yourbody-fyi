@@ -16,7 +16,7 @@ import { StatusBanner } from '../common/StatusBanner';
 import { Skeleton } from '../common/Skeleton';
 import { useSetDeletion } from './useSetDeletion';
 import { useExerciseRemoval } from './useExerciseRemoval';
-import { useWorkoutUrlParams } from './useWorkoutUrlParams';
+import { useWorkoutUrlParams, isValidCivilDate } from './useWorkoutUrlParams';
 import { useWorkoutEditSheet } from './useWorkoutEditSheet';
 import { useWorkoutSetCommit } from './useWorkoutSetCommit';
 import { useWorkoutFinishReview } from './useWorkoutFinishReview';
@@ -46,8 +46,21 @@ export const WorkoutEngine: React.FC = () => {
   const [isReloadConfirmOpen, setIsReloadConfirmOpen] = useState(false);
 
   // 1. Workout Session State & Stores
-  const activeSession = workoutSessionStore.getActiveSession(targetUserId);
-  const initialDate = activeSession?.workoutDate || getLocalDateStr(new Date());
+  const [workoutDate, setWorkoutDate] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const param = new URLSearchParams(window.location.search).get('date');
+        if (isValidCivilDate(param)) return param!;
+      } catch {
+        // ignore
+      }
+    }
+    const activeSession = workoutSessionStore.getActiveSession(targetUserId);
+    if (activeSession && activeSession.workoutDate) {
+      return activeSession.workoutDate;
+    }
+    return getLocalDateStr(new Date());
+  });
 
   // 2. Data Queries
   const {
@@ -55,11 +68,11 @@ export const WorkoutEngine: React.FC = () => {
     hasCatalogLoaded, isCatalogPending, userLogs, logsFetched,
     availableRoutines, isLogsError, logsError, refetchLogs,
     benchmarks: allTimeBenchmarks, hiddenRoutineNames,
-  } = useWorkoutQueries(targetUserId, initialDate);
+  } = useWorkoutQueries(targetUserId, workoutDate);
 
   // 3. Session Management (Routines, Exercises, Targets, Drafts)
   const {
-    workoutDate, setWorkoutDate, activeRoutineName, activeExercises,
+    activeRoutineName, activeExercises,
     targetSetCounts, targetRepCounts, expandedExercises, inputDrafts, setInputDrafts,
     getSetsForExerciseToday, toggleAccordion, collapseExercise, collapseCompleted,
     toggleAllAccordions, handleSelectRoutine: selectRoutineInternal,
@@ -68,7 +81,7 @@ export const WorkoutEngine: React.FC = () => {
     restoreExercise, adjustTargetSets, updateDraft, handleClearWorkout: executeClearWorkout,
     isScheduledRoutineDirty,
   } = useWorkoutSession({
-    targetUserId, exercises, exercisesFetched, customTemplates, templatesFetched,
+    targetUserId, workoutDate, setWorkoutDate, exercises, exercisesFetched, customTemplates, templatesFetched,
     userLogs, logsFetched, unit, hasLoadedCatalog: hasCatalogLoaded,
     isCatalogPending, hiddenRoutineNames,
   });

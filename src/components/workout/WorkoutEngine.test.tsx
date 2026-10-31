@@ -3917,5 +3917,60 @@ describe('WorkoutEngine', () => {
       // Bodyweight set stores weight 0
       expect(op.payload.weight).toBe(0);
     });
+
+    it('switching workout date refetches and displays sets logged on the new date', async () => {
+      // Start on Sunday 2026-09-06
+      vi.setSystemTime(new Date('2026-09-06T12:00:00Z'));
+
+      const mondaySets = [
+        {
+          id: 's-monday-1',
+          weight: 225,
+          reps: 8,
+          set_index: 1,
+          set_type: 'working',
+          created_at: '2026-09-07T10:00:00Z',
+          exercise_id: 'e0000000-0000-0000-0000-000000000001',
+        },
+      ];
+
+      (supabase.from as any).mockImplementation((table: string) => {
+        if (table === 'workouts') {
+          return createSupabaseBuilder('workouts', {
+            resolver: (builder: any) => {
+              const gteFilter = builder.filters.find((f: any) => f.method === 'gte' && f.column === 'date');
+              if (gteFilter && String(gteFilter.value).startsWith('2026-09-07')) {
+                return [
+                  {
+                    id: 'workout-monday',
+                    date: '2026-09-07T10:00:00Z',
+                    name: 'Workout A (Push, Quads & Core)',
+                    sets: mondaySets,
+                  },
+                ];
+              }
+              return [];
+            },
+          });
+        }
+        return createSupabaseBuilder(table, { data: [], error: null });
+      });
+
+      renderComponent();
+
+      // On Sunday, rest day is rendered
+      expect(screen.getByTestId('routine-select-btn')).toBeDefined();
+      expect(screen.getAllByText('Rest Day').length).toBeGreaterThanOrEqual(1);
+
+      // Switch date to Monday 2026-09-07
+      const dateInput = screen.getByTestId('workout-date-input');
+      fireEvent.change(dateInput, { target: { value: '2026-09-07' } });
+
+      // The logged set from Monday (225 lb x 8 reps) must be fetched and displayed
+      await waitFor(() => {
+        expect(screen.getByTestId('logged-set-row-0-0')).toBeDefined();
+      });
+      expect(within(screen.getByTestId('logged-set-row-0-0')).getByText('225')).toBeDefined();
+    });
   });
 });
