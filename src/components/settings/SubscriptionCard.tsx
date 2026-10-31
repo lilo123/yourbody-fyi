@@ -11,7 +11,7 @@ import { openBillingPortal, planLabel } from '../../lib/billing';
 const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
 
 export const SubscriptionCard: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const userId = user?.id;
   const entitlement = useEntitlement();
   const queryClient = useQueryClient();
@@ -43,6 +43,10 @@ export const SubscriptionCard: React.FC = () => {
       });
       if (userId) {
         void queryClient.invalidateQueries({ queryKey: getEntitlementQueryKey(userId) });
+        void queryClient.invalidateQueries({
+          queryKey: ['coach_active_athletes_count', userId],
+        });
+        void refreshProfile();
       }
     }
     params.delete('billing');
@@ -50,7 +54,7 @@ export const SubscriptionCard: React.FC = () => {
     const newUrl =
       window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
     window.history.replaceState({}, '', newUrl);
-  }, [userId, queryClient, showToast]);
+  }, [userId, queryClient, showToast, refreshProfile]);
 
   const isTrial =
     (!entitlement.isPaid &&

@@ -340,5 +340,45 @@ describe('SubscriptionCard component', () => {
       );
       expect(replaceStateSpy).toHaveBeenCalledWith({}, '', '/settings');
     });
+
+    it('refreshes profile and invalidates coach active athletes count on billing=success', () => {
+      const mockRefreshProfile = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(authModule.useAuth).mockReturnValue({
+        user: { id: 'test-user-id', email: 'test@example.com' } as any,
+        profile: { coach_tier: 'pro' } as any,
+        role: 'coach',
+        isCoachMode: true,
+        loading: false,
+        updateProfile: vi.fn(),
+        switchRole: vi.fn(),
+        refreshProfile: mockRefreshProfile,
+        signOut: vi.fn(),
+      } as any);
+
+      vi.mocked(entitlementModule.useEntitlement).mockReturnValue({
+        plan: 'pro',
+        isPro: true,
+        isPaid: true,
+        trialEndsAt: null,
+        paidUntil: '2027-10-10T00:00:00Z',
+        isLoading: false,
+      });
+
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+      delete (window as any).location;
+      window.location = {
+        pathname: '/settings',
+        search: '?billing=success',
+        hash: '',
+      } as any;
+
+      renderCard();
+
+      expect(mockRefreshProfile).toHaveBeenCalledTimes(1);
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['coach_active_athletes_count', 'test-user-id'],
+      });
+    });
   });
 });
