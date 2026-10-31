@@ -344,6 +344,54 @@ describe('NutritionEngine', () => {
     expect(payload.protein).toBe(18);
   });
 
+  it('ignores double-tap on Log Meal and does not create duplicate meal logs', async () => {
+    const mockUpsert = vi.fn((values: any, options?: any) => {
+      const b = createSupabaseBuilder('nutrition_logs');
+      return b.upsert(values, options);
+    });
+    (supabase.from as any).mockImplementation((table: string) => {
+      const b = createSupabaseBuilder(table, { data: [], error: null });
+      if (table === 'nutrition_logs') {
+        b.upsert = mockUpsert;
+      }
+      return b;
+    });
+
+    (supabase.functions.invoke as any).mockResolvedValue({
+      data: {
+        name: '3 Eggs',
+        calories: 210,
+        protein: 18,
+        carbs: 2,
+        fat: 15,
+        fiber: 0,
+        explanation: '3 eggs = 210 kcal',
+        items: [{ name: 'Eggs', portion: '3 large', calories: 210, protein: 18, carbs: 2, fat: 15, fiber: 0 }],
+      },
+      error: null,
+    });
+
+    renderComponent();
+
+    const input = screen.getByPlaceholderText(
+      'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
+    );
+    await userEvent.type(input, '3 eggs');
+    fireEvent.click(screen.getByText('Analyze Meal'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Log Meal (+210 kcal)')).toBeDefined();
+    });
+
+    const logBtn = screen.getByText('Log Meal (+210 kcal)');
+    fireEvent.click(logBtn);
+    fireEvent.click(logBtn);
+
+    await waitFor(() => {
+      expect(mockUpsert).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('single-item meal: modal edit updates item 0 nutrition and logged payload equals edited values', async () => {
     const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [], error: null }) });
     (supabase.from as any).mockImplementation((table: string) => {

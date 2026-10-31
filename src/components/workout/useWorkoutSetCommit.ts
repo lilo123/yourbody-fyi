@@ -1,4 +1,4 @@
-import { useCallback, type RefObject } from 'react';
+import { useCallback, useRef, useEffect, type RefObject } from 'react';
 import type { Exercise, WorkoutSet, RoutineTemplate } from '../../types/database';
 import type { UseMutationResult } from '@tanstack/react-query';
 import type { SetDraftInput } from '../../utils/workoutSessionStore';
@@ -31,12 +31,31 @@ export function useWorkoutSetCommit({
 }: UseWorkoutSetCommitOptions) {
   const contextUnit = useWeightUnit();
   const unit = propUnit ?? contextUnit;
+  const inFlightSetsRef = useRef<Set<string>>(new Set());
+  const inFlightBatchRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!logSetMutation.isPending) {
+      inFlightSetsRef.current.clear();
+    }
+  }, [logSetMutation.isPending]);
+
+  useEffect(() => {
+    if (!batchLogSetsMutation.isPending) {
+      inFlightBatchRef.current.clear();
+    }
+  }, [batchLogSetsMutation.isPending]);
 
   const handleCommitSet = useCallback((
     exName: string,
     setIndex: number,
     ghostValues: { weight: number | ''; reps: number | '' }
   ) => {
+    const setKey = `${exName.trim().toLowerCase()}_${setIndex}`;
+    if (inFlightSetsRef.current.has(setKey)) {
+      return;
+    }
+
     const draftKey = `${exName}_${setIndex}`;
     const draft = inputDraftsRef.current?.[draftKey];
 
@@ -82,6 +101,7 @@ export function useWorkoutSetCommit({
       }
     }
 
+    inFlightSetsRef.current.add(setKey);
     logSetMutation.mutate({
       exerciseName: exName,
       exerciseId,
@@ -97,6 +117,11 @@ export function useWorkoutSetCommit({
     ghostValues: { weight: number | ''; reps: number | '' }[],
     exerciseSetsToday: WorkoutSet[]
   ) => {
+    const batchKey = exName.trim().toLowerCase();
+    if (inFlightBatchRef.current.has(batchKey)) {
+      return;
+    }
+
     const unloggedSets: {
       exerciseName: string;
       weight: number;
@@ -153,6 +178,7 @@ export function useWorkoutSetCommit({
         }
       }
       const setsWithId = unloggedSets.map((s) => ({ ...s, exerciseId }));
+      inFlightBatchRef.current.add(batchKey);
       batchLogSetsMutation.mutate(setsWithId);
     }
   }, [batchLogSetsMutation, exercises, customTemplates, inputDraftsRef, targetRepCountsRef, unit]);

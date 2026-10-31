@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import type { WorkoutSet, Exercise, SetType } from "../../types/database";
@@ -77,6 +77,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [conflictType, setConflictType] = useState<'changed' | 'deleted' | null>(null);
   const [isReloading, setIsReloading] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const isDirty =
     selectedExerciseId !== initialExerciseId ||
@@ -209,6 +210,7 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isBusy || isSubmittingRef.current) return;
     setErrorMessage(null);
     setConflictType(null);
 
@@ -254,14 +256,22 @@ const EditSetForm: React.FC<EditSetFormProps> = ({
       return;
     }
 
-    updateMutation.mutate({
-      id: currentSet.id,
-      exercise_id: selectedExerciseId,
-      weight: resolvedWeight,
-      reps: repsVal,
-      rpe: rpeVal,
-      set_type: setType,
-    });
+    isSubmittingRef.current = true;
+    updateMutation.mutate(
+      {
+        id: currentSet.id,
+        exercise_id: selectedExerciseId,
+        weight: resolvedWeight,
+        reps: repsVal,
+        rpe: rpeVal,
+        set_type: setType,
+      },
+      {
+        onSettled: () => {
+          isSubmittingRef.current = false;
+        },
+      }
+    );
   };
 
   const handleDelete = () => {
