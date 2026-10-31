@@ -135,6 +135,7 @@ export const AddItemForm: React.FC<AddItemFormProps> = memo(({
   return (
     <form
       data-testid="add-item-form"
+      data-captures-escape=""
       onSubmit={handleSubmit}
       noValidate
       className="p-3 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-2.5 animate-in fade-in"
