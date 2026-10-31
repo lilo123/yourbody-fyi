@@ -184,6 +184,7 @@ export const ExerciseListTab = forwardRef<ExerciseListTabHandle, ExerciseListTab
     let displayedItems = sourceItems.filter((ex) => ex.id !== pendingArchive?.item.id);
     if (selectedScope === 'athlete' && selectedAthleteId) displayedItems = displayedItems.filter((ex) => ex.user_id === selectedAthleteId);
     if (selectedMuscleGroup !== 'all') displayedItems = displayedItems.filter((ex) => matchesExerciseSearch(ex, '', selectedMuscleGroup, null));
+    if (selectedEquipment !== 'all') displayedItems = displayedItems.filter((ex) => matchesExerciseSearch(ex, '', null, selectedEquipment));
     if (search && !catalogData) displayedItems = displayedItems.filter((ex) => matchesExerciseSearch(ex, search, null, null));
 
     const athleteChipLabel = selectedAthlete ? `${selectedAthlete.name.split(' ')[0]}'s` : 'Athletes';

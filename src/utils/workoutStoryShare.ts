@@ -2,11 +2,13 @@ import type { HistorySession } from '../components/history/useWorkoutHistory';
 import type { Exercise } from '../types/database';
 import type { WeightUnit } from './weight';
 import type { ToastOptions } from '../hooks/useToast';
+import type { PrMode } from '../lib/prComparator';
 import { fetchSessionSets } from '../components/history/useWorkoutHistory';
 import { buildWorkoutStoryData, type WorkoutStoryData } from './workoutStorySummary';
 
 export interface ShareWorkoutStoryDeps {
   renderToBlob?: (data: WorkoutStoryData) => Promise<Blob>;
+  prMode?: PrMode;
 }
 
 export async function shareWorkoutStory(
@@ -14,9 +16,12 @@ export async function shareWorkoutStory(
   exercises: Exercise[],
   unit: WeightUnit,
   showToast: (options: ToastOptions) => void,
-  deps?: ShareWorkoutStoryDeps
+  deps?: ShareWorkoutStoryDeps,
+  prMode?: PrMode
 ): Promise<void> {
   try {
+    const resolvedPrMode: PrMode = prMode === 'e1rm' || deps?.prMode === 'e1rm' ? 'e1rm' : 'weight';
+
     // 1. Fetch sets if not already loaded on session
     let sets = session.sets;
     if (!sets || sets.length === 0) {
@@ -37,6 +42,7 @@ export async function shareWorkoutStory(
       unit,
       totalVolume: session.total_volume,
       setCount: session.set_count,
+      prMode: resolvedPrMode,
     });
 
     // 3. Lazy-load renderer (dynamic import on tap) so entry chunk does not grow

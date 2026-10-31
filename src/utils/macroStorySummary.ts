@@ -70,14 +70,26 @@ function sanitizeNumber(value: unknown): number {
   return 0;
 }
 
+function sanitizeTarget(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && !Number.isNaN(value) ? Math.max(0, value) : null;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && !Number.isNaN(parsed) ? Math.max(0, parsed) : null;
+  }
+  return null;
+}
+
 function buildNutrientGoal(
   currentRaw: unknown,
   targetRaw: unknown,
   unit: 'kcal' | 'g'
 ): NutrientGoal {
   const current = sanitizeNumber(currentRaw);
-  const targetNum = targetRaw != null ? sanitizeNumber(targetRaw) : null;
-  const hasTarget = targetNum !== null && targetNum > 0;
+  const targetNum = sanitizeTarget(targetRaw);
+  const hasTarget = targetNum !== null;
 
   const currentFormatted =
     unit === 'kcal' ? `${formatCalories(current)} kcal` : `${formatMacro(current)}g`;
@@ -88,7 +100,7 @@ function buildNutrientGoal(
       : `${formatMacro(targetNum)}g`
     : null;
 
-  const percentage = hasTarget ? Math.round((current / targetNum) * 100) : null;
+  const percentage = hasTarget && targetNum > 0 ? Math.round((current / targetNum) * 100) : null;
   const isOver = hasTarget ? current > targetNum : false;
 
   return {

@@ -23,7 +23,7 @@ export const MacroCell: React.FC<MacroCellProps> = memo(({
 }) => {
   const config = MACRO_COLUMNS_CONFIG[colKey];
   const num = roundTo1Decimal(value);
-  const isOver = Boolean(target && target > 0 && num > target);
+  const isOver = typeof target === 'number' && Number.isFinite(target) && target >= 0 && num > target;
   const isZero = colKey === 'calories' ? Math.abs(num) < 0.5 : Math.abs(num) < 0.05;
   const formatted = isZero ? '0' : (colKey === 'calories' ? formatCalories(value) : formatMacro(value));
 
