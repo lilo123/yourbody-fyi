@@ -333,16 +333,24 @@ export function applyPendingToHistory(
                 s.civil_date === payloadDate ||
                 s.date.startsWith(payloadDate)))
         );
-        if (matchingSession) {
-          const date =
-            matchingSession.workout_date ||
-            matchingSession.civil_date ||
-            matchingSession.date.slice(0, 10);
-          const summary = getSummary(date, matchingSession.id);
+
+        const date =
+          payloadDate ||
+          (matchingSession
+            ? matchingSession.workout_date ||
+              matchingSession.civil_date ||
+              matchingSession.date.slice(0, 10)
+            : undefined) ||
+          (payloadRef ? workoutDateMap.get(payloadRef) : undefined);
+
+        if (date) {
+          const summary = getSummary(date, payloadRef || matchingSession?.id);
           summary.deletedSetIds.add(op.payload.id);
-        } else if (payloadDate) {
-          const summary = getSummary(payloadDate, payloadRef);
-          summary.deletedSetIds.add(op.payload.id);
+        } else {
+          // Legacy queued ops with no date: keep original behaviour across active summaries
+          for (const summary of daySummaries.values()) {
+            summary.deletedSetIds.add(op.payload.id);
+          }
         }
       }
     } else if (op.kind === 'workout.rename') {
