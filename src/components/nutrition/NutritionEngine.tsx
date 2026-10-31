@@ -335,11 +335,7 @@ export const NutritionEngine: React.FC = () => {
       triggerToast,
     });
 
-  const { handleAddParsedItems } = useStagedMealAddAi({
-    stagedMeal,
-    setStagedMeal,
-    triggerToast,
-  });
+  const { handleAddParsedItems } = useStagedMealAddAi({ stagedMeal, setStagedMeal, triggerToast, onQuotaUpdate: setAiQuota });
 
   useEffect(() => {
     if (
@@ -429,6 +425,7 @@ export const NutritionEngine: React.FC = () => {
             isPending={mutation.isPending}
             customDishes={displayedCustomDishes}
             onAddParsedItems={handleAddParsedItems}
+            onQuotaUpdate={setAiQuota}
             onAnalyzeWithAiInstead={() => ai.handleForceAiAnalyze(stagedMeal.rawText || stagedMeal.name)}
             isAnalyzing={ai.isAnalyzing}
           />
