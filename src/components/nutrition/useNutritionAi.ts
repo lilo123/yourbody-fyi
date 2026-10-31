@@ -193,6 +193,7 @@ export function useNutritionAi({
     },
     onClearError: () => {
       setIsError(false);
+      setStatus('');
       setIsRateLimited(false);
       setIsQuotaExceeded(false);
     },

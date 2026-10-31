@@ -3532,6 +3532,116 @@ describe('WorkoutEngine', () => {
       expect(repsInput.value).toBe("8");
     });
 
+    it('workout exercise card displays all-time PR benchmark older than the previous session', async () => {
+      (supabase as any).rpc = vi.fn().mockImplementation((fn: string) => {
+        if (fn === 'get_exercise_benchmarks') {
+          return Promise.resolve({
+            data: [
+              {
+                exercise_id: 'e0000000-0000-0000-0000-000000000001',
+                pr_weight: 225,
+                pr_reps: 5,
+                pr_date: '2026-06-01',
+                pr_workout_id: '00000000-0000-0000-0000-000000000099',
+                last_date: '2026-09-05',
+                last_workout_id: '00000000-0000-0000-0000-000000000088',
+                last_sets: [{ id: 's-last-1', weight: 185, reps: 5, set_index: 1, set_type: 'working' }],
+                pr_e1rm: null,
+              },
+            ],
+            error: null,
+          });
+        }
+        if (fn === 'get_ghost_sets') {
+          return Promise.resolve({
+            data: [
+              {
+                id: 's-last-1',
+                workout_id: '00000000-0000-0000-0000-000000000088',
+                exercise_id: 'e0000000-0000-0000-0000-000000000001',
+                exercise_name: 'Incline Bench Press',
+                weight: 185,
+                reps: 5,
+                set_index: 1,
+                set_type: 'working',
+                workout_date: '2026-09-05T12:00:00Z',
+                workout_name: 'Workout Session',
+                created_at: '2026-09-05T12:00:00Z',
+                civil_date: '2026-09-05',
+              },
+            ],
+            error: null,
+          });
+        }
+        return Promise.resolve({ data: [], error: null });
+      });
+
+      renderComponent();
+
+      const dateInput = screen.getByTestId('workout-date-input');
+      fireEvent.change(dateInput, { target: { value: '2026-09-07' } });
+
+      await waitFor(() => {
+        expect(screen.getByText('Incline Bench Press')).toBeDefined();
+      });
+
+      await waitFor(() => {
+        const prChip = screen.getByTestId('pr-chip-0');
+        expect(prChip).toHaveTextContent('PR: 225×5');
+        const lastChip = screen.getByTestId('last-chip-0');
+        expect(lastChip).toHaveTextContent('Last: 185×5');
+      });
+    });
+
+    it('falls back to local benchmarks when server benchmarks return empty or fail', async () => {
+      (supabase as any).rpc = vi.fn().mockImplementation((fn: string) => {
+        if (fn === 'get_exercise_benchmarks') {
+          return Promise.resolve({
+            data: [],
+            error: null,
+          });
+        }
+        if (fn === 'get_ghost_sets') {
+          return Promise.resolve({
+            data: [
+              {
+                id: 's-last-1',
+                workout_id: '00000000-0000-0000-0000-000000000088',
+                exercise_id: 'e0000000-0000-0000-0000-000000000001',
+                exercise_name: 'Incline Bench Press',
+                weight: 185,
+                reps: 5,
+                set_index: 1,
+                set_type: 'working',
+                workout_date: '2026-09-05T12:00:00Z',
+                workout_name: 'Workout Session',
+                created_at: '2026-09-05T12:00:00Z',
+                civil_date: '2026-09-05',
+              },
+            ],
+            error: null,
+          });
+        }
+        return Promise.resolve({ data: [], error: null });
+      });
+
+      renderComponent();
+
+      const dateInput = screen.getByTestId('workout-date-input');
+      fireEvent.change(dateInput, { target: { value: '2026-09-07' } });
+
+      await waitFor(() => {
+        expect(screen.getByText('Incline Bench Press')).toBeDefined();
+      });
+
+      await waitFor(() => {
+        const prChip = screen.getByTestId('pr-chip-0');
+        expect(prChip).toHaveTextContent('PR: 185×5');
+        const lastChip = screen.getByTestId('last-chip-0');
+        expect(lastChip).toHaveTextContent('Last: 185×5');
+      });
+    });
+
     it('converts typed-but-unlogged weight drafts when switching weight unit preference (e2e bug reproduction)', async () => {
       let currentUnit: 'kg' | 'lb' = 'kg';
       localStorage.setItem(

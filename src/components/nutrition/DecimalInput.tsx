@@ -17,7 +17,7 @@ export interface DecimalInputProps
 export const DecimalInput = forwardRef<HTMLInputElement, DecimalInputProps>(({
   value,
   onChange,
-  allowNegative = true,
+  allowNegative = false,
   max,
   onBlur,
   onKeyDown,

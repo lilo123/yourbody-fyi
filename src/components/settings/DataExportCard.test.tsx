@@ -320,6 +320,7 @@ describe('DataExportCard', () => {
           preset: '30d',
           domains: expect.arrayContaining(['workouts', 'nutrition_logs']),
           isSelfExport: true,
+          targetTimezone: undefined,
         }),
         expect.any(Function)
       );
@@ -328,6 +329,90 @@ describe('DataExportCard', () => {
 
     const statusText = screen.getByTestId('export-status-text');
     expect(statusText.textContent).toContain('Export complete');
+  });
+
+  it('passes athlete timezone to executeDataExport when coach exports athlete from context', async () => {
+    const coachCtxWithTz: CoachContextType = {
+      ...mockCoachContextValue,
+      athletes: [
+        { id: 'athlete-1', name: 'Alex Rivera', email: 'alex@test.com', timezone: 'America/New_York' },
+      ],
+    };
+
+    renderCard({
+      hasCoachCapability: true,
+      coachCtx: coachCtxWithTz,
+    });
+
+    fireEvent.click(screen.getByTestId('toggle-data-export-btn'));
+
+    const targetSelect = screen.getByTestId('export-target-select');
+    fireEvent.change(targetSelect, { target: { value: 'athlete-1' } });
+
+    const downloadBtn = screen.getByTestId('download-export-btn');
+    fireEvent.click(downloadBtn);
+
+    await waitFor(() => {
+      expect(dataExportUtils.executeDataExport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetUserId: 'athlete-1',
+          isSelfExport: false,
+          targetTimezone: 'America/New_York',
+        }),
+        expect.any(Function)
+      );
+    });
+  });
+
+  it('preserves and passes athlete timezone when lazily querying linked athletes for export', async () => {
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'coach_athlete_links') {
+        return createSupabaseBuilder('coach_athlete_links', {
+          data: [
+            {
+              athlete_id: 'athlete-lazy-1',
+              status: 'active',
+              linked_at: '2026-09-01T00:00:00Z',
+              athlete: {
+                id: 'athlete-lazy-1',
+                username: 'Sam Taylor',
+                email: 'sam@test.com',
+                timezone: 'America/Chicago',
+              },
+            },
+          ],
+          error: null,
+        });
+      }
+      return createSupabaseBuilder(table, { data: [], error: null });
+    });
+
+    renderCard({
+      hasCoachCapability: true,
+    });
+
+    fireEvent.click(screen.getByTestId('toggle-data-export-btn'));
+
+    const targetSelect = await screen.findByTestId('export-target-select');
+    await waitFor(() => {
+      expect(screen.getByText(/Sam Taylor/i)).toBeDefined();
+    });
+
+    fireEvent.change(targetSelect, { target: { value: 'athlete-lazy-1' } });
+
+    const downloadBtn = screen.getByTestId('download-export-btn');
+    fireEvent.click(downloadBtn);
+
+    await waitFor(() => {
+      expect(dataExportUtils.executeDataExport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetUserId: 'athlete-lazy-1',
+          isSelfExport: false,
+          targetTimezone: 'America/Chicago',
+        }),
+        expect.any(Function)
+      );
+    });
   });
 
   it('displays error status when export fails', async () => {

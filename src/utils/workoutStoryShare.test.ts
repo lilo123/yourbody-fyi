@@ -177,4 +177,77 @@ describe('shareWorkoutStory utility', () => {
       kind: 'info',
     });
   });
+
+  it('passes e1rm prMode to story builder when specified via param or deps', async () => {
+    const sessionWithSets: HistorySession = {
+      ...sampleSession,
+      sets: [
+        {
+          id: 'set-1',
+          workout_id: 'test-session-123',
+          exercise_id: 'ex-bench-1',
+          exercise_name: 'Bench Press',
+          weight: 220,
+          reps: 1,
+          set_index: 1,
+          set_type: 'working',
+          workout_date: '2026-10-12',
+          workout_name: 'Upper Body Blast',
+          created_at: '2026-10-12T10:00:00Z',
+        },
+        {
+          id: 'set-2',
+          workout_id: 'test-session-123',
+          exercise_id: 'ex-bench-1',
+          exercise_name: 'Bench Press',
+          weight: 200,
+          reps: 8,
+          set_index: 2,
+          set_type: 'working',
+          workout_date: '2026-10-12',
+          workout_name: 'Upper Body Blast',
+          created_at: '2026-10-12T10:05:00Z',
+        },
+      ],
+    };
+
+    let capturedStoryData: any = null;
+    const capturingRenderer = vi.fn().mockImplementation((data) => {
+      capturedStoryData = data;
+      return Promise.resolve(mockBlob);
+    });
+
+    // Test with prMode as 6th param
+    await shareWorkoutStory(
+      sessionWithSets,
+      [],
+      'lb',
+      mockShowToast,
+      { renderToBlob: capturingRenderer },
+      'e1rm'
+    );
+    expect(capturedStoryData.exercises[0].bestSetFormatted).toBe('200 lbs × 8');
+
+    // Test with prMode in deps
+    capturedStoryData = null;
+    await shareWorkoutStory(
+      sessionWithSets,
+      [],
+      'lb',
+      mockShowToast,
+      { renderToBlob: capturingRenderer, prMode: 'e1rm' }
+    );
+    expect(capturedStoryData.exercises[0].bestSetFormatted).toBe('200 lbs × 8');
+
+    // Test default weight mode
+    capturedStoryData = null;
+    await shareWorkoutStory(
+      sessionWithSets,
+      [],
+      'lb',
+      mockShowToast,
+      { renderToBlob: capturingRenderer }
+    );
+    expect(capturedStoryData.exercises[0].bestSetFormatted).toBe('220 lbs × 1');
+  });
 });

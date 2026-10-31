@@ -556,6 +556,45 @@ describe('StagedMealCard', () => {
     expect(screen.getByText('Log Meal (+750 kcal)')).toBeInTheDocument();
   });
 
+  it('single-item meal: onEditNutrition resyncs meal explanation and serving size/unit', () => {
+    const meal = makeStagedMeal();
+    meal.explanation = '600 kcal (Power Breakfast)';
+    meal.items[0].quantity = 2;
+    meal.items[0].unit = 'g';
+    const onUpdateStagedMeal = vi.fn();
+
+    render(
+      <StagedMealCard
+        stagedMeal={meal}
+        onUpdateStagedMeal={onUpdateStagedMeal}
+        onApplyStagedItemChange={vi.fn()}
+        onDeleteItem={vi.fn()}
+        onSaveItemAsCustomDish={vi.fn()}
+        onLogStagedMeal={vi.fn()}
+        onSaveStagedAsCustomDish={vi.fn()}
+        onDiscardStagedMeal={vi.fn()}
+        isPending={false}
+      />
+    );
+
+    // Open overflow menu for the item
+    fireEvent.click(screen.getByTestId('component-actions'));
+    // Click Edit nutrition
+    fireEvent.click(screen.getByTestId('component-edit-nutrition'));
+
+    // Modal is open, edit calories
+    fireEvent.change(screen.getByTestId('edit-item-calories-input'), { target: { value: '450' } });
+    fireEvent.click(screen.getByTestId('save-edit-item-nutrition-btn'));
+
+    expect(onUpdateStagedMeal).toHaveBeenCalledTimes(1);
+    const updated = onUpdateStagedMeal.mock.calls[0][0] as StagedMeal;
+
+    expect(updated.calories).toBe(450);
+    expect(updated.explanation).toBe('450 kcal (Power Breakfast)');
+    expect(updated.servingSize).toBe(2);
+    expect(updated.servingUnit).toBe('g');
+  });
+
   it('deleting from 2 items down to 1: removes This meal row and Itemized Breakdown header without rendering inputs', () => {
     const multiMeal: StagedMeal = {
       name: '2-Item Meal',
