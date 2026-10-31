@@ -56,11 +56,37 @@ export interface ResolvedRoutineResult {
   targetReps: Record<string, number>;
 }
 
+export function isOwnOrAssignedRoutine(
+  template?: RoutineTemplate | null,
+  targetUserId?: string | null
+): boolean {
+  if (!template || !targetUserId) return false;
+  return template.user_id === targetUserId || template.assigned_to === targetUserId;
+}
+
+export function hasOwnOrAssignedRoutines(
+  catalog?: RoutineTemplate[] | null,
+  targetUserId?: string | null
+): boolean {
+  if (!targetUserId || !catalog || catalog.length === 0) return false;
+  return catalog.some((t) => isOwnOrAssignedRoutine(t, targetUserId));
+}
+
+export function shouldHideStarterRoutines(
+  catalog?: RoutineTemplate[] | null,
+  targetUserId?: string | null,
+  hasLoadedCatalog?: boolean
+): boolean {
+  if (!hasLoadedCatalog) return false;
+  return hasOwnOrAssignedRoutines(catalog, targetUserId);
+}
+
 export function isDefaultRoutineHidden(
   templateName: string,
-  _customTemplates?: RoutineTemplate[],
+  customTemplates?: RoutineTemplate[],
   hiddenRoutineNames?: Set<string> | string[] | null,
-  _hasLoadedCatalog?: boolean
+  hasLoadedCatalog?: boolean,
+  targetUserId?: string | null
 ): boolean {
   const normName = templateName.trim().toLowerCase();
 
@@ -73,6 +99,11 @@ export function isDefaultRoutineHidden(
     }
   }
 
+  // Hide all starters once the loaded catalog contains at least one own or assigned routine
+  if (shouldHideStarterRoutines(customTemplates, targetUserId, hasLoadedCatalog)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -83,7 +114,8 @@ export function resolveRoutineAndExercises(
   exerciseCatalog: Exercise[],
   removedExercises: string[] = [],
   hasLoadedCatalog?: boolean,
-  hiddenRoutineNames?: Set<string> | string[]
+  hiddenRoutineNames?: Set<string> | string[],
+  targetUserId?: string | null
 ): ResolvedRoutineResult {
   let resolvedRoutine = 'Rest Day';
   let resolvedExList: string[] = [];
@@ -215,30 +247,35 @@ export function resolveRoutineAndExercises(
   } else {
     const hasCatalog = Boolean(hasLoadedCatalog);
     const dayAbbr = getDayOfWeekAbbr(workoutDate);
-    const scheduledCustom = customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
+    const scheduledOwn = customTemplates.find(
+      (template) => isOwnOrAssignedRoutine(template, targetUserId) && template.days_of_week?.includes(dayAbbr)
+    );
+    const scheduledCustom = scheduledOwn || customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
     const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
-      if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog)) {
+      if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog, targetUserId)) {
         return false;
       }
       return template.days.some((day) => day === dayAbbr || day.slice(0, 3) === dayAbbr);
     });
 
-    if (scheduledCustom && scheduledCustom.exercises) {
+    if (scheduledCustom) {
       resolvedRoutine = scheduledCustom.name;
-      const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-      sorted.forEach((e) => {
-        const name =
-          e.exercise?.name ||
-          e.exercise_name ||
-          exerciseCatalog.find((ex) => ex.id === e.exercise_id)?.name ||
-          DEFAULT_EXERCISES_LIST.find((ex) => ex.id === e.exercise_id)?.name ||
-          e.exercise_id;
-        if (name) {
-          resolvedExList.push(name);
-          resolvedTargets[name] = e.target_sets || 3;
-          resolvedReps[name] = e.target_reps || 10;
-        }
-      });
+      if (scheduledCustom.exercises) {
+        const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+        sorted.forEach((e) => {
+          const name =
+            e.exercise?.name ||
+            e.exercise_name ||
+            exerciseCatalog.find((ex) => ex.id === e.exercise_id)?.name ||
+            DEFAULT_EXERCISES_LIST.find((ex) => ex.id === e.exercise_id)?.name ||
+            e.exercise_id;
+          if (name) {
+            resolvedExList.push(name);
+            resolvedTargets[name] = e.target_sets || 3;
+            resolvedReps[name] = e.target_reps || 10;
+          }
+        });
+      }
     } else if (scheduledDef) {
       resolvedRoutine = scheduledDef.name;
       resolvedExList = [...scheduledDef.exercises];
@@ -266,6 +303,7 @@ export function checkIsScheduledRoutineDirty({
   targetRepCounts,
   hasLoadedCatalog,
   hiddenRoutineNames,
+  targetUserId,
 }: {
   workoutDate: string;
   activeRoutineName: string;
@@ -277,12 +315,16 @@ export function checkIsScheduledRoutineDirty({
   targetRepCounts?: Record<string, number>;
   hasLoadedCatalog?: boolean;
   hiddenRoutineNames?: Set<string> | string[];
+  targetUserId?: string | null;
 }): boolean {
   const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
-  const scheduledCustom = customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
+  const scheduledOwn = customTemplates.find(
+    (template) => isOwnOrAssignedRoutine(template, targetUserId) && template.days_of_week?.includes(dayAbbr)
+  );
+  const scheduledCustom = scheduledOwn || customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
   const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
-    if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog)) {
+    if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog, targetUserId)) {
       return false;
     }
     return template.days.some((day) => day === dayAbbr || day.slice(0, 3) === dayAbbr);
@@ -299,18 +341,20 @@ export function checkIsScheduledRoutineDirty({
   const scheduledTargetSets: Record<string, number> = {};
   const scheduledTargetReps: Record<string, number> = {};
 
-  if (scheduledCustom && scheduledCustom.exercises) {
-    const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-    scheduledExercises = sorted
-      .map((e) => {
-        const name = e.exercise?.name || e.exercise_name || exercises.find((ex) => ex.id === e.exercise_id)?.name || e.exercise_id;
-        if (name) {
-          scheduledTargetSets[name] = e.target_sets || 3;
-          if (e.target_reps) scheduledTargetReps[name] = e.target_reps;
-        }
-        return name;
-      })
-      .filter(Boolean);
+  if (scheduledCustom) {
+    if (scheduledCustom.exercises) {
+      const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+      scheduledExercises = sorted
+        .map((e) => {
+          const name = e.exercise?.name || e.exercise_name || exercises.find((ex) => ex.id === e.exercise_id)?.name || e.exercise_id;
+          if (name) {
+            scheduledTargetSets[name] = e.target_sets || 3;
+            if (e.target_reps) scheduledTargetReps[name] = e.target_reps;
+          }
+          return name;
+        })
+        .filter(Boolean);
+    }
   } else if (scheduledDef) {
     scheduledExercises = [...scheduledDef.exercises];
     Object.assign(scheduledTargetSets, scheduledDef.targetSets);
