@@ -19,6 +19,7 @@ import {
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
+import type { AiQuotaInfo } from './parseNutrition';
 import type { CustomDish } from '../../types/database';
 import { AddItemForm, type AddItemFormData } from './AddItemForm';
 import { AddItemsComposer } from './AddItemsComposer';
@@ -46,33 +47,19 @@ export interface StagedMealCardProps {
   onDiscardStagedMeal: (e?: React.MouseEvent<HTMLButtonElement>) => void;
   isPending: boolean;
   customDishes?: CustomDish[];
-  onAddParsedItems?: (items: StagedItem[], mealAtStart?: StagedMeal) => void;
+  onAddParsedItems?: (items: StagedItem[], mealAtStart?: StagedMeal, quota?: AiQuotaInfo) => void;
+  onQuotaUpdate?: (quota: AiQuotaInfo) => void;
   onAnalyzeWithAiInstead?: () => void;
   isAnalyzing?: boolean;
 }
 
 export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
-  mode = 'stage',
-  isDirty = false,
-  date,
-  onDateChange,
-  onCancel,
-  stagedMeal,
-  dailyTotals,
-  targets,
-  onUpdateStagedMeal,
-  onApplyStagedItemChange,
-  onDeleteItem,
-  onSaveItemAsCustomDish,
-  onLogStagedMeal,
-  onSaveStagedAsCustomDish,
-  onDiscardStagedMeal,
-  isPending,
-  customDishes = [],
-  onAddParsedItems,
-  onAnalyzeWithAiInstead,
-  isAnalyzing = false,
-  navHeight: navHeightProp,
+  mode = 'stage', isDirty = false, date, onDateChange, onCancel,
+  stagedMeal, dailyTotals, targets,
+  onUpdateStagedMeal, onApplyStagedItemChange, onDeleteItem,
+  onSaveItemAsCustomDish, onLogStagedMeal, onSaveStagedAsCustomDish, onDiscardStagedMeal,
+  isPending, customDishes = [], onAddParsedItems, onQuotaUpdate,
+  onAnalyzeWithAiInstead, isAnalyzing = false, navHeight: navHeightProp,
 }) => {
   const isOnline = useOnlineStatus();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -174,17 +161,14 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
     wasComposerOpenRef.current = isComposerOpen;
   }, [newlyAddedItemId, isAddingItem, isComposerOpen]);
 
-  const handleAddParsed = (items: StagedItem[]) => {
+  const handleAddParsed = (items: StagedItem[], quota?: AiQuotaInfo) => {
     if (onAddParsedItems) {
-      onAddParsedItems(items, stagedMeal);
+      onAddParsedItems(items, stagedMeal, quota);
     } else {
+      if (quota && onQuotaUpdate) onQuotaUpdate(quota);
       const merged = mergeOrAppendStagedItems(stagedMeal.items, items);
       const totals = recomputeStagedTotals(merged);
-      onUpdateStagedMeal({
-        ...stagedMeal,
-        items: merged,
-        ...totals,
-      });
+      onUpdateStagedMeal({ ...stagedMeal, items: merged, ...totals, ...(quota ? { quota } : {}) });
     }
     setIsComposerOpen(false);
   };
