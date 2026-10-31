@@ -17,10 +17,69 @@ import { ToastHost } from '../common/ToastHost';
 import { useCoach } from '../../hooks/useCoach';
 import { useWeightUnitPreference } from '../../hooks/useWeightUnit';
 import { supabase } from '../../lib/supabase';
-import { getLocalDateStr } from '../../utils/ghostSets';
+import { DEFAULT_EXERCISES_LIST, DEFAULT_WORKOUT_TEMPLATES, getLocalDateStr } from '../../utils/ghostSets';
 import { isValidUUID, resolveRoutineAndExercises } from './workoutEngineHelpers';
 import type { Exercise, RoutineTemplate } from '../../types/database';
-import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
+import {
+  createSupabaseBuilder as createBaseSupabaseBuilder,
+  getRecordedSelects,
+  getRecordedTables,
+  clearMockHistory,
+} from '../../test/supabaseBuilderMock';
+
+const defaultMasterTemplates: RoutineTemplate[] = DEFAULT_WORKOUT_TEMPLATES.map((dt, idx) => ({
+  id: `master-tpl-${idx}`,
+  user_id: '00000000-0000-0000-0000-000000000000',
+  name: dt.name,
+  is_master: true,
+  assigned_to: null,
+  days_of_week: dt.days,
+  created_at: '2026-01-01T00:00:00Z',
+  exercises: dt.exercises.map((exName, exIdx) => {
+    const defaultEx = DEFAULT_EXERCISES_LIST.find((e) => e.name.toLowerCase() === exName.toLowerCase());
+    const exId = defaultEx ? defaultEx.id : `ex-${exIdx}`;
+    return {
+      id: `master-te-${idx}-${exIdx}`,
+      template_id: `master-tpl-${idx}`,
+      exercise_id: exId,
+      order_index: exIdx,
+      target_sets: dt.targetSets[exName] ?? 3,
+      target_reps: dt.targetReps?.[exName] ?? 10,
+      exercise: { id: exId, name: exName },
+      exercise_name: exName,
+    };
+  }),
+}));
+
+function createSupabaseBuilder(table: string, optionsOrData?: any) {
+  if (
+    table === 'routine_templates' &&
+    (!optionsOrData ||
+      (typeof optionsOrData === 'object' &&
+        Array.isArray(optionsOrData.data) &&
+        optionsOrData.data.length === 0 &&
+        !optionsOrData.resolver))
+  ) {
+    return createBaseSupabaseBuilder('routine_templates', {
+      resolver: (builder: any) => {
+        const idFilter = builder.filters?.find((f: any) => f.column === 'id');
+        const templateId = idFilter?.value;
+        if (templateId) {
+          const matched = defaultMasterTemplates.find((t) => t.id === templateId);
+          if (builder.projection?.includes('template_exercises')) {
+            return {
+              data: matched ? { id: templateId, exercises: matched.exercises } : null,
+              error: null,
+            };
+          }
+          return { data: matched || null, error: null };
+        }
+        return { data: defaultMasterTemplates, error: null };
+      },
+    });
+  }
+  return createBaseSupabaseBuilder(table, optionsOrData);
+}
 
 const { mockSession, mockEnqueueAndAwait, mockGetOutboxOps } = vi.hoisted(() => ({
   mockSession: {
@@ -136,7 +195,13 @@ describe('WorkoutEngine', () => {
     const routineBtn = screen.getByTestId('routine-select-btn');
     fireEvent.click(routineBtn);
     const workoutABtn = await screen.findByText('Workout A (Push, Quads & Core)');
-    fireEvent.click(workoutABtn);
+    const btn = workoutABtn.closest('button') || workoutABtn;
+    if (!btn.isConnected) {
+      const freshBtn = await screen.findByText('Workout A (Push, Quads & Core)');
+      fireEvent.click(freshBtn.closest('button') || freshBtn);
+    } else {
+      fireEvent.click(btn);
+    }
   };
 
   it('renders Sunday Rest Day card by default on Sunday when no routine is scheduled', () => {
@@ -390,18 +455,7 @@ describe('WorkoutEngine', () => {
           }),
         };
       }
-      return {
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-          order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          or: vi.fn().mockResolvedValue({ data: [], error: null }),
-          in: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-        }),
-      };
+      return createSupabaseBuilder(table, { data: [], error: null });
     });
 
     renderComponent();
@@ -948,6 +1002,7 @@ describe('WorkoutEngine', () => {
               days_of_week: [],
               exercises: [],
             },
+            ...defaultMasterTemplates,
           ],
           error: null,
         });
@@ -980,18 +1035,7 @@ describe('WorkoutEngine', () => {
       if (table === 'sets') {
         return { insert: mockInsert };
       }
-      return {
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-          order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          or: vi.fn().mockResolvedValue({ data: [], error: null }),
-          in: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          }),
-        }),
-      };
+      return createSupabaseBuilder(table, { data: [], error: null });
     });
 
     renderComponent();
@@ -1572,10 +1616,11 @@ describe('WorkoutEngine', () => {
     it('isolates personal workout session drafts strictly to authenticated user regardless of coach context athlete switching (Bug 7 reconciled)', async () => {
       const athleteAId = '11111111-1111-4111-8111-111111111111';
       const athleteBId = '22222222-2222-4222-8222-222222222222';
+      const coachId = '00000000-0000-4000-8000-000000000099';
 
       localStorage.setItem(
         'yourbody_user',
-        JSON.stringify({ id: 'coach-id', email: 'coach@example.com', role: 'coach', is_coach_mode: true })
+        JSON.stringify({ id: coachId, email: 'coach@example.com', role: 'coach', is_coach_mode: true })
       );
       localStorage.setItem('yourbody_view_mode', 'coach');
       localStorage.setItem(
@@ -1586,15 +1631,15 @@ describe('WorkoutEngine', () => {
         ])
       );
       localStorage.setItem('yourbody_selected_athlete', athleteAId);
-      (supabase.auth.getUser as any).mockResolvedValue({ data: { user: { id: 'coach-id' } } });
+      (supabase.auth.getUser as any).mockResolvedValue({ data: { user: { id: coachId } } });
       (supabase.auth.getSession as any).mockResolvedValue({
-        data: { session: { user: { id: 'coach-id', email: 'coach@example.com' } } },
+        data: { session: { user: { id: coachId, email: 'coach@example.com' } } },
       });
 
       (supabase.from as any).mockImplementation((table: string) => {
         if (table === 'users') {
           return createSupabaseBuilder('users', {
-            data: { id: 'coach-id', email: 'coach@example.com', role: 'coach', is_coach_mode: true, auto_rest_timer: true },
+            data: { id: coachId, email: 'coach@example.com', role: 'coach', is_coach_mode: true, auto_rest_timer: true },
             error: null,
           });
         }
@@ -2611,6 +2656,9 @@ describe('WorkoutEngine', () => {
               error: null,
             });
           }
+          if (fn === 'get_routine_catalog') {
+            return Promise.resolve({ data: defaultMasterTemplates, error: null });
+          }
           return Promise.resolve({ data: [], error: null });
         });
 
@@ -2749,6 +2797,9 @@ describe('WorkoutEngine', () => {
               ],
               error: null,
             });
+          }
+          if (fn === 'get_routine_catalog') {
+            return Promise.resolve({ data: defaultMasterTemplates, error: null });
           }
           return Promise.resolve({ data: [], error: null });
         });

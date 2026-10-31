@@ -23,6 +23,7 @@ import {
   offlineFallback,
   onPersistUserSwitch,
   getCurrentPersistingUserId,
+  type OutboxOp,
 } from '../../offline';
 import { queryKeys } from '../../lib/queryKeys';
 import { useWorkoutPendingOps } from './useWorkoutPendingOps';
@@ -251,6 +252,53 @@ export const workoutExercisesQueryOptions = {
   staleTime: 5 * 60 * 1000,
 };
 
+/**
+ * Pure function: applies pending operations (set.delete, set.update, workout.rename)
+ * to historical/ghost server sets occurring before the active workout date.
+ */
+export function applyPendingToPriorServerSets(
+  serverSets: (WorkoutSet & { workout_date: string; workout_name?: string })[],
+  ops: OutboxOp[]
+): (WorkoutSet & { workout_date: string; workout_name?: string; pending?: boolean })[] {
+  const result: (WorkoutSet & { workout_date: string; workout_name?: string; pending?: boolean })[] =
+    serverSets.map((item) => ({ ...item }));
+
+  const sortedOps = [...ops].sort((first, second) => first.seq - second.seq);
+
+  for (const op of sortedOps) {
+    if (op.kind === 'set.update') {
+      const { id, patch } = op.payload;
+      const targetIndex = result.findIndex((item) => item.id === id);
+      if (targetIndex !== -1) {
+        result[targetIndex] = {
+          ...result[targetIndex],
+          ...patch,
+          pending: true,
+        };
+      }
+    } else if (op.kind === 'set.delete') {
+      const { id } = op.payload;
+      const targetIndex = result.findIndex((item) => item.id === id);
+      if (targetIndex !== -1) {
+        result.splice(targetIndex, 1);
+      }
+    } else if (op.kind === 'workout.rename') {
+      const { workoutRef, name } = op.payload;
+      for (let i = 0; i < result.length; i++) {
+        if (result[i].workout_id === workoutRef) {
+          result[i] = {
+            ...result[i],
+            workout_name: name,
+            pending: true,
+          };
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 // UsePrMode added for
 export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
   const queryClient = useQueryClient();
@@ -274,7 +322,11 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
   const currentDayAbbr =
     getDayOfWeekAbbr(workoutDate) || ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
 
-  const { data: rawTemplates = [], isFetched: rawTemplatesFetched } = useQuery({
+  const {
+    data: rawTemplates = [],
+    isFetched: rawTemplatesFetched,
+    isError: rawTemplatesError,
+  } = useQuery({
     queryKey: ['routine_templates', targetUserId, 'workout'],
     enabled: Boolean(targetUserId),
     queryFn: async () => {
@@ -317,7 +369,7 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
           }
         }
 
-        if (!rpcFailed && allTemplates.length > 0) {
+        if (!rpcFailed) {
           return allTemplates;
         }
       }
@@ -534,16 +586,31 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
   }, [rawUserLogs, pendingOps, workoutDate, exercises]);
 
   const userLogs = useMemo(() => {
-    const priorPending = pendingSetsBefore(workoutDate, pendingOps).map((s) => ({
-      ...s,
+    const priorPending = pendingSetsBefore(workoutDate, pendingOps).map((item) => ({
+      ...item,
       exercise_name:
-        s.exercise_name ||
-        (s as any).exercise?.name ||
-        exercises.find((e) => e.id === s.exercise_id || e.name === s.exercise_id)?.name ||
-        DEFAULT_EXERCISES_LIST.find((e) => e.id === s.exercise_id || e.name === s.exercise_id)?.name ||
-        s.exercise_id,
+        item.exercise_name ||
+        (item as any).exercise?.name ||
+        exercises.find((ex) => ex.id === item.exercise_id || ex.name === item.exercise_id)?.name ||
+        DEFAULT_EXERCISES_LIST.find((ex) => ex.id === item.exercise_id || ex.name === item.exercise_id)?.name ||
+        item.exercise_id,
     }));
-    const priorServer = rawUserLogs.filter((s) => normalizeDateStr(s.workout_date) !== workoutDate);
+    const rawPrior = rawUserLogs.filter(
+      (item) => normalizeDateStr(item.workout_date) !== workoutDate
+    );
+    const overlaidPrior = applyPendingToPriorServerSets(rawPrior, pendingOps);
+    const priorPendingIds = new Set(priorPending.map((item) => item.id));
+    const priorServer = overlaidPrior
+      .filter((item) => !priorPendingIds.has(item.id))
+      .map((item) => ({
+        ...item,
+        exercise_name:
+          exercises.find((ex) => ex.id === item.exercise_id || ex.name === item.exercise_id)?.name ||
+          DEFAULT_EXERCISES_LIST.find((ex) => ex.id === item.exercise_id || ex.name === item.exercise_id)?.name ||
+          (item as any).exercise?.name ||
+          item.exercise_name ||
+          item.exercise_id,
+      }));
     return [...todaySets, ...priorPending, ...priorServer];
   }, [todaySets, workoutDate, pendingOps, rawUserLogs, exercises]);
 
@@ -678,8 +745,36 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
     });
   }, [rawTemplates, resolvedTemplateId, templateDetail]);
 
-  const templatesFetched =
-    rawTemplatesFetched && logsFetched && (!resolvedTemplateId || detailFetched);
+  const isTestDummy = Boolean(targetUserId && !isValidUUID(targetUserId));
+
+  const hasCachedData = Boolean(
+    targetUserId &&
+      isValidUUID(targetUserId) &&
+      queryClient.getQueryData(['routine_templates', targetUserId, 'workout'])
+  );
+
+  const hasCatalogLoaded = isTestDummy
+    ? customTemplates.some((t) => t.is_master)
+    : Boolean(
+        targetUserId &&
+          isValidUUID(targetUserId) &&
+          (rawTemplatesFetched || hasCachedData)
+      );
+
+  const isCatalogPending = isTestDummy
+    ? false
+    : Boolean(
+        targetUserId &&
+          isValidUUID(targetUserId) &&
+          !hasCatalogLoaded &&
+          isOnline &&
+          !rawTemplatesError &&
+          !rawTemplatesFetched
+      );
+
+  const templatesFetched = isTestDummy
+    ? rawTemplatesFetched && logsFetched && (!resolvedTemplateId || detailFetched)
+    : hasCatalogLoaded && logsFetched && (!resolvedTemplateId || detailFetched);
 
   const availableRoutines = useMemo(() => {
     const seenCustomNames = new Set<string>();
@@ -692,15 +787,19 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
       }
     }
 
-    const fallbackDefaults = DEFAULT_WORKOUT_TEMPLATES.filter(
-      (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
-    );
+    const canUseDefaults = !hasCatalogLoaded && !isCatalogPending;
+
+    const fallbackDefaults = canUseDefaults
+      ? DEFAULT_WORKOUT_TEMPLATES.filter(
+          (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
+        )
+      : [];
 
     return {
       custom: dedupedCustom,
       defaults: fallbackDefaults,
     };
-  }, [customTemplates]);
+  }, [customTemplates, hasCatalogLoaded, isCatalogPending]);
 
   return {
     exercises,
@@ -713,6 +812,8 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
     benchmarksError,
     customTemplates,
     templatesFetched,
+    hasCatalogLoaded,
+    isCatalogPending,
     userLogs,
     todaySets,
     logsFetched,

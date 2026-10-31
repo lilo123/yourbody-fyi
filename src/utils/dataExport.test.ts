@@ -25,6 +25,7 @@ import {
   clearMockHistory,
 } from '../test/supabaseBuilderMock';
 import type { NutritionItem } from './itemModel';
+import { getDayBounds } from './date';
 
 vi.mock('../lib/supabase', async () => {
   const { createSupabaseMock } = await import('../test/supabaseBuilderMock');
@@ -799,6 +800,69 @@ describe('dataExport utilities', () => {
       expect('2026-10-18' >= gteFilter!.value && '2026-10-18' <= lteFilter!.value).toBe(true);
       // (c) row on endDate+1 (workout_date '2026-10-19') is excluded
       expect('2026-10-19' <= lteFilter!.value).toBe(false);
+    });
+
+    it('bounds nutrition_logs query using athlete timezone for coach exports so evening logs are not lost across timezones', async () => {
+      mockSupabase.setTableData('workouts', []);
+      mockSupabase.setTableData('nutrition_logs', []);
+      mockSupabase.setTableData('custom_dishes', []);
+      mockSupabase.setTableData('routine_templates', []);
+      mockSupabase.setTableData('users', {
+        id: 'athlete-ny',
+        username: 'ny_runner',
+        timezone: 'America/New_York',
+      });
+
+      await fetchExportBundle({
+        targetUserId: 'athlete-ny',
+        targetUsername: 'ny_runner',
+        targetEmail: 'ny@example.com',
+        targetTimezone: 'America/New_York',
+        exportedByRole: 'coach',
+        isSelfExport: false,
+        domains: ['nutrition_logs'],
+        format: 'json',
+        preset: 'custom',
+        customStartDate: '2026-09-20',
+        customEndDate: '2026-09-22',
+      });
+
+      const nutritionBuilder = mockSupabase.getLastBuilder('nutrition_logs')!;
+      const lteFilter = nutritionBuilder.filters.find((f) => f.column === 'logged_at' && f.method === 'lte');
+      expect(lteFilter).toBeDefined();
+
+      // In America/New_York (EDT, UTC-4), 2026-09-22 ends at 2026-09-23T03:59:59.999Z.
+      // An athlete logging dinner at 20:30 EDT has logged_at: 2026-09-23T00:30:00Z.
+      const athleteDinnerIso = '2026-09-23T00:30:00Z';
+      expect(lteFilter?.value).toBe('2026-09-23T03:59:59.999Z');
+      expect(athleteDinnerIso <= lteFilter!.value).toBe(true);
+    });
+
+    it('uses device timezone for self-export of nutrition_logs (deliberate design choice)', async () => {
+      mockSupabase.setTableData('workouts', []);
+      mockSupabase.setTableData('nutrition_logs', []);
+      mockSupabase.setTableData('custom_dishes', []);
+      mockSupabase.setTableData('routine_templates', []);
+      mockSupabase.setTableData('users', {
+        id: 'usr-1',
+        username: 'alex_runner',
+        timezone: 'America/New_York',
+      });
+
+      await fetchExportBundle({
+        ...baseOptions,
+        preset: 'custom',
+        customStartDate: '2026-09-20',
+        customEndDate: '2026-09-22',
+        domains: ['nutrition_logs'],
+        isSelfExport: true,
+      });
+
+      const nutritionBuilder = mockSupabase.getLastBuilder('nutrition_logs')!;
+      const lteFilter = nutritionBuilder.filters.find((f) => f.column === 'logged_at' && f.method === 'lte');
+      expect(lteFilter).toBeDefined();
+      const expectedDeviceBound = getDayBounds('2026-09-22').endOfDay;
+      expect(lteFilter?.value).toBe(expectedDeviceBound);
     });
 
     it('throws error when Supabase query returns an error', async () => {

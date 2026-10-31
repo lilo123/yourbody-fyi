@@ -74,6 +74,7 @@ export const DataExportCard: React.FC<DataExportCardProps> = ({
         id: row.athlete?.id || row.athlete_id,
         name: row.athlete?.username || 'Unknown Athlete',
         email: row.athlete?.email || '',
+        timezone: row.athlete?.timezone ?? null,
       }));
     },
   });
@@ -132,12 +133,14 @@ export const DataExportCard: React.FC<DataExportCardProps> = ({
       const targetEmail = isSelfExport
         ? profile?.email || null
         : targetAthlete?.email || null;
+      const targetTimezone = isSelfExport ? undefined : (targetAthlete?.timezone || undefined);
       const exportedByRole = hasCoachCapability ? 'coach' : 'athlete';
 
       const options: DataExportOptions = {
         targetUserId: targetUserId || '',
         targetUsername,
         targetEmail,
+        targetTimezone,
         exportedByRole,
         isSelfExport,
         format,

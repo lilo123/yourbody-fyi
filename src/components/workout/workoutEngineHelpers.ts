@@ -57,8 +57,10 @@ export function resolveRoutineAndExercises(
   todaySets: WorkoutSet[],
   customTemplates: RoutineTemplate[],
   exerciseCatalog: Exercise[],
-  removedExercises: string[] = []
+  removedExercises: string[] = [],
+  hasLoadedCatalog?: boolean
 ): ResolvedRoutineResult {
+  const hasCatalog = Boolean(hasLoadedCatalog);
   let resolvedRoutine = 'Rest Day';
   let resolvedExList: string[] = [];
   let resolvedTargets: Record<string, number> = {};
@@ -87,14 +89,16 @@ export function resolveRoutineAndExercises(
           (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
       );
     });
-    const matchedDef = DEFAULT_WORKOUT_TEMPLATES.find((t) => {
-      const tNorm = t.name.trim().toLowerCase();
-      return (
-        tNorm === normLoggedName ||
-        (normLoggedName.length > 0 &&
-          (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
-      );
-    });
+    const matchedDef = !hasCatalog
+      ? DEFAULT_WORKOUT_TEMPLATES.find((t) => {
+          const tNorm = t.name.trim().toLowerCase();
+          return (
+            tNorm === normLoggedName ||
+            (normLoggedName.length > 0 &&
+              (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
+          );
+        })
+      : undefined;
 
     let baseExercises: string[] = [];
     const setTargets: Record<string, number> = {};
@@ -189,9 +193,11 @@ export function resolveRoutineAndExercises(
   } else {
     const dayAbbr = getDayOfWeekAbbr(workoutDate);
     const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
-    const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((t) =>
-      t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
-    );
+    const scheduledDef = !hasCatalog
+      ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
+          t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
+        )
+      : undefined;
 
     if (scheduledCustom && scheduledCustom.exercises) {
       resolvedRoutine = scheduledCustom.name;
@@ -234,6 +240,7 @@ export function checkIsScheduledRoutineDirty({
   inputDrafts,
   targetSetCounts,
   targetRepCounts,
+  hasLoadedCatalog,
 }: {
   workoutDate: string;
   activeRoutineName: string;
@@ -243,12 +250,16 @@ export function checkIsScheduledRoutineDirty({
   inputDrafts: Record<string, any>;
   targetSetCounts?: Record<string, number>;
   targetRepCounts?: Record<string, number>;
+  hasLoadedCatalog?: boolean;
 }): boolean {
+  const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
   const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
-  const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((t) =>
-    t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
-  );
+  const scheduledDef = !hasCatalog
+    ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
+        t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
+      )
+    : undefined;
   const scheduledName = scheduledCustom?.name || scheduledDef?.name || 'Rest Day';
   if (activeRoutineName !== scheduledName) return true;
 

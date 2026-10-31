@@ -47,7 +47,11 @@ export const DayTotalRow: React.FC<DayTotalRowProps> = ({
           const consumed = Number(dailyTotals?.[colKey]) || 0;
           const meal = Number(mealTotals[colKey]) || 0;
           const newVal = roundTo1Decimal(consumed + meal);
-          const target = Number(targets?.[colKey]) || 0;
+          const rawTarget = targets?.[colKey];
+          const target =
+            rawTarget != null && Number.isFinite(Number(rawTarget))
+              ? Number(rawTarget)
+              : undefined;
 
           return (
             <MacroCell

@@ -40,6 +40,8 @@ export interface UseWorkoutSessionOptions {
   logsFetched: boolean;
   onSessionRoutineChange?: () => void;
   unit?: WeightUnit;
+  hasLoadedCatalog?: boolean;
+  isCatalogPending?: boolean;
 }
 
 export function useWorkoutSession({
@@ -51,10 +53,15 @@ export function useWorkoutSession({
   userLogs,
   logsFetched,
   unit = 'lb',
+  hasLoadedCatalog,
+  isCatalogPending,
 }: UseWorkoutSessionOptions) {
   const queryClient = useContext(QueryClientContext);
   const { show: showToast } = useToast();
   const isOnline = useOnlineStatus();
+
+  const catalogLoaded = hasLoadedCatalog !== undefined ? hasLoadedCatalog : templatesFetched;
+  const catalogPending = isCatalogPending !== undefined ? isCatalogPending : (!catalogLoaded && isOnline);
 
   const [workoutDate, setWorkoutDate] = useState<string>(() => {
     const activeSession = workoutSessionStore.getActiveSession(targetUserId);
@@ -74,7 +81,13 @@ export function useWorkoutSession({
     initialSession.weightUnit = unit;
     workoutSessionStore.saveSession(initialSession, false);
   }
-  const initialState = getInitialRoutineState(initialSession, workoutDate);
+  const initialState = getInitialRoutineState(
+    initialSession,
+    workoutDate,
+    customTemplates,
+    catalogLoaded,
+    catalogPending
+  );
 
   const [activeRoutineName, setActiveRoutineName] = useState<string>(initialState.activeRoutineName);
   const [activeExercises, setActiveExercises] = useState<string[]>(initialState.activeExercises);
@@ -157,7 +170,9 @@ export function useWorkoutSession({
         workoutDate,
         todaySets,
         customTemplates,
-        exercises
+        exercises,
+        [],
+        catalogLoaded
       );
 
       const isToday = workoutDate === getLocalDateStr(new Date());
@@ -230,7 +245,9 @@ export function useWorkoutSession({
       workoutDate,
       todaySets,
       customTemplates,
-      exercises
+      exercises,
+      [],
+      catalogLoaded
     );
 
     const isToday = workoutDate === getLocalDateStr(new Date());
@@ -255,7 +272,7 @@ export function useWorkoutSession({
       setInputDrafts({});
       setExpandedExercises(resolved.exercises.length > 0 ? new Set([resolved.exercises[0]]) : new Set());
     }
-  }, [workoutDate, targetUserId, templatesFetched, logsFetched, exercisesFetched, customTemplates, todaySets, exercises, getSetsForExerciseToday, activeRoutineName, activeExercises.length, unit]);
+  }, [workoutDate, targetUserId, templatesFetched, logsFetched, exercisesFetched, customTemplates, todaySets, exercises, getSetsForExerciseToday, activeRoutineName, activeExercises.length, unit, catalogLoaded]);
 
   const {
     toggleAccordion,
@@ -453,7 +470,9 @@ export function useWorkoutSession({
       workoutDate,
       todaySets,
       customWithExercises,
-      exercises
+      exercises,
+      [],
+      catalogLoaded
     );
 
     const isToday = workoutDate === getLocalDateStr(new Date());
@@ -711,8 +730,9 @@ export function useWorkoutSession({
       inputDrafts,
       targetSetCounts,
       targetRepCounts,
+      hasLoadedCatalog: catalogLoaded,
     });
-  }, [workoutDate, activeRoutineName, activeExercises, customTemplates, exercises, inputDrafts, targetSetCounts, targetRepCounts]);
+  }, [workoutDate, activeRoutineName, activeExercises, customTemplates, exercises, inputDrafts, targetSetCounts, targetRepCounts, catalogLoaded]);
 
   const isWholeWorkoutCompleted =
     activeExercises.length > 0 &&
