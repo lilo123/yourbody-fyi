@@ -427,6 +427,130 @@ describe('useHistorySetDeferredDelete (toast detail & weight units)', () => {
       deleteSetSpy.mockRestore();
       vi.useRealTimers();
     });
+
+    it('adjusts displayed header set count and volume during undo window without mutating source data, and restores on undo', () => {
+      const set1: WorkoutSet & { exercise_name?: string } = {
+        id: 'set-del-1',
+        workout_id: 'w-totals-1',
+        exercise_id: 'ex-bench',
+        weight: 100,
+        reps: 5,
+        set_index: 1,
+        set_type: 'working',
+      };
+      const set2: WorkoutSet & { exercise_name?: string } = {
+        id: 'set-del-2',
+        workout_id: 'w-totals-1',
+        exercise_id: 'ex-bench',
+        weight: 100,
+        reps: 5,
+        set_index: 2,
+        set_type: 'working',
+      };
+
+      const sourceSession = {
+        id: 'w-totals-1',
+        date: '2026-10-18',
+        name: 'Bench Day',
+        set_count: 2,
+        total_volume: 1000,
+      };
+
+      const options = {
+        ...defaultOptions,
+        sessions: [sourceSession],
+        displayedSessions: [sourceSession],
+        sessionSetsMap: {
+          'w-totals-1': [set1 as any, set2 as any],
+        },
+      };
+
+      const { result } = renderHook(() => useHistorySetDeferredDelete(options), { wrapper });
+
+      // Baseline before delete
+      expect(result.current.displayedSessionsWithSets[0].sets).toHaveLength(2);
+      expect(result.current.displayedSessionsWithSets[0].set_count).toBe(2);
+      expect(result.current.displayedSessionsWithSets[0].total_volume).toBe(1000);
+
+      // Delete set 1
+      act(() => {
+        result.current.handleDeleteSetRequested(set1);
+      });
+
+      // During undo window: set row is filtered out AND header count/volume adjusted
+      const duringDelete = result.current.displayedSessionsWithSets[0];
+      expect(duringDelete.sets).toHaveLength(1);
+      expect(duringDelete.sets[0].id).toBe('set-del-2');
+      expect(duringDelete.set_count).toBe(1);
+      expect(duringDelete.total_volume).toBe(500);
+
+      // Source data must NOT be mutated
+      expect(sourceSession.set_count).toBe(2);
+      expect(sourceSession.total_volume).toBe(1000);
+
+      // Undo deletion
+      act(() => {
+        result.current.toastItem?.onUndo?.();
+      });
+
+      // After undo: restored to original
+      const afterUndo = result.current.displayedSessionsWithSets[0];
+      expect(afterUndo.sets).toHaveLength(2);
+      expect(afterUndo.set_count).toBe(2);
+      expect(afterUndo.total_volume).toBe(1000);
+    });
+
+    it('does not adjust set count or volume when pending deleted set is warmup', () => {
+      const warmupSet: WorkoutSet & { exercise_name?: string } = {
+        id: 'set-warmup-1',
+        workout_id: 'w-totals-2',
+        exercise_id: 'ex-bench',
+        weight: 95,
+        reps: 10,
+        set_index: 1,
+        set_type: 'warmup',
+      };
+      const workingSet: WorkoutSet & { exercise_name?: string } = {
+        id: 'set-working-1',
+        workout_id: 'w-totals-2',
+        exercise_id: 'ex-bench',
+        weight: 185,
+        reps: 5,
+        set_index: 2,
+        set_type: 'working',
+      };
+
+      const sourceSession = {
+        id: 'w-totals-2',
+        date: '2026-10-18',
+        name: 'Bench Day',
+        set_count: 1,
+        total_volume: 925,
+      };
+
+      const options = {
+        ...defaultOptions,
+        sessions: [sourceSession],
+        displayedSessions: [sourceSession],
+        sessionSetsMap: {
+          'w-totals-2': [warmupSet as any, workingSet as any],
+        },
+      };
+
+      const { result } = renderHook(() => useHistorySetDeferredDelete(options), { wrapper });
+
+      act(() => {
+        result.current.handleDeleteSetRequested(warmupSet);
+      });
+
+      const duringDelete = result.current.displayedSessionsWithSets[0];
+      // Warmup set row filtered out
+      expect(duringDelete.sets).toHaveLength(1);
+      expect(duringDelete.sets[0].id).toBe('set-working-1');
+      // Set count and volume unchanged because warmup sets are excluded from aggregates
+      expect(duringDelete.set_count).toBe(1);
+      expect(duringDelete.total_volume).toBe(925);
+    });
   });
 });
 
