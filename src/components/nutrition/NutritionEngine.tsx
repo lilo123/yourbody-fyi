@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { useLocalToday } from '../../hooks/useLocalToday';
 import type { NutritionLog, CustomDish, CustomDishDetail } from '../../types/database';
 import { getLocalDateStr, formatLocalTimestamp } from '../../utils/date';
 import { EditMealSheet } from './EditMealSheet';
@@ -34,10 +35,9 @@ import { PARSER_VERSION } from '../../lib/nutrition/localParse';
 import type { AiQuotaInfo } from './parseNutrition';
 
 export const NutritionEngine: React.FC = () => {
-  const { user, profile } = useAuth();
-  const targetUserId = user?.id || '';
+  const { user, profile } = useAuth(); const targetUserId = user?.id || '';
 
-  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateStr(new Date()));
+  const [selectedDate, setSelectedDate] = useLocalToday();
   const [aiQuota, setAiQuota] = useState<AiQuotaInfo | null>(
     () => (targetUserId ? loadStagedMealDraft(targetUserId, getLocalDateStr(new Date()))?.quota ?? null : null)
   );
