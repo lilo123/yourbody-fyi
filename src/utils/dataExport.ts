@@ -427,6 +427,8 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
         'auto_rest_timer',
         'weight_unit',
         'pr_mode',
+        'rest_timer_seconds',
+        'timezone',
       ];
       const rows: string[] = [headers.join(',')];
       const p = bundle.data.profile;
@@ -443,6 +445,8 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
         p?.auto_rest_timer !== undefined ? p.auto_rest_timer : '',
         p?.weight_unit ?? '',
         p?.pr_mode ?? '',
+        p?.rest_timer_seconds ?? '',
+        p?.timezone ?? '',
       ];
       rows.push(cells.map(escapeCsvCell).join(','));
 
@@ -460,7 +464,7 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
 export async function fetchProfileForExport(targetUserId: string): Promise<Partial<UserProfile> | null> {
   let query = supabase
     .from('users')
-    .select('id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit, pr_mode')
+    .select('id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit, pr_mode, rest_timer_seconds')
     .eq('id', targetUserId);
 
   const { data, error } = await query.maybeSingle();

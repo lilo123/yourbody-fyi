@@ -315,6 +315,24 @@ describe('dataExport utilities', () => {
       const parsed = JSON.parse(file.content);
       expect(parsed.data.profile.pr_mode).toBe('e1rm');
     });
+
+    it('includes rest_timer_seconds in profile section when present', () => {
+      const bundleWithRestTimer: ExportBundle = {
+        ...mockBundle,
+        filters: { ...mockBundle.filters, domains: ['profile'] },
+        data: {
+          profile: {
+            id: 'usr-1',
+            username: 'alex_runner',
+            rest_timer_seconds: 120,
+          },
+        },
+      };
+
+      const file = serializeToExportJson(bundleWithRestTimer);
+      const parsed = JSON.parse(file.content);
+      expect(parsed.data.profile.rest_timer_seconds).toBe(120);
+    });
   });
 
   describe('serializeToExportCsvFiles', () => {
@@ -605,6 +623,39 @@ describe('dataExport utilities', () => {
         'user_id,username,email,role,target_calories,target_protein_g,target_carbs_g,target_fat_g,target_fiber_g,auto_rest_timer,weight_unit,pr_mode'
       );
       expect(profileCsv.content).toContain('usr-1,alex_runner,alex@example.com,athlete,2400,180,250,70,35,true,lb,e1rm');
+    });
+
+    it('exports profile CSV with rest_timer_seconds and timezone headers and values when present', () => {
+      const bundleWithSettings: ExportBundle = {
+        ...mockBundle,
+        filters: { preset: 'all', start_date: null, end_date: null, domains: ['profile'] },
+        data: {
+          profile: {
+            id: 'usr-1',
+            username: 'alex_runner',
+            email: 'alex@example.com',
+            role: 'athlete',
+            target_calories: 2400,
+            target_protein: 180,
+            target_carbs: 250,
+            target_fat: 70,
+            target_fiber: 35,
+            auto_rest_timer: true,
+            weight_unit: 'lb',
+            pr_mode: 'e1rm',
+            rest_timer_seconds: 120,
+            timezone: 'America/New_York',
+          },
+        },
+      };
+
+      const files = serializeToExportCsvFiles(bundleWithSettings, '2026-10-31');
+      const profileCsv = files.find((f) => f.filename === 'yourbody-profile-2026-10-31.csv')!;
+      expect(profileCsv).toBeDefined();
+      expect(profileCsv.content).toContain(
+        'user_id,username,email,role,target_calories,target_protein_g,target_carbs_g,target_fat_g,target_fiber_g,auto_rest_timer,weight_unit,pr_mode,rest_timer_seconds,timezone'
+      );
+      expect(profileCsv.content).toContain('usr-1,alex_runner,alex@example.com,athlete,2400,180,250,70,35,true,lb,e1rm,120,America/New_York');
     });
 
     it('formats workout date as plain calendar date in CSV export even with ISO timestamp', () => {
@@ -1038,6 +1089,12 @@ describe('dataExport utilities', () => {
       expect(userBuilder?.projection).toContain('pr_mode');
     });
 
+    it('queries users table with rest_timer_seconds in projection so rest_timer_seconds is exported', async () => {
+      await fetchProfileForExport('usr-1');
+      const userBuilder = mockSupabase.getLastBuilder('users');
+      expect(userBuilder?.projection).toContain('rest_timer_seconds');
+    });
+
     it('returns profile data including pr_mode preference', async () => {
       mockSupabase.setTableData('users', {
         id: 'usr-1',
@@ -1057,6 +1114,28 @@ describe('dataExport utilities', () => {
 
       const profile = await fetchProfileForExport('usr-1');
       expect(profile?.pr_mode).toBe('e1rm');
+    });
+
+    it('returns profile data including rest_timer_seconds preference', async () => {
+      mockSupabase.setTableData('users', {
+        id: 'usr-1',
+        username: 'alex_runner',
+        email: 'alex@example.com',
+        role: 'athlete',
+        target_calories: 2400,
+        target_protein: 180,
+        target_carbs: 250,
+        target_fat: 70,
+        target_fiber: 35,
+        auto_rest_timer: true,
+        timezone: 'UTC',
+        weight_unit: 'lb',
+        pr_mode: 'e1rm',
+        rest_timer_seconds: 120,
+      });
+
+      const profile = await fetchProfileForExport('usr-1');
+      expect(profile?.rest_timer_seconds).toBe(120);
     });
   });
 
@@ -1095,7 +1174,7 @@ describe('dataExport utilities', () => {
       });
       expect(recorded).toContainEqual({
         table: 'users',
-        projection: 'id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit, pr_mode',
+        projection: 'id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit, pr_mode, rest_timer_seconds',
       });
     });
   });
