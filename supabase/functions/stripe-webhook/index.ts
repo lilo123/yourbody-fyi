@@ -897,11 +897,17 @@ export async function handler(req: Request): Promise<Response> {
           typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
 
         let targetUserId: string | null = null;
-        let currentUserRow: { id: string; plan?: string | null; paid_until?: string | null; coach_tier?: string | null } | null = null;
+        let currentUserRow: {
+          id: string;
+          plan?: string | null;
+          paid_until?: string | null;
+          coach_tier?: string | null;
+          billing_customer_id?: string | null;
+        } | null = null;
         if (invCustId) {
           const { data: userRow, error: selectError } = await serviceClient
             .from("users")
-            .select("id, plan, paid_until, coach_tier")
+            .select("id, plan, paid_until, coach_tier, billing_customer_id")
             .eq("billing_customer_id", invCustId)
             .maybeSingle();
           if (selectError) {
@@ -911,7 +917,10 @@ export async function handler(req: Request): Promise<Response> {
           }
           if (userRow?.id) {
             targetUserId = userRow.id;
-            currentUserRow = userRow;
+            currentUserRow = {
+              ...userRow,
+              billing_customer_id: userRow.billing_customer_id ?? invCustId,
+            };
           }
         }
 
@@ -928,7 +937,7 @@ export async function handler(req: Request): Promise<Response> {
         if (targetUserId && !currentUserRow) {
           const { data: userRow, error: selectError } = await serviceClient
             .from("users")
-            .select("id, plan, paid_until, coach_tier")
+            .select("id, plan, paid_until, coach_tier, billing_customer_id")
             .eq("id", targetUserId)
             .maybeSingle();
           if (selectError) {
@@ -1077,6 +1086,15 @@ export async function handler(req: Request): Promise<Response> {
           if (effective.coach_tier !== undefined) {
             updates.coach_tier = effective.coach_tier;
           }
+          if (invCustId) {
+            if (!currentUserRow?.billing_customer_id) {
+              updates.billing_customer_id = invCustId;
+            } else if (currentUserRow.billing_customer_id !== invCustId) {
+              console.warn(
+                `[stripe-webhook] Skipping billing_customer_id update for user ${targetUserId}: existing ${currentUserRow.billing_customer_id} does not match incoming ${invCustId}`,
+              );
+            }
+          }
 
           const { error: updateError } = await serviceClient
             .from("users")
@@ -1126,12 +1144,13 @@ export async function handler(req: Request): Promise<Response> {
           plan?: string | null;
           paid_until?: string | null;
           coach_tier?: string | null;
+          billing_customer_id?: string | null;
         } | null = null;
 
         if (subCustId) {
           const { data: userRow, error: selectError } = await serviceClient
             .from("users")
-            .select("id, plan, paid_until, coach_tier")
+            .select("id, plan, paid_until, coach_tier, billing_customer_id")
             .eq("billing_customer_id", subCustId)
             .maybeSingle();
 
@@ -1142,7 +1161,10 @@ export async function handler(req: Request): Promise<Response> {
           }
           if (userRow?.id) {
             targetUserId = userRow.id;
-            currentUserRow = userRow;
+            currentUserRow = {
+              ...userRow,
+              billing_customer_id: userRow.billing_customer_id ?? subCustId,
+            };
           }
         }
 
@@ -1152,7 +1174,7 @@ export async function handler(req: Request): Promise<Response> {
             targetUserId = subUserId;
             const { data: userRow, error: selectError } = await serviceClient
               .from("users")
-              .select("id, plan, paid_until, coach_tier")
+              .select("id, plan, paid_until, coach_tier, billing_customer_id")
               .eq("id", targetUserId)
               .maybeSingle();
             if (selectError) {
@@ -1274,6 +1296,15 @@ export async function handler(req: Request): Promise<Response> {
           }
           if (effective.coach_tier !== undefined) {
             updates.coach_tier = effective.coach_tier;
+          }
+          if (subCustId) {
+            if (!currentUserRow?.billing_customer_id) {
+              updates.billing_customer_id = subCustId;
+            } else if (currentUserRow.billing_customer_id !== subCustId) {
+              console.warn(
+                `[stripe-webhook] Skipping billing_customer_id update for user ${targetUserId}: existing ${currentUserRow.billing_customer_id} does not match incoming ${subCustId}`,
+              );
+            }
           }
 
           const { error: updateError } = await serviceClient
