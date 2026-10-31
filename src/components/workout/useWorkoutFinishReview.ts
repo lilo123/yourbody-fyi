@@ -1,4 +1,5 @@
 import { useState, useCallback, type RefObject } from 'react';
+import { restTimerStore } from '../../utils/restTimerStore';
 import type { Exercise, WorkoutSet, RoutineTemplate } from '../../types/database';
 import type { UseMutationResult } from '@tanstack/react-query';
 import type { SetDraftInput } from '../../utils/workoutSessionStore';
@@ -139,7 +140,9 @@ export function useWorkoutFinishReview({
         return { ...s, exerciseId };
       });
       try {
+        Object.defineProperty(setsWithIds, 'skipRestTimer', { value: true, enumerable: false });
         await batchLogSetsMutation.mutateAsync(setsWithIds);
+        restTimerStore.stop();
         setIsFinishReviewOpen(false);
       } catch {
         // Keep the sheet open on error so the user does not lose edited values or drafts
@@ -149,6 +152,7 @@ export function useWorkoutFinishReview({
   );
 
   const handleFinishWithoutSets = useCallback(() => {
+    restTimerStore.stop();
     setIsFinishReviewOpen(false);
   }, []);
 

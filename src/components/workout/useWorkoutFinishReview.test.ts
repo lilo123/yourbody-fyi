@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useWorkoutFinishReview } from './useWorkoutFinishReview';
 import { AuthContext, type AuthContextType } from '../../context/AuthContextTypes';
+import { restTimerStore } from '../../utils/restTimerStore';
 
 const createAuthContextValue = (weightUnit: 'lb' | 'kg' = 'lb'): AuthContextType => ({
   user: { id: 'user-789' } as any,
@@ -386,5 +387,92 @@ describe('useWorkoutFinishReview', () => {
       },
     ]);
     expect(result.current.isFinishReviewOpen).toBe(false);
+  });
+
+  it('stops rest timer and attaches skipRestTimer flag when finish review confirms sets', async () => {
+    const timerStopSpy = vi.spyOn(restTimerStore, 'stop');
+    const inputDraftsRef = { current: {} };
+    const targetRepCountsRef = { current: {} };
+    let passedVariables: any = null;
+    const batchLogSetsMutation = {
+      mutate: vi.fn(),
+      mutateAsync: vi.fn().mockImplementation(async (sets: any) => {
+        passedVariables = sets;
+        return [];
+      }),
+      isPending: false,
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useWorkoutFinishReview({
+          activeExercises: ['Bench Press'],
+          getSetsForExerciseToday: () => [],
+          pendingSetId: null,
+          pendingDeletedSetIds: new Set(),
+          targetSetCounts: {},
+          targetRepCountsRef,
+          inputDraftsRef,
+          userLogs: [],
+          workoutDate: '2026-09-27',
+          exercises: dummyExercises,
+          batchLogSetsMutation,
+        }),
+      { wrapper: createWrapper('lb') }
+    );
+
+    act(() => {
+      result.current.setIsFinishReviewOpen(true);
+    });
+
+    await act(async () => {
+      await result.current.handleConfirmFinishWithSets([
+        { exerciseName: 'Bench Press', weight: 200, reps: 5, setIndex: 1 },
+      ]);
+    });
+
+    expect(passedVariables?.skipRestTimer).toBe(true);
+    expect(timerStopSpy).toHaveBeenCalled();
+  });
+
+  it('stops rest timer when finishing workout without sets', () => {
+    const timerStopSpy = vi.spyOn(restTimerStore, 'stop');
+    const inputDraftsRef = { current: {} };
+    const targetRepCountsRef = { current: {} };
+    const batchLogSetsMutation = {
+      mutate: vi.fn(),
+      mutateAsync: vi.fn().mockResolvedValue([]),
+      isPending: false,
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useWorkoutFinishReview({
+          activeExercises: ['Bench Press'],
+          getSetsForExerciseToday: () => [],
+          pendingSetId: null,
+          pendingDeletedSetIds: new Set(),
+          targetSetCounts: {},
+          targetRepCountsRef,
+          inputDraftsRef,
+          userLogs: [],
+          workoutDate: '2026-09-27',
+          exercises: dummyExercises,
+          batchLogSetsMutation,
+        }),
+      { wrapper: createWrapper('lb') }
+    );
+
+    act(() => {
+      result.current.setIsFinishReviewOpen(true);
+    });
+    expect(result.current.isFinishReviewOpen).toBe(true);
+
+    act(() => {
+      result.current.handleFinishWithoutSets();
+    });
+
+    expect(result.current.isFinishReviewOpen).toBe(false);
+    expect(timerStopSpy).toHaveBeenCalled();
   });
 });

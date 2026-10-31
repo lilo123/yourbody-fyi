@@ -37,6 +37,24 @@ export interface UseWorkoutMutationsOptions {
   }) => void;
 }
 
+export type BatchLogSetItem = {
+  exerciseName?: string;
+  exerciseId?: string;
+  weight: number;
+  reps: number;
+  setIndex: number;
+  setType?: "working" | "warmup" | "drop";
+  rpe?: number | null;
+  skipRestTimer?: boolean;
+};
+
+export type BatchLogSetsVariables =
+  | BatchLogSetItem[]
+  | {
+      sets: BatchLogSetItem[];
+      skipRestTimer?: boolean;
+    };
+
 export function useWorkoutMutations({
   targetUserId,
   workoutDate,
@@ -265,18 +283,9 @@ export function useWorkoutMutations({
   });
 
   const batchLogSetsMutation = useMutation({
-    mutationFn: async (
-      setsToLog: {
-        exerciseName?: string;
-        exerciseId?: string;
-        weight: number;
-        reps: number;
-        setIndex: number;
-        setType?: "working" | "warmup" | "drop";
-        rpe?: number | null;
-      }[]
-    ) => {
-      if (setsToLog.length === 0) return [];
+    mutationFn: async (variables: BatchLogSetsVariables) => {
+      const setsToLog = Array.isArray(variables) ? variables : variables.sets;
+      if (!setsToLog || setsToLog.length === 0) return [];
       const effectiveUserId = await resolveUserId();
 
       const workoutId = await getOrCreateWorkout(
@@ -317,31 +326,36 @@ export function useWorkoutMutations({
           return [...arr, ...newSets];
         });
       }
+      const sets = Array.isArray(variables) ? variables : variables.sets;
       const effectiveUserId = targetUserId || "";
-      for (const s of variables) {
-        const exId = s.exerciseId || (s.exerciseName ? exercises.find(e => e.name.toLowerCase() === s.exerciseName?.toLowerCase())?.id : "");
+      for (const setItem of sets) {
+        const exId = setItem.exerciseId || (setItem.exerciseName ? exercises.find(e => e.name.toLowerCase() === setItem.exerciseName?.toLowerCase())?.id : "");
         if (exId) {
-          workoutSessionStore.clearDraft(effectiveUserId, workoutDate, exId, s.setIndex);
+          workoutSessionStore.clearDraft(effectiveUserId, workoutDate, exId, setItem.setIndex);
         }
-        if (s.exerciseName) {
-          workoutSessionStore.clearDraft(effectiveUserId, workoutDate, s.exerciseName, s.setIndex);
-          clearExerciseError(s.exerciseName);
+        if (setItem.exerciseName) {
+          workoutSessionStore.clearDraft(effectiveUserId, workoutDate, setItem.exerciseName, setItem.setIndex);
+          clearExerciseError(setItem.exerciseName);
         }
         if (onDraftSuccess) {
-          onDraftSuccess(s);
+          onDraftSuccess(setItem);
         }
       }
-      if (autoRestTimer) {
+      const shouldSkipRest = Array.isArray(variables)
+        ? Boolean((variables as any).skipRestTimer || sets.some((setItem) => setItem.skipRestTimer))
+        : Boolean(variables.skipRestTimer);
+      if (autoRestTimer && !shouldSkipRest) {
         restTimerStore.start(restTimerSeconds);
       }
       markFirstLogCompleted();
     },
     onError: (err: unknown, variables) => {
+      const sets = Array.isArray(variables) ? variables : variables?.sets;
       const message =
         err instanceof Error
           ? err.message
           : (err as { message?: string })?.message || "Failed to log sets. Please try again.";
-      const affectedName = variables?.[0]?.exerciseName;
+      const affectedName = sets?.[0]?.exerciseName;
       if (affectedName) {
         setExerciseError(affectedName, message, () => {
           batchLogSetsMutation.mutate(variables);
