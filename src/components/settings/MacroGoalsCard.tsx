@@ -2,6 +2,7 @@ import React, { useId } from 'react';
 import { Target, CheckCircle2, AlertCircle } from 'lucide-react';
 import { StatusBanner } from '../common/StatusBanner';
 import { DecimalInput } from '../nutrition/DecimalInput';
+import { parseDecimalInput } from '../../utils/unitConverter';
 
 interface MacroGoalsCardProps {
   targetCalories: number | string;
@@ -67,8 +68,17 @@ export const MacroGoalsCard: React.FC<MacroGoalsCardProps> = ({
             id={caloriesId}
             type="number"
             inputMode="numeric"
+            min="0"
             value={targetCalories}
-            onChange={(e) => setTargetCalories(e.target.value === '' ? '' : Number(e.target.value))}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                setTargetCalories('');
+                return;
+              }
+              const parsed = parseDecimalInput(raw, { allowNegative: false });
+              setTargetCalories(parsed !== null ? parsed : 0);
+            }}
             aria-describedby={caloriesUnitId}
             className="w-full bg-zinc-950 border border-border-interactive text-white rounded-xl p-2.5 min-h-[44px] text-base font-bold tabular-nums focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 outline-none text-center"
             required

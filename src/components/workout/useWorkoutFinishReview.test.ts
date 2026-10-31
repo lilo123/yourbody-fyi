@@ -246,4 +246,145 @@ describe('useWorkoutFinishReview', () => {
     // Set 2: draft was 102.1 kg, matching original 225 lb -> exact 225 lb preserved
     expect(result.current.pendingReviewSets[1].weight).toBe(225);
   });
+
+  it('resolves exerciseId from customTemplates when exercise is archived/absent from exercises catalog', async () => {
+    const archivedExerciseId = '11111111-2222-3333-4444-555555555555';
+    const archivedExerciseName = 'Archived Overhead Press';
+    const customTemplates = [
+      {
+        id: 'tpl-1',
+        name: 'Shoulder Day',
+        exercises: [
+          {
+            exercise_id: archivedExerciseId,
+            exercise: { name: archivedExerciseName },
+            target_sets: 3,
+            target_reps: 10,
+          },
+        ],
+      },
+    ] as any;
+
+    const inputDraftsRef = { current: {} };
+    const targetRepCountsRef = { current: { [archivedExerciseName]: 8 } };
+    const batchLogSetsMutation = {
+      mutate: vi.fn(),
+      mutateAsync: vi.fn().mockImplementation(async (sets: any[]) => {
+        for (const s of sets) {
+          if (!s.exerciseId) {
+            throw new Error('exerciseId UUID is required for each set');
+          }
+        }
+        return [];
+      }),
+      isPending: false,
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useWorkoutFinishReview({
+          activeExercises: [archivedExerciseName],
+          getSetsForExerciseToday: () => [],
+          pendingSetId: null,
+          pendingDeletedSetIds: new Set(),
+          targetSetCounts: { [archivedExerciseName]: 1 },
+          targetRepCountsRef,
+          inputDraftsRef,
+          userLogs: [],
+          workoutDate: '2026-09-27',
+          exercises: dummyExercises,
+          customTemplates,
+          batchLogSetsMutation,
+        }),
+      { wrapper: createWrapper('lb') }
+    );
+
+    act(() => {
+      result.current.setIsFinishReviewOpen(true);
+    });
+
+    await act(async () => {
+      await result.current.handleConfirmFinishWithSets([
+        { exerciseName: archivedExerciseName, weight: 135, reps: 8, setIndex: 1 },
+      ]);
+    });
+
+    expect(batchLogSetsMutation.mutateAsync).toHaveBeenCalledWith([
+      {
+        exerciseName: archivedExerciseName,
+        exerciseId: archivedExerciseId,
+        weight: 135,
+        reps: 8,
+        setIndex: 1,
+      },
+    ]);
+    expect(result.current.isFinishReviewOpen).toBe(false);
+  });
+
+  it('resolves exerciseId from customTemplates when exercises array has raw exercise_name field', async () => {
+    const archivedExerciseId = '22222222-3333-4444-5555-666666666666';
+    const archivedExerciseName = 'Archived Romanian Deadlift';
+    const customTemplates = [
+      {
+        id: 'tpl-2',
+        name: 'Leg Day',
+        exercises: [
+          {
+            exercise_id: archivedExerciseId,
+            exercise_name: archivedExerciseName,
+            target_sets: 3,
+            target_reps: 10,
+          },
+        ],
+      },
+    ] as any;
+
+    const inputDraftsRef = { current: {} };
+    const targetRepCountsRef = { current: { [archivedExerciseName]: 10 } };
+    const batchLogSetsMutation = {
+      mutate: vi.fn(),
+      mutateAsync: vi.fn().mockResolvedValue([]),
+      isPending: false,
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useWorkoutFinishReview({
+          activeExercises: [archivedExerciseName],
+          getSetsForExerciseToday: () => [],
+          pendingSetId: null,
+          pendingDeletedSetIds: new Set(),
+          targetSetCounts: { [archivedExerciseName]: 1 },
+          targetRepCountsRef,
+          inputDraftsRef,
+          userLogs: [],
+          workoutDate: '2026-09-27',
+          exercises: dummyExercises,
+          customTemplates,
+          batchLogSetsMutation,
+        }),
+      { wrapper: createWrapper('lb') }
+    );
+
+    act(() => {
+      result.current.setIsFinishReviewOpen(true);
+    });
+
+    await act(async () => {
+      await result.current.handleConfirmFinishWithSets([
+        { exerciseName: archivedExerciseName, weight: 225, reps: 10, setIndex: 1 },
+      ]);
+    });
+
+    expect(batchLogSetsMutation.mutateAsync).toHaveBeenCalledWith([
+      {
+        exerciseName: archivedExerciseName,
+        exerciseId: archivedExerciseId,
+        weight: 225,
+        reps: 10,
+        setIndex: 1,
+      },
+    ]);
+    expect(result.current.isFinishReviewOpen).toBe(false);
+  });
 });
