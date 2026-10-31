@@ -1,5 +1,5 @@
 import { useState, useCallback, type RefObject } from 'react';
-import type { Exercise, WorkoutSet } from '../../types/database';
+import type { Exercise, WorkoutSet, RoutineTemplate } from '../../types/database';
 import type { UseMutationResult } from '@tanstack/react-query';
 import type { SetDraftInput } from '../../utils/workoutSessionStore';
 import { computeGhostSets } from '../../utils/ghostSets';
@@ -19,6 +19,7 @@ export interface UseWorkoutFinishReviewOptions {
   userLogs: WorkoutSet[];
   workoutDate: string;
   exercises: Exercise[];
+  customTemplates?: RoutineTemplate[];
   batchLogSetsMutation: UseMutationResult<any, any, any, any>;
   unit?: WeightUnit;
 }
@@ -34,6 +35,7 @@ export function useWorkoutFinishReview({
   userLogs,
   workoutDate,
   exercises,
+  customTemplates,
   batchLogSetsMutation,
   unit: propUnit,
 }: UseWorkoutFinishReviewOptions) {
@@ -117,10 +119,23 @@ export function useWorkoutFinishReview({
       if (validSets.length === 0) return;
 
       const setsWithIds = validSets.map((s) => {
+        const norm = s.exerciseName.trim().toLowerCase();
         const matchedEx = exercises.find(
-          (e) => e.name.toLowerCase() === s.exerciseName.toLowerCase() || e.id === s.exerciseName
+          (e) => e.name.trim().toLowerCase() === norm || e.id === s.exerciseName
         );
-        const exerciseId = matchedEx ? matchedEx.id : isUUID(s.exerciseName) ? s.exerciseName : undefined;
+        let exerciseId = matchedEx ? matchedEx.id : isUUID(s.exerciseName) ? s.exerciseName : undefined;
+        if (!exerciseId && customTemplates) {
+          for (const tpl of customTemplates) {
+            for (const item of tpl.exercises || []) {
+              const itemName = item.exercise?.name || (item as any).exercise_name;
+              if (itemName && itemName.trim().toLowerCase() === norm && isUUID(item.exercise_id)) {
+                exerciseId = item.exercise_id;
+                break;
+              }
+            }
+            if (exerciseId) break;
+          }
+        }
         return { ...s, exerciseId };
       });
       try {
@@ -130,7 +145,7 @@ export function useWorkoutFinishReview({
         // Keep the sheet open on error so the user does not lose edited values or drafts
       }
     },
-    [batchLogSetsMutation, exercises]
+    [batchLogSetsMutation, exercises, customTemplates]
   );
 
   const handleFinishWithoutSets = useCallback(() => {

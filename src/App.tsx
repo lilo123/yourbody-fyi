@@ -116,6 +116,7 @@ const AuthLoadingFallback: React.FC = () => {
 // Guard for authenticated routes
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   // Display content immediately when optimistic cached user is available
   if (user) {
@@ -125,12 +126,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (loading) {
     return <AuthLoadingFallback />;
   }
-  return <Navigate to="/login" replace />;
+  return <Navigate to="/login" state={{ from: location }} replace />;
 };
 
 // Guard for Coach-only routes
 const CoachRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isCoachMode, loading } = useAuth();
+  const location = useLocation();
   if (user) {
     if (!isCoachMode) {
       return <Navigate to="/workout" replace />;
@@ -138,7 +140,7 @@ const CoachRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return <>{children}</>;
   }
   if (loading) return null;
-  return <Navigate to="/login" replace />;
+  return <Navigate to="/login" state={{ from: location }} replace />;
 };
 
 // Guard for Login route when already authenticated
