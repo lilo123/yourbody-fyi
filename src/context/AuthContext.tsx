@@ -5,7 +5,12 @@ import { supabase } from '../lib/supabase';
 import type { UserProfile, UserRole } from '../types/database';
 import type { PrMode } from '../lib/prComparator';
 
-import { AuthContext, type AuthContextType } from './AuthContextTypes';
+import {
+  AuthContext,
+  type AuthContextType,
+  USER_EDITABLE_PROFILE_KEYS,
+  type EditableProfileKey,
+} from './AuthContextTypes';
 import { restTimerStore } from '../utils/restTimerStore';
 import { dedupeInFlight } from '../utils/promiseDedupe';
 import {
@@ -529,13 +534,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!profile) return { success: false, error: 'Not authenticated' };
-    // Strip role, coach_tier, and max_athletes mutations: client cannot modify protected fields
-    const {
-      role: _strippedRole,
-      coach_tier: _strippedTier,
-      max_athletes: _strippedMax,
-      ...safeUpdates
-    } = updates;
+
+    // Strip billing, entitlement, role, and non-editable columns: only send user-editable fields
+    const safeUpdates: Partial<Pick<UserProfile, EditableProfileKey>> = {};
+    for (const key of USER_EDITABLE_PROFILE_KEYS) {
+      if (key in updates && updates[key] !== undefined) {
+        (safeUpdates as any)[key] = updates[key];
+      }
+    }
+
     const updated = { ...profile, ...safeUpdates };
     setProfile(updated);
     localStorage.setItem('yourbody_user', JSON.stringify(updated));
@@ -546,11 +553,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('yourbody_rest_timer_seconds', String(safeUpdates.rest_timer_seconds));
     }
 
+    if (Object.keys(safeUpdates).length === 0) {
+      return { success: true };
+    }
+
+    const safePayload = { id: profile.id, ...safeUpdates };
+
     try {
       const { error } = await (supabase
         .from('users') as any)
-        .upsert(updated)
-        .eq('id', updated.id);
+        .upsert(safePayload)
+        .eq('id', profile.id);
       if (error) throw error;
       return { success: true };
     } catch (err: any) {
