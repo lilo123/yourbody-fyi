@@ -30,6 +30,14 @@ export const Sheet: React.FC<SheetProps> = ({
 }) => {
   const generatedTitleId = useId();
   const effectiveTitleId = customTitleId || (title ? generatedTitleId : undefined);
+  const isDismissible = typeof dismissible === 'function' ? dismissible() : dismissible;
+
+  const handleClose = () => {
+    if (!isDismissible) {
+      return;
+    }
+    onClose();
+  };
 
   return (
     <AccessibleModal
@@ -55,7 +63,8 @@ export const Sheet: React.FC<SheetProps> = ({
         )}
         <IconButton
           aria-label={title ? `Close ${title}` : 'Close sheet'}
-          onClick={onClose}
+          onClick={handleClose}
+          disabled={!isDismissible}
           size="sm"
           testId={testId ? `${testId}-close` : 'sheet-close-btn'}
           icon={<X className="w-5 h-5 text-zinc-400 hover:text-white" />}
