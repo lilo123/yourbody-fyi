@@ -209,6 +209,38 @@ Deno.test("parse-nutrition should return 400 when request body is malformed JSON
     }
 });
 
+Deno.test("parse-nutrition should return 400 when request body is null or non-object JSON", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | Request | URL): Promise<Response> => {
+        const urlString = input.toString();
+        if (urlString.includes("/auth/v1/user")) {
+            return new Response(JSON.stringify({ id: "mock-user-id", email: "athlete@yourbody.fyi" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
+        return originalFetch(input);
+    };
+
+    try {
+        for (const invalidBody of ["null", "[]", '"just a string"', "123", "true"]) {
+            const req = new Request("http://localhost/parse-nutrition", {
+                method: "POST",
+                headers: { "Authorization": "Bearer valid-jwt-token" },
+                body: invalidBody
+            });
+
+            const res = await app.fetch(req);
+            assertEquals(res.status, 400);
+
+            const data = await res.json();
+            assertEquals(data.error, "Malformed JSON or payload too large.");
+        }
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 Deno.test("parse-nutrition should return valid JSON macro payload when authorized", async () => {
     const originalKey = Deno.env.get("GEMINI_API_KEY");
     Deno.env.set("GEMINI_API_KEY", "test-key");
