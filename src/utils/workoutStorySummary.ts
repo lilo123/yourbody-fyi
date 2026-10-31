@@ -1,5 +1,5 @@
 import type { WorkoutSet, Exercise } from '../types/database';
-import { pickPrSet } from '../lib/prComparator';
+import { pickPrSet, type PrMode } from '../lib/prComparator';
 import { formatShortDate } from './date';
 import { formatVolume, formatWeight, weightUnitLabel, type WeightUnit } from './weight';
 
@@ -28,6 +28,7 @@ export interface BuildWorkoutStoryOptions {
   unit?: WeightUnit;
   totalVolume?: number | null;
   setCount?: number | null;
+  prMode?: PrMode;
 }
 
 /**
@@ -41,14 +42,17 @@ export function truncateText(text: string, maxLength: number): string {
 }
 
 /**
- * Selects the best set for an exercise using the canonical PR comparator (weight mode).
+ * Selects the best set for an exercise using the canonical PR comparator.
+ * Defaults to 'weight' mode, or uses 'e1rm' mode when specified.
  */
 export function selectBestSet<T extends { weight: number; reps: number; set_type?: string | null }>(
-  sets: T[]
+  sets: T[],
+  mode: PrMode = 'weight'
 ): T | null {
-  const workingSets = sets.filter((s) => !s.set_type || s.set_type === 'working');
+  const workingSets = sets.filter((candidateSet) => !candidateSet.set_type || candidateSet.set_type === 'working');
   if (workingSets.length === 0) return null;
-  return pickPrSet(workingSets, 'weight');
+  const resolvedMode: PrMode = mode === 'e1rm' ? 'e1rm' : 'weight';
+  return pickPrSet(workingSets, resolvedMode);
 }
 
 /**
@@ -74,6 +78,7 @@ export function formatBestSet(
  */
 export function buildWorkoutStoryData(options: BuildWorkoutStoryOptions): WorkoutStoryData {
   const unit = options.unit || 'lb';
+  const prMode: PrMode = options.prMode === 'e1rm' ? 'e1rm' : 'weight';
   const rawTitle = options.sessionName?.trim() || 'Workout Session';
   const title = truncateText(rawTitle, 40);
 
@@ -131,14 +136,14 @@ export function buildWorkoutStoryData(options: BuildWorkoutStoryOptions): Workou
       : calculatedTotalSets;
 
   // Build exercise summaries with best set
-  const allExerciseSummaries: WorkoutStoryExercise[] = groups.map((g) => {
-    const best = selectBestSet(g.sets);
+  const allExerciseSummaries: WorkoutStoryExercise[] = groups.map((group) => {
+    const best = selectBestSet(group.sets, prMode);
     return {
-      name: g.name,
+      name: group.name,
       bestSetFormatted: formatBestSet(best, unit),
       bestWeight: best ? Number(best.weight) || 0 : 0,
       bestReps: best ? Number(best.reps) || 0 : 0,
-      setCount: g.sets.length,
+      setCount: group.sets.length,
     };
   });
 
