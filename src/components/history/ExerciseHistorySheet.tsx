@@ -165,6 +165,7 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
 
     for (const op of pendingOps) {
       if (op.kind === 'set.create' && op.payload.exercise_id === exercise.id) {
+        if (op.payload.set_type && op.payload.set_type !== 'working') continue;
         const info = workoutRefDateMap.get(op.payload.workoutRef);
         const civilDate = info?.date || getSetLocalDate(op.payload.created_at);
         pendingSets.push({
@@ -183,6 +184,7 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
         const info = workoutRefDateMap.get(op.payload.workoutRef);
         for (const s of op.payload.sets) {
           if (s.exercise_id === exercise.id) {
+            if (s.set_type && s.set_type !== 'working') continue;
             const civilDate = info?.date || getSetLocalDate(s.created_at);
             pendingSets.push({
               workout_id: op.payload.workoutRef,
@@ -207,7 +209,12 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
 
     const serverSetIds = new Set(serverRows.map((s) => s.set_id));
     const nonDuplicatePending = pendingSets.filter((s) => !serverSetIds.has(s.set_id));
-    let combined = [...nonDuplicatePending, ...serverRows].filter((s) => !deletedSetIds.has(s.set_id));
+    let combined = [...nonDuplicatePending, ...serverRows].filter((s) => {
+      if (deletedSetIds.has(s.set_id)) return false;
+      const patch = updatedSets.get(s.set_id);
+      if (patch?.set_type && patch.set_type !== 'working') return false;
+      return true;
+    });
     combined = combined.map((s) => {
       const patch = updatedSets.get(s.set_id);
       if (!patch) return s;

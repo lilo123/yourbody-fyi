@@ -736,5 +736,73 @@ describe('ExerciseHistorySheet', () => {
     expect(await screen.findByTestId('exercise-history-set-set-duplicate-1')).toBeDefined();
     expect(screen.getAllByTestId('exercise-history-set-set-duplicate-1')).toHaveLength(1);
   });
+
+  it('excludes pending warmup and drop sets from exercise history (matching server get_exercise_history contract)', async () => {
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-warmup-1',
+        userId: 'test-user-123',
+        seq: 1,
+        createdAt: '2026-10-31T18:00:00Z',
+        kind: 'set.create',
+        payload: {
+          id: 'set-warmup-1',
+          workoutRef: 'w-sync-1',
+          exercise_id: 'ex-bench',
+          weight: 135,
+          reps: 10,
+          set_index: 0,
+          set_type: 'warmup',
+          created_at: '2026-10-31T18:00:00Z',
+        },
+        state: 'pending',
+        attempts: 0,
+      },
+      {
+        opId: 'op-batch-mixed',
+        userId: 'test-user-123',
+        seq: 2,
+        createdAt: '2026-10-31T18:05:00Z',
+        kind: 'set.batchCreate',
+        payload: {
+          workoutRef: 'w-sync-1',
+          sets: [
+            {
+              id: 'set-working-1',
+              exercise_id: 'ex-bench',
+              weight: 225,
+              reps: 8,
+              set_index: 1,
+              set_type: 'working',
+              created_at: '2026-10-31T18:05:00Z',
+            },
+            {
+              id: 'set-drop-1',
+              exercise_id: 'ex-bench',
+              weight: 185,
+              reps: 12,
+              set_index: 2,
+              set_type: 'drop',
+              created_at: '2026-10-31T18:10:00Z',
+            },
+          ],
+        },
+        state: 'pending',
+        attempts: 0,
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: [], error: null } as any);
+
+    renderComponent();
+
+    // Working set must be displayed
+    expect(await screen.findByTestId('exercise-history-set-set-working-1')).toBeDefined();
+
+    // Warmup and drop sets must NOT be displayed in ExerciseHistorySheet
+    expect(screen.queryByTestId('exercise-history-set-set-warmup-1')).toBeNull();
+    expect(screen.queryByTestId('exercise-history-set-set-drop-1')).toBeNull();
+  });
 });
 
