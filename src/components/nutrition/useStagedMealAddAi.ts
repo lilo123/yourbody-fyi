@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import { roundTo1Decimal } from '../../utils/nutrition';
 import {
   mergeOrAppendStagedItems,
-  recomputeStagedTotals,
+  withSyncedServing,
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
@@ -37,11 +37,9 @@ export function useStagedMealAddAi({
       }
 
       const mergedItems = mergeOrAppendStagedItems(currentStaged.items, items);
-      const tot = recomputeStagedTotals(mergedItems);
+      const synced = withSyncedServing(currentStaged, mergedItems);
       const nextStagedMeal: StagedMeal = {
-        ...currentStaged,
-        items: mergedItems,
-        ...tot,
+        ...synced,
         explanation: currentStaged.explanation,
       };
 

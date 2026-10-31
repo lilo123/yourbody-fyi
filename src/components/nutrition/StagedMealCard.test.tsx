@@ -2366,6 +2366,77 @@ describe('Scale chip on the staged card', () => {
       expect(multiBadge.className).not.toContain('uppercase');
     });
   });
+
+  describe('serving size synchronization on item changes', () => {
+    it('adding an item to a single-item meal resets serving to 1 serving', () => {
+      const meal = makeStagedMeal();
+      meal.servingSize = 150;
+      meal.servingUnit = 'g';
+      let currentMeal = meal;
+      const onUpdateStagedMeal = vi.fn((updated) => {
+        currentMeal = updated;
+      });
+
+      render(
+        <StagedMealCard
+          stagedMeal={currentMeal}
+          onUpdateStagedMeal={onUpdateStagedMeal}
+          onApplyStagedItemChange={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onSaveItemAsCustomDish={vi.fn()}
+          onLogStagedMeal={vi.fn()}
+          onSaveStagedAsCustomDish={vi.fn()}
+          onDiscardStagedMeal={vi.fn()}
+          isPending={false}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('add-item-button'));
+      fireEvent.click(screen.getByRole('button', { name: /enter manually/i }));
+
+      fireEvent.change(screen.getByTestId('add-item-name-input'), { target: { value: 'White Rice' } });
+      fireEvent.change(screen.getByTestId('add-item-quantity-input'), { target: { value: '200' } });
+      fireEvent.change(screen.getByTestId('add-item-unit-input'), { target: { value: 'g' } });
+      fireEvent.change(screen.getByTestId('add-item-calories-input'), { target: { value: '260' } });
+      fireEvent.click(screen.getByTestId('submit-add-item-button'));
+
+      expect(onUpdateStagedMeal).toHaveBeenCalled();
+      expect(currentMeal.items.length).toBe(2);
+      expect(currentMeal.servingSize).toBe(1);
+      expect(currentMeal.servingUnit).toBe('serving');
+    });
+
+    it('editing nutrition on multi-item meal syncs serving to 1 serving', () => {
+      const multiMeal = makeMultiItemMeal();
+      multiMeal.servingSize = 150;
+      multiMeal.servingUnit = 'g';
+      const onUpdateStagedMeal = vi.fn();
+
+      render(
+        <StagedMealCard
+          stagedMeal={multiMeal}
+          onUpdateStagedMeal={onUpdateStagedMeal}
+          onApplyStagedItemChange={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onSaveItemAsCustomDish={vi.fn()}
+          onLogStagedMeal={vi.fn()}
+          onSaveStagedAsCustomDish={vi.fn()}
+          onDiscardStagedMeal={vi.fn()}
+          isPending={false}
+        />
+      );
+
+      fireEvent.click(screen.getAllByTestId('component-actions')[0]);
+      fireEvent.click(screen.getByTestId('component-edit-nutrition'));
+      fireEvent.change(screen.getByTestId('edit-item-calories-input'), { target: { value: '150' } });
+      fireEvent.click(screen.getByTestId('save-edit-item-nutrition-btn'));
+
+      expect(onUpdateStagedMeal).toHaveBeenCalled();
+      const updated = onUpdateStagedMeal.mock.calls[0][0] as StagedMeal;
+      expect(updated.servingSize).toBe(1);
+      expect(updated.servingUnit).toBe('serving');
+    });
+  });
 });
 
 

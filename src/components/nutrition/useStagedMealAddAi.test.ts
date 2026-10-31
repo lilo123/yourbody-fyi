@@ -221,4 +221,42 @@ describe('useStagedMealAddAi', () => {
     expect(setStagedMeal).not.toHaveBeenCalled();
     expect(triggerToast).not.toHaveBeenCalled();
   });
+
+  it('resets serving to 1 serving when adding items to a single-item meal', () => {
+    const singleItemMeal: StagedMeal = {
+      ...baseMeal,
+      servingSize: 150,
+      servingUnit: 'g',
+    };
+    const setStagedMeal = vi.fn();
+
+    const { result } = renderHook(() =>
+      useStagedMealAddAi({
+        stagedMeal: singleItemMeal,
+        setStagedMeal,
+      })
+    );
+
+    const newItem = buildStagedItem({
+      name: 'Broccoli',
+      portion: '100 g',
+      quantity: 100,
+      unit: 'g',
+      calories: 35,
+      protein: 2.5,
+      carbs: 7,
+      fat: 0.4,
+      fiber: 2.6,
+    });
+
+    act(() => {
+      result.current.handleAddParsedItems([newItem], singleItemMeal);
+    });
+
+    expect(setStagedMeal).toHaveBeenCalled();
+    const updatedMeal = setStagedMeal.mock.calls[0][0];
+    expect(updatedMeal.items).toHaveLength(2);
+    expect(updatedMeal.servingSize).toBe(1);
+    expect(updatedMeal.servingUnit).toBe('serving');
+  });
 });

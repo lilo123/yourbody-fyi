@@ -8,7 +8,7 @@ import {
   stagedToItem,
   stagedReference,
   reanchorStagedItem,
-  recomputeStagedTotals,
+  withSyncedServing,
   updateStagedItemNutrition,
   buildStagedItem,
   mergeOrAppendStagedItems,
@@ -55,21 +55,13 @@ function syncMealAfterItemChange(
   stagedMeal: StagedMeal,
   updatedItems: StagedItem[]
 ): StagedMeal {
-  const totals = recomputeStagedTotals(updatedItems);
+  const synced = withSyncedServing(stagedMeal, updatedItems);
   const single = updatedItems.length === 1 ? updatedItems[0] : null;
   return {
-    ...stagedMeal,
-    items: updatedItems,
-    ...totals,
+    ...synced,
     ...(single
       ? {
-          explanation: `${formatCalories(totals.calories)} kcal (${stagedMeal.name})`,
-          ...(single.quantity > 0
-            ? {
-                servingSize: single.quantity,
-                servingUnit: single.unit,
-              }
-            : {}),
+          explanation: `${formatCalories(synced.calories)} kcal (${stagedMeal.name})`,
         }
       : {}),
   };
@@ -203,12 +195,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
       onAddParsedItems(items, stagedMeal);
     } else {
       const merged = mergeOrAppendStagedItems(stagedMeal.items, items);
-      const totals = recomputeStagedTotals(merged);
-      onUpdateStagedMeal({
-        ...stagedMeal,
-        items: merged,
-        ...totals,
-      });
+      onUpdateStagedMeal(withSyncedServing(stagedMeal, merged));
     }
     setIsComposerOpen(false);
   };
@@ -226,12 +213,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
       fiber: data.fiber,
     });
     const updatedItems = [...stagedMeal.items, newItem];
-    const totals = recomputeStagedTotals(updatedItems);
-    onUpdateStagedMeal({
-      ...stagedMeal,
-      items: updatedItems,
-      ...totals,
-    });
+    onUpdateStagedMeal(withSyncedServing(stagedMeal, updatedItems));
     setIsAddingItem(false);
     setNewlyAddedItemId(newItem.id);
   };
