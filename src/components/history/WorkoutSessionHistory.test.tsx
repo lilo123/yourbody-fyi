@@ -448,5 +448,60 @@ describe('WorkoutSessionHistory', () => {
 
     shareSpy.mockRestore();
   });
+
+  it('passes loaded sets from sessionSetsMap to shareWorkoutStory when session.sets is empty', async () => {
+    const shareStoryModule = await import('../../utils/workoutStoryShare');
+    const shareSpy = vi.spyOn(shareStoryModule, 'shareWorkoutStory').mockResolvedValue(undefined);
+
+    const loadedSets = [
+      {
+        id: 's1',
+        workout_id: 'session-1',
+        exercise_id: 'ex-1',
+        exercise_name: 'Squat',
+        weight: 315,
+        reps: 5,
+        set_index: 1,
+        set_type: 'working' as const,
+        workout_date: '2026-09-15',
+        workout_name: 'Leg Day',
+        created_at: '2026-09-15T00:00:00.000Z',
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <WorkoutSessionHistory
+          displayedSessions={mockSessions}
+          exercises={[]}
+          timeRange="all"
+          isInspectingAthlete={false}
+          onEditSet={vi.fn()}
+          onLoadMore={vi.fn()}
+          sessionSetsMap={{ 'session-1': loadedSets }}
+        />
+      </MemoryRouter>
+    );
+
+    const overflowTrigger = screen.getByRole('button', { name: /Session actions for Leg Day/i });
+    fireEvent.click(overflowTrigger);
+
+    const shareBtn = screen.getByTestId('share-session-session-1');
+    fireEvent.click(shareBtn);
+
+    expect(shareSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'session-1',
+        sets: loadedSets,
+      }),
+      [],
+      'lb',
+      expect.any(Function),
+      undefined,
+      'weight'
+    );
+
+    shareSpy.mockRestore();
+  });
 });
 

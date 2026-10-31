@@ -18,7 +18,8 @@ import { useToast } from '../../hooks/useToast';
 import { PendingMark } from '../sync/PendingMark';
 import { formatVolume, formatWeight, weightUnitLabel } from '../../utils/weight';
 import { shareWorkoutStory } from '../../utils/workoutStoryShare';
-import type { HistorySession } from './useWorkoutHistory';
+import type { QueryClient } from '@tanstack/react-query';
+import type { HistorySession, HistorySet } from './useWorkoutHistory';
 
 export type { HistorySession };
 
@@ -27,6 +28,8 @@ export interface WorkoutSessionHistoryProps {
   filteredSessionsCount?: number;
   totalCount?: number | null;
   exercises: Exercise[];
+  sessionSetsMap?: Record<string, HistorySet[]>;
+  queryClient?: QueryClient;
   timeRange: 'all' | '90d' | '30d' | '1y';
   isInspectingAthlete: boolean;
   isSessionsPending?: boolean;
@@ -45,16 +48,15 @@ export interface WorkoutSessionHistoryProps {
   onClearFilters?: () => void;
   onNavigate?: (path: string) => void;
   highlightDate?: string;
-  filterSummary?: {
-    matchCount: number;
-    loadedCount: number;
-  };
+  filterSummary?: { matchCount: number; loadedCount: number };
 }
 
 export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
   displayedSessions,
   totalCount,
   exercises,
+  sessionSetsMap,
+  queryClient,
   timeRange,
   isInspectingAthlete,
   isSessionsPending = false,
@@ -272,11 +274,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
     const setCount = session.set_count ?? session.sets?.length ?? 0;
     const totalVolume =
       session.total_volume ??
-      session.sets?.reduce(
-        (sum, s) => sum + (Number(s.weight) || 0) * (Number(s.reps) || 0),
-        0
-      ) ??
-      0;
+      session.sets?.reduce((sum, s) => sum + (Number(s.weight) || 0) * (Number(s.reps) || 0), 0) ?? 0;
     const sets = session.sets || [];
 
     const civilDate = session.civil_date || session.workout_date || (session.date ? normalizeDateStr(session.date) : '');
@@ -288,7 +286,13 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
       {
         label: 'Share workout',
         onSelect: () => {
-          void shareWorkoutStory(session, exercises, unit, showToast, undefined, prMode);
+          const setsToUse = session.sets && session.sets.length > 0 ? session.sets : sessionSetsMap?.[session.id];
+          const sessionToShare: HistorySession =
+            setsToUse && setsToUse.length > 0 && (!session.sets || session.sets.length === 0)
+              ? { ...session, sets: setsToUse }
+              : session;
+          const deps = queryClient ? { queryClient, cachedSets: sessionSetsMap?.[session.id] } : undefined;
+          void shareWorkoutStory(sessionToShare, exercises, unit, showToast, deps, prMode);
         },
         testId: `share-session-${session.id}`,
       },

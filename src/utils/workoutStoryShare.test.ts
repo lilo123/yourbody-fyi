@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { QueryClient } from '@tanstack/react-query';
 import { shareWorkoutStory } from './workoutStoryShare';
 import type { HistorySession } from '../components/history/useWorkoutHistory';
 
@@ -249,5 +250,98 @@ describe('shareWorkoutStory utility', () => {
       { renderToBlob: capturingRenderer }
     );
     expect(capturedStoryData.exercises[0].bestSetFormatted).toBe('220 lbs × 1');
+  });
+
+  it('uses cached sets from deps.cachedSets when session.sets is empty and network fetch fails', async () => {
+    const sessionWithoutSets: HistorySession = {
+      ...sampleSession,
+      id: 'session-offline-fail-1',
+      sets: [],
+    };
+
+    let capturedStoryData: any = null;
+    const capturingRenderer = vi.fn().mockImplementation((data) => {
+      capturedStoryData = data;
+      return Promise.resolve(mockBlob);
+    });
+
+    const cachedSets = [
+      {
+        id: 'cached-set-1',
+        workout_id: 'session-offline-fail-1',
+        exercise_id: 'ex-squat',
+        exercise_name: 'Back Squat',
+        weight: 315,
+        reps: 5,
+        set_index: 1,
+        set_type: 'working' as const,
+        workout_date: '2026-10-12',
+        workout_name: 'Upper Body Blast',
+        created_at: '2026-10-12T10:00:00Z',
+      },
+    ];
+
+    await shareWorkoutStory(
+      sessionWithoutSets,
+      [],
+      'lb',
+      mockShowToast,
+      {
+        renderToBlob: capturingRenderer,
+        cachedSets,
+      }
+    );
+
+    expect(capturedStoryData).not.toBeNull();
+    expect(capturedStoryData.exercises).toHaveLength(1);
+    expect(capturedStoryData.exercises[0].name).toBe('Back Squat');
+    expect(capturedStoryData.exercises[0].bestSetFormatted).toBe('315 lbs × 5');
+  });
+
+  it('uses cached sets from queryClient when session.sets is empty and network fetch fails', async () => {
+    const sessionWithoutSets: HistorySession = {
+      ...sampleSession,
+      id: 'session-offline-fail-2',
+      sets: [],
+    };
+
+    let capturedStoryData: any = null;
+    const capturingRenderer = vi.fn().mockImplementation((data) => {
+      capturedStoryData = data;
+      return Promise.resolve(mockBlob);
+    });
+
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['session_sets', 'session-offline-fail-2'], [
+      {
+        id: 'cached-set-2',
+        workout_id: 'session-offline-fail-2',
+        exercise_id: 'ex-bench',
+        exercise_name: 'Bench Press',
+        weight: 225,
+        reps: 5,
+        set_index: 1,
+        set_type: 'working',
+        workout_date: '2026-10-12',
+        workout_name: 'Upper Body Blast',
+        created_at: '2026-10-12T10:00:00Z',
+      },
+    ]);
+
+    await shareWorkoutStory(
+      sessionWithoutSets,
+      [],
+      'lb',
+      mockShowToast,
+      {
+        renderToBlob: capturingRenderer,
+        queryClient,
+      }
+    );
+
+    expect(capturedStoryData).not.toBeNull();
+    expect(capturedStoryData.exercises).toHaveLength(1);
+    expect(capturedStoryData.exercises[0].name).toBe('Bench Press');
+    expect(capturedStoryData.exercises[0].bestSetFormatted).toBe('225 lbs × 5');
   });
 });

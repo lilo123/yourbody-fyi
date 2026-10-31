@@ -2,6 +2,7 @@ import type { WorkoutSet, Exercise } from '../types/database';
 import { pickPrSet, type PrMode } from '../lib/prComparator';
 import { formatShortDate } from './date';
 import { formatVolume, formatWeight, weightUnitLabel, type WeightUnit } from './weight';
+import { DEFAULT_EXERCISES_LIST } from './exerciseCatalog';
 
 export interface WorkoutStoryExercise {
   name: string;
@@ -87,10 +88,20 @@ export function buildWorkoutStoryData(options: BuildWorkoutStoryOptions): Workou
   // Group sets by exercise while preserving order of appearance
   const groups: { name: string; sets: (WorkoutSet & { exercise_name?: string })[] }[] = [];
   const exerciseLookup = new Map<string, string>();
+
+  // Pre-seed lookup with default catalog exercises
+  for (const ex of DEFAULT_EXERCISES_LIST) {
+    if (ex.id && ex.name) {
+      exerciseLookup.set(ex.id, ex.name);
+      exerciseLookup.set(ex.name, ex.name);
+    }
+  }
+
   if (options.exercises) {
     for (const ex of options.exercises) {
       if (ex.id && ex.name) {
         exerciseLookup.set(ex.id, ex.name);
+        exerciseLookup.set(ex.name, ex.name);
       }
     }
   }

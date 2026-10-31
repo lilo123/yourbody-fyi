@@ -408,6 +408,8 @@ export const HistoryView: React.FC = () => {
               filteredSessionsCount={sessions.length}
               totalCount={totalCount}
               exercises={exercises}
+              sessionSetsMap={sessionSetsMap}
+              queryClient={queryClient}
               timeRange={timeRange}
               isInspectingAthlete={isInspectingAthlete}
               isSessionsPending={isSessionsPending}
