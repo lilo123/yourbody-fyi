@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MacroGoalsCard } from './MacroGoalsCard';
@@ -244,5 +245,35 @@ describe('MacroGoalsCard accessibility', () => {
 
     fireEvent.change(fiberInput, { target: { value: '' } });
     expect(setTargetFiber).toHaveBeenCalledWith('');
+  });
+
+  it('does not allow negative calorie goals to be saved and sets min="0"', () => {
+    let savedCalories: number | string | null = null;
+    function CalorieGoalHarness() {
+      const [calories, setCalories] = useState<number | string>(2200);
+      return (
+        <MacroGoalsCard
+          {...defaultProps}
+          targetCalories={calories}
+          setTargetCalories={setCalories}
+          onSave={(e) => {
+            e.preventDefault();
+            savedCalories = calories;
+          }}
+        />
+      );
+    }
+
+    render(<CalorieGoalHarness />);
+    const calInput = screen.getByLabelText(/calories/i);
+
+    fireEvent.change(calInput, { target: { value: '-500' } });
+
+    const saveButton = screen.getByRole('button', { name: /save goals/i });
+    fireEvent.click(saveButton);
+
+    expect(savedCalories).not.toBe(-500);
+    expect(savedCalories).toBe(0);
+    expect(calInput.getAttribute('min')).toBe('0');
   });
 });
