@@ -293,6 +293,7 @@ export const WorkoutEngine: React.FC = () => {
     userLogs,
     workoutDate,
     exercises,
+    customTemplates,
     batchLogSetsMutation,
   });
 
