@@ -105,7 +105,32 @@ describe('SyncStatusSheet', () => {
     fireEvent.click(signInBtn);
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
-    expect(mockNavigate).toHaveBeenCalledWith('/login');
+    expect(mockNavigate).toHaveBeenCalledWith('/login', {
+      state: { ['from']: expect.objectContaining({ pathname: '/' }) },
+    });
+  });
+
+  it('passes current location state when navigating to /login on Sign In click', () => {
+    vi.mocked(useOutboxStatus).mockReturnValue({
+      ...baseSummary,
+      pending: 1,
+      attention: 0,
+      authRequired: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/nutrition']}>
+        <SyncStatusSheet isOpen={true} onClose={mockOnClose} />
+      </MemoryRouter>
+    );
+
+    const signInBtn = screen.getByTestId('sync-sheet-sign-in-btn');
+    fireEvent.click(signInBtn);
+
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith('/login', {
+      state: { ['from']: expect.objectContaining({ pathname: '/nutrition' }) },
+    });
   });
 
   it('renders attention ops list with formatOpKind, formatted time, and error', () => {

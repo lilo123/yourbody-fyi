@@ -2,8 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
 import { computeGhostSets, getExerciseBenchmarks, getDayOfWeekAbbr, getLocalDateStr } from '../../utils/ghostSets';
-import { workoutSessionStore, type SetDraftInput } from '../../utils/workoutSessionStore';
-import { toDisplayWeight } from '../../utils/weight';
+import { workoutSessionStore } from '../../utils/workoutSessionStore';
 import { Layers, Plus, Check, AlertCircle, RotateCcw } from 'lucide-react';
 import { useWorkoutQueries } from './useWorkoutQueries';
 import { useWorkoutSession } from './useWorkoutSession';
@@ -24,21 +23,21 @@ import { useWorkoutFinishReview } from './useWorkoutFinishReview';
 import { WorkoutEmptyState } from './WorkoutEmptyState';
 import { WorkoutDialogs } from './WorkoutDialogs';
 import type { CatalogExercise } from '../../lib/exercises';
-import { resolveCardBenchmarks } from './workoutEngineHelpers';
+import {
+  resolveCardBenchmarks,
+  resolveTargetUserId,
+  resolveRestTimerSeconds,
+  clearDraftForSet,
+  performUnlogSet,
+} from './workoutEngineHelpers';
 
 export const WorkoutEngine: React.FC = () => {
   const { user, profile } = useAuth();
   const unit = useWeightUnit();
 
-  const targetUserId = user?.id || (() => {
-    try { return JSON.parse(localStorage.getItem('yourbody_user') || '{}')?.id || ''; } catch { return ''; }
-  })();
+  const targetUserId = resolveTargetUserId(user?.id);
   const autoRestTimer = profile?.auto_rest_timer ?? (localStorage.getItem('yourbody_auto_rest_timer') !== 'false');
-  const restTimerSeconds = profile?.rest_timer_seconds ?? (() => {
-    const localVal = typeof localStorage !== 'undefined' ? localStorage.getItem('yourbody_rest_timer_seconds') : null;
-    const parsed = localVal ? Number(localVal) : 90;
-    return Number.isFinite(parsed) && parsed >= 15 && parsed <= 600 ? parsed : 90;
-  })();
+  const restTimerSeconds = resolveRestTimerSeconds(profile?.rest_timer_seconds);
 
   const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
 
@@ -52,73 +51,38 @@ export const WorkoutEngine: React.FC = () => {
 
   // 2. Data Queries
   const {
-    exercises,
-    exercisesFetched,
-    customTemplates,
-    templatesFetched,
-    userLogs,
-    logsFetched,
-    availableRoutines,
-    isLogsError,
-    logsError,
-    refetchLogs,
-    benchmarks: allTimeBenchmarks,
+    exercises, exercisesFetched, customTemplates, templatesFetched,
+    hasCatalogLoaded, isCatalogPending, userLogs, logsFetched,
+    availableRoutines, isLogsError, logsError, refetchLogs,
+    benchmarks: allTimeBenchmarks, hiddenRoutineNames,
   } = useWorkoutQueries(targetUserId, initialDate);
 
   // 3. Session Management (Routines, Exercises, Targets, Drafts)
   const {
-    workoutDate,
-    setWorkoutDate,
-    activeRoutineName,
-    activeExercises,
-    targetSetCounts,
-    targetRepCounts,
-    expandedExercises,
-    inputDrafts,
-    setInputDrafts,
-    getSetsForExerciseToday,
-    toggleAccordion,
-    collapseExercise,
-    collapseCompleted,
-    toggleAllAccordions,
-    handleSelectRoutine: selectRoutineInternal,
-    cancelRoutineSelection,
-    handleReloadScheduledRoutine: reloadScheduledRoutineInternal,
-    addExercises: addExercisesInternal,
-    moveExercise,
-    removeExercise: removeExerciseDirectly,
-    restoreExercise,
-    adjustTargetSets,
-    updateDraft,
-    handleClearWorkout: executeClearWorkout,
+    workoutDate, setWorkoutDate, activeRoutineName, activeExercises,
+    targetSetCounts, targetRepCounts, expandedExercises, inputDrafts, setInputDrafts,
+    getSetsForExerciseToday, toggleAccordion, collapseExercise, collapseCompleted,
+    toggleAllAccordions, handleSelectRoutine: selectRoutineInternal,
+    cancelRoutineSelection, handleReloadScheduledRoutine: reloadScheduledRoutineInternal,
+    addExercises: addExercisesInternal, moveExercise, removeExercise: removeExerciseDirectly,
+    restoreExercise, adjustTargetSets, updateDraft, handleClearWorkout: executeClearWorkout,
     isScheduledRoutineDirty,
   } = useWorkoutSession({
-    targetUserId,
-    exercises,
-    exercisesFetched,
-    customTemplates,
-    templatesFetched,
-    userLogs,
-    logsFetched,
-    unit,
+    targetUserId, exercises, exercisesFetched, customTemplates, templatesFetched,
+    userLogs, logsFetched, unit, hasLoadedCatalog: hasCatalogLoaded,
+    isCatalogPending, hiddenRoutineNames,
   });
 
   const {
-    showRoutineModal,
-    setShowRoutineModal,
-    isSelectingRoutine,
-    handleSelectRoutine,
-    handleCloseRoutineModal,
+    showRoutineModal, setShowRoutineModal, isSelectingRoutine,
+    handleSelectRoutine, handleCloseRoutineModal,
   } = useRoutineSelection({ selectRoutineInternal, cancelRoutineSelection, workoutDate });
 
   // URL Query Parameters Handling (URL-1, URL-2)
   const { syncDateToUrl } = useWorkoutUrlParams({
-    customTemplates,
-    templatesFetched,
-    onSelectRoutine: handleSelectRoutine,
-    workoutDate,
-    onDateChange: setWorkoutDate,
-    targetUserId,
+    customTemplates, templatesFetched, onSelectRoutine: handleSelectRoutine,
+    workoutDate, onDateChange: setWorkoutDate, targetUserId,
+    hasLoadedCatalog: hasCatalogLoaded, hiddenRoutineNames,
   });
 
   const handleDateChange = useCallback((newDate: string) => {
@@ -128,16 +92,7 @@ export const WorkoutEngine: React.FC = () => {
 
   const handleDraftSuccess = useCallback(
     (variables: { exerciseName?: string; exerciseId?: string; setIndex: number }) => {
-      setInputDrafts((prev) => {
-        const next = { ...prev };
-        if (variables.exerciseName) {
-          delete next[`${variables.exerciseName}_${variables.setIndex}`];
-        }
-        if (variables.exerciseId) {
-          delete next[`${variables.exerciseId}_${variables.setIndex}`];
-        }
-        return next;
-      });
+      setInputDrafts((prev) => clearDraftForSet(prev, variables));
     },
     [setInputDrafts]
   );
@@ -222,47 +177,15 @@ export const WorkoutEngine: React.FC = () => {
   });
 
   const handleUnlogSet = useCallback((exIndex: number, rowIdx: number) => {
-    const exName = activeExercises[exIndex];
-    if (!exName) return;
-    const rawSets = getSetsForExerciseToday(exName);
-    const exerciseSetsToday = rawSets.filter(
-      (s) => s.id !== pendingSetId && (!s.id || !pendingDeletedSetIds.has(s.id))
-    );
-    const targetSet = exerciseSetsToday[rowIdx];
-    if (!targetSet) return;
-
-    const setIndex = targetSet.set_index ?? (rowIdx + 1);
-    const draftKey = `${exName}_${setIndex}`;
-    const draftWeight = typeof targetSet.weight === 'number'
-      ? String(toDisplayWeight(targetSet.weight, unit))
-      : '';
-    const draftReps = targetSet.reps != null ? String(targetSet.reps) : '';
-
-    setInputDrafts((prev) => {
-      const updated: SetDraftInput = {
-        weight: draftWeight,
-        reps: draftReps,
-      };
-      workoutSessionStore.setDraftInput(targetUserId, workoutDate, exName, setIndex, updated);
-      return {
-        ...prev,
-        [draftKey]: updated,
-      };
+    performUnlogSet({
+      exIndex, rowIdx, activeExercises, getSetsForExerciseToday,
+      pendingSetId, pendingDeletedSetIds, unit, setInputDrafts,
+      targetUserId, workoutDate,
+      onDeleteSet: (id) => deleteSetMutation.mutate(id),
     });
-
-    if (targetSet.id) {
-      deleteSetMutation.mutate(targetSet.id);
-    }
   }, [
-    activeExercises,
-    getSetsForExerciseToday,
-    pendingSetId,
-    pendingDeletedSetIds,
-    unit,
-    setInputDrafts,
-    targetUserId,
-    workoutDate,
-    deleteSetMutation,
+    activeExercises, getSetsForExerciseToday, pendingSetId, pendingDeletedSetIds,
+    unit, setInputDrafts, targetUserId, workoutDate, deleteSetMutation,
   ]);
 
   // 8. Set Commit & Batch Log
@@ -420,6 +343,9 @@ export const WorkoutEngine: React.FC = () => {
         exercises={exercises}
         targetUserId={targetUserId}
         isSelecting={isSelectingRoutine}
+        hasLoadedCatalog={hasCatalogLoaded}
+        isCatalogPending={isCatalogPending}
+        hiddenRoutineNames={hiddenRoutineNames}
       />
 
       {activeRoutineName === 'Rest Day' ? (

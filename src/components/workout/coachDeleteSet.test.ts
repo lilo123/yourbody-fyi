@@ -65,7 +65,7 @@ describe('coach deleting athlete set - outbox target user routing', () => {
       expect.objectContaining({
         userId: athleteUserId,
         kind: 'set.delete',
-        payload: { id: 'set-athlete-1' },
+        payload: { id: 'set-athlete-1', workoutDate: '2026-10-18' },
       })
     );
   });
