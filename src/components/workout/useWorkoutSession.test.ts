@@ -819,5 +819,105 @@ describe('useWorkoutSession', () => {
       expect(result.current.inputDrafts['Bench Press_2']).toEqual({ weight: '49.9', reps: '8' });
     });
   });
+
+  it('(a) switching routine mid-workout merges logged exercises from today into the active exercises and store', async () => {
+    const loggedSets: (WorkoutSet & { workout_date: string; workout_name?: string })[] = [
+      {
+        id: 's-bench-1',
+        workout_id: 'w-1',
+        exercise_id: 'ex-bench',
+        exercise_name: 'Bench Press',
+        weight: 185,
+        reps: 8,
+        set_index: 1,
+        set_type: 'working',
+        workout_date: '2026-09-06',
+        workout_name: 'Push Routine',
+        created_at: '2026-09-06T10:00:00Z',
+      },
+    ];
+
+    const customPullTemplate: RoutineTemplate = {
+      id: 'tpl-pull',
+      user_id: targetUserId,
+      name: 'Pull Routine',
+      is_master: false,
+      assigned_to: null,
+      created_at: '2026-01-01',
+      exercises: [
+        {
+          id: 'te-row',
+          template_id: 'tpl-pull',
+          exercise_id: 'ex-row',
+          order_index: 0,
+          target_sets: 3,
+          target_reps: 10,
+          exercise: { name: 'Barbell Row' },
+        },
+      ],
+    };
+
+    const { result } = renderHook(() =>
+      useWorkoutSession({
+        ...defaultProps,
+        customTemplates: [customPullTemplate],
+        userLogs: loggedSets,
+      })
+    );
+
+    // Switch routine to Pull Routine
+    await act(async () => {
+      await result.current.handleSelectRoutine('Pull Routine', customPullTemplate);
+    });
+
+    // Both the new template exercise (Barbell Row) AND the logged exercise (Bench Press) must be present
+    expect(result.current.activeExercises).toContain('Barbell Row');
+    expect(result.current.activeExercises).toContain('Bench Press');
+
+    // WorkoutSessionStore must also persist both exercises
+    const stored = workoutSessionStore.getSession(targetUserId, '2026-09-06');
+    expect(stored?.exercises).toContain('Bench Press');
+  });
+
+  it('(b) restoreExercise writes targetSetCounts and targetRepCounts back to workoutSessionStore so reload preserves them', () => {
+    const { result } = renderHook(() => useWorkoutSession(defaultProps));
+
+    act(() => {
+      result.current.handleAddExercise('Bench Press');
+      result.current.adjustTargetSets('Bench Press', 2); // 3 -> 5
+    });
+
+    expect(result.current.targetSetCounts['Bench Press']).toBe(5);
+
+    // Remove Bench Press
+    act(() => {
+      result.current.removeExercise(0);
+    });
+
+    // Restore Bench Press with targetSetCount = 5 and targetRepCount = 8
+    act(() => {
+      result.current.restoreExercise({
+        exerciseName: 'Bench Press',
+        index: 0,
+        targetSetCount: 5,
+        targetRepCount: 8,
+        drafts: {},
+      });
+    });
+
+    // In-memory state is restored
+    expect(result.current.targetSetCounts['Bench Press']).toBe(5);
+    expect(result.current.targetRepCounts['Bench Press']).toBe(8);
+
+    // Verify store has the restored targets persisted
+    const stored = workoutSessionStore.getSession(targetUserId, '2026-09-06');
+    expect(stored?.targetSetCounts['Bench Press']).toBe(5);
+    expect(stored?.targetRepCounts['Bench Press']).toBe(8);
+
+    // On reload from store, targets must remain 5 and 8
+    const { result: reloadedResult } = renderHook(() => useWorkoutSession(defaultProps));
+    expect(reloadedResult.current.targetSetCounts['Bench Press']).toBe(5);
+    expect(reloadedResult.current.targetRepCounts['Bench Press']).toBe(8);
+  });
 });
 
