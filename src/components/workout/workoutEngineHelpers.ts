@@ -1,4 +1,4 @@
-import type { WorkoutSet, Exercise, RoutineTemplate } from '../../types/database';
+import type { WorkoutSet, Exercise, RoutineTemplate, ExerciseBenchmarks } from '../../types/database';
 import {
   getDayOfWeekAbbr,
   getLocalDateStr,
@@ -7,6 +7,8 @@ import {
 } from '../../utils/ghostSets';
 
 import { UUID_REGEX, isValidUUID, isUUID } from '../../utils/uuid';
+import { formatSet, type WeightUnit } from '../../utils/weight';
+import { comparePrSets, type PrMode } from '../../lib/prComparator';
 export { UUID_REGEX, isValidUUID, isUUID };
 
 export function resolveCleanExerciseName(
@@ -81,7 +83,6 @@ export function resolveRoutineAndExercises(
   hasLoadedCatalog?: boolean,
   hiddenRoutineNames?: Set<string> | string[]
 ): ResolvedRoutineResult {
-  const hasCatalog = Boolean(hasLoadedCatalog);
   let resolvedRoutine = 'Rest Day';
   let resolvedExList: string[] = [];
   let resolvedTargets: Record<string, number> = {};
@@ -210,6 +211,7 @@ export function resolveRoutineAndExercises(
       resolvedTargets[exName] = Math.max(currentTarget, loggedSetsForEx.length);
     });
   } else {
+    const hasCatalog = Boolean(hasLoadedCatalog);
     const dayAbbr = getDayOfWeekAbbr(workoutDate);
     const scheduledCustom = customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
     const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
@@ -336,4 +338,73 @@ export function checkIsScheduledRoutineDirty({
   }
 
   return false;
+}
+
+export function resolveExerciseId(
+  exerciseName: string,
+  exercisesCatalog: Exercise[],
+  customTemplates?: RoutineTemplate[]
+): string | undefined {
+  const normalizedName = exerciseName.trim().toLowerCase();
+  const matchedExercise = exercisesCatalog.find(
+    (item) => item.name.trim().toLowerCase() === normalizedName || item.id === exerciseName
+  ) || DEFAULT_EXERCISES_LIST.find(
+    (item) => item.name.trim().toLowerCase() === normalizedName || item.id === exerciseName
+  );
+  if (matchedExercise?.id && isValidUUID(matchedExercise.id)) {
+    return matchedExercise.id;
+  }
+  if (isValidUUID(exerciseName)) {
+    return exerciseName;
+  }
+  if (customTemplates) {
+    for (const template of customTemplates) {
+      for (const item of template.exercises || []) {
+        const itemName = item.exercise?.name || (item as any).exercise_name;
+        if (itemName && itemName.trim().toLowerCase() === normalizedName && isValidUUID(item.exercise_id)) {
+          return item.exercise_id;
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+export function resolveCardBenchmarks(
+  exerciseName: string,
+  serverBenchmarksMap: Record<string, ExerciseBenchmarks> | undefined,
+  localBenchmarks: ExerciseBenchmarks,
+  exercisesCatalog: Exercise[],
+  customTemplates: RoutineTemplate[] | undefined,
+  prRankingMode: PrMode,
+  weightUnit: WeightUnit
+): ExerciseBenchmarks {
+  const exerciseId = resolveExerciseId(exerciseName, exercisesCatalog, customTemplates);
+  const serverBenchmark = (exerciseId ? serverBenchmarksMap?.[exerciseId] : undefined) || serverBenchmarksMap?.[exerciseName];
+
+  if (!serverBenchmark) {
+    return localBenchmarks;
+  }
+
+  const bestPr = (() => {
+    if (!serverBenchmark.pr) return localBenchmarks.pr;
+    if (!localBenchmarks.pr) return serverBenchmark.pr;
+    return comparePrSets(localBenchmarks.pr, serverBenchmark.pr, prRankingMode) < 0
+      ? localBenchmarks.pr
+      : serverBenchmark.pr;
+  })();
+
+  const lastSession = serverBenchmark.lastSession
+    ? {
+        ...serverBenchmark.lastSession,
+        summaryText: serverBenchmark.lastSession.sets && serverBenchmark.lastSession.sets.length > 0
+          ? serverBenchmark.lastSession.sets.map((singleSet) => formatSet(singleSet.weight, singleSet.reps, weightUnit)).join(', ')
+          : serverBenchmark.lastSession.summaryText,
+      }
+    : localBenchmarks.lastSession;
+
+  return {
+    lastSession,
+    pr: bestPr,
+  };
 }

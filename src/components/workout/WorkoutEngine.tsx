@@ -1,12 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
-import {
-  computeGhostSets,
-  getExerciseBenchmarks,
-  getDayOfWeekAbbr,
-  getLocalDateStr,
-} from '../../utils/ghostSets';
+import { computeGhostSets, getExerciseBenchmarks, getDayOfWeekAbbr, getLocalDateStr } from '../../utils/ghostSets';
 import { workoutSessionStore, type SetDraftInput } from '../../utils/workoutSessionStore';
 import { toDisplayWeight } from '../../utils/weight';
 import { Layers, Plus, Check, AlertCircle, RotateCcw } from 'lucide-react';
@@ -29,6 +24,7 @@ import { useWorkoutFinishReview } from './useWorkoutFinishReview';
 import { WorkoutEmptyState } from './WorkoutEmptyState';
 import { WorkoutDialogs } from './WorkoutDialogs';
 import type { CatalogExercise } from '../../lib/exercises';
+import { resolveCardBenchmarks } from './workoutEngineHelpers';
 
 export const WorkoutEngine: React.FC = () => {
   const { user, profile } = useAuth();
@@ -56,25 +52,60 @@ export const WorkoutEngine: React.FC = () => {
 
   // 2. Data Queries
   const {
-    exercises, exercisesFetched, customTemplates, templatesFetched,
-    hasCatalogLoaded, isCatalogPending, userLogs, logsFetched,
-    availableRoutines, isLogsError, logsError, refetchLogs,
+    exercises,
+    exercisesFetched,
+    customTemplates,
+    templatesFetched,
+    hasCatalogLoaded,
+    isCatalogPending,
+    userLogs,
+    logsFetched,
+    availableRoutines,
+    isLogsError,
+    logsError,
+    refetchLogs,
+    benchmarks: allTimeBenchmarks,
     hiddenRoutineNames,
   } = useWorkoutQueries(targetUserId, initialDate);
 
   // 3. Session Management (Routines, Exercises, Targets, Drafts)
   const {
-    workoutDate, setWorkoutDate, activeRoutineName, activeExercises,
-    targetSetCounts, targetRepCounts, expandedExercises, inputDrafts, setInputDrafts,
-    getSetsForExerciseToday, toggleAccordion, collapseExercise, collapseCompleted,
-    toggleAllAccordions, handleSelectRoutine: selectRoutineInternal,
-    cancelRoutineSelection, handleReloadScheduledRoutine: reloadScheduledRoutineInternal,
-    addExercises: addExercisesInternal, moveExercise, removeExercise: removeExerciseDirectly,
-    restoreExercise, adjustTargetSets, updateDraft, handleClearWorkout: executeClearWorkout,
+    workoutDate,
+    setWorkoutDate,
+    activeRoutineName,
+    activeExercises,
+    targetSetCounts,
+    targetRepCounts,
+    expandedExercises,
+    inputDrafts,
+    setInputDrafts,
+    getSetsForExerciseToday,
+    toggleAccordion,
+    collapseExercise,
+    collapseCompleted,
+    toggleAllAccordions,
+    handleSelectRoutine: selectRoutineInternal,
+    cancelRoutineSelection,
+    handleReloadScheduledRoutine: reloadScheduledRoutineInternal,
+    addExercises: addExercisesInternal,
+    moveExercise,
+    removeExercise: removeExerciseDirectly,
+    restoreExercise,
+    adjustTargetSets,
+    updateDraft,
+    handleClearWorkout: executeClearWorkout,
     isScheduledRoutineDirty,
   } = useWorkoutSession({
-    targetUserId, exercises, exercisesFetched, customTemplates, templatesFetched,
-    userLogs, logsFetched, unit, hasLoadedCatalog: hasCatalogLoaded, isCatalogPending,
+    targetUserId,
+    exercises,
+    exercisesFetched,
+    customTemplates,
+    templatesFetched,
+    userLogs,
+    logsFetched,
+    unit,
+    hasLoadedCatalog: hasCatalogLoaded,
+    isCatalogPending,
     hiddenRoutineNames,
   });
 
@@ -88,8 +119,13 @@ export const WorkoutEngine: React.FC = () => {
 
   // URL Query Parameters Handling (URL-1, URL-2)
   const { syncDateToUrl } = useWorkoutUrlParams({
-    customTemplates, templatesFetched, onSelectRoutine: handleSelectRoutine,
-    workoutDate, onDateChange: setWorkoutDate, targetUserId, hasLoadedCatalog: hasCatalogLoaded,
+    customTemplates,
+    templatesFetched,
+    onSelectRoutine: handleSelectRoutine,
+    workoutDate,
+    onDateChange: setWorkoutDate,
+    targetUserId,
+    hasLoadedCatalog: hasCatalogLoaded,
     hiddenRoutineNames,
   });
 
@@ -262,6 +298,7 @@ export const WorkoutEngine: React.FC = () => {
     userLogs,
     workoutDate,
     exercises,
+    customTemplates,
     batchLogSetsMutation,
   });
 
@@ -445,7 +482,11 @@ export const WorkoutEngine: React.FC = () => {
                 const exerciseSetsToday = rawSets.filter(
                   (s) => s.id !== pendingSetId && (!s.id || !pendingDeletedSetIds.has(s.id))
                 );
-                const benchmarks = getExerciseBenchmarks(exName, userLogs, workoutDate, unit, profile?.pr_mode || 'weight');
+                const localBenchmarks = getExerciseBenchmarks(exName, userLogs, workoutDate, unit, profile?.pr_mode || 'weight');
+                const benchmarks = resolveCardBenchmarks(
+                  exName, allTimeBenchmarks, localBenchmarks,
+                  exercises, customTemplates, profile?.pr_mode || 'weight', unit
+                );
                 const isExpanded = expandedExercises.has(exName);
                 const targetCount = targetSetCounts[exName] || 3;
                 const ghostValues = computeGhostSets(exName, targetCount, userLogs, workoutDate, unit);
