@@ -1349,6 +1349,51 @@ describe('NutritionEngine', () => {
     expect('ingredients' in payload).toBe(false);
   });
 
+  it('keeps custom dish modal open with typed fields intact when save fails', async () => {
+    const mockInsert = vi.fn().mockReturnValue({
+      select: vi.fn().mockResolvedValue({
+        data: null,
+        error: new Error('Network error saving dish'),
+      }),
+    });
+    (supabase.from as any).mockImplementation((table: string) => {
+      const b = createSupabaseBuilder(table, { data: [], error: null });
+      if (table === 'custom_dishes') {
+        b.insert = mockInsert;
+      }
+      return b;
+    });
+
+    renderComponent();
+
+    const newDishBtn = screen.getByText('New Dish');
+    fireEvent.click(newDishBtn);
+
+    expect(screen.getByText('New Custom Dish')).toBeDefined();
+
+    const nameInput = screen.getByPlaceholderText('e.g. Protein Oatmeal');
+    await userEvent.type(nameInput, 'Grandma Casserole');
+    fireEvent.click(screen.getByTestId('dish-add-item'));
+    await userEvent.type(screen.getByTestId('dish-item-name'), 'Grandma Casserole');
+    fireEvent.change(screen.getByTestId('dish-item-calories'), { target: { value: '650' } });
+
+    const saveDishBtn = screen.getByText('Save Dish');
+    fireEvent.click(saveDishBtn);
+
+    await waitFor(() => {
+      expect(mockInsert).toHaveBeenCalled();
+    });
+
+    // Modal must remain open and typed fields intact
+    await waitFor(() => {
+      expect(screen.getByTestId('custom-dish-modal')).toBeInTheDocument();
+      expect(screen.getByText('New Custom Dish')).toBeInTheDocument();
+    });
+    expect((screen.getByPlaceholderText('e.g. Protein Oatmeal') as HTMLInputElement).value).toBe('Grandma Casserole');
+    // Error message must be rendered in modal
+    expect(screen.getByTestId('custom-dish-save-error')).toHaveTextContent(/Failed to save custom dish/i);
+  });
+
   it('accurately parses pre-analyzed structured breakdown text with line items and totals', async () => {
     (supabase.functions.invoke as any).mockResolvedValue({
       data: {
