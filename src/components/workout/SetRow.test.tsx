@@ -386,62 +386,6 @@ describe('SetRow', () => {
       expect(onCommitSet).toHaveBeenCalledTimes(1);
     });
 
-    it('does not commit a second time when checkmark button is clicked twice while mutation is in flight', () => {
-      const onCommitSet = vi.fn();
-      const StatefulSetRow = () => {
-        const [isMutating, setIsMutating] = useState(false);
-        return (
-          <SetRow
-            exName="Bench Press"
-            exIndex={0}
-            rowIdx={0}
-            setIndex={1}
-            ghost={defaultGhost}
-            draftWeight="135"
-            draftReps="10"
-            isMutating={isMutating}
-            onUpdateDraft={vi.fn()}
-            onCommitSet={(...args) => {
-              setIsMutating(true);
-              onCommitSet(...args);
-            }}
-          />
-        );
-      };
-
-      renderWithAuth(<StatefulSetRow />);
-
-      const commitBtn = screen.getByTestId('commit-set-btn-0-0');
-      fireEvent.click(commitBtn);
-      expect(onCommitSet).toHaveBeenCalledTimes(1);
-
-      fireEvent.click(commitBtn);
-      expect(onCommitSet).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not commit on checkmark button click when isMutating is true', () => {
-      const onCommitSet = vi.fn();
-      renderWithAuth(
-        <SetRow
-          exName="Bench Press"
-          exIndex={0}
-          rowIdx={0}
-          setIndex={1}
-          ghost={defaultGhost}
-          draftWeight="135"
-          draftReps="10"
-          isMutating={true}
-          onUpdateDraft={vi.fn()}
-          onCommitSet={onCommitSet}
-        />
-      );
-
-      const commitBtn = screen.getByTestId('commit-set-btn-0-0');
-      // Directly invoke onClick to verify the guard inside onClick handler (mirroring onKeyDown isMutating guard)
-      commitBtn.onclick?.(new MouseEvent('click') as any);
-      expect(onCommitSet).not.toHaveBeenCalled();
-    });
-
     it('does not commit on Enter in reps when isMutating is true', () => {
       const onCommitSet = vi.fn();
       renderWithAuth(

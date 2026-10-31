@@ -179,7 +179,6 @@ export const SetRow: React.FC<SetRowProps> = memo((props) => {
         <button
           type="button"
           onClick={() => {
-            if (isMutating) return;
             onCommitSet(exName, setIndex, ghost);
             focusNextPendingSet(exIndex, rowIdx);
           }}
