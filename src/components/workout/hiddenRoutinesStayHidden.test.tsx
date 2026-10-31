@@ -50,6 +50,26 @@ const customLegDay: RoutineTemplate = {
   exercises: [],
 };
 
+const coachMasterPush: RoutineTemplate = {
+  id: 'tpl-coach-push',
+  name: 'My Push',
+  is_master: true,
+  user_id: '00000000-0000-0000-0000-000000000001',
+  assigned_to: null,
+  days_of_week: ['Mon'],
+  exercises: [],
+};
+
+const athleteCoachMaster: RoutineTemplate = {
+  id: 'tpl-coach-master',
+  name: 'Coach Master Push',
+  is_master: true,
+  user_id: '00000000-0000-0000-0000-000000000099',
+  assigned_to: '00000000-0000-0000-0000-000000000001',
+  days_of_week: ['Mon'],
+  exercises: [],
+};
+
 describe('Hidden routines stay hidden (confirm-first tests)', () => {
   let queryClient: QueryClient;
   const targetUserId = '00000000-0000-0000-0000-000000000001';
@@ -77,7 +97,7 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
 
   describe('(1) useWorkoutSession integration and dirty checking', () => {
     it('passes customTemplates and loaded flag into session resolution; Monday does not pick deleted routine', () => {
-      // 2026-10-19 is Monday. Catalog has loaded (templatesFetched = true) with only pullRoutine.
+      // 2026-10-19 is Monday. Catalog has loaded with pullRoutine, and Push routine was deleted/hidden.
       const { result } = renderHook(
         () =>
           useWorkoutSession({
@@ -89,11 +109,12 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
             userLogs: [],
             logsFetched: true,
             hasLoadedCatalog: true,
+            hiddenRoutineNames: new Set(['push, quads, & core - reduced']),
           }),
         { wrapper }
       );
 
-      // On Monday, with pullRoutine (Tue/Fri) and no push routine, resolves to Rest Day
+      // On Monday, with deleted push routine, resolves to Rest Day
       expect(result.current.activeRoutineName).not.toBe('Push, Quads, & Core - Reduced');
       expect(result.current.activeRoutineName).toBe('Rest Day');
       expect(result.current.isScheduledRoutineDirty).toBe(false);
@@ -108,6 +129,7 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
         exercises: mockCatalog,
         inputDrafts: {},
         hasLoadedCatalog: true,
+        hiddenRoutineNames: new Set(['push, quads, & core - reduced']),
       });
       // Monday scheduledName resolves to 'Rest Day' (not Push template), so active 'Rest Day' is not dirty
       expect(isDirty).toBe(false);
@@ -217,6 +239,107 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
     });
   });
 
+  describe('(2b) coach and athlete master routines do not hide platform defaults', () => {
+    it('coach whose catalog contains one own is_master routine "My Push" and no hides still sees all 4 defaults incl. "Workout A (Push, Quads & Core)"', () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[coachMasterPush]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set<string>()}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.getByText('My Push')).toBeDefined();
+      expect(screen.getByText('Push, Quads, & Core - Reduced')).toBeDefined();
+      expect(screen.getByText('Pull, Hamstring, & Core - Reduced')).toBeDefined();
+      expect(screen.getByText('Workout A (Push, Quads & Core)')).toBeDefined();
+      expect(screen.getByText('Workout B (Pull, Hamstrings & Core)')).toBeDefined();
+    });
+
+    it('athlete whose catalog has the coach\'s master routine and no hides still sees all 4 defaults incl. "Workout A (Push, Quads & Core)"', () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[athleteCoachMaster]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set<string>()}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.getByText('Coach Master Push')).toBeDefined();
+      expect(screen.getByText('Push, Quads, & Core - Reduced')).toBeDefined();
+      expect(screen.getByText('Pull, Hamstring, & Core - Reduced')).toBeDefined();
+      expect(screen.getByText('Workout A (Push, Quads & Core)')).toBeDefined();
+      expect(screen.getByText('Workout B (Pull, Hamstrings & Core)')).toBeDefined();
+    });
+
+    it('hidden "Workout B" stays hidden while A/C/D show', () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[customLegDay]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set(['workout b (pull, hamstrings & core)'])}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.queryByText('Workout B (Pull, Hamstrings & Core)')).toBeNull();
+      expect(screen.getByText('Workout A (Push, Quads & Core)')).toBeDefined();
+      expect(screen.getByText('Push, Quads, & Core - Reduced')).toBeDefined();
+      expect(screen.getByText('Pull, Hamstring, & Core - Reduced')).toBeDefined();
+    });
+
+    it('catalog [] + hides [] shows Workout A (smoke case)', () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set<string>()}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.getByText('Workout A (Push, Quads & Core)')).toBeDefined();
+    });
+  });
+
   describe('(3) ?routine= URL parameter handling', () => {
     it('does not resolve through DEFAULT_WORKOUT_TEMPLATES once catalog is loaded', () => {
       const onSelectRoutine = vi.fn();
@@ -233,6 +356,7 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
           workoutDate: '2026-10-19',
           onDateChange: vi.fn(),
           targetUserId,
+          hiddenRoutineNames: new Set(['push, quads, & core - reduced']),
         })
       );
 

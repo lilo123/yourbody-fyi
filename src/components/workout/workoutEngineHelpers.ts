@@ -54,27 +54,18 @@ export interface ResolvedRoutineResult {
 
 export function isDefaultRoutineHidden(
   templateName: string,
-  customTemplates: RoutineTemplate[] = [],
+  _customTemplates?: RoutineTemplate[],
   hiddenRoutineNames?: Set<string> | string[] | null,
-  hasLoadedCatalog?: boolean
+  _hasLoadedCatalog?: boolean
 ): boolean {
   const normName = templateName.trim().toLowerCase();
 
-  // 1. Explicitly in hiddenRoutineNames
+  // Explicitly in hiddenRoutineNames
   if (hiddenRoutineNames) {
     if (hiddenRoutineNames instanceof Set) {
       if (hiddenRoutineNames.has(normName)) return true;
     } else if (Array.isArray(hiddenRoutineNames)) {
       if (hiddenRoutineNames.some((name) => name.trim().toLowerCase() === normName)) return true;
-    }
-  }
-
-  // 2. Catalog has loaded and contains master routines, but this master routine is missing
-  if (hasLoadedCatalog) {
-    const hasCatalogMasters = customTemplates.some((template) => Boolean(template.is_master));
-    if (hasCatalogMasters) {
-      const inCatalog = customTemplates.some((template) => template.name.trim().toLowerCase() === normName);
-      if (!inCatalog) return true;
     }
   }
 
