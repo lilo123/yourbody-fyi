@@ -30,6 +30,8 @@ import { groupNutritionDays } from '../../utils/nutritionDayGrouping';
 import { DEFAULT_EXERCISES_LIST } from '../../utils/ghostSets';
 import { normalizeDateStr } from '../../utils/ghostSets';
 import { fetchAllVisibleExercises, EXERCISE_SUMMARY_PROJECTION } from '../../lib/exercises';
+import { onSynced } from '../../offline';
+import { invalidateWorkoutDerived, invalidateNutritionDerived } from '../../lib/invalidate';
 
 export const HistoryView: React.FC = () => {
   const { user, isCoachMode } = useAuth();
@@ -68,6 +70,14 @@ export const HistoryView: React.FC = () => {
   const effectiveTimeZone = isInspectingAthlete
     ? selectedAthlete?.timezone || undefined
     : undefined;
+
+  React.useEffect(() => {
+    const unsubscribe = onSynced(() => {
+      void invalidateWorkoutDerived(queryClient, targetUserId);
+      void invalidateNutritionDerived(queryClient, targetUserId);
+    });
+    return unsubscribe;
+  }, [queryClient, targetUserId]);
 
   // Workout History hook (v2 RPC, keyset pagination, range filtering)
   const {
