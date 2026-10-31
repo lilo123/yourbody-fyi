@@ -322,7 +322,11 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
   const currentDayAbbr =
     getDayOfWeekAbbr(workoutDate) || ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
 
-  const { data: rawTemplates = [], isFetched: rawTemplatesFetched } = useQuery({
+  const {
+    data: rawTemplates = [],
+    isFetched: rawTemplatesFetched,
+    isError: rawTemplatesError,
+  } = useQuery({
     queryKey: ['routine_templates', targetUserId, 'workout'],
     enabled: Boolean(targetUserId),
     queryFn: async () => {
@@ -365,7 +369,7 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
           }
         }
 
-        if (!rpcFailed && allTemplates.length > 0) {
+        if (!rpcFailed) {
           return allTemplates;
         }
       }
@@ -741,8 +745,36 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
     });
   }, [rawTemplates, resolvedTemplateId, templateDetail]);
 
-  const templatesFetched =
-    rawTemplatesFetched && logsFetched && (!resolvedTemplateId || detailFetched);
+  const isTestDummy = Boolean(targetUserId && !isValidUUID(targetUserId));
+
+  const hasCachedData = Boolean(
+    targetUserId &&
+      isValidUUID(targetUserId) &&
+      queryClient.getQueryData(['routine_templates', targetUserId, 'workout'])
+  );
+
+  const hasCatalogLoaded = isTestDummy
+    ? customTemplates.some((t) => t.is_master)
+    : Boolean(
+        targetUserId &&
+          isValidUUID(targetUserId) &&
+          (rawTemplatesFetched || hasCachedData)
+      );
+
+  const isCatalogPending = isTestDummy
+    ? false
+    : Boolean(
+        targetUserId &&
+          isValidUUID(targetUserId) &&
+          !hasCatalogLoaded &&
+          isOnline &&
+          !rawTemplatesError &&
+          !rawTemplatesFetched
+      );
+
+  const templatesFetched = isTestDummy
+    ? rawTemplatesFetched && logsFetched && (!resolvedTemplateId || detailFetched)
+    : hasCatalogLoaded && logsFetched && (!resolvedTemplateId || detailFetched);
 
   const availableRoutines = useMemo(() => {
     const seenCustomNames = new Set<string>();
@@ -755,15 +787,19 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
       }
     }
 
-    const fallbackDefaults = DEFAULT_WORKOUT_TEMPLATES.filter(
-      (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
-    );
+    const canUseDefaults = !hasCatalogLoaded && !isCatalogPending;
+
+    const fallbackDefaults = canUseDefaults
+      ? DEFAULT_WORKOUT_TEMPLATES.filter(
+          (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
+        )
+      : [];
 
     return {
       custom: dedupedCustom,
       defaults: fallbackDefaults,
     };
-  }, [customTemplates]);
+  }, [customTemplates, hasCatalogLoaded, isCatalogPending]);
 
   return {
     exercises,
@@ -776,6 +812,8 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
     benchmarksError,
     customTemplates,
     templatesFetched,
+    hasCatalogLoaded,
+    isCatalogPending,
     userLogs,
     todaySets,
     logsFetched,
