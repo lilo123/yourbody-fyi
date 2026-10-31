@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { resolveRoutineAndExercises, resolveExerciseId, resolveCardBenchmarks } from './workoutEngineHelpers';
+import {
+  resolveRoutineAndExercises,
+  resolveExerciseId,
+  resolveCardBenchmarks,
+  resolveTargetUserId,
+  resolveRestTimerSeconds,
+  clearDraftForSet,
+  performUnlogSet,
+} from './workoutEngineHelpers';
 import { DEFAULT_WORKOUT_TEMPLATES } from '../../utils/ghostSets';
 import type { RoutineTemplate, Exercise, ExerciseBenchmarks } from '../../types/database';
 
@@ -236,6 +244,56 @@ describe('resolveRoutineAndExercises - Starter Routines & Precedence', () => {
       );
 
       expect(resolved.pr?.weight).toBe(240);
+    });
+  });
+
+  describe('resolveTargetUserId & resolveRestTimerSeconds', () => {
+    it('prefers explicitly provided user id or returns empty string', () => {
+      expect(resolveTargetUserId('explicit-id')).toBe('explicit-id');
+      expect(resolveTargetUserId(undefined)).toBe('');
+    });
+
+    it('resolves rest timer seconds within bounds or falls back to 90', () => {
+      expect(resolveRestTimerSeconds(120)).toBe(120);
+      expect(resolveRestTimerSeconds(null)).toBe(90);
+    });
+  });
+
+  describe('clearDraftForSet & performUnlogSet', () => {
+    it('clears draft by exerciseName and exerciseId', () => {
+      const prev = {
+        'Bench Press_1': { weight: '100', reps: '10' },
+        'ex-1_1': { weight: '100', reps: '10' },
+        'Squat_1': { weight: '200', reps: '5' },
+      };
+      const next = clearDraftForSet(prev, { exerciseName: 'Bench Press', exerciseId: 'ex-1', setIndex: 1 });
+      expect(next).toEqual({ 'Squat_1': { weight: '200', reps: '5' } });
+    });
+
+    it('performs unlog set correctly by restoring draft and invoking delete mutation', () => {
+      let deletedId = '';
+      let draftState: Record<string, { weight: string; reps: string }> = {};
+      const setInputDrafts = (fn: unknown) => {
+        draftState = typeof fn === 'function' ? (fn as (p: typeof draftState) => typeof draftState)(draftState) : (fn as typeof draftState);
+      };
+      performUnlogSet({
+        exIndex: 0,
+        rowIdx: 0,
+        activeExercises: ['Bench Press'],
+        getSetsForExerciseToday: () => [
+          { id: 'set-1', exercise_id: 'ex-1', set_index: 1, weight: 100, reps: 8, date: '2026-10-31' } as any,
+        ],
+        pendingSetId: null,
+        pendingDeletedSetIds: new Set(),
+        unit: 'lb',
+        setInputDrafts: setInputDrafts as any,
+        targetUserId: 'user-1',
+        workoutDate: '2026-10-31',
+        onDeleteSet: (id) => { deletedId = id; },
+      });
+
+      expect(deletedId).toBe('set-1');
+      expect(draftState['Bench Press_1']).toEqual({ weight: '100', reps: '8' });
     });
   });
 });

@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { WorkoutSet, Exercise, RoutineTemplate, ExerciseBenchmarks } from '../../types/database';
 import {
   getDayOfWeekAbbr,
@@ -7,7 +8,8 @@ import {
 } from '../../utils/ghostSets';
 
 import { UUID_REGEX, isValidUUID, isUUID } from '../../utils/uuid';
-import { formatSet, type WeightUnit } from '../../utils/weight';
+import { formatSet, toDisplayWeight, type WeightUnit } from '../../utils/weight';
+import { workoutSessionStore, type SetDraftInput } from '../../utils/workoutSessionStore';
 import { comparePrSets, type PrMode } from '../../lib/prComparator';
 export { UUID_REGEX, isValidUUID, isUUID };
 
@@ -408,3 +410,90 @@ export function resolveCardBenchmarks(
     pr: bestPr,
   };
 }
+
+export function resolveTargetUserId(userId?: string | null): string {
+  if (userId) return userId;
+  try {
+    return JSON.parse(localStorage.getItem('yourbody_user') || '{}')?.id || '';
+  } catch {
+    return '';
+  }
+}
+
+export function resolveRestTimerSeconds(profileSeconds?: number | null): number {
+  if (profileSeconds !== undefined && profileSeconds !== null) return profileSeconds;
+  const localVal = typeof localStorage !== 'undefined' ? localStorage.getItem('yourbody_rest_timer_seconds') : null;
+  const parsed = localVal ? Number(localVal) : 90;
+  return Number.isFinite(parsed) && parsed >= 15 && parsed <= 600 ? parsed : 90;
+}
+
+export function clearDraftForSet(
+  prev: Record<string, SetDraftInput>,
+  variables: { exerciseName?: string; exerciseId?: string; setIndex: number }
+): Record<string, SetDraftInput> {
+  const next = { ...prev };
+  if (variables.exerciseName) delete next[`${variables.exerciseName}_${variables.setIndex}`];
+  if (variables.exerciseId) delete next[`${variables.exerciseId}_${variables.setIndex}`];
+  return next;
+}
+
+export interface PerformUnlogSetParams {
+  exIndex: number;
+  rowIdx: number;
+  activeExercises: string[];
+  getSetsForExerciseToday: (name: string) => WorkoutSet[];
+  pendingSetId: string | null;
+  pendingDeletedSetIds: Set<string>;
+  unit: WeightUnit;
+  setInputDrafts: React.Dispatch<React.SetStateAction<Record<string, SetDraftInput>>>;
+  targetUserId: string;
+  workoutDate: string;
+  onDeleteSet: (id: string) => void;
+}
+
+export function performUnlogSet({
+  exIndex,
+  rowIdx,
+  activeExercises,
+  getSetsForExerciseToday,
+  pendingSetId,
+  pendingDeletedSetIds,
+  unit,
+  setInputDrafts,
+  targetUserId,
+  workoutDate,
+  onDeleteSet,
+}: PerformUnlogSetParams): void {
+  const exName = activeExercises[exIndex];
+  if (!exName) return;
+  const rawSets = getSetsForExerciseToday(exName);
+  const exerciseSetsToday = rawSets.filter(
+    (s) => s.id !== pendingSetId && (!s.id || !pendingDeletedSetIds.has(s.id))
+  );
+  const targetSet = exerciseSetsToday[rowIdx];
+  if (!targetSet) return;
+
+  const setIndex = targetSet.set_index ?? (rowIdx + 1);
+  const draftKey = `${exName}_${setIndex}`;
+  const draftWeight = typeof targetSet.weight === 'number'
+    ? String(toDisplayWeight(targetSet.weight, unit))
+    : '';
+  const draftReps = targetSet.reps != null ? String(targetSet.reps) : '';
+
+  setInputDrafts((prev) => {
+    const updated: SetDraftInput = {
+      weight: draftWeight,
+      reps: draftReps,
+    };
+    workoutSessionStore.setDraftInput(targetUserId, workoutDate, exName, setIndex, updated);
+    return {
+      ...prev,
+      [draftKey]: updated,
+    };
+  });
+
+  if (targetSet.id) {
+    onDeleteSet(targetSet.id);
+  }
+}
+
