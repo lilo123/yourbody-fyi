@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -6,6 +6,7 @@ import { HistoryView } from './HistoryView';
 import { AuthProvider } from '../../context/AuthContext';
 import { CoachProvider } from '../../context/CoachContext';
 import * as workoutHistoryModule from './useWorkoutHistory';
+import * as historyDataModule from './useHistoryData';
 import {
   createSupabaseBuilder,
   getRecordedSelects,
@@ -361,6 +362,89 @@ describe('HistoryView Filters & Range Integration', () => {
 
       fireEvent.click(startBtn);
       expect(mockNavigate).toHaveBeenCalledWith('/workout');
+    });
+  });
+
+  describe('Nutrition date range across DST fall-back', () => {
+    let originalTz: string | undefined;
+
+    beforeEach(() => {
+      originalTz = process.env.TZ;
+    });
+
+    afterEach(() => {
+      process.env.TZ = originalTz;
+      vi.useRealTimers();
+    });
+
+    it('retains 30-civil-days-ago nutrition logs on 2026-11-02 across US DST fall-back (2026-10-03)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // 2026-11-02 23:15:00 EST (UTC-5) is 2026-11-03T04:15:00.000Z
+      vi.setSystemTime(new Date('2026-11-03T04:15:00.000Z'));
+      process.env.TZ = 'America/New_York';
+
+      const mockMeals = [
+        {
+          id: 'meal-oct-3',
+          user_id: mockUser.id,
+          food_name: 'Boundary Meal Oct 3',
+          meal_type: 'lunch',
+          calories: 500,
+          protein: 40,
+          carbs: 50,
+          fat: 15,
+          fiber: 5,
+          logged_at: '2026-10-03T16:00:00Z',
+          logged_date: '2026-10-03',
+        },
+        {
+          id: 'meal-nov-2',
+          user_id: mockUser.id,
+          food_name: 'Current Meal Nov 2',
+          meal_type: 'dinner',
+          calories: 600,
+          protein: 45,
+          carbs: 55,
+          fat: 20,
+          fiber: 6,
+          logged_at: '2026-11-02T20:00:00Z',
+          logged_date: '2026-11-02',
+        },
+      ];
+
+      vi.spyOn(historyDataModule, 'useHistoryData').mockReturnValue({
+        exercises: [],
+        nutritionLogs: mockMeals,
+        hasMoreNutrition: false,
+        loadMoreNutrition: vi.fn(),
+        isNutritionPending: false,
+        isLoadingMoreNutrition: false,
+        deleteMealMutation: { mutateAsync: vi.fn() } as any,
+        scaleMealMutation: { mutateAsync: vi.fn() } as any,
+        isNutritionLogsError: false,
+        nutritionLogsError: null,
+        refetchNutritionLogs: vi.fn(),
+        isExercisesError: false,
+        exercisesError: null,
+        refetchExercises: vi.fn(),
+      });
+
+      renderComponent();
+
+      // Switch to Nutrition tab
+      const nutritionTab = screen.getByTestId('history-tab-nutrition');
+      fireEvent.click(nutritionTab);
+
+      // Verify both days exist initially in 'all' range
+      expect(screen.getByText(/2026-10-03/)).toBeDefined();
+      expect(screen.getByText(/2026-11-02/)).toBeDefined();
+
+      // Switch to 30D range
+      const chip30D = screen.getByRole('button', { name: '30D' });
+      fireEvent.click(chip30D);
+
+      // In 30D window, 2026-10-03 is 30 civil days ago and must remain visible
+      expect(screen.getByText(/2026-10-03/)).toBeDefined();
     });
   });
 });
