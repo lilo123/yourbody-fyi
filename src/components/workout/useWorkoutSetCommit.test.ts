@@ -259,4 +259,60 @@ describe('useWorkoutSetCommit', () => {
       }),
     ]);
   });
+
+  it('ignores double commit on the same set in the same tick before mutation settles', () => {
+    const logSetMutation = { mutate: vi.fn() } as any;
+    const batchLogSetsMutation = { mutate: vi.fn() } as any;
+    const setMutationError = vi.fn();
+    const inputDraftsRef = { current: {} };
+    const targetRepCountsRef = { current: {} };
+
+    const { result } = renderHook(
+      () =>
+        useWorkoutSetCommit({
+          exercises: dummyExercises,
+          inputDraftsRef,
+          targetRepCountsRef,
+          logSetMutation,
+          batchLogSetsMutation,
+          setMutationError,
+        }),
+      { wrapper: createWrapper('lb') }
+    );
+
+    act(() => {
+      result.current.handleCommitSet('Bench Press', 1, { weight: 135, reps: 10 });
+      result.current.handleCommitSet('Bench Press', 1, { weight: 135, reps: 10 });
+    });
+
+    expect(logSetMutation.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows logging different sets quickly in a row', () => {
+    const logSetMutation = { mutate: vi.fn() } as any;
+    const batchLogSetsMutation = { mutate: vi.fn() } as any;
+    const setMutationError = vi.fn();
+    const inputDraftsRef = { current: {} };
+    const targetRepCountsRef = { current: {} };
+
+    const { result } = renderHook(
+      () =>
+        useWorkoutSetCommit({
+          exercises: dummyExercises,
+          inputDraftsRef,
+          targetRepCountsRef,
+          logSetMutation,
+          batchLogSetsMutation,
+          setMutationError,
+        }),
+      { wrapper: createWrapper('lb') }
+    );
+
+    act(() => {
+      result.current.handleCommitSet('Bench Press', 1, { weight: 135, reps: 10 });
+      result.current.handleCommitSet('Bench Press', 2, { weight: 135, reps: 10 });
+    });
+
+    expect(logSetMutation.mutate).toHaveBeenCalledTimes(2);
+  });
 });

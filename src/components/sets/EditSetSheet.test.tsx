@@ -564,6 +564,21 @@ describe("EditSetSheet", () => {
     });
   });
 
+  it("ignores double submission on Enter/save and prevents duplicate update mutations", async () => {
+    renderSheet();
+
+    const repsInput = screen.getByTestId("edit-set-reps-input");
+    fireEvent.change(repsInput, { target: { value: "10" } });
+
+    const form = screen.getByTestId("edit-set-sheet").querySelector("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("resets internal form state when a different set is passed to the modal", () => {
     const { rerender } = renderSheet();
 

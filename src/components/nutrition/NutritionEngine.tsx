@@ -81,6 +81,7 @@ export const NutritionEngine: React.FC = () => {
     selectedDate,
     profile,
     onMutationSuccessReset: () => {
+      isLoggingMealRef.current = false;
       clearDraft(); ai.setSelectedPhoto(null); setShowManualForm(false);
       ai.setIsRateLimited(false); ai.setNlInput(''); manualMealForm.resetManualForm();
     },
@@ -92,6 +93,7 @@ export const NutritionEngine: React.FC = () => {
   const [dishFetchError, setDishFetchError] = useState<{ message: string; retry: () => void } | null>(null);
   const { show: showToast, dismiss: dismissToast, activeToast: contextActiveToast } = useToast();
   const contextActiveToastRef = useRef(contextActiveToast); contextActiveToastRef.current = contextActiveToast;
+  const isLoggingMealRef = useRef(false);
   useToastOffset(isTimerActive ? (stagedMeal ? 190 : 148) : stagedMeal ? 128 : undefined);
 
   // Deferred delete for NutritionLog (6s window with UndoToast)
@@ -274,7 +276,8 @@ export const NutritionEngine: React.FC = () => {
   };
 
   const handleLogStagedMeal = (e?: React.MouseEvent | React.UIEvent) => {
-    if (!stagedMeal) return;
+    if (!stagedMeal || mutation.isPending || isLoggingMealRef.current) return;
+    isLoggingMealRef.current = true;
     if (contextActiveToastRef.current?.testId !== 'status-message') {
       dismissToast();
     }
@@ -287,21 +290,14 @@ export const NutritionEngine: React.FC = () => {
     const logTimestamp = stagedMeal.capturedAt || formatLocalTimestamp(selectedDate, undefined, profile?.timezone ?? undefined);
 
     const logSource: 'device' | 'ai' | 'manual' =
-      stagedMeal.source === 'ai'
-        ? 'ai'
-        : (stagedMeal.source === 'local' || stagedMeal.source === 'rules')
-          ? 'device'
-          : 'manual';
+      stagedMeal.source === 'ai' ? 'ai' : (stagedMeal.source === 'local' || stagedMeal.source === 'rules') ? 'device' : 'manual';
 
     const targetItem = isSingle && item0 ? item0 : totals;
     const payload = {
       id: newId(),
       food_name: stagedMeal.name,
-      calories: roundTo1Decimal(targetItem.calories),
-      protein: roundTo1Decimal(targetItem.protein),
-      carbs: roundTo1Decimal(targetItem.carbs),
-      fat: roundTo1Decimal(targetItem.fat),
-      fiber: roundTo1Decimal(targetItem.fiber),
+      calories: roundTo1Decimal(targetItem.calories), protein: roundTo1Decimal(targetItem.protein),
+      carbs: roundTo1Decimal(targetItem.carbs), fat: roundTo1Decimal(targetItem.fat), fiber: roundTo1Decimal(targetItem.fiber),
       meal_type: stagedMeal.mealType,
       serving_size: Number(stagedMeal.servingSize) || 1,
       serving_unit: stagedMeal.servingUnit || 'serving',
@@ -312,7 +308,11 @@ export const NutritionEngine: React.FC = () => {
       source: logSource,
       parser_version: PARSER_VERSION,
     };
-    mutation.mutate(payload);
+    mutation.mutate(payload, {
+      onSettled: () => {
+        isLoggingMealRef.current = false;
+      },
+    });
   };
 
   const { handleSaveStagedAsCustomDish, handleSaveItemAsCustomDish } = useCustomDishSaving({
