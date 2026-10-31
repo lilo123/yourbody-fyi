@@ -654,6 +654,100 @@ describe('useWorkoutMutations', () => {
       expect(timerSpy).toHaveBeenCalledWith(150);
     });
 
+    it('does not start rest timer on batch log sets when skipRestTimer is true', async () => {
+      const timerSpy = vi.spyOn(restTimerStore, 'start');
+      vi.spyOn(setsLib, 'getOrCreateWorkout').mockResolvedValue('w-123');
+      vi.spyOn(setsLib, 'batchInsertSets').mockResolvedValue([
+        {
+          id: 'set-b1',
+          workout_id: 'w-123',
+          exercise_id: exerciseId,
+          weight: 135,
+          reps: 10,
+          set_index: 1,
+          set_type: 'working',
+          rpe: null,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      const { result } = renderHook(
+        () =>
+          useWorkoutMutations({
+            targetUserId,
+            workoutDate,
+            activeRoutineName: 'Chest Day',
+            exercises: exercises as any,
+            autoRestTimer: true,
+            restTimerSeconds: 150,
+          }),
+        { wrapper }
+      );
+
+      const batchSets = [
+        {
+          exerciseName: 'Bench Press',
+          weight: 135,
+          reps: 10,
+          setIndex: 1,
+        },
+      ];
+      Object.defineProperty(batchSets, 'skipRestTimer', { value: true, enumerable: false });
+
+      await act(async () => {
+        await result.current.batchLogSetsMutation.mutateAsync(batchSets);
+      });
+
+      expect(timerSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not start rest timer on batch log sets when skipRestTimer object option is true', async () => {
+      const timerSpy = vi.spyOn(restTimerStore, 'start');
+      vi.spyOn(setsLib, 'getOrCreateWorkout').mockResolvedValue('w-123');
+      vi.spyOn(setsLib, 'batchInsertSets').mockResolvedValue([
+        {
+          id: 'set-b1',
+          workout_id: 'w-123',
+          exercise_id: exerciseId,
+          weight: 135,
+          reps: 10,
+          set_index: 1,
+          set_type: 'working',
+          rpe: null,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      const { result } = renderHook(
+        () =>
+          useWorkoutMutations({
+            targetUserId,
+            workoutDate,
+            activeRoutineName: 'Chest Day',
+            exercises: exercises as any,
+            autoRestTimer: true,
+            restTimerSeconds: 150,
+          }),
+        { wrapper }
+      );
+
+      await act(async () => {
+        await result.current.batchLogSetsMutation.mutateAsync({
+          sets: [
+            {
+              exerciseName: 'Bench Press',
+              weight: 135,
+              reps: 10,
+              setIndex: 1,
+            },
+          ],
+          skipRestTimer: true,
+        });
+      });
+
+      expect(timerSpy).not.toHaveBeenCalled();
+    });
+
     it('defaults rest timer to 90 seconds if restTimerSeconds is omitted', async () => {
       const timerSpy = vi.spyOn(restTimerStore, 'start');
       vi.spyOn(setsLib, 'getOrCreateWorkout').mockResolvedValue('w-123');
