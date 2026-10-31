@@ -622,6 +622,70 @@ describe('useHistorySessionSets deduplication', () => {
     expect(result.current.sessionSetsMap['w-session-1']).toHaveLength(1);
     expect(result.current.sessionSetsMap['w-session-1'][0].id).toBe('online-set-1');
   });
+
+  it('overlays offline sets matching session local civil date in evening west of UTC', async () => {
+    const prevTz = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+      // 18:30 PDT on 2026-10-31 -> UTC is 2026-11-01T01:30:00.000Z
+      const createdAt = '2026-11-01T01:30:00.000Z';
+      const syntheticSession: HistorySession = {
+        id: 'offline-2026-10-31-w-server-synced',
+        date: '2026-10-31T12:00:00.000Z',
+        workout_date: '2026-10-31',
+        civil_date: '2026-10-31',
+        name: 'Evening Workout',
+        set_count: 1,
+        total_volume: 200,
+      };
+
+      const pendingOps: OutboxOp[] = [
+        {
+          opId: 'op-sess-evening',
+          userId: 'u1',
+          seq: 1,
+          createdAt,
+          kind: 'set.create',
+          payload: {
+            id: 'set-sess-evening-1',
+            workoutRef: 'w-server-synced',
+            exercise_id: 'bench-press',
+            weight: 200,
+            reps: 8,
+            set_index: 0,
+            set_type: 'working',
+            created_at: createdAt,
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+
+      const { result } = renderHook(() =>
+        useHistorySessionSets({
+          targetUserId: 'u1',
+          sessions: [syntheticSession],
+          queryClient,
+        })
+      );
+
+      await act(async () => {
+        await result.current.loadSetsForSession('offline-2026-10-31-w-server-synced');
+      });
+
+      await waitFor(() => {
+        expect(result.current.sessionSetsMap['offline-2026-10-31-w-server-synced']).toBeDefined();
+      });
+
+      const sets = result.current.sessionSetsMap['offline-2026-10-31-w-server-synced'];
+      expect(sets).toHaveLength(1);
+      expect(sets[0].id).toBe('set-sess-evening-1');
+    } finally {
+      process.env.TZ = prevTz;
+    }
+  });
 });
 
 

@@ -3,6 +3,13 @@ import type { QueryClient } from '@tanstack/react-query';
 import { fetchSessionSets, type HistorySession, type HistorySet } from './useWorkoutHistory';
 import { useWorkoutPendingOps } from '../workout/useWorkoutPendingOps';
 import type { WorkoutSet } from '../../types/database';
+import { getLocalDateStr } from '../../utils/date';
+
+function getSetLocalDate(createdAt?: string | null): string {
+  if (!createdAt) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(createdAt)) return createdAt;
+  return getLocalDateStr(new Date(createdAt)) || createdAt.slice(0, 10);
+}
 
 export interface UseHistorySessionSetsOptions {
   targetUserId: string;
@@ -177,7 +184,7 @@ export function useHistorySessionSets({
         if (op.kind === 'set.create') {
           const matchesRef = op.payload.workoutRef === sessionId;
           const opDate =
-            workoutRefDateMap.get(op.payload.workoutRef) || op.payload.created_at?.slice(0, 10);
+            workoutRefDateMap.get(op.payload.workoutRef) || getSetLocalDate(op.payload.created_at);
           const matchesDate = Boolean(sessionDate && opDate === sessionDate);
           if (matchesRef || matchesDate) {
             sessionPendingSets.push({
@@ -199,7 +206,7 @@ export function useHistorySessionSets({
           const matchesRef = workoutRef === sessionId;
           for (const s of sets) {
             const opDate =
-              workoutRefDateMap.get(workoutRef) || s.created_at?.slice(0, 10);
+              workoutRefDateMap.get(workoutRef) || getSetLocalDate(s.created_at);
             const matchesDate = Boolean(sessionDate && opDate === sessionDate);
             if (matchesRef || matchesDate) {
               sessionPendingSets.push({

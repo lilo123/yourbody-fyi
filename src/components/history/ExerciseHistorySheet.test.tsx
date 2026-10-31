@@ -649,5 +649,160 @@ describe('ExerciseHistorySheet', () => {
 
     pendingOpsSpy.mockRestore();
   });
+
+  it('groups offline pending sets under local civil date when workout.ensure is absent (evening west of UTC)', async () => {
+    const prevTz = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+      // 18:30 PDT on 2026-10-31 -> UTC is 2026-11-01T01:30:00.000Z
+      const createdAt = '2026-11-01T01:30:00.000Z';
+      const pendingOps: OutboxOp[] = [
+        {
+          opId: 'op-evening-set',
+          userId: 'test-user-123',
+          seq: 1,
+          createdAt,
+          kind: 'set.create',
+          payload: {
+            id: 'set-evening-1',
+            workoutRef: 'w-synced-server-workout', // No pending workout.ensure
+            exercise_id: 'ex-bench',
+            weight: 225,
+            reps: 8,
+            set_index: 0,
+            created_at: createdAt,
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+      vi.mocked(supabase.rpc).mockResolvedValue({ data: [], error: null } as any);
+
+      renderComponent({ timeZone: 'America/Los_Angeles' });
+
+      // Local civil date in America/Los_Angeles is Oct 31, not Nov 1
+      expect(await screen.findByText(/Oct 31/)).toBeDefined();
+      expect(screen.queryByText(/Nov 1/)).toBeNull();
+    } finally {
+      process.env.TZ = prevTz;
+    }
+  });
+
+  it('deduplicates pending sets against serverRows with matching set_id', async () => {
+    const mockRows = [
+      {
+        workout_id: 'w-sync-1',
+        civil_date: '2026-10-31',
+        workout_name: 'Bench Press Session',
+        set_id: 'set-duplicate-1',
+        set_index: 0,
+        weight: 225,
+        reps: 8,
+        rpe: null,
+        created_at: '2026-10-31T18:00:00Z',
+        total_sessions: 1,
+      },
+    ];
+
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-duplicate-1',
+        userId: 'test-user-123',
+        seq: 1,
+        createdAt: '2026-10-31T18:00:00Z',
+        kind: 'set.create',
+        payload: {
+          id: 'set-duplicate-1',
+          workoutRef: 'w-sync-1',
+          exercise_id: 'ex-bench',
+          weight: 225,
+          reps: 8,
+          set_index: 0,
+          created_at: '2026-10-31T18:00:00Z',
+        },
+        state: 'pending',
+        attempts: 0,
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: mockRows, error: null } as any);
+
+    renderComponent();
+
+    // Must be rendered exactly once, not duplicated
+    expect(await screen.findByTestId('exercise-history-set-set-duplicate-1')).toBeDefined();
+    expect(screen.getAllByTestId('exercise-history-set-set-duplicate-1')).toHaveLength(1);
+  });
+
+  it('excludes pending warmup and drop sets from exercise history (matching server get_exercise_history contract)', async () => {
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-warmup-1',
+        userId: 'test-user-123',
+        seq: 1,
+        createdAt: '2026-10-31T18:00:00Z',
+        kind: 'set.create',
+        payload: {
+          id: 'set-warmup-1',
+          workoutRef: 'w-sync-1',
+          exercise_id: 'ex-bench',
+          weight: 135,
+          reps: 10,
+          set_index: 0,
+          set_type: 'warmup',
+          created_at: '2026-10-31T18:00:00Z',
+        },
+        state: 'pending',
+        attempts: 0,
+      },
+      {
+        opId: 'op-batch-mixed',
+        userId: 'test-user-123',
+        seq: 2,
+        createdAt: '2026-10-31T18:05:00Z',
+        kind: 'set.batchCreate',
+        payload: {
+          workoutRef: 'w-sync-1',
+          sets: [
+            {
+              id: 'set-working-1',
+              exercise_id: 'ex-bench',
+              weight: 225,
+              reps: 8,
+              set_index: 1,
+              set_type: 'working',
+              created_at: '2026-10-31T18:05:00Z',
+            },
+            {
+              id: 'set-drop-1',
+              exercise_id: 'ex-bench',
+              weight: 185,
+              reps: 12,
+              set_index: 2,
+              set_type: 'drop',
+              created_at: '2026-10-31T18:10:00Z',
+            },
+          ],
+        },
+        state: 'pending',
+        attempts: 0,
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: [], error: null } as any);
+
+    renderComponent();
+
+    // Working set must be displayed
+    expect(await screen.findByTestId('exercise-history-set-set-working-1')).toBeDefined();
+
+    // Warmup and drop sets must NOT be displayed in ExerciseHistorySheet
+    expect(screen.queryByTestId('exercise-history-set-set-warmup-1')).toBeNull();
+    expect(screen.queryByTestId('exercise-history-set-set-drop-1')).toBeNull();
+  });
 });
 
