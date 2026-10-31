@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { getLocalDateStr } from '../../utils/date';
 import {
   applyPendingToDaySets,
   pendingSetsBefore,
@@ -509,6 +510,91 @@ describe('overlay', () => {
       const beforeSets = pendingSetsBefore('2026-03-29', ops);
       expect(beforeSets).toHaveLength(2);
       expect(beforeSets.map((s) => s.id)).toEqual(['b-set-1', 'b-set-2']);
+    });
+
+    it('groups offline set by device local date when workout.ensure is absent (evening west of UTC)', () => {
+      // 20:30 EDT on 2026-10-31 -> UTC timestamp is 2026-11-01T00:30:00Z
+      const createdAt = '2026-11-01T00:30:00.000Z';
+      const localDate = getLocalDateStr(new Date(createdAt));
+
+      const ops: OutboxOp[] = [
+        {
+          opId: 'op-evening-set',
+          userId: 'u1',
+          seq: 1,
+          createdAt,
+          kind: 'set.create',
+          payload: {
+            id: 'evening-set-1',
+            workoutRef: 'w-synced-server-workout', // No pending workout.ensure in ops
+            exercise_id: 'ex-bench',
+            weight: 200,
+            reps: 8,
+            set_index: 0,
+            created_at: createdAt,
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      // 1. applyPendingToDaySets: must appear under local civil date
+      const daySets = applyPendingToDaySets([], ops, localDate);
+      expect(daySets).toHaveLength(1);
+      expect(daySets[0].id).toBe('evening-set-1');
+      expect(daySets[0].workout_date).toBe(localDate);
+
+      // 2. applyPendingToHistory: synthetic session must have local civil date
+      const history = applyPendingToHistory([], ops);
+      expect(history).toHaveLength(1);
+      expect(history[0].workout_date).toBe(localDate);
+      expect(history[0].civil_date).toBe(localDate);
+
+      // 3. pendingSetsBefore: for next local day, this set must be included
+      const [y, m, d] = localDate.split('-').map(Number);
+      const tomorrowStr = getLocalDateStr(new Date(y, m - 1, d + 1));
+      const beforeTomorrow = pendingSetsBefore(tomorrowStr, ops);
+      expect(beforeTomorrow).toHaveLength(1);
+      expect(beforeTomorrow[0].workout_date).toBe(localDate);
+    });
+
+    it('groups offline batchCreate sets by device local date when workout.ensure is absent', () => {
+      const createdAt = '2026-11-01T00:30:00.000Z';
+      const localDate = getLocalDateStr(new Date(createdAt));
+
+      const ops: OutboxOp[] = [
+        {
+          opId: 'op-evening-batch',
+          userId: 'u1',
+          seq: 1,
+          createdAt,
+          kind: 'set.batchCreate',
+          payload: {
+            workoutRef: 'w-synced-server-workout',
+            sets: [
+              {
+                id: 'evening-bset-1',
+                exercise_id: 'ex-bench',
+                weight: 185,
+                reps: 10,
+                set_index: 0,
+                created_at: createdAt,
+              },
+            ],
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      const daySets = applyPendingToDaySets([], ops, localDate);
+      expect(daySets).toHaveLength(1);
+      expect(daySets[0].id).toBe('evening-bset-1');
+      expect(daySets[0].workout_date).toBe(localDate);
+
+      const history = applyPendingToHistory([], ops);
+      expect(history).toHaveLength(1);
+      expect(history[0].workout_date).toBe(localDate);
     });
   });
 
