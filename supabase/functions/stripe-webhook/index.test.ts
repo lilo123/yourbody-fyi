@@ -5473,3 +5473,457 @@ Deno.test("stripe-webhook: invoice.paid with billing_reason subscription_update 
   }
 });
 
+Deno.test("stripe-webhook: invoice.paid links billing_customer_id when user has null customer (metadata fallback)", async () => {
+  setupEnv();
+
+  let userUpdatePayload: any = null;
+  const linePeriodEnd = 1761955200;
+  const NEW_CUSTOMER_ID = "cus_invoice_link_123";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
+    if (url.includes("/v1/charges/ch_test_link")) {
+      return new Response(
+        JSON.stringify({
+          id: "ch_test_link",
+          amount: 2000,
+          amount_refunded: 0,
+          disputed: false,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("/rest/v1/billing_grandfather")) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_invoice_link_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdatePayload = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("billing_customer_id=eq.")) {
+        return new Response(JSON.stringify(null), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          id: TEST_USER_ID,
+          plan: "free",
+          coach_tier: "free",
+          paid_until: null,
+          billing_customer_id: null,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_invoice_link_1",
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: "in_test_link_1",
+          customer: NEW_CUSTOMER_ID,
+          charge: "ch_test_link",
+          subscription_details: {
+            metadata: {
+              user_id: TEST_USER_ID,
+            },
+          },
+          lines: {
+            data: [
+              {
+                price: { id: "price_basic_env_123" },
+                period: { end: linePeriodEnd },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertExists(userUpdatePayload);
+    assertEquals(userUpdatePayload.plan, "basic");
+    assertEquals(userUpdatePayload.billing_customer_id, NEW_CUSTOMER_ID);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: invoice.paid does not overwrite existing different billing_customer_id", async () => {
+  setupEnv();
+
+  let userUpdatePayload: any = null;
+  const linePeriodEnd = 1761955200;
+  const EXISTING_CUSTOMER_ID = "cus_existing_original_111";
+  const NEW_CUSTOMER_ID = "cus_incoming_different_222";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/v1/prices/")) {
+      return mockStripePriceNotFound();
+    }
+    if (url.includes("/v1/charges/ch_test_preserve")) {
+      return new Response(
+        JSON.stringify({
+          id: "ch_test_preserve",
+          amount: 2000,
+          amount_refunded: 0,
+          disputed: false,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (url.includes("/rest/v1/billing_grandfather")) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_invoice_preserve_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdatePayload = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("billing_customer_id=eq.")) {
+        return new Response(JSON.stringify(null), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          id: TEST_USER_ID,
+          plan: "free",
+          coach_tier: "free",
+          paid_until: null,
+          billing_customer_id: EXISTING_CUSTOMER_ID,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_invoice_preserve_1",
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: "in_test_preserve_1",
+          customer: NEW_CUSTOMER_ID,
+          charge: "ch_test_preserve",
+          subscription_details: {
+            metadata: {
+              user_id: TEST_USER_ID,
+            },
+          },
+          lines: {
+            data: [
+              {
+                price: { id: "price_basic_env_123" },
+                period: { end: linePeriodEnd },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertExists(userUpdatePayload);
+    assertEquals(userUpdatePayload.plan, "basic");
+    assertEquals(userUpdatePayload.billing_customer_id, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: customer.subscription.updated links billing_customer_id when user has null customer (metadata fallback)", async () => {
+  setupEnv();
+
+  let userUpdatePayload: any = null;
+  const currentPaidUntil = "2026-11-10T00:00:00.000Z";
+  const subPeriodEnd = 1794268800;
+  const NEW_CUSTOMER_ID = "cus_sub_link_456";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_sub_upd_link_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/billing_grandfather")) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdatePayload = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("billing_customer_id=eq.")) {
+        return new Response(JSON.stringify(null), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          id: TEST_USER_ID,
+          plan: "basic",
+          coach_tier: "free",
+          paid_until: currentPaidUntil,
+          billing_customer_id: null,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_sub_upd_link_1",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          id: "sub_link_1",
+          customer: NEW_CUSTOMER_ID,
+          status: "active",
+          current_period_end: subPeriodEnd,
+          metadata: {
+            user_id: TEST_USER_ID,
+          },
+          items: {
+            data: [
+              {
+                id: "si_coach_link",
+                price: { id: "price_coach_monthly", lookup_key: "coach_monthly" },
+              },
+            ],
+          },
+        },
+        previous_attributes: {
+          items: {
+            data: [
+              {
+                id: "si_coach_link",
+                price: { id: "price_personal_monthly", lookup_key: "personal_monthly" },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertExists(userUpdatePayload);
+    assertEquals(userUpdatePayload.plan, "pro");
+    assertEquals(userUpdatePayload.billing_customer_id, NEW_CUSTOMER_ID);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("stripe-webhook: customer.subscription.updated does not overwrite existing different billing_customer_id", async () => {
+  setupEnv();
+
+  let userUpdatePayload: any = null;
+  const currentPaidUntil = "2026-11-10T00:00:00.000Z";
+  const subPeriodEnd = 1794268800;
+  const EXISTING_CUSTOMER_ID = "cus_existing_sub_111";
+  const NEW_CUSTOMER_ID = "cus_incoming_sub_diff_222";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const url = input.toString();
+    if (url.includes("/rest/v1/billing_events")) {
+      return new Response(JSON.stringify([{ event_id: "evt_sub_upd_preserve_1" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/billing_grandfather")) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("/rest/v1/users")) {
+      if (init?.method === "PATCH") {
+        userUpdatePayload = JSON.parse(init.body as string);
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("billing_customer_id=eq.")) {
+        return new Response(JSON.stringify(null), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          id: TEST_USER_ID,
+          plan: "basic",
+          coach_tier: "free",
+          paid_until: currentPaidUntil,
+          billing_customer_id: EXISTING_CUSTOMER_ID,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const payload = JSON.stringify({
+      id: "evt_sub_upd_preserve_1",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          id: "sub_preserve_1",
+          customer: NEW_CUSTOMER_ID,
+          status: "active",
+          current_period_end: subPeriodEnd,
+          metadata: {
+            user_id: TEST_USER_ID,
+          },
+          items: {
+            data: [
+              {
+                id: "si_coach_preserve",
+                price: { id: "price_coach_monthly", lookup_key: "coach_monthly" },
+              },
+            ],
+          },
+        },
+        previous_attributes: {
+          items: {
+            data: [
+              {
+                id: "si_coach_preserve",
+                price: { id: "price_personal_monthly", lookup_key: "personal_monthly" },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const sig = await createSignedHeader(payload);
+
+    const req = new Request("http://localhost/stripe-webhook", {
+      method: "POST",
+      headers: {
+        "Stripe-Signature": sig,
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.received, true);
+    assertExists(userUpdatePayload);
+    assertEquals(userUpdatePayload.plan, "pro");
+    assertEquals(userUpdatePayload.billing_customer_id, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
