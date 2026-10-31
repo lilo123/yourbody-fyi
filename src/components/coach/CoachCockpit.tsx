@@ -77,10 +77,13 @@ export const CoachCockpit: React.FC = () => {
     error: templatesError, refetch: refetchTemplates,
   } = useQuery({
     queryKey: ['routine_templates', user?.id, 'coach'],
+    enabled: Boolean(user?.id),
     queryFn: async () => {
+      if (!user?.id) return [];
       // payload-gate: accepted-list — coach routine templates list, measured 54223 B on /coach
       const { data, error } = await supabase.from('routine_templates')
         .select('id, user_id, name, is_master, assigned_to, days_of_week, created_at, exercises:template_exercises(id, template_id, exercise_id, order_index, target_sets, target_reps)')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false }).limit(100);
       if (error) throw error;
       return (data || []) as RoutineTemplate[];
