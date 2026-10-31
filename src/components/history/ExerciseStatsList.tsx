@@ -151,8 +151,14 @@ export const ExerciseStatsList: React.FC<ExerciseStatsListProps> = ({
 
   const getLastPerformedDate = (stat: ExerciseStat): string => {
     if (stat.sets && stat.sets.length > 0) {
-      const last = stat.sets[stat.sets.length - 1];
-      return last.workout_date || '';
+      let latestDate = '';
+      for (const set of stat.sets) {
+        const workoutDate = set.workout_date || '';
+        if (workoutDate && (!latestDate || workoutDate.localeCompare(latestDate) > 0)) {
+          latestDate = workoutDate;
+        }
+      }
+      if (latestDate) return latestDate;
     }
     return stat.prDate || '';
   };
@@ -188,14 +194,17 @@ export const ExerciseStatsList: React.FC<ExerciseStatsListProps> = ({
   const getSparklinePoints = (stat: ExerciseStat): number[] => {
     if (!stat.sets || stat.sets.length < 2) return [];
     const sessionBestMap = new Map<string, number>();
-    for (const s of stat.sets) {
-      const key = s.workout_date || s.id || '';
-      const w = Number(s.weight) || 0;
-      const cur = sessionBestMap.get(key) ?? 0;
-      if (w > cur) sessionBestMap.set(key, w);
+    for (const set of stat.sets) {
+      const key = set.workout_date || set.id || '';
+      const weight = Number(set.weight) || 0;
+      const current = sessionBestMap.get(key) ?? 0;
+      if (weight > current) sessionBestMap.set(key, weight);
     }
     if (sessionBestMap.size >= 2) {
-      return Array.from(sessionBestMap.values());
+      const sortedSessions = Array.from(sessionBestMap.entries()).sort(
+        ([dateA], [dateB]) => dateA.localeCompare(dateB)
+      );
+      return sortedSessions.map(([, maxWeight]) => maxWeight);
     }
     return [];
   };

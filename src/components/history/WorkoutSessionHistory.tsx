@@ -12,6 +12,7 @@ import { StatusBanner } from '../common/StatusBanner';
 import { OverflowMenu, type OverflowMenuItem } from '../common/OverflowMenu';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useWeightUnit } from '../../hooks/useWeightUnit';
+import { usePrMode } from '../../hooks/usePrMode';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useToast } from '../../hooks/useToast';
 import { PendingMark } from '../sync/PendingMark';
@@ -77,6 +78,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
   const routerNavigate = useNavigate();
   const navigate = onNavigate || routerNavigate;
   const unit = useWeightUnit();
+  const { mode: prMode } = usePrMode();
   const isOnline = useOnlineStatus();
   const { show: showToast } = useToast();
 
@@ -286,7 +288,7 @@ export const WorkoutSessionHistory: React.FC<WorkoutSessionHistoryProps> = ({
       {
         label: 'Share workout',
         onSelect: () => {
-          void shareWorkoutStory(session, exercises, unit, showToast);
+          void shareWorkoutStory(session, exercises, unit, showToast, undefined, prMode);
         },
         testId: `share-session-${session.id}`,
       },
