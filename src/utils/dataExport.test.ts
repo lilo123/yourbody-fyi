@@ -5,6 +5,7 @@ import {
   formatItemsSummary,
   serializeToExportJson,
   serializeToExportCsvFiles,
+  fetchProfileForExport,
   fetchExportBundle,
   downloadExportFiles,
   executeDataExport,
@@ -24,6 +25,7 @@ import {
   clearMockHistory,
 } from '../test/supabaseBuilderMock';
 import type { NutritionItem } from './itemModel';
+import { getDayBounds } from './date';
 
 vi.mock('../lib/supabase', async () => {
   const { createSupabaseMock } = await import('../test/supabaseBuilderMock');
@@ -295,6 +297,24 @@ describe('dataExport utilities', () => {
       expect(parsed.data.workouts[0].sets[0].weight).toBe(225);
       expect(typeof parsed.data.workouts[0].sets[0].weight).toBe('number');
     });
+
+    it('includes pr_mode in profile section when present', () => {
+      const bundleWithPrMode: ExportBundle = {
+        ...mockBundle,
+        filters: { ...mockBundle.filters, domains: ['profile'] },
+        data: {
+          profile: {
+            id: 'usr-1',
+            username: 'alex_runner',
+            pr_mode: 'e1rm',
+          },
+        },
+      };
+
+      const file = serializeToExportJson(bundleWithPrMode);
+      const parsed = JSON.parse(file.content);
+      expect(parsed.data.profile.pr_mode).toBe('e1rm');
+    });
   });
 
   describe('serializeToExportCsvFiles', () => {
@@ -554,6 +574,37 @@ describe('dataExport utilities', () => {
         'workout_id,workout_date,workout_name,set_index,set_type,exercise_name,body_part,weight,reps,rpe,set_created_at'
       );
       expect(workoutsCsv.content).toContain('w-1,2026-09-21,Push Day,0,working,Bench Press,Chest,225,5,8.5,2026-09-21T10:05:00Z');
+    });
+
+    it('exports profile CSV with pr_mode header and user pr_mode value when present', () => {
+      const bundleWithPrMode: ExportBundle = {
+        ...mockBundle,
+        filters: { preset: 'all', start_date: null, end_date: null, domains: ['profile'] },
+        data: {
+          profile: {
+            id: 'usr-1',
+            username: 'alex_runner',
+            email: 'alex@example.com',
+            role: 'athlete',
+            target_calories: 2400,
+            target_protein: 180,
+            target_carbs: 250,
+            target_fat: 70,
+            target_fiber: 35,
+            auto_rest_timer: true,
+            weight_unit: 'lb',
+            pr_mode: 'e1rm',
+          },
+        },
+      };
+
+      const files = serializeToExportCsvFiles(bundleWithPrMode, '2026-10-21');
+      const profileCsv = files.find((f) => f.filename === 'yourbody-profile-2026-10-21.csv')!;
+      expect(profileCsv).toBeDefined();
+      expect(profileCsv.content).toContain(
+        'user_id,username,email,role,target_calories,target_protein_g,target_carbs_g,target_fat_g,target_fiber_g,auto_rest_timer,weight_unit,pr_mode'
+      );
+      expect(profileCsv.content).toContain('usr-1,alex_runner,alex@example.com,athlete,2400,180,250,70,35,true,lb,e1rm');
     });
 
     it('formats workout date as plain calendar date in CSV export even with ISO timestamp', () => {
@@ -821,6 +872,69 @@ describe('dataExport utilities', () => {
       expect(bundle.data.nutrition_logs?.[0].logged_date).toBe('2026-09-22');
     });
 
+    it('bounds nutrition_logs query using athlete timezone for coach exports so evening logs are not lost across timezones', async () => {
+      mockSupabase.setTableData('workouts', []);
+      mockSupabase.setTableData('nutrition_logs', []);
+      mockSupabase.setTableData('custom_dishes', []);
+      mockSupabase.setTableData('routine_templates', []);
+      mockSupabase.setTableData('users', {
+        id: 'athlete-ny',
+        username: 'ny_runner',
+        timezone: 'America/New_York',
+      });
+
+      await fetchExportBundle({
+        targetUserId: 'athlete-ny',
+        targetUsername: 'ny_runner',
+        targetEmail: 'ny@example.com',
+        targetTimezone: 'America/New_York',
+        exportedByRole: 'coach',
+        isSelfExport: false,
+        domains: ['nutrition_logs'],
+        format: 'json',
+        preset: 'custom',
+        customStartDate: '2026-09-20',
+        customEndDate: '2026-09-22',
+      });
+
+      const nutritionBuilder = mockSupabase.getLastBuilder('nutrition_logs')!;
+      const lteFilter = nutritionBuilder.filters.find((f) => f.column === 'logged_at' && f.method === 'lte');
+      expect(lteFilter).toBeDefined();
+
+      // In America/New_York (EDT, UTC-4), 2026-09-22 ends at 2026-09-23T03:59:59.999Z.
+      // An athlete logging dinner at 20:30 EDT has logged_at: 2026-09-23T00:30:00Z.
+      const athleteDinnerIso = '2026-09-23T00:30:00Z';
+      expect(lteFilter?.value).toBe('2026-09-23T03:59:59.999Z');
+      expect(athleteDinnerIso <= lteFilter!.value).toBe(true);
+    });
+
+    it('uses device timezone for self-export of nutrition_logs (deliberate design choice)', async () => {
+      mockSupabase.setTableData('workouts', []);
+      mockSupabase.setTableData('nutrition_logs', []);
+      mockSupabase.setTableData('custom_dishes', []);
+      mockSupabase.setTableData('routine_templates', []);
+      mockSupabase.setTableData('users', {
+        id: 'usr-1',
+        username: 'alex_runner',
+        timezone: 'America/New_York',
+      });
+
+      await fetchExportBundle({
+        ...baseOptions,
+        preset: 'custom',
+        customStartDate: '2026-09-20',
+        customEndDate: '2026-09-22',
+        domains: ['nutrition_logs'],
+        isSelfExport: true,
+      });
+
+      const nutritionBuilder = mockSupabase.getLastBuilder('nutrition_logs')!;
+      const lteFilter = nutritionBuilder.filters.find((f) => f.column === 'logged_at' && f.method === 'lte');
+      expect(lteFilter).toBeDefined();
+      const expectedDeviceBound = getDayBounds('2026-09-22').endOfDay;
+      expect(lteFilter?.value).toBe(expectedDeviceBound);
+    });
+
     it('throws error when Supabase query returns an error', async () => {
       mockSupabase.setTableData('workouts', null, new Error('Network error'));
 
@@ -917,6 +1031,35 @@ describe('dataExport utilities', () => {
     });
   });
 
+  describe('fetchProfileForExport', () => {
+    it('queries users table with pr_mode in projection so pr_mode is exported', async () => {
+      await fetchProfileForExport('usr-1');
+      const userBuilder = mockSupabase.getLastBuilder('users');
+      expect(userBuilder?.projection).toContain('pr_mode');
+    });
+
+    it('returns profile data including pr_mode preference', async () => {
+      mockSupabase.setTableData('users', {
+        id: 'usr-1',
+        username: 'alex_runner',
+        email: 'alex@example.com',
+        role: 'athlete',
+        target_calories: 2400,
+        target_protein: 180,
+        target_carbs: 250,
+        target_fat: 70,
+        target_fiber: 35,
+        auto_rest_timer: true,
+        timezone: 'UTC',
+        weight_unit: 'lb',
+        pr_mode: 'e1rm',
+      });
+
+      const profile = await fetchProfileForExport('usr-1');
+      expect(profile?.pr_mode).toBe('e1rm');
+    });
+  });
+
   describe('Database Contract Fidelity', () => {
     it('services exact projection contracts for all export tables', async () => {
       await fetchExportBundle({
@@ -952,7 +1095,7 @@ describe('dataExport utilities', () => {
       });
       expect(recorded).toContainEqual({
         table: 'users',
-        projection: 'id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit',
+        projection: 'id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit, pr_mode',
       });
     });
   });

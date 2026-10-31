@@ -27,6 +27,7 @@ export interface DataExportOptions {
   targetUserId: string;
   targetUsername: string;
   targetEmail: string | null;
+  targetTimezone?: string | null;
   exportedByRole: 'athlete' | 'coach';
   isSelfExport: boolean;
   domains: ExportDomain[];
@@ -459,7 +460,7 @@ export function serializeToExportCsvFiles(bundle: ExportBundle, dateStamp: strin
 export async function fetchProfileForExport(targetUserId: string): Promise<Partial<UserProfile> | null> {
   let query = supabase
     .from('users')
-    .select('id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit')
+    .select('id, username, email, role, target_calories, target_protein, target_carbs, target_fat, target_fiber, auto_rest_timer, timezone, weight_unit, pr_mode')
     .eq('id', targetUserId);
 
   const { data, error } = await query.maybeSingle();
@@ -496,10 +497,11 @@ export async function fetchNutritionLogsPage(
   targetUserId: string,
   bounds: DateBounds,
   from: number,
-  to: number
+  to: number,
+  timeZone?: string
 ): Promise<NutritionLog[]> {
-  const startIso = bounds.startDate ? getDayBounds(bounds.startDate).startOfDay : null;
-  const endIso = bounds.endDate ? getDayBounds(bounds.endDate).endOfDay : null;
+  const startIso = bounds.startDate ? getDayBounds(bounds.startDate, timeZone).startOfDay : null;
+  const endIso = bounds.endDate ? getDayBounds(bounds.endDate, timeZone).endOfDay : null;
 
   // payload-gate: detail-fetch — user-initiated full data export
   let query = supabase
@@ -600,6 +602,23 @@ export async function fetchExportBundle(
 
   // 3. Nutrition logs domain
   if (effectiveDomains.includes('nutrition_logs')) {
+    let athleteTimeZone: string | undefined = undefined;
+    if (!options.isSelfExport) {
+      if (options.targetTimezone) {
+        athleteTimeZone = options.targetTimezone;
+      } else if (bundleData.profile?.timezone) {
+        athleteTimeZone = bundleData.profile.timezone;
+      } else {
+        const targetProfile = await fetchProfileForExport(options.targetUserId);
+        if (targetProfile?.timezone) {
+          athleteTimeZone = targetProfile.timezone;
+        }
+        if (effectiveDomains.includes('profile')) {
+          bundleData.profile = targetProfile;
+        }
+      }
+    }
+
     let from = 0;
     let hasMore = true;
     const nutritionLogs: NutritionLog[] = [];
@@ -607,7 +626,13 @@ export async function fetchExportBundle(
     while (hasMore) {
       const to = from + EXPORT_PAGE_SIZE - 1;
       onProgress?.(`Fetching nutrition logs (${from + 1}–${to + 1})...`);
-      const rows = await fetchNutritionLogsPage(options.targetUserId, bounds, from, to);
+      const rows = await fetchNutritionLogsPage(
+        options.targetUserId,
+        bounds,
+        from,
+        to,
+        athleteTimeZone
+      );
       nutritionLogs.push(...rows);
       if (rows.length < EXPORT_PAGE_SIZE) {
         hasMore = false;

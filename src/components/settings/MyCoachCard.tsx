@@ -15,6 +15,7 @@ import { Skeleton } from '../common/Skeleton';
 import { Button } from '../common/Button';
 import { formatShortDate } from '../../utils/date';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { queryKeys } from '../../lib/queryKeys';
 
 interface CoachJoinedInfo {
   username?: string | null;
@@ -87,7 +88,8 @@ export const MyCoachCard: React.FC<MyCoachCardProps> = ({
       
       queryClient.invalidateQueries({ queryKey: ['my_coach_link'] });
       queryClient.invalidateQueries({ queryKey: ['routine_templates'] });
-      queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      queryClient.invalidateQueries({ queryKey: ['workout_sets'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workouts.all });
       queryClient.invalidateQueries({ queryKey: ['nutrition_logs'] });
 
       await refetchCoachLink();
@@ -113,7 +115,8 @@ export const MyCoachCard: React.FC<MyCoachCardProps> = ({
       
       queryClient.invalidateQueries({ queryKey: ['my_coach_link'] });
       queryClient.invalidateQueries({ queryKey: ['routine_templates'] });
-      queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      queryClient.invalidateQueries({ queryKey: ['workout_sets'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workouts.all });
       queryClient.invalidateQueries({ queryKey: ['nutrition_logs'] });
 
       await refetchCoachLink();
