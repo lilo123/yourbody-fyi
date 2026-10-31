@@ -156,7 +156,7 @@ export function useWorkoutUrlParams({
       return;
     }
 
-    if (!isDefaultRoutineHidden(trimmed, customTemplates, resolvedHiddenNames, isCatalogLoaded)) {
+    if (!isDefaultRoutineHidden(trimmed, customTemplates, resolvedHiddenNames, isCatalogLoaded, targetUserId)) {
       const matchedDefault = DEFAULT_WORKOUT_TEMPLATES.find(
         (template) => template.name.toLowerCase() === trimmed.toLowerCase()
       );
