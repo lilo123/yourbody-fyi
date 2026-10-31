@@ -25,3 +25,20 @@ export interface AuthContextType {
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const USER_EDITABLE_PROFILE_KEYS = [
+  'username',
+  'target_calories',
+  'target_protein',
+  'target_carbs',
+  'target_fat',
+  'target_fiber',
+  'auto_rest_timer',
+  'rest_timer_seconds',
+  'timezone',
+  'weight_unit',
+  'pr_mode',
+  'is_coach_mode',
+] as const;
+
+export type EditableProfileKey = (typeof USER_EDITABLE_PROFILE_KEYS)[number];

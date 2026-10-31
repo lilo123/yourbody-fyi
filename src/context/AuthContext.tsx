@@ -5,7 +5,12 @@ import { supabase } from '../lib/supabase';
 import type { UserProfile, UserRole } from '../types/database';
 import type { PrMode } from '../lib/prComparator';
 
-import { AuthContext, type AuthContextType } from './AuthContextTypes';
+import {
+  AuthContext,
+  type AuthContextType,
+  USER_EDITABLE_PROFILE_KEYS,
+  type EditableProfileKey,
+} from './AuthContextTypes';
 import { restTimerStore } from '../utils/restTimerStore';
 import { dedupeInFlight } from '../utils/promiseDedupe';
 import {
@@ -23,23 +28,6 @@ import { clearAllStagedMealDrafts } from '../components/nutrition/stagedMealDraf
 import { NUTRITION_PARSER_MODE_KEY } from '../hooks/useNutritionParserMode';
 
 export const AUTH_STORAGE_PREFIX = 'yourbody_';
-
-export const USER_EDITABLE_PROFILE_KEYS = [
-  'username',
-  'target_calories',
-  'target_protein',
-  'target_carbs',
-  'target_fat',
-  'target_fiber',
-  'auto_rest_timer',
-  'rest_timer_seconds',
-  'timezone',
-  'weight_unit',
-  'pr_mode',
-  'is_coach_mode',
-] as const;
-
-export type EditableProfileKey = (typeof USER_EDITABLE_PROFILE_KEYS)[number];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [profile, setProfile] = useState<UserProfile | null>(() => {

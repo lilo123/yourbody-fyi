@@ -9,6 +9,7 @@ import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMock
 import type { UserProfile } from '../types/database';
 import * as offlineModule from '../offline';
 import { NUTRITION_PARSER_MODE_KEY } from '../hooks/useNutritionParserMode';
+import { USER_EDITABLE_PROFILE_KEYS } from './AuthContextTypes';
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
@@ -1248,6 +1249,18 @@ describe('AuthContext - iOS PWA Resilience & Lifecycle', () => {
         auto_rest_timer: false,
         rest_timer_seconds: 120,
       });
+    });
+
+    it('USER_EDITABLE_PROFILE_KEYS excludes billing, role, and subscription protected fields', () => {
+      expect(USER_EDITABLE_PROFILE_KEYS).not.toContain('plan');
+      expect(USER_EDITABLE_PROFILE_KEYS).not.toContain('paid_until');
+      expect(USER_EDITABLE_PROFILE_KEYS).not.toContain('trial_ends_at');
+      expect(USER_EDITABLE_PROFILE_KEYS).not.toContain('billing_customer_id');
+      expect(USER_EDITABLE_PROFILE_KEYS).not.toContain('role');
+      expect(USER_EDITABLE_PROFILE_KEYS).not.toContain('coach_tier');
+      expect(USER_EDITABLE_PROFILE_KEYS).not.toContain('max_athletes');
+      expect(USER_EDITABLE_PROFILE_KEYS).toContain('username');
+      expect(USER_EDITABLE_PROFILE_KEYS).toContain('target_calories');
     });
   });
 });
