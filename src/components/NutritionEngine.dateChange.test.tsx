@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { NutritionEngine } from './nutrition/NutritionEngine';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../context/AuthContext';
@@ -367,5 +367,107 @@ describe('NutritionEngine — Staged meal survives date change', () => {
     // Confirm no discard confirmation modal or alert is shown
     expect(screen.queryByText(/discard/i)).toBeNull();
     expect(screen.queryByText(/confirm/i)).toBeNull();
+  });
+});
+
+describe('NutritionEngine — Midnight rollover', () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-10-31T23:55:00'));
+    setFlusherSupabaseClient(supabase);
+    vi.clearAllMocks();
+    clearMockHistory();
+    (supabase.auth.getUser as any).mockResolvedValue({ data: { user: { id: 'test-user-id' } } });
+    (supabase.auth.getSession as any).mockResolvedValue({ data: { session: mockSession } });
+    (supabase.auth.onAuthStateChange as any).mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
+    (supabase.from as any).mockImplementation((table: string) =>
+      createSupabaseBuilder(table, { data: [], error: null })
+    );
+
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const renderComponent = () =>
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <CoachProvider>
+            <NutritionEngine />
+          </CoachProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    );
+
+  it('rolls over selectedDate to the new day on visibilitychange when user was viewing today', async () => {
+    renderComponent();
+
+    const dateInput = screen.getByTestId('nutrition-date-input') as HTMLInputElement;
+    expect(dateInput.value).toBe('2026-10-31');
+
+    // Midnight passes
+    act(() => {
+      vi.setSystemTime(new Date('2026-11-01T00:05:00'));
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(dateInput.value).toBe('2026-11-01');
+  });
+
+  it('rolls over selectedDate to the new day on minute timer when visible and user was viewing today', async () => {
+    renderComponent();
+
+    const dateInput = screen.getByTestId('nutrition-date-input') as HTMLInputElement;
+    expect(dateInput.value).toBe('2026-10-31');
+
+    // Midnight passes and minute timer fires while visible
+    act(() => {
+      vi.setSystemTime(new Date('2026-11-01T00:01:00'));
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(dateInput.value).toBe('2026-11-01');
+  });
+
+  it('leaves selectedDate unchanged across midnight if the user had picked another date', async () => {
+    renderComponent();
+
+    const dateInput = screen.getByTestId('nutrition-date-input') as HTMLInputElement;
+    expect(dateInput.value).toBe('2026-10-31');
+
+    // User explicitly navigates to a past date
+    fireEvent.change(dateInput, { target: { value: '2026-10-25' } });
+    expect(dateInput.value).toBe('2026-10-25');
+
+    // Midnight passes
+    act(() => {
+      vi.setSystemTime(new Date('2026-11-01T00:05:00'));
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(60_000);
+    });
+
+    // Remains the explicitly selected date
+    expect(dateInput.value).toBe('2026-10-25');
   });
 });
