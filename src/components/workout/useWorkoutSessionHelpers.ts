@@ -115,63 +115,32 @@ import {
 
 export function getInitialRoutineState(
   initialSession: ActiveWorkoutSession | null | undefined,
-  workoutDate: string,
-  customTemplates?: RoutineTemplate[],
-  hasLoadedCatalog?: boolean,
-  isCatalogPending?: boolean
+  workoutDate: string
 ) {
-  const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
-  const scheduledCustom = customTemplates?.find((t) => t.days_of_week?.includes(dayAbbr));
-  const canUseDefaults = !hasCatalog && !isCatalogPending;
-  const scheduledDef = canUseDefaults
-    ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
-        t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
-      )
-    : undefined;
-
-  let defName = 'Rest Day';
-  let defExercises: string[] = [];
-  let defTargetSets: Record<string, number> = {};
-  let defTargetReps: Record<string, number> = {};
-
-  if (scheduledCustom && scheduledCustom.exercises) {
-    defName = scheduledCustom.name;
-    const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-    defExercises = sorted.map((e) => e.exercise?.name || e.exercise_name || e.exercise_id).filter(Boolean);
-    sorted.forEach((e) => {
-      const name = e.exercise?.name || e.exercise_name || e.exercise_id;
-      if (name) {
-        defTargetSets[name] = e.target_sets || 3;
-        defTargetReps[name] = e.target_reps || 10;
-      }
-    });
-  } else if (scheduledDef) {
-    defName = scheduledDef.name;
-    defExercises = [...scheduledDef.exercises];
-    defTargetSets = { ...scheduledDef.targetSets };
-    defTargetReps = scheduledDef.targetReps ? { ...scheduledDef.targetReps } : {};
-  }
+  const defTpl = DEFAULT_WORKOUT_TEMPLATES.find((t) =>
+    t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
+  );
 
   const activeRoutineName = initialSession
     ? initialSession.routineName
-    : defName;
+    : defTpl ? defTpl.name : 'Rest Day';
 
   const activeExercises = initialSession
     ? initialSession.exercises
-    : defExercises;
+    : defTpl ? [...defTpl.exercises] : [];
 
   const targetSetCounts = initialSession
     ? initialSession.targetSetCounts
-    : defTargetSets;
+    : defTpl ? { ...defTpl.targetSets } : {};
 
   const targetRepCounts = initialSession
     ? initialSession.targetRepCounts
-    : defTargetReps;
+    : defTpl?.targetReps ? { ...defTpl.targetReps } : {};
 
   const expandedExercises = initialSession
     ? new Set(initialSession.expandedExercises)
-    : defExercises.length > 0 ? new Set([defExercises[0]]) : new Set<string>();
+    : defTpl && defTpl.exercises.length > 0 ? new Set([defTpl.exercises[0]]) : new Set<string>();
 
   return {
     activeRoutineName,

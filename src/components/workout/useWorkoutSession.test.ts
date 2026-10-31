@@ -3,7 +3,6 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWorkoutSession } from './useWorkoutSession';
 import { workoutSessionStore } from '../../utils/workoutSessionStore';
 import type { Exercise, RoutineTemplate, WorkoutSet } from '../../types/database';
-import { DEFAULT_WORKOUT_TEMPLATES } from '../../utils/ghostSets';
 import * as outboxModule from '../../offline/outbox';
 import { enqueue, resetOutboxForTesting } from '../../offline/outbox';
 import { deleteOfflineDb, closeAllOfflineDbs } from '../../offline/db';
@@ -50,31 +49,11 @@ describe('useWorkoutSession', () => {
     { id: 'ex-row', name: 'Barbell Row', body_parts: ['Back'], is_master: true },
   ];
 
-  const mockMasterTemplates: RoutineTemplate[] = DEFAULT_WORKOUT_TEMPLATES.map((dt, idx) => ({
-    id: `master-tpl-${idx}`,
-    user_id: '00000000-0000-0000-0000-000000000000',
-    name: dt.name,
-    is_master: true,
-    assigned_to: null,
-    days_of_week: dt.days,
-    created_at: '2026-01-01T00:00:00Z',
-    exercises: dt.exercises.map((exName, exIdx) => ({
-      id: `master-te-${idx}-${exIdx}`,
-      template_id: `master-tpl-${idx}`,
-      exercise_id: `ex-${exIdx}`,
-      order_index: exIdx,
-      target_sets: dt.targetSets[exName] ?? 3,
-      target_reps: dt.targetReps?.[exName] ?? 10,
-      exercise: { name: exName },
-      exercise_name: exName,
-    })),
-  }));
-
   const defaultProps = {
     targetUserId,
     exercises: mockExercises,
     exercisesFetched: true,
-    customTemplates: mockMasterTemplates,
+    customTemplates: [] as RoutineTemplate[],
     templatesFetched: true,
     userLogs: [] as (WorkoutSet & { workout_date: string; workout_name?: string })[],
     logsFetched: true,
