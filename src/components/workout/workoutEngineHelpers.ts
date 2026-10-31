@@ -52,13 +52,43 @@ export interface ResolvedRoutineResult {
   targetReps: Record<string, number>;
 }
 
+export function isDefaultRoutineHidden(
+  templateName: string,
+  customTemplates: RoutineTemplate[] = [],
+  hiddenRoutineNames?: Set<string> | string[] | null,
+  hasLoadedCatalog?: boolean
+): boolean {
+  const normName = templateName.trim().toLowerCase();
+
+  // 1. Explicitly in hiddenRoutineNames
+  if (hiddenRoutineNames) {
+    if (hiddenRoutineNames instanceof Set) {
+      if (hiddenRoutineNames.has(normName)) return true;
+    } else if (Array.isArray(hiddenRoutineNames)) {
+      if (hiddenRoutineNames.some((name) => name.trim().toLowerCase() === normName)) return true;
+    }
+  }
+
+  // 2. Catalog has loaded and contains master routines, but this master routine is missing
+  if (hasLoadedCatalog) {
+    const hasCatalogMasters = customTemplates.some((template) => Boolean(template.is_master));
+    if (hasCatalogMasters) {
+      const inCatalog = customTemplates.some((template) => template.name.trim().toLowerCase() === normName);
+      if (!inCatalog) return true;
+    }
+  }
+
+  return false;
+}
+
 export function resolveRoutineAndExercises(
   workoutDate: string,
   todaySets: WorkoutSet[],
   customTemplates: RoutineTemplate[],
   exerciseCatalog: Exercise[],
   removedExercises: string[] = [],
-  hasLoadedCatalog?: boolean
+  hasLoadedCatalog?: boolean,
+  hiddenRoutineNames?: Set<string> | string[]
 ): ResolvedRoutineResult {
   const hasCatalog = Boolean(hasLoadedCatalog);
   let resolvedRoutine = 'Rest Day';
@@ -81,24 +111,22 @@ export function resolveRoutineAndExercises(
     const loggedRoutineName =
       todaySets[0].workout_name || (todaySets[0] as any)?.workouts?.name || '';
     const normLoggedName = loggedRoutineName.trim().toLowerCase();
-    const matchedCustom = customTemplates.find((t) => {
-      const tNorm = t.name.trim().toLowerCase();
+    const matchedCustom = customTemplates.find((template) => {
+      const tNorm = template.name.trim().toLowerCase();
       return (
         tNorm === normLoggedName ||
         (normLoggedName.length > 0 &&
           (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
       );
     });
-    const matchedDef = !hasCatalog
-      ? DEFAULT_WORKOUT_TEMPLATES.find((t) => {
-          const tNorm = t.name.trim().toLowerCase();
-          return (
-            tNorm === normLoggedName ||
-            (normLoggedName.length > 0 &&
-              (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
-          );
-        })
-      : undefined;
+    const matchedDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
+      const tNorm = template.name.trim().toLowerCase();
+      return (
+        tNorm === normLoggedName ||
+        (normLoggedName.length > 0 &&
+          (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
+      );
+    });
 
     let baseExercises: string[] = [];
     const setTargets: Record<string, number> = {};
@@ -192,12 +220,13 @@ export function resolveRoutineAndExercises(
     });
   } else {
     const dayAbbr = getDayOfWeekAbbr(workoutDate);
-    const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
-    const scheduledDef = !hasCatalog
-      ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
-          t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
-        )
-      : undefined;
+    const scheduledCustom = customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
+    const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
+      if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog)) {
+        return false;
+      }
+      return template.days.some((day) => day === dayAbbr || day.slice(0, 3) === dayAbbr);
+    });
 
     if (scheduledCustom && scheduledCustom.exercises) {
       resolvedRoutine = scheduledCustom.name;
@@ -241,6 +270,7 @@ export function checkIsScheduledRoutineDirty({
   targetSetCounts,
   targetRepCounts,
   hasLoadedCatalog,
+  hiddenRoutineNames,
 }: {
   workoutDate: string;
   activeRoutineName: string;
@@ -251,15 +281,17 @@ export function checkIsScheduledRoutineDirty({
   targetSetCounts?: Record<string, number>;
   targetRepCounts?: Record<string, number>;
   hasLoadedCatalog?: boolean;
+  hiddenRoutineNames?: Set<string> | string[];
 }): boolean {
   const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
-  const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
-  const scheduledDef = !hasCatalog
-    ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
-        t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
-      )
-    : undefined;
+  const scheduledCustom = customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
+  const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
+    if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog)) {
+      return false;
+    }
+    return template.days.some((day) => day === dayAbbr || day.slice(0, 3) === dayAbbr);
+  });
   const scheduledName = scheduledCustom?.name || scheduledDef?.name || 'Rest Day';
   if (activeRoutineName !== scheduledName) return true;
 

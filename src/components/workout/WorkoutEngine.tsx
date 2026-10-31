@@ -59,6 +59,7 @@ export const WorkoutEngine: React.FC = () => {
     exercises, exercisesFetched, customTemplates, templatesFetched,
     hasCatalogLoaded, isCatalogPending, userLogs, logsFetched,
     availableRoutines, isLogsError, logsError, refetchLogs,
+    hiddenRoutineNames,
   } = useWorkoutQueries(targetUserId, initialDate);
 
   // 3. Session Management (Routines, Exercises, Targets, Drafts)
@@ -74,6 +75,7 @@ export const WorkoutEngine: React.FC = () => {
   } = useWorkoutSession({
     targetUserId, exercises, exercisesFetched, customTemplates, templatesFetched,
     userLogs, logsFetched, unit, hasLoadedCatalog: hasCatalogLoaded, isCatalogPending,
+    hiddenRoutineNames,
   });
 
   const {
@@ -88,6 +90,7 @@ export const WorkoutEngine: React.FC = () => {
   const { syncDateToUrl } = useWorkoutUrlParams({
     customTemplates, templatesFetched, onSelectRoutine: handleSelectRoutine,
     workoutDate, onDateChange: setWorkoutDate, targetUserId, hasLoadedCatalog: hasCatalogLoaded,
+    hiddenRoutineNames,
   });
 
   const handleDateChange = useCallback((newDate: string) => {
@@ -390,6 +393,7 @@ export const WorkoutEngine: React.FC = () => {
         isSelecting={isSelectingRoutine}
         hasLoadedCatalog={hasCatalogLoaded}
         isCatalogPending={isCatalogPending}
+        hiddenRoutineNames={hiddenRoutineNames}
       />
 
       {activeRoutineName === 'Rest Day' ? (

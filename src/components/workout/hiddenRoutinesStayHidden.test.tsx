@@ -115,6 +115,10 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
   });
 
   describe('(2) hiding all masters (catalog has custom-only or empty)', () => {
+    const allHiddenMasters = new Set(
+      DEFAULT_WORKOUT_TEMPLATES.map((template) => template.name.toLowerCase())
+    );
+
     it('schedule on Monday resolves to Rest Day with custom-only templates, never falling back to defaults', () => {
       // Catalog has loaded (hasLoadedCatalog = true), but user hid every master routine
       const res = resolveRoutineAndExercises(
@@ -123,7 +127,8 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
         [customLegDay], // only a Wednesday custom routine
         mockCatalog,
         [],
-        true
+        true,
+        allHiddenMasters
       );
       expect(res.routineName).not.toBe('Push, Quads, & Core - Reduced');
       expect(res.routineName).toBe('Rest Day');
@@ -135,7 +140,9 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
         null,
         '2026-10-19',
         [customLegDay],
-        true // hasLoadedCatalog
+        true, // hasLoadedCatalog
+        false, // isCatalogPending
+        allHiddenMasters
       );
       expect(state.activeRoutineName).toBe('Rest Day');
       expect(state.activeExercises).toEqual([]);
@@ -155,6 +162,7 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
             defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
             exercises={mockCatalog}
             hasLoadedCatalog={true}
+            hiddenRoutineNames={allHiddenMasters}
           />
         </QueryClientProvider>
       );
@@ -162,6 +170,50 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
       expect(screen.queryByText('Push, Quads, & Core - Reduced')).toBeNull();
       expect(screen.queryByText('Pull, Hamstring, & Core - Reduced')).toBeNull();
       expect(screen.getByText('My Custom Leg Day')).toBeDefined();
+    });
+
+    it('offers "Workout A (Push, Quads & Core)" when catalog loads without it and it is not hidden', () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[customLegDay]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set<string>()}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.getByText('Workout A (Push, Quads & Core)')).toBeDefined();
+    });
+
+    it('does NOT offer "Workout A (Push, Quads & Core)" when it is hidden', () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[customLegDay]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set(['workout a (push, quads & core)'])}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.queryByText('Workout A (Push, Quads & Core)')).toBeNull();
     });
   });
 

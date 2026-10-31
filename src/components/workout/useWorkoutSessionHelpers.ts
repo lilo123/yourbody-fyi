@@ -1,6 +1,6 @@
 import type { Exercise, RoutineTemplate, WorkoutSet } from '../../types/database';
 import type { ActiveWorkoutSession, SetDraftInput } from '../../utils/workoutSessionStore';
-import { resolveCleanExerciseName } from './workoutEngineHelpers';
+import { resolveCleanExerciseName, isDefaultRoutineHidden } from './workoutEngineHelpers';
 
 export function cleanSessionUUIDs(
   existingSession: ActiveWorkoutSession,
@@ -118,16 +118,20 @@ export function getInitialRoutineState(
   workoutDate: string,
   customTemplates?: RoutineTemplate[],
   hasLoadedCatalog?: boolean,
-  isCatalogPending?: boolean
+  isCatalogPending?: boolean,
+  hiddenRoutineNames?: Set<string> | string[]
 ) {
   const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
-  const scheduledCustom = customTemplates?.find((t) => t.days_of_week?.includes(dayAbbr));
-  const canUseDefaults = !hasCatalog && !isCatalogPending;
+  const scheduledCustom = customTemplates?.find((template) => template.days_of_week?.includes(dayAbbr));
+  const canUseDefaults = !isCatalogPending;
   const scheduledDef = canUseDefaults
-    ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
-        t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
-      )
+    ? DEFAULT_WORKOUT_TEMPLATES.find((template) => {
+        if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog)) {
+          return false;
+        }
+        return template.days.some((day) => day === dayAbbr || day.slice(0, 3) === dayAbbr);
+      })
     : undefined;
 
   let defName = 'Rest Day';
