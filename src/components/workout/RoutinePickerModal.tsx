@@ -20,8 +20,6 @@ export interface RoutinePickerModalProps {
   exercises: Exercise[];
   targetUserId?: string;
   isSelecting?: boolean;
-  hasLoadedCatalog?: boolean;
-  isCatalogPending?: boolean;
 }
 
 export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
@@ -36,8 +34,6 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
   exercises,
   targetUserId,
   isSelecting,
-  hasLoadedCatalog,
-  isCatalogPending,
 }) => {
   const {
     data,
@@ -116,14 +112,9 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
     }
   }
 
-  const isLoaded =
-    hasLoadedCatalog !== undefined
-      ? hasLoadedCatalog
-      : (data !== undefined || (Boolean(targetUserId && isValidUUID(targetUserId)) && customTemplates.length > 0));
-  const canUseDefaults = !isLoaded && !isCatalogPending;
-  const fallbackDefaults = canUseDefaults
-    ? defaultTemplates.filter((dt) => !seenCustomNames.has(dt.name.trim().toLowerCase()))
-    : [];
+  const fallbackDefaults = defaultTemplates.filter(
+    (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
+  );
 
   return (
     <AccessibleModal

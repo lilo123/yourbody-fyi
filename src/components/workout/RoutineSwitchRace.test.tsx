@@ -86,28 +86,6 @@ const defaultCustomTemplate: RoutineTemplate = {
   created_at: '2026-01-01T00:00:00Z',
 };
 
-const masterPullTemplate: RoutineTemplate = {
-  id: 'tpl-master-pull',
-  user_id: '00000000-0000-0000-0000-000000000000',
-  name: 'Pull, Hamstring, & Core - Reduced',
-  is_master: true,
-  assigned_to: null,
-  days_of_week: ['Tue', 'Fri'],
-  created_at: '2026-01-01T00:00:00Z',
-  exercises: [
-    {
-      id: 'te-pull-1',
-      template_id: 'tpl-master-pull',
-      exercise_id: 'ex-lat',
-      order_index: 0,
-      target_sets: 4,
-      target_reps: 10,
-      exercise: { name: 'Lat Pull Down' },
-      exercise_name: 'Lat Pull Down',
-    },
-  ],
-};
-
 const brokenCustomTemplate: RoutineTemplate = {
   id: 'tpl-broken',
   user_id: testUserId,
@@ -148,7 +126,7 @@ describe('Routine Switch Race Conditions', () => {
         { id: 'ex-incline-bench', name: 'Incline Bench Press', body_parts: ['Chest'], is_master: true },
       ],
       exercisesFetched: true,
-      customTemplates: [defaultCustomTemplate, masterPullTemplate],
+      customTemplates: [defaultCustomTemplate],
       templatesFetched: true,
       userLogs: [],
       logsFetched: true,

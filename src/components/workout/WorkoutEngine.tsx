@@ -56,24 +56,54 @@ export const WorkoutEngine: React.FC = () => {
 
   // 2. Data Queries
   const {
-    exercises, exercisesFetched, customTemplates, templatesFetched,
-    hasCatalogLoaded, isCatalogPending, userLogs, logsFetched,
-    availableRoutines, isLogsError, logsError, refetchLogs,
+    exercises,
+    exercisesFetched,
+    customTemplates,
+    templatesFetched,
+    userLogs,
+    logsFetched,
+    availableRoutines,
+    isLogsError,
+    logsError,
+    refetchLogs,
   } = useWorkoutQueries(targetUserId, initialDate);
 
   // 3. Session Management (Routines, Exercises, Targets, Drafts)
   const {
-    workoutDate, setWorkoutDate, activeRoutineName, activeExercises,
-    targetSetCounts, targetRepCounts, expandedExercises, inputDrafts, setInputDrafts,
-    getSetsForExerciseToday, toggleAccordion, collapseExercise, collapseCompleted,
-    toggleAllAccordions, handleSelectRoutine: selectRoutineInternal,
-    cancelRoutineSelection, handleReloadScheduledRoutine: reloadScheduledRoutineInternal,
-    addExercises: addExercisesInternal, moveExercise, removeExercise: removeExerciseDirectly,
-    restoreExercise, adjustTargetSets, updateDraft, handleClearWorkout: executeClearWorkout,
+    workoutDate,
+    setWorkoutDate,
+    activeRoutineName,
+    activeExercises,
+    targetSetCounts,
+    targetRepCounts,
+    expandedExercises,
+    inputDrafts,
+    setInputDrafts,
+    getSetsForExerciseToday,
+    toggleAccordion,
+    collapseExercise,
+    collapseCompleted,
+    toggleAllAccordions,
+    handleSelectRoutine: selectRoutineInternal,
+    cancelRoutineSelection,
+    handleReloadScheduledRoutine: reloadScheduledRoutineInternal,
+    addExercises: addExercisesInternal,
+    moveExercise,
+    removeExercise: removeExerciseDirectly,
+    restoreExercise,
+    adjustTargetSets,
+    updateDraft,
+    handleClearWorkout: executeClearWorkout,
     isScheduledRoutineDirty,
   } = useWorkoutSession({
-    targetUserId, exercises, exercisesFetched, customTemplates, templatesFetched,
-    userLogs, logsFetched, unit, hasLoadedCatalog: hasCatalogLoaded, isCatalogPending,
+    targetUserId,
+    exercises,
+    exercisesFetched,
+    customTemplates,
+    templatesFetched,
+    userLogs,
+    logsFetched,
+    unit,
   });
 
   const {
@@ -86,8 +116,12 @@ export const WorkoutEngine: React.FC = () => {
 
   // URL Query Parameters Handling (URL-1, URL-2)
   const { syncDateToUrl } = useWorkoutUrlParams({
-    customTemplates, templatesFetched, onSelectRoutine: handleSelectRoutine,
-    workoutDate, onDateChange: setWorkoutDate, targetUserId, hasLoadedCatalog: hasCatalogLoaded,
+    customTemplates,
+    templatesFetched,
+    onSelectRoutine: handleSelectRoutine,
+    workoutDate,
+    onDateChange: setWorkoutDate,
+    targetUserId,
   });
 
   const handleDateChange = useCallback((newDate: string) => {
@@ -388,8 +422,6 @@ export const WorkoutEngine: React.FC = () => {
         exercises={exercises}
         targetUserId={targetUserId}
         isSelecting={isSelectingRoutine}
-        hasLoadedCatalog={hasCatalogLoaded}
-        isCatalogPending={isCatalogPending}
       />
 
       {activeRoutineName === 'Rest Day' ? (
