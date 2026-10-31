@@ -475,4 +475,63 @@ describe('ExerciseListTab', () => {
     expect(getRecordedTables()).toContain('exercises');
     expect(getRecordedTables()).toContain('exercise_hides');
   });
+
+  it('filters exercises by equipment on the fallback path when catalogData is missing', async () => {
+    mockRpc.mockRejectedValue(new Error('Network error'));
+
+    const fallbackExercises: any[] = [
+      {
+        id: 'ex-barbell-1',
+        name: 'Barbell Bench Press',
+        body_parts: ['Chest'],
+        equipment: 'barbell',
+        is_master: true,
+        user_id: null,
+        is_archived: false,
+        is_hidden: false,
+      },
+      {
+        id: 'ex-dumbbell-1',
+        name: 'Dumbbell Flyes',
+        body_parts: ['Chest'],
+        equipment: 'dumbbell',
+        is_master: true,
+        user_id: null,
+        is_archived: false,
+        is_hidden: false,
+      },
+    ];
+
+    renderComponent({ exercises: fallbackExercises });
+
+    expect(await screen.findByText('Barbell Bench Press')).toBeDefined();
+    expect(screen.getByText('Dumbbell Flyes')).toBeDefined();
+
+    const dumbbellChip = screen.getByTestId('equipment-filter-dumbbell');
+    fireEvent.click(dumbbellChip);
+
+    expect(await screen.findByText('Dumbbell Flyes')).toBeDefined();
+    expect(screen.queryByText('Barbell Bench Press')).toBeNull();
+
+    const allChip = screen.getByTestId('equipment-filter-all');
+    fireEvent.click(allChip);
+
+    expect(await screen.findByText('Barbell Bench Press')).toBeDefined();
+    expect(screen.getByText('Dumbbell Flyes')).toBeDefined();
+  });
+
+  it('passes p_equipment to RPC when equipment chip is clicked in online mode', async () => {
+    renderComponent();
+    await screen.findByText('Zercher Squat');
+
+    const dumbbellChip = screen.getByTestId('equipment-filter-dumbbell');
+    fireEvent.click(dumbbellChip);
+
+    await waitFor(() => {
+      expect(mockRpc).toHaveBeenCalledWith(
+        'get_exercise_catalog',
+        expect.objectContaining({ p_equipment: 'dumbbell' })
+      );
+    });
+  });
 });

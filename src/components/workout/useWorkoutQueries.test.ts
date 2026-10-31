@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { useWorkoutQueries } from './useWorkoutQueries';
+import { useWorkoutQueries, applyPendingToPriorServerSets } from './useWorkoutQueries';
 import { supabase } from '../../lib/supabase';
 import * as pendingOpsModule from './useWorkoutPendingOps';
 import { AuthContext } from '../../context/AuthContextTypes';
@@ -465,17 +465,35 @@ describe('useWorkoutQueries', () => {
       },
     ]);
 
-    vi.spyOn(supabase, 'from').mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      gte: vi.fn().mockReturnThis(),
-      lte: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-      range: vi.fn().mockResolvedValue({ data: [], error: null }),
-      or: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-    } as any);
+    vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+      if (table === 'workouts') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            lte: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [],
+                error: null,
+              }),
+            }),
+          }),
+        } as any;
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        range: vi.fn().mockResolvedValue({ data: [], error: null }),
+        or: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      } as any;
+    });
 
     // Test in weight mode
     const { result } = renderHook(
@@ -596,5 +614,389 @@ describe('useWorkoutQueries', () => {
 
     const legacySet = result.current.todaySets.find((s) => s.id === 's-legacy');
     expect(legacySet?.set_type).toBe('working');
+  });
+
+  describe('applyPendingToPriorServerSets', () => {
+    const basePriorSets = [
+      {
+        id: 'prior-set-1',
+        workout_id: 'prior-workout-1',
+        exercise_id: 'ex-bench-uuid',
+        weight: 200,
+        reps: 8,
+        set_index: 0,
+        set_type: 'working' as const,
+        workout_date: '2026-09-20',
+        workout_name: 'Chest Day',
+      },
+      {
+        id: 'prior-set-2',
+        workout_id: 'prior-workout-1',
+        exercise_id: 'ex-bench-uuid',
+        weight: 205,
+        reps: 6,
+        set_index: 1,
+        set_type: 'working' as const,
+        workout_date: '2026-09-20',
+        workout_name: 'Chest Day',
+      },
+    ];
+
+    it('removes sets deleted via set.delete', () => {
+      const ops = [
+        {
+          opId: 'op-del',
+          seq: 1,
+          userId: targetUserId,
+          createdAt: '2026-09-26T10:00:00.000Z',
+          attempts: 0,
+          state: 'pending' as const,
+          kind: 'set.delete' as const,
+          payload: { id: 'prior-set-1' },
+        },
+      ];
+      const result = applyPendingToPriorServerSets(basePriorSets, ops);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('prior-set-2');
+    });
+
+    it('patches set fields via set.update', () => {
+      const ops = [
+        {
+          opId: 'op-upd',
+          seq: 1,
+          userId: targetUserId,
+          createdAt: '2026-09-26T10:00:00.000Z',
+          attempts: 0,
+          state: 'pending' as const,
+          kind: 'set.update' as const,
+          payload: {
+            id: 'prior-set-2',
+            patch: { weight: 225, reps: 5 },
+          },
+        },
+      ];
+      const result = applyPendingToPriorServerSets(basePriorSets, ops);
+      expect(result).toHaveLength(2);
+      const updated = result.find((item) => item.id === 'prior-set-2');
+      expect(updated?.weight).toBe(225);
+      expect(updated?.reps).toBe(5);
+      expect(updated?.pending).toBe(true);
+    });
+
+    it('updates workout_name via workout.rename', () => {
+      const ops = [
+        {
+          opId: 'op-ren',
+          seq: 1,
+          userId: targetUserId,
+          createdAt: '2026-09-26T10:00:00.000Z',
+          attempts: 0,
+          state: 'pending' as const,
+          kind: 'workout.rename' as const,
+          payload: {
+            workoutRef: 'prior-workout-1',
+            name: 'Heavy Push Day',
+          },
+        },
+      ];
+      const result = applyPendingToPriorServerSets(basePriorSets, ops);
+      expect(result.every((item) => item.workout_name === 'Heavy Push Day')).toBe(true);
+      expect(result.every((item) => item.pending === true)).toBe(true);
+    });
+
+    it('applies ops in sequence order', () => {
+      const ops = [
+        {
+          opId: 'op-del',
+          seq: 2,
+          userId: targetUserId,
+          createdAt: '2026-09-26T10:05:00.000Z',
+          attempts: 0,
+          state: 'pending' as const,
+          kind: 'set.delete' as const,
+          payload: { id: 'prior-set-1' },
+        },
+        {
+          opId: 'op-upd',
+          seq: 1,
+          userId: targetUserId,
+          createdAt: '2026-09-26T10:00:00.000Z',
+          attempts: 0,
+          state: 'pending' as const,
+          kind: 'set.update' as const,
+          payload: {
+            id: 'prior-set-1',
+            patch: { weight: 250 },
+          },
+        },
+      ];
+      const result = applyPendingToPriorServerSets(basePriorSets, ops);
+      expect(result.some((item) => item.id === 'prior-set-1')).toBe(false);
+    });
+  });
+
+  it('excludes prior server sets deleted offline via set.delete from userLogs', async () => {
+    (supabase as any).rpc = vi.fn().mockImplementation((fn: string) => {
+      if (fn === 'get_ghost_sets') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'prior-server-set-1',
+              workout_id: 'w-prior-1',
+              exercise_id: 'ex-bench-uuid',
+              weight: 225,
+              reps: 5,
+              set_index: 0,
+              set_type: 'working',
+              workout_date: '2026-09-20',
+              workout_name: 'Chest Day',
+              created_at: '2026-09-20T10:00:00.000Z',
+            },
+          ],
+          error: null,
+        });
+      }
+      const fallback = Promise.resolve({ data: [], error: null });
+      (fallback as any).select = vi.fn().mockReturnValue(fallback);
+      return fallback;
+    });
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue([
+      {
+        opId: 'op-del-1',
+        seq: 1,
+        userId: targetUserId,
+        createdAt: '2026-09-26T10:00:00.000Z',
+        attempts: 0,
+        state: 'pending',
+        kind: 'set.delete',
+        payload: {
+          id: 'prior-server-set-1',
+        },
+      },
+    ]);
+
+    vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+      if (table === 'workouts') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            lte: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [],
+                error: null,
+              }),
+            }),
+          }),
+        } as any;
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        range: vi.fn().mockResolvedValue({ data: [], error: null }),
+        or: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      } as any;
+    });
+
+    const { result } = renderHook(
+      () => useWorkoutQueries(targetUserId, '2026-09-27'),
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(result.current.logsFetched).toBe(true);
+    });
+
+    expect(result.current.userLogs.some((item) => item.id === 'prior-server-set-1')).toBe(false);
+  });
+
+  it('applies offline set.update to prior server sets in userLogs and updates PR benchmarks', async () => {
+    (supabase as any).rpc = vi.fn().mockImplementation((fn: string) => {
+      if (fn === 'get_ghost_sets') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'prior-server-set-2',
+              workout_id: 'w-prior-2',
+              exercise_id: 'ex-bench-uuid',
+              weight: 225,
+              reps: 5,
+              set_index: 0,
+              set_type: 'working',
+              workout_date: '2026-09-20',
+              workout_name: 'Chest Day',
+              created_at: '2026-09-20T10:00:00.000Z',
+            },
+          ],
+          error: null,
+        });
+      }
+      const fallback = Promise.resolve({ data: [], error: null });
+      (fallback as any).select = vi.fn().mockReturnValue(fallback);
+      return fallback;
+    });
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue([
+      {
+        opId: 'op-upd-1',
+        seq: 1,
+        userId: targetUserId,
+        createdAt: '2026-09-26T10:00:00.000Z',
+        attempts: 0,
+        state: 'pending',
+        kind: 'set.update',
+        payload: {
+          id: 'prior-server-set-2',
+          patch: {
+            weight: 315,
+            reps: 3,
+          },
+        },
+      },
+    ]);
+
+    vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+      if (table === 'workouts') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            lte: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [],
+                error: null,
+              }),
+            }),
+          }),
+        } as any;
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        range: vi.fn().mockResolvedValue({ data: [], error: null }),
+        or: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      } as any;
+    });
+
+    const { result } = renderHook(
+      () => useWorkoutQueries(targetUserId, '2026-09-27'),
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(result.current.logsFetched).toBe(true);
+    });
+
+    const targetSet = result.current.userLogs.find((item) => item.id === 'prior-server-set-2');
+    expect(targetSet).toBeDefined();
+    expect(targetSet?.weight).toBe(315);
+    expect(targetSet?.reps).toBe(3);
+
+    // Benchmarks calculated from userLogs reflect the updated weight
+    expect(result.current.benchmarks['ex-bench-uuid']).toBeDefined();
+    expect(result.current.benchmarks['ex-bench-uuid'].pr?.weight).toBe(315);
+    expect(result.current.benchmarks['ex-bench-uuid'].pr?.reps).toBe(3);
+  });
+
+  it('applies offline workout.rename to prior server sets in userLogs', async () => {
+    (supabase as any).rpc = vi.fn().mockImplementation((fn: string) => {
+      if (fn === 'get_ghost_sets') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'prior-server-set-3',
+              workout_id: 'w-prior-3',
+              exercise_id: 'ex-bench-uuid',
+              weight: 185,
+              reps: 8,
+              set_index: 0,
+              set_type: 'working',
+              workout_date: '2026-09-20',
+              workout_name: 'Original Name',
+              created_at: '2026-09-20T10:00:00.000Z',
+            },
+          ],
+          error: null,
+        });
+      }
+      const fallback = Promise.resolve({ data: [], error: null });
+      (fallback as any).select = vi.fn().mockReturnValue(fallback);
+      return fallback;
+    });
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue([
+      {
+        opId: 'op-ren-1',
+        seq: 1,
+        userId: targetUserId,
+        createdAt: '2026-09-26T10:00:00.000Z',
+        attempts: 0,
+        state: 'pending',
+        kind: 'workout.rename',
+        payload: {
+          workoutRef: 'w-prior-3',
+          name: 'Renamed Session',
+        },
+      },
+    ]);
+
+    vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+      if (table === 'workouts') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            lte: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({
+                data: [],
+                error: null,
+              }),
+            }),
+          }),
+        } as any;
+      }
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        range: vi.fn().mockResolvedValue({ data: [], error: null }),
+        or: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      } as any;
+    });
+
+    const { result } = renderHook(
+      () => useWorkoutQueries(targetUserId, '2026-09-27'),
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(result.current.logsFetched).toBe(true);
+    });
+
+    const targetSet = result.current.userLogs.find((item) => item.id === 'prior-server-set-3');
+    expect(targetSet).toBeDefined();
+    expect(targetSet?.workout_name).toBe('Renamed Session');
   });
 });

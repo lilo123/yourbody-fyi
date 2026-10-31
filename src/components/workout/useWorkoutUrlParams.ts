@@ -78,6 +78,23 @@ export function useWorkoutUrlParams({
     }
   }, []);
 
+  // Helper to remove only the routine query param from the URL after consuming,
+  // preserving other search params (e.g. date), hash, and window.history.state.
+  const stripRoutineParamFromUrl = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const searchParams = getSearchParams();
+      if (!searchParams.has('routine')) return;
+      searchParams.delete('routine');
+      const newSearch = searchParams.toString();
+      const newUrl =
+        window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+      window.history.replaceState(window.history.state, '', newUrl);
+    } catch {
+      // In non-browser environments
+    }
+  }, [getSearchParams]);
+
   // 3. Routine param handling
   useEffect(() => {
     if (!templatesFetched) return;
@@ -87,28 +104,66 @@ export function useWorkoutUrlParams({
     if (!routineParam) return;
 
     if (routineParamAppliedRef.current === routineParam) return;
-    routineParamAppliedRef.current = routineParam;
 
     const trimmed = routineParam.trim();
     const matchedCustom =
-      customTemplates.find((t) => t.id.toLowerCase() === trimmed.toLowerCase()) ||
-      customTemplates.find((t) => t.name.toLowerCase() === trimmed.toLowerCase());
+      customTemplates.find((template) => template.id.toLowerCase() === trimmed.toLowerCase()) ||
+      customTemplates.find((template) => template.name.toLowerCase() === trimmed.toLowerCase());
 
     if (matchedCustom) {
-      onSelectRoutine(matchedCustom.name, matchedCustom);
+      let isCancelled = false;
+      const res = onSelectRoutine(matchedCustom.name, matchedCustom) as unknown;
+      if (res && typeof (res as Promise<unknown>).then === 'function') {
+        (res as Promise<unknown>)
+          .then(() => {
+            if (!isCancelled) {
+              routineParamAppliedRef.current = routineParam;
+              stripRoutineParamFromUrl();
+            }
+          })
+          .catch(() => {
+            // Swallow error: leave param unapplied and unstripped so a retry can apply it
+          });
+        return () => {
+          isCancelled = true;
+        };
+      } else {
+        routineParamAppliedRef.current = routineParam;
+        stripRoutineParamFromUrl();
+      }
       return;
     }
 
     const matchedDefault = DEFAULT_WORKOUT_TEMPLATES.find(
-      (t) => t.name.toLowerCase() === trimmed.toLowerCase()
+      (template) => template.name.toLowerCase() === trimmed.toLowerCase()
     );
 
     if (matchedDefault) {
-      onSelectRoutine(matchedDefault.name);
+      let isCancelled = false;
+      const res = onSelectRoutine(matchedDefault.name) as unknown;
+      if (res && typeof (res as Promise<unknown>).then === 'function') {
+        (res as Promise<unknown>)
+          .then(() => {
+            if (!isCancelled) {
+              routineParamAppliedRef.current = routineParam;
+              stripRoutineParamFromUrl();
+            }
+          })
+          .catch(() => {
+            // Swallow error: leave param unapplied and unstripped so a retry can apply it
+          });
+        return () => {
+          isCancelled = true;
+        };
+      } else {
+        routineParamAppliedRef.current = routineParam;
+        stripRoutineParamFromUrl();
+      }
     }
-  }, [getSearchParams, templatesFetched, customTemplates, onSelectRoutine]);
+  }, [getSearchParams, templatesFetched, customTemplates, onSelectRoutine, stripRoutineParamFromUrl]);
 
   return {
     syncDateToUrl,
   };
 }
+
