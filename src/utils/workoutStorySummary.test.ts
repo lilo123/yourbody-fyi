@@ -68,6 +68,30 @@ describe('workoutStorySummary pure functions', () => {
       expect(best?.id).toBe('2');
       expect(best?.weight).toBe(185);
     });
+
+    it('picks higher e1rm set (200x8) over heavier set (220x1) when mode is e1rm', () => {
+      const sets: WorkoutSet[] = [
+        { id: '1', workout_id: 'w1', exercise_id: 'e1', weight: 220, reps: 1, set_index: 1, set_type: 'working', created_at: '2026-09-01T10:00:00Z', workout_date: '2026-09-01' },
+        { id: '2', workout_id: 'w1', exercise_id: 'e1', weight: 200, reps: 8, set_index: 2, set_type: 'working', created_at: '2026-09-01T10:05:00Z', workout_date: '2026-09-01' },
+      ];
+      const best = selectBestSet(sets, 'e1rm');
+      expect(best?.id).toBe('2');
+      expect(best?.weight).toBe(200);
+      expect(best?.reps).toBe(8);
+    });
+
+    it('picks heavier set (220x1) over higher e1rm set (200x8) when mode is weight or omitted', () => {
+      const sets: WorkoutSet[] = [
+        { id: '1', workout_id: 'w1', exercise_id: 'e1', weight: 220, reps: 1, set_index: 1, set_type: 'working', created_at: '2026-09-01T10:00:00Z', workout_date: '2026-09-01' },
+        { id: '2', workout_id: 'w1', exercise_id: 'e1', weight: 200, reps: 8, set_index: 2, set_type: 'working', created_at: '2026-09-01T10:05:00Z', workout_date: '2026-09-01' },
+      ];
+      const bestExplicit = selectBestSet(sets, 'weight');
+      const bestDefault = selectBestSet(sets);
+      expect(bestExplicit?.id).toBe('1');
+      expect(bestExplicit?.weight).toBe(220);
+      expect(bestExplicit?.reps).toBe(1);
+      expect(bestDefault?.id).toBe('1');
+    });
   });
 
   describe('formatBestSet helper', () => {
@@ -209,6 +233,43 @@ describe('workoutStorySummary pure functions', () => {
       expect(data.totalSets).toBe(0);
       expect(data.exercises).toEqual([]);
       expect(data.overflowCount).toBe(0);
+    });
+
+    it('selects best set respecting prMode in buildWorkoutStoryData', () => {
+      const sets: (WorkoutSet & { exercise_name?: string })[] = [
+        { id: '1', workout_id: 'w1', exercise_id: 'e1', exercise_name: 'Bench Press', weight: 220, reps: 1, set_index: 1, set_type: 'working', created_at: '2026-09-15T10:00:00Z', workout_date: '2026-09-15' },
+        { id: '2', workout_id: 'w1', exercise_id: 'e1', exercise_name: 'Bench Press', weight: 200, reps: 8, set_index: 2, set_type: 'working', created_at: '2026-09-15T10:05:00Z', workout_date: '2026-09-15' },
+      ];
+
+      const dataE1rm = buildWorkoutStoryData({
+        sessionName: 'Chest Day',
+        workoutDate: '2026-09-15',
+        sets,
+        unit: 'lb',
+        prMode: 'e1rm',
+      });
+      expect(dataE1rm.exercises[0].bestSetFormatted).toBe('200 lbs × 8');
+      expect(dataE1rm.exercises[0].bestWeight).toBe(200);
+      expect(dataE1rm.exercises[0].bestReps).toBe(8);
+
+      const dataWeight = buildWorkoutStoryData({
+        sessionName: 'Chest Day',
+        workoutDate: '2026-09-15',
+        sets,
+        unit: 'lb',
+        prMode: 'weight',
+      });
+      expect(dataWeight.exercises[0].bestSetFormatted).toBe('220 lbs × 1');
+      expect(dataWeight.exercises[0].bestWeight).toBe(220);
+      expect(dataWeight.exercises[0].bestReps).toBe(1);
+
+      const dataDefault = buildWorkoutStoryData({
+        sessionName: 'Chest Day',
+        workoutDate: '2026-09-15',
+        sets,
+        unit: 'lb',
+      });
+      expect(dataDefault.exercises[0].bestSetFormatted).toBe('220 lbs × 1');
     });
   });
 });
