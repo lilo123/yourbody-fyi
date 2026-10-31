@@ -136,6 +136,24 @@ describe('App Shell & Navigation', () => {
     });
   });
 
+  it('redirects to /login preserving location state when unauthenticated visitor navigates to /nutrition', async () => {
+    (supabase.auth.getUser as any).mockResolvedValue({ data: { user: null } });
+    (supabase.auth.getSession as any).mockResolvedValue({ data: { session: null } });
+    localStorage.clear();
+    window.history.pushState({}, '', '/nutrition');
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Sign In').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByPlaceholderText('you@example.com')).toBeDefined();
+    });
+  });
+
   it('persists global rest timer pill across /workout, /nutrition, and /history navigation', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: false, toFake: ['Date'] });
     vi.setSystemTime(1_700_000_000_000);
