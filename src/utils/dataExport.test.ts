@@ -381,6 +381,7 @@ describe('dataExport utilities', () => {
             id: 'nl-1',
             user_id: 'usr-1',
             logged_at: '2026-09-21T12:30:00Z',
+            logged_date: '2026-09-21',
             meal_type: 'lunch',
             food_name: 'Chicken Rice Bowl',
             calories: 650,
@@ -477,9 +478,9 @@ describe('dataExport utilities', () => {
       const nutritionFile = files.find((f) => f.filename === 'yourbody-nutrition-2026-09-23.csv')!;
       expect(nutritionFile).toBeDefined();
       expect(nutritionFile.content).toContain(
-        'log_id,logged_at,meal_type,food_name,calories,protein_g,carbs_g,fat_g,fiber_g,serving_size,serving_unit,has_components,components_breakdown,notes'
+        'log_id,logged_at,logged_date,meal_type,food_name,calories,protein_g,carbs_g,fat_g,fiber_g,serving_size,serving_unit,has_components,components_breakdown,notes'
       );
-      expect(nutritionFile.content).toContain('nl-1,2026-09-21T12:30:00Z,lunch,Chicken Rice Bowl,650,52,70,16,6,1,bowl,true');
+      expect(nutritionFile.content).toContain('nl-1,2026-09-21T12:30:00Z,2026-09-21,lunch,Chicken Rice Bowl,650,52,70,16,6,1,bowl,true');
 
       const dishesFile = files.find((f) => f.filename === 'yourbody-custom-dishes-2026-09-23.csv')!;
       expect(dishesFile).toBeDefined();
@@ -654,6 +655,44 @@ describe('dataExport utilities', () => {
       expect(workoutsFile.content).toContain('w-iso-empty,2026-09-22,Rest Session,,,,,,,,');
       expect(workoutsFile.content).not.toContain('2026-09-22T20:15:00.000Z');
     });
+
+    it('includes logged_date in nutrition CSV export headers and rows', () => {
+      const bundleWithNutritionLoggedDate: ExportBundle = {
+        ...mockBundle,
+        filters: {
+          ...mockBundle.filters,
+          domains: ['nutrition_logs'],
+        },
+        data: {
+          ...mockBundle.data,
+          nutrition_logs: [
+            {
+              id: 'nl-civil-1',
+              user_id: 'usr-1',
+              food_name: 'Late Dinner',
+              calories: 500,
+              protein: 40,
+              carbs: 50,
+              fat: 15,
+              fiber: 5,
+              logged_at: '2026-09-23T02:30:00Z',
+              logged_date: '2026-09-22',
+              meal_type: 'dinner',
+            },
+          ],
+        },
+      };
+
+      const files = serializeToExportCsvFiles(bundleWithNutritionLoggedDate, '2026-09-23');
+      const nutritionFile = files.find((f) => f.filename === 'yourbody-nutrition-2026-09-23.csv')!;
+      expect(nutritionFile).toBeDefined();
+      expect(nutritionFile.content).toContain(
+        'log_id,logged_at,logged_date,meal_type,food_name,calories,protein_g,carbs_g,fat_g,fiber_g,serving_size,serving_unit,has_components,components_breakdown,notes'
+      );
+      expect(nutritionFile.content).toContain(
+        'nl-civil-1,2026-09-23T02:30:00Z,2026-09-22,dinner,Late Dinner,500,40,50,15,5,,,false,,'
+      );
+    });
   });
 
   describe('fetchExportBundle (Paginated fetchers & Guardrails)', () => {
@@ -800,6 +839,37 @@ describe('dataExport utilities', () => {
       expect('2026-10-18' >= gteFilter!.value && '2026-10-18' <= lteFilter!.value).toBe(true);
       // (c) row on endDate+1 (workout_date '2026-10-19') is excluded
       expect('2026-10-19' <= lteFilter!.value).toBe(false);
+    });
+
+    it('selects logged_date in nutrition_logs projection and preserves it in export bundle', async () => {
+      mockSupabase.setTableData('workouts', []);
+      mockSupabase.setTableData('nutrition_logs', [
+        {
+          id: 'nl-db-1',
+          user_id: 'usr-1',
+          food_name: 'Midnight Snack',
+          calories: 200,
+          protein: 10,
+          carbs: 20,
+          fat: 5,
+          fiber: 2,
+          logged_at: '2026-09-23T04:00:00Z',
+          logged_date: '2026-09-22',
+        },
+      ]);
+      mockSupabase.setTableData('custom_dishes', []);
+      mockSupabase.setTableData('routine_templates', []);
+      mockSupabase.setTableData('users', null);
+
+      const bundle = await fetchExportBundle({
+        ...baseOptions,
+        domains: ['nutrition_logs'],
+      });
+
+      const recorded = getRecordedSelects();
+      const nutritionSelect = recorded.find((r) => r.table === 'nutrition_logs');
+      expect(nutritionSelect?.projection).toContain('logged_date');
+      expect(bundle.data.nutrition_logs?.[0].logged_date).toBe('2026-09-22');
     });
 
     it('bounds nutrition_logs query using athlete timezone for coach exports so evening logs are not lost across timezones', async () => {
@@ -955,6 +1025,7 @@ describe('dataExport utilities', () => {
     it('defines expected projection string constants', () => {
       expect(WORKOUT_EXPORT_PROJECTION).toContain('sets(');
       expect(NUTRITION_EXPORT_PROJECTION).toContain('items');
+      expect(NUTRITION_EXPORT_PROJECTION).toContain('logged_date');
       expect(CUSTOM_DISH_EXPORT_PROJECTION).toContain('items');
       expect(ROUTINE_EXPORT_PROJECTION).toContain('template_exercises(');
     });
