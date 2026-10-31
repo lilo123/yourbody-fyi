@@ -317,8 +317,21 @@ export function applyPendingToHistory(
         }
       }
       if (!matched) {
-        const matchingSession = sessions.find((s) =>
-          s.sets?.some((st) => st.id === op.payload.id)
+        const payloadDate =
+          (op.payload as { workoutDate?: string; workout_date?: string }).workoutDate ||
+          (op.payload as { workoutDate?: string; workout_date?: string }).workout_date;
+        const payloadRef =
+          (op.payload as { workoutRef?: string; workout_id?: string }).workoutRef ||
+          (op.payload as { workoutRef?: string; workout_id?: string }).workout_id;
+
+        const matchingSession = sessions.find(
+          (s) =>
+            s.sets?.some((st) => st.id === op.payload.id) ||
+            (payloadRef && s.id === payloadRef) ||
+            (payloadDate &&
+              (s.workout_date === payloadDate ||
+                s.civil_date === payloadDate ||
+                s.date.startsWith(payloadDate)))
         );
         if (matchingSession) {
           const date =
@@ -327,10 +340,9 @@ export function applyPendingToHistory(
             matchingSession.date.slice(0, 10);
           const summary = getSummary(date, matchingSession.id);
           summary.deletedSetIds.add(op.payload.id);
-        } else {
-          for (const summary of daySummaries.values()) {
-            summary.deletedSetIds.add(op.payload.id);
-          }
+        } else if (payloadDate) {
+          const summary = getSummary(payloadDate, payloadRef);
+          summary.deletedSetIds.add(op.payload.id);
         }
       }
     } else if (op.kind === 'workout.rename') {

@@ -605,6 +605,54 @@ describe('overlay', () => {
       expect(dayB!.set_count).toBe(2);
     });
 
+    it('does not lower set count of day B when an unassociated server set is deleted', () => {
+      const existingHistory: HistorySession[] = [
+        {
+          id: 'hist-b',
+          date: '2026-03-29T10:00:00Z',
+          workout_date: '2026-03-29',
+          civil_date: '2026-03-29',
+          name: 'Day B Workout',
+          set_count: 2,
+          total_volume: 2000,
+        },
+      ];
+
+      const ops: OutboxOp[] = [
+        {
+          opId: 'op-w-b',
+          userId: 'u1',
+          seq: 1,
+          createdAt: '2026-03-29T10:00:00Z',
+          kind: 'workout.ensure',
+          payload: {
+            clientWorkoutId: 'hist-b',
+            workout_date: '2026-03-29',
+            name: 'Day B Workout',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+        {
+          opId: 'op-del-unknown',
+          userId: 'u1',
+          seq: 2,
+          createdAt: '2026-03-29T11:00:00Z',
+          kind: 'set.delete',
+          payload: {
+            id: 'server-set-unassociated',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      const updatedHistory = applyPendingToHistory(existingHistory, ops);
+      const dayB = updatedHistory.find((s) => s.workout_date === '2026-03-29');
+
+      expect(dayB!.set_count).toBe(2);
+    });
+
     it('overlays set.batchCreate ops into today sets and pendingSetsBefore', () => {
       const ops: OutboxOp[] = [
         {
