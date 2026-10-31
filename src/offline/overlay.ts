@@ -307,12 +307,30 @@ export function applyPendingToHistory(
         }
       }
     } else if (op.kind === 'set.delete') {
+      let matched = false;
       for (const summary of daySummaries.values()) {
         const idx = summary.createdSets.findIndex((s) => s.id === op.payload.id);
         if (idx !== -1) {
           summary.createdSets.splice(idx, 1);
-        } else {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        const matchingSession = sessions.find((s) =>
+          s.sets?.some((st) => st.id === op.payload.id)
+        );
+        if (matchingSession) {
+          const date =
+            matchingSession.workout_date ||
+            matchingSession.civil_date ||
+            matchingSession.date.slice(0, 10);
+          const summary = getSummary(date, matchingSession.id);
           summary.deletedSetIds.add(op.payload.id);
+        } else {
+          for (const summary of daySummaries.values()) {
+            summary.deletedSetIds.add(op.payload.id);
+          }
         }
       }
     } else if (op.kind === 'workout.rename') {

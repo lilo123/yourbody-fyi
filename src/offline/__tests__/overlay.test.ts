@@ -447,6 +447,164 @@ describe('overlay', () => {
       expect(updatedHistory[0].pending).toBe(true);
     });
 
+    it('does not lower set count of day B when a pending set on day A is deleted', () => {
+      const existingHistory: HistorySession[] = [
+        {
+          id: 'hist-b',
+          date: '2026-03-29T10:00:00Z',
+          workout_date: '2026-03-29',
+          civil_date: '2026-03-29',
+          name: 'Day B Workout',
+          set_count: 2,
+          total_volume: 2000,
+        },
+      ];
+
+      const ops: OutboxOp[] = [
+        {
+          opId: 'op-w-a',
+          userId: 'u1',
+          seq: 1,
+          createdAt: '2026-03-28T10:00:00Z',
+          kind: 'workout.ensure',
+          payload: {
+            clientWorkoutId: 'w-a',
+            workout_date: '2026-03-28',
+            name: 'Day A Workout',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+        {
+          opId: 'op-s-a1',
+          userId: 'u1',
+          seq: 2,
+          createdAt: '2026-03-28T10:05:00Z',
+          kind: 'set.create',
+          payload: {
+            id: 'set-a1',
+            workoutRef: 'w-a',
+            exercise_id: 'bench',
+            weight: 100,
+            reps: 5,
+            set_index: 0,
+            created_at: '2026-03-28T10:05:00Z',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+        {
+          opId: 'op-s-b1',
+          userId: 'u1',
+          seq: 3,
+          createdAt: '2026-03-29T10:05:00Z',
+          kind: 'set.create',
+          payload: {
+            id: 'set-b1',
+            workoutRef: 'hist-b',
+            exercise_id: 'squat',
+            weight: 150,
+            reps: 5,
+            set_index: 2,
+            created_at: '2026-03-29T10:05:00Z',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+        {
+          opId: 'op-del-a1',
+          userId: 'u1',
+          seq: 4,
+          createdAt: '2026-03-29T11:00:00Z',
+          kind: 'set.delete',
+          payload: {
+            id: 'set-a1',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      const updatedHistory = applyPendingToHistory(existingHistory, ops);
+      const dayB = updatedHistory.find((s) => s.workout_date === '2026-03-29');
+      expect(dayB).toBeDefined();
+      expect(dayB!.set_count).toBe(3);
+    });
+
+    it('only counts server set delete against the session that contains the set', () => {
+      const existingHistory: HistorySession[] = [
+        {
+          id: 'hist-a',
+          date: '2026-03-28T10:00:00Z',
+          workout_date: '2026-03-28',
+          civil_date: '2026-03-28',
+          name: 'Day A Workout',
+          set_count: 2,
+          total_volume: 2000,
+          sets: [
+            {
+              id: 'server-set-a1',
+              workout_id: 'hist-a',
+              exercise_id: 'bench',
+              weight: 100,
+              reps: 5,
+              set_index: 0,
+              set_type: 'working',
+              created_at: '2026-03-28T10:00:00Z',
+              workout_date: '2026-03-28',
+              workout_name: 'Day A Workout',
+            },
+          ],
+        },
+        {
+          id: 'hist-b',
+          date: '2026-03-29T10:00:00Z',
+          workout_date: '2026-03-29',
+          civil_date: '2026-03-29',
+          name: 'Day B Workout',
+          set_count: 2,
+          total_volume: 2000,
+          sets: [],
+        },
+      ];
+
+      const ops: OutboxOp[] = [
+        {
+          opId: 'op-w-b',
+          userId: 'u1',
+          seq: 1,
+          createdAt: '2026-03-29T10:00:00Z',
+          kind: 'workout.ensure',
+          payload: {
+            clientWorkoutId: 'hist-b',
+            workout_date: '2026-03-29',
+            name: 'Day B Workout',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+        {
+          opId: 'op-del-a1',
+          userId: 'u1',
+          seq: 2,
+          createdAt: '2026-03-29T11:00:00Z',
+          kind: 'set.delete',
+          payload: {
+            id: 'server-set-a1',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      const updatedHistory = applyPendingToHistory(existingHistory, ops);
+      const dayA = updatedHistory.find((s) => s.workout_date === '2026-03-28');
+      const dayB = updatedHistory.find((s) => s.workout_date === '2026-03-29');
+
+      expect(dayA!.set_count).toBe(1);
+      expect(dayB!.set_count).toBe(2);
+    });
+
     it('overlays set.batchCreate ops into today sets and pendingSetsBefore', () => {
       const ops: OutboxOp[] = [
         {
