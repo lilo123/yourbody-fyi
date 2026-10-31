@@ -1140,5 +1140,126 @@ describe('TemplateListTab - Routine Features', () => {
       );
       expect(screen.queryByTestId('template-action-error')).toBeNull();
     });
+
+    it('(d) coach viewing athlete Routines tab creates routine with assignToAthleteId', async () => {
+      mockUser.id = 'user-coach-1';
+      mockCoachState.isCoach = true;
+      mockCoachState.selectedAthleteId = 'user-athlete-1';
+
+      const mockRpc = vi.fn().mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: mockTemplates, error: null });
+        }
+        if (fn === 'get_exercise_catalog') {
+          return Promise.resolve({
+            data: [
+              {
+                id: 'ex-bench',
+                name: 'Barbell Bench Press',
+                body_parts: ['Chest'],
+                is_master: true,
+                catalog_total_count: 1,
+              },
+            ],
+            error: null,
+          });
+        }
+        if (fn === 'save_routine_template') {
+          return Promise.resolve({ data: { id: 'tpl-new-1' }, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+      vi.mocked(supabase.rpc).mockImplementation(mockRpc);
+
+      renderComponent({ targetUserId: 'user-athlete-1' });
+
+      const newBtn = await screen.findByTestId('new-template-btn');
+      fireEvent.click(newBtn);
+
+      await screen.findByTestId('edit-template-modal');
+
+      fireEvent.change(screen.getByTestId('template-name-input'), {
+        target: { value: 'Coach Routine for Athlete' },
+      });
+
+      fireEvent.click(screen.getByTestId('open-exercise-picker'));
+      const exerciseRow = await screen.findByTestId('exercise-row-ex-bench');
+      fireEvent.click(exerciseRow);
+      fireEvent.click(screen.getByTestId('picker-confirm-add-btn'));
+
+      const saveBtn = screen.getByTestId('save-template-btn');
+      await act(async () => {
+        fireEvent.click(saveBtn);
+      });
+
+      expect(mockRpc).toHaveBeenCalledWith(
+        'save_routine_template',
+        expect.objectContaining({
+          p_name: 'Coach Routine for Athlete',
+          p_assigned_to: 'user-athlete-1',
+        })
+      );
+    });
+
+    it('(e) coach in own context creates routine without assignToAthleteId', async () => {
+      mockUser.id = 'user-coach-1';
+      mockCoachState.isCoach = true;
+      mockCoachState.selectedAthleteId = 'user-athlete-1';
+
+      const mockRpc = vi.fn().mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: mockTemplates, error: null });
+        }
+        if (fn === 'get_exercise_catalog') {
+          return Promise.resolve({
+            data: [
+              {
+                id: 'ex-bench',
+                name: 'Barbell Bench Press',
+                body_parts: ['Chest'],
+                is_master: true,
+                catalog_total_count: 1,
+              },
+            ],
+            error: null,
+          });
+        }
+        if (fn === 'save_routine_template') {
+          return Promise.resolve({ data: { id: 'tpl-new-1' }, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+      vi.mocked(supabase.rpc).mockImplementation(mockRpc);
+
+      renderComponent({ targetUserId: 'user-coach-1' });
+
+      const newBtn = await screen.findByTestId('new-template-btn');
+      fireEvent.click(newBtn);
+
+      await screen.findByTestId('edit-template-modal');
+
+      fireEvent.change(screen.getByTestId('template-name-input'), {
+        target: { value: 'Coach Routine for Self' },
+      });
+
+      fireEvent.click(screen.getByTestId('open-exercise-picker'));
+      const exerciseRow = await screen.findByTestId('exercise-row-ex-bench');
+      fireEvent.click(exerciseRow);
+      fireEvent.click(screen.getByTestId('picker-confirm-add-btn'));
+
+      const saveBtn = screen.getByTestId('save-template-btn');
+      await act(async () => {
+        fireEvent.click(saveBtn);
+      });
+
+      expect(mockRpc).toHaveBeenCalledWith(
+        'save_routine_template',
+        expect.objectContaining({
+          p_name: 'Coach Routine for Self',
+        })
+      );
+      const call = mockRpc.mock.calls.find((c) => c[0] === 'save_routine_template');
+      expect(call?.[1]?.p_assigned_to).toBeUndefined();
+    });
   });
 });
