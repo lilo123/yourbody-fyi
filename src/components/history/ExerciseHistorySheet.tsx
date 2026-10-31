@@ -205,7 +205,9 @@ export const ExerciseHistorySheet: React.FC<ExerciseHistorySheetProps> = ({
       }
     }
 
-    let combined = [...pendingSets, ...serverRows].filter((s) => !deletedSetIds.has(s.set_id));
+    const serverSetIds = new Set(serverRows.map((s) => s.set_id));
+    const nonDuplicatePending = pendingSets.filter((s) => !serverSetIds.has(s.set_id));
+    let combined = [...nonDuplicatePending, ...serverRows].filter((s) => !deletedSetIds.has(s.set_id));
     combined = combined.map((s) => {
       const patch = updatedSets.get(s.set_id);
       if (!patch) return s;

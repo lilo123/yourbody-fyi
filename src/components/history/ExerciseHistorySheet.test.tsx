@@ -689,5 +689,52 @@ describe('ExerciseHistorySheet', () => {
       process.env.TZ = prevTz;
     }
   });
+
+  it('deduplicates pending sets against serverRows with matching set_id', async () => {
+    const mockRows = [
+      {
+        workout_id: 'w-sync-1',
+        civil_date: '2026-10-31',
+        workout_name: 'Bench Press Session',
+        set_id: 'set-duplicate-1',
+        set_index: 0,
+        weight: 225,
+        reps: 8,
+        rpe: null,
+        created_at: '2026-10-31T18:00:00Z',
+        total_sessions: 1,
+      },
+    ];
+
+    const pendingOps: OutboxOp[] = [
+      {
+        opId: 'op-duplicate-1',
+        userId: 'test-user-123',
+        seq: 1,
+        createdAt: '2026-10-31T18:00:00Z',
+        kind: 'set.create',
+        payload: {
+          id: 'set-duplicate-1',
+          workoutRef: 'w-sync-1',
+          exercise_id: 'ex-bench',
+          weight: 225,
+          reps: 8,
+          set_index: 0,
+          created_at: '2026-10-31T18:00:00Z',
+        },
+        state: 'pending',
+        attempts: 0,
+      },
+    ];
+
+    vi.spyOn(pendingOpsModule, 'useWorkoutPendingOps').mockReturnValue(pendingOps);
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: mockRows, error: null } as any);
+
+    renderComponent();
+
+    // Must be rendered exactly once, not duplicated
+    expect(await screen.findByTestId('exercise-history-set-set-duplicate-1')).toBeDefined();
+    expect(screen.getAllByTestId('exercise-history-set-set-duplicate-1')).toHaveLength(1);
+  });
 });
 
