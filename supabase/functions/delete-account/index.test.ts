@@ -446,6 +446,189 @@ Deno.test("delete-account: clone-and-repoints custom exercise when referenced by
   }
 });
 
+Deno.test("delete-account: repoints to matching master exercise when clone insert collides with built-in exercise name", async () => {
+  Deno.env.delete("STRIPE_SECRET_KEY");
+  const repointedTemplates: Array<Record<string, any>> = [];
+  const repointedSets: Array<Record<string, any>> = [];
+  const deletedExerciseIds: string[] = [];
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | Request | URL, init?: RequestInit): Promise<Response> => {
+    const urlStr = input.toString();
+    const method = init?.method || "GET";
+    const bodyText = typeof init?.body === "string" ? init.body : "";
+
+    if (urlStr.includes("/auth/v1/user")) {
+      return new Response(JSON.stringify({ id: VALID_USER_ID, email: "user_a@example.com" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (urlStr.includes("/rest/v1/app_config")) {
+      return new Response(JSON.stringify({ value: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (urlStr.includes("/rest/v1/routine_templates")) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (urlStr.includes("/rest/v1/workouts")) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Caller owns custom exercise 'ex-custom-bench' named 'Bench Press' (collides with master exercise)
+    if (urlStr.includes("/rest/v1/exercises")) {
+      if (method === "GET") {
+        if (urlStr.includes(`user_id=eq.${VALID_USER_ID}`)) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: "ex-custom-bench",
+                name: "Bench Press",
+                user_id: VALID_USER_ID,
+                equipment: "barbell",
+                body_parts: ["Chest", "Triceps"],
+                is_master: false,
+                is_archived: false,
+              },
+            ]),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        if (urlStr.includes("is_master=eq.true")) {
+          return new Response(
+            JSON.stringify({ id: "ex-master-bench", name: "Bench Press", is_master: true }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        // Fallback or other user lookup -> null
+        return new Response(JSON.stringify(null), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (method === "POST") {
+        // Clone insertion is rejected by trg_exercise_name_guard because name collides with master
+        return new Response(
+          JSON.stringify({
+            code: "23505",
+            message: "duplicate_exercise_name",
+            details: "ex-master-bench",
+          }),
+          { status: 409, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (method === "DELETE") {
+        if (urlStr.includes("id=eq.ex-custom-bench")) {
+          deletedExerciseIds.push("ex-custom-bench");
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Another user references 'ex-custom-bench' in template_exercises and sets
+    if (urlStr.includes("/rest/v1/template_exercises")) {
+      if (method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "te-other-bench",
+              routine_templates: { id: "tpl-other-bench", user_id: OTHER_USER_ID },
+            },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (method === "PATCH") {
+        repointedTemplates.push(JSON.parse(bodyText));
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (urlStr.includes("/rest/v1/sets")) {
+      if (method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "set-other-bench",
+              workouts: { id: "wk-other-bench", user_id: OTHER_USER_ID },
+            },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (method === "PATCH") {
+        repointedSets.push(JSON.parse(bodyText));
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (urlStr.includes("/auth/v1/admin/users/")) {
+      // If other user's sets were not repointed, foreign key constraint on sets.exercise_id fails deletion
+      if (repointedSets.length === 0) {
+        return new Response(
+          JSON.stringify({
+            message: 'Database error deleting user: violates foreign key constraint "sets_exercise_id_fkey" on table "sets"',
+          }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return originalFetch(input, init);
+  };
+
+  try {
+    const req = new Request("http://localhost/delete-account", {
+      method: "POST",
+      headers: { Authorization: VALID_TOKEN },
+      body: JSON.stringify({ confirm: "DELETE" }),
+    });
+    const res = await app.fetch(req);
+    assertEquals(res.status, 200);
+    const data = await res.json();
+    assertEquals(data.deleted, true);
+
+    // Other user's template_exercises repointed to master exercise
+    assertEquals(repointedTemplates.length, 1);
+    assertEquals(repointedTemplates[0].exercise_id, "ex-master-bench");
+
+    // Other user's sets repointed to master exercise
+    assertEquals(repointedSets.length, 1);
+    assertEquals(repointedSets[0].exercise_id, "ex-master-bench");
+
+    // Caller's custom exercise was deleted
+    assertEquals(deletedExerciseIds, ["ex-custom-bench"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("delete-account: Stripe cleanup is skipped when STRIPE_SECRET_KEY is absent", async () => {
   Deno.env.delete("STRIPE_SECRET_KEY");
   let stripeFetchCalled = false;

@@ -287,6 +287,18 @@ export default {
                   .eq('name', ex.name)
                   .maybeSingle();
                 targetExerciseId = fallbackEx?.id || null;
+
+                if (!targetExerciseId) {
+                  // Fall back to matching master/global exercise if name collides with a built-in one
+                  const { data: masterEx } = await adminClient
+                    .from('exercises')
+                    .select('id')
+                    .eq('is_master', true)
+                    .ilike('name', ex.name.trim())
+                    .limit(1)
+                    .maybeSingle();
+                  targetExerciseId = masterEx?.id || null;
+                }
               }
             }
 
