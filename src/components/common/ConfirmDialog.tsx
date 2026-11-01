@@ -36,6 +36,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       onClose={onCancel}
       titleId={titleId}
       testId={testId}
+      dismissible={!isLoading}
       className="w-full max-w-sm rounded-3xl bg-zinc-900 border border-zinc-800 p-5 space-y-4 shadow-2xl"
     >
       <div className="flex items-start gap-3">
