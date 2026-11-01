@@ -39,6 +39,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
   const isOnline = useOnlineStatus();
 
   const targetUserId = propTargetUserId ?? user?.id ?? '';
+  const isAthleteScoped = Boolean(isCoach && targetUserId && user?.id && targetUserId !== user.id);
 
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('All');
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState<boolean>(false);
@@ -48,6 +49,8 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
   const [showHidden, setShowHidden] = useState<boolean>(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+
+  const athleteToAssign = isAthleteScoped && (!editingTemplate || isForking) ? targetUserId : undefined;
 
   // Load library routine list via get_routine_catalog RPC
   const {
@@ -532,6 +535,7 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
         template={editingTemplate}
         exercises={exercises}
         targetUserId={targetUserId}
+        assignToAthleteId={athleteToAssign}
         isFork={isForking}
         sourceTemplateId={sourceTemplateId}
         onClose={() => {

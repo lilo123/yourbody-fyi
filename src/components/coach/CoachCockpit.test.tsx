@@ -1369,4 +1369,35 @@ describe('CoachCockpit', () => {
     });
   });
 
+  it('scopes routine templates query to current coach user_id', async () => {
+    let routineTemplatesBuilder: any;
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'routine_templates') {
+        routineTemplatesBuilder = createSupabaseBuilder('routine_templates', {
+          resolver: (b: any) => {
+            const userIdFilter = b.filters.find((f: any) => f.column === 'user_id');
+            const allTemplates = [
+              { id: 'tpl-mine', user_id: 'coach-id', name: 'My Coach Routine', is_master: false, assigned_to: 'ath-1', days_of_week: [], exercises: [] },
+              { id: 'tpl-other', user_id: 'coach-other', name: 'Other Coach Routine', is_master: false, assigned_to: 'ath-1', days_of_week: [], exercises: [] },
+            ];
+            if (userIdFilter) {
+              return allTemplates.filter((t: any) => t.user_id === userIdFilter.value);
+            }
+            return allTemplates;
+          },
+        });
+        return routineTemplatesBuilder;
+      }
+      return defaultMock(table);
+    });
+
+    renderComponent();
+
+    await screen.findByText('My Coach Routine');
+    expect(screen.queryByText('Other Coach Routine')).toBeNull();
+    const userFilter = routineTemplatesBuilder.filters.find((f: any) => f.method === 'eq' && f.column === 'user_id');
+    expect(userFilter).toBeDefined();
+    expect(userFilter.value).toBe('coach-id');
+  });
+
 });
