@@ -1,6 +1,6 @@
 import type { Exercise, RoutineTemplate, WorkoutSet } from '../../types/database';
 import type { ActiveWorkoutSession, SetDraftInput } from '../../utils/workoutSessionStore';
-import { resolveCleanExerciseName, isDefaultRoutineHidden } from './workoutEngineHelpers';
+import { resolveCleanExerciseName, isDefaultRoutineHidden, isOwnOrAssignedRoutine } from './workoutEngineHelpers';
 
 export function cleanSessionUUIDs(
   existingSession: ActiveWorkoutSession,
@@ -119,15 +119,19 @@ export function getInitialRoutineState(
   customTemplates?: RoutineTemplate[],
   hasLoadedCatalog?: boolean,
   isCatalogPending?: boolean,
-  hiddenRoutineNames?: Set<string> | string[]
+  hiddenRoutineNames?: Set<string> | string[],
+  targetUserId?: string | null
 ) {
   const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
-  const scheduledCustom = customTemplates?.find((template) => template.days_of_week?.includes(dayAbbr));
+  const scheduledOwn = customTemplates?.find(
+    (template) => isOwnOrAssignedRoutine(template, targetUserId) && template.days_of_week?.includes(dayAbbr)
+  );
+  const scheduledCustom = scheduledOwn || customTemplates?.find((template) => template.days_of_week?.includes(dayAbbr));
   const canUseDefaults = !isCatalogPending;
   const scheduledDef = canUseDefaults
     ? DEFAULT_WORKOUT_TEMPLATES.find((template) => {
-        if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog)) {
+        if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog, targetUserId)) {
           return false;
         }
         return template.days.some((day) => day === dayAbbr || day.slice(0, 3) === dayAbbr);
@@ -139,17 +143,19 @@ export function getInitialRoutineState(
   let defTargetSets: Record<string, number> = {};
   let defTargetReps: Record<string, number> = {};
 
-  if (scheduledCustom && scheduledCustom.exercises) {
+  if (scheduledCustom) {
     defName = scheduledCustom.name;
-    const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-    defExercises = sorted.map((e) => e.exercise?.name || e.exercise_name || e.exercise_id).filter(Boolean);
-    sorted.forEach((e) => {
-      const name = e.exercise?.name || e.exercise_name || e.exercise_id;
-      if (name) {
-        defTargetSets[name] = e.target_sets || 3;
-        defTargetReps[name] = e.target_reps || 10;
-      }
-    });
+    if (scheduledCustom.exercises) {
+      const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+      defExercises = sorted.map((e) => e.exercise?.name || e.exercise_name || e.exercise_id).filter(Boolean);
+      sorted.forEach((e) => {
+        const name = e.exercise?.name || e.exercise_name || e.exercise_id;
+        if (name) {
+          defTargetSets[name] = e.target_sets || 3;
+          defTargetReps[name] = e.target_reps || 10;
+        }
+      });
+    }
   } else if (scheduledDef) {
     defName = scheduledDef.name;
     defExercises = [...scheduledDef.exercises];
