@@ -234,4 +234,98 @@ describe('NutritionEngine Add Items with AI', () => {
     expect(screen.queryByTestId('staged-meal-card')).toBeNull();
     expect(screen.queryByTestId('quick-log-toast')).toBeNull();
   });
+
+  it('updates aiQuota state and renders quota warning banner after adding item via AI', async () => {
+    // 1. Initial meal parse with quota remaining = 6 (> 5, so no low-quota warning)
+    (supabase.functions.invoke as any).mockResolvedValueOnce({
+      data: {
+        name: 'Eggs & Toast',
+        calories: 300,
+        protein: 18,
+        carbs: 25,
+        fat: 12,
+        fiber: 2,
+        explanation: '300 kcal (Eggs & Toast) = 300 kcal',
+        items: [
+          { name: 'Eggs & Toast', portion: '1 plate', calories: 300, protein: 18, carbs: 25, fat: 12, fiber: 2 },
+        ],
+        quota: {
+          used: 4,
+          remaining: 6,
+          limit: 10,
+          period: 'day',
+          resetsAt: '2026-10-31T00:00:00Z',
+        },
+      },
+      error: null,
+    });
+
+    renderComponent();
+
+    const input = screen.getByPlaceholderText(
+      'Describe what you ate (e.g., 3 eggs, 2 slices sourdough, 1 tbsp butter)'
+    );
+    fireEvent.change(input, { target: { value: 'eggs & toast' } });
+    fireEvent.click(screen.getByText('Analyze Meal'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('staged-meal-card')).toBeDefined();
+    });
+
+    // 2. Open inline composer via "+ Add"
+    const addBtn = screen.getByTestId('add-item-button');
+    fireEvent.click(addBtn);
+
+    const textarea = screen.getByPlaceholderText('e.g. a banana and 200 ml oat milk');
+    fireEvent.change(textarea, { target: { value: '1 banana' } });
+
+    // Mock second parse with consumed quota: remaining drops from 6 to 5 (<= 5 triggers warning)
+    (supabase.functions.invoke as any).mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            name: 'Banana',
+            portion: '1 medium',
+            quantity: 1,
+            unit: 'unit',
+            calories: 105,
+            protein: 1.3,
+            carbs: 27,
+            fat: 0.3,
+            fiber: 3.1,
+          },
+        ],
+        quota: {
+          used: 5,
+          remaining: 5,
+          limit: 10,
+          period: 'day',
+          resetsAt: '2026-10-31T00:00:00Z',
+        },
+      },
+      error: null,
+    });
+
+    const analyzeBtn = screen.getByTestId('analyze-items-button');
+    fireEvent.click(analyzeBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('add-items-composer')).toBeNull();
+      expect(screen.getByTestId('staged-meal-card')).toHaveTextContent('Banana');
+    });
+
+    // 3. Discard staged meal to reveal NutritionAiInput and verify aiQuota was updated
+    fireEvent.click(screen.getByLabelText('Discard staged meal'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('staged-meal-card')).toBeNull();
+    });
+
+    // The quota banner should now reflect the updated remaining count (5 of 10)
+    await waitFor(() => {
+      const banner = screen.getByTestId('ai-quota-warning');
+      expect(banner).toBeDefined();
+      expect(banner.textContent).toContain('5 of 10 left today');
+    });
+  });
 });

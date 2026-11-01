@@ -238,7 +238,7 @@ export const NutritionEngine: React.FC = () => {
   useAiRescue({ targetUserId, stagedMeal, nlInput: ai.nlInput, setNlInput: ai.setNlInput });
 
   const dishModal = useCustomDishModal({
-    onSaveDish: (args) => saveCustomDishMutation.mutate(args),
+    onSaveDish: (args) => saveCustomDishMutation.mutateAsync(args),
     onDeleteDish: handleScheduleDishDelete,
     onDismissToast: dismissToast,
     fetchDishDetail,
@@ -335,11 +335,7 @@ export const NutritionEngine: React.FC = () => {
       triggerToast,
     });
 
-  const { handleAddParsedItems } = useStagedMealAddAi({
-    stagedMeal,
-    setStagedMeal,
-    triggerToast,
-  });
+  const { handleAddParsedItems } = useStagedMealAddAi({ stagedMeal, setStagedMeal, triggerToast, onQuotaUpdate: setAiQuota });
 
   useEffect(() => {
     if (
@@ -429,6 +425,7 @@ export const NutritionEngine: React.FC = () => {
             isPending={mutation.isPending}
             customDishes={displayedCustomDishes}
             onAddParsedItems={handleAddParsedItems}
+            onQuotaUpdate={setAiQuota}
             onAnalyzeWithAiInstead={() => ai.handleForceAiAnalyze(stagedMeal.rawText || stagedMeal.name)}
             isAnalyzing={ai.isAnalyzing}
           />
@@ -565,6 +562,7 @@ export const NutritionEngine: React.FC = () => {
         onSaveDish={dishModal.handleSaveCustomDishModal} onDeleteDish={dishModal.handleDeleteCustomDish}
         isSaving={saveCustomDishMutation.isPending} isDeleting={deleteCustomDishMutation.isPending}
         onOpenEditDishModal={dishModal.handleOpenEditDishModal}
+        saveError={dishModal.dishSaveError}
       />
 
       {/* Edit Meal Sheet */}
