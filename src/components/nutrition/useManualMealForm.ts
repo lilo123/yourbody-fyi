@@ -31,6 +31,9 @@ export interface UseManualMealFormOptions {
   initialMealType?: string;
 }
 
+const DEFAULT_SERVING_SIZE = 1;
+const DEFAULT_SERVING_UNIT = 'serving';
+
 export function useManualMealForm({
   onStageMeal,
   now,
@@ -46,8 +49,8 @@ export function useManualMealForm({
   const [manualMealType, setManualMealType] = useState<string>(() =>
     initialMealType ?? inferMealType(undefined, now)
   );
-  const [manualServingSize, setManualServingSize] = useState<number | ''>(1);
-  const [manualServingUnit, setManualServingUnit] = useState<string>('serving');
+  const [manualServingSize, setManualServingSize] = useState<number | ''>(DEFAULT_SERVING_SIZE);
+  const [manualServingUnit, setManualServingUnit] = useState<string>(DEFAULT_SERVING_UNIT);
 
   const resetManualForm = () => {
     setManualDishName('');
@@ -57,6 +60,8 @@ export function useManualMealForm({
     setManualFat('');
     setManualFiber('');
     setManualMealType(initialMealType ?? inferMealType(undefined, now));
+    setManualServingSize(DEFAULT_SERVING_SIZE);
+    setManualServingUnit(DEFAULT_SERVING_UNIT);
   };
 
   const prefillForm = (prefill: ManualMealPrefill) => {
