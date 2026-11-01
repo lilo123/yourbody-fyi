@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { resolveRoutineAndExercises } from './workoutEngineHelpers';
+import {
+  resolveRoutineAndExercises,
+  resolveExerciseId,
+  resolveCardBenchmarks,
+  resolveTargetUserId,
+  resolveRestTimerSeconds,
+  clearDraftForSet,
+  performUnlogSet,
+} from './workoutEngineHelpers';
 import { DEFAULT_WORKOUT_TEMPLATES } from '../../utils/ghostSets';
-import type { RoutineTemplate, Exercise } from '../../types/database';
+import type { RoutineTemplate, Exercise, ExerciseBenchmarks } from '../../types/database';
 
 describe('resolveRoutineAndExercises - Starter Routines & Precedence', () => {
   const mockCatalog: Exercise[] = [
@@ -126,6 +134,166 @@ describe('resolveRoutineAndExercises - Starter Routines & Precedence', () => {
       expect(res.exercises).toEqual(DEFAULT_WORKOUT_TEMPLATES[0].exercises);
       expect(res.targetSets).toEqual(DEFAULT_WORKOUT_TEMPLATES[0].targetSets);
       expect(res.targetReps).toEqual(DEFAULT_WORKOUT_TEMPLATES[0].targetReps);
+    });
+  });
+
+  describe('resolveExerciseId & resolveCardBenchmarks', () => {
+    const validUuid1 = 'e0000000-0000-0000-0000-000000000001';
+    const validUuid2 = '00000000-0000-4000-8000-000000000002';
+    const catalog: Exercise[] = [
+      { id: validUuid1, name: 'Incline Bench Press', body_parts: ['Chest'] },
+      { id: validUuid2, name: 'Custom Lift', body_parts: ['Arms'] },
+    ];
+
+    it('resolves exercise ID from catalog or raw UUID', () => {
+      expect(resolveExerciseId('Incline Bench Press', catalog)).toBe(validUuid1);
+      expect(resolveExerciseId(validUuid2, catalog)).toBe(validUuid2);
+      expect(resolveExerciseId('Non Existent', catalog)).toBeUndefined();
+    });
+
+    it('resolves exercise ID from customTemplates when not in catalog', () => {
+      const templateWithExercise: RoutineTemplate[] = [
+        {
+          id: 'tpl-1',
+          name: 'Special Template',
+          is_master: false,
+          user_id: 'user-1',
+          assigned_to: null,
+          days_of_week: [],
+          exercises: [
+            {
+              id: 'te-1',
+              template_id: 'tpl-1',
+              exercise_id: validUuid2,
+              order_index: 0,
+              exercise_name: 'Template Only Lift',
+              target_sets: 3,
+              target_reps: 10,
+            },
+          ],
+        },
+      ];
+      expect(resolveExerciseId('Template Only Lift', [], templateWithExercise)).toBe(validUuid2);
+    });
+
+    it('prefers server all-time PR over recent session benchmark', () => {
+      const localBenchmarks: ExerciseBenchmarks = {
+        lastSession: { date: '2026-09-05', summaryText: '185×5', sets: [] },
+        pr: { weight: 185, reps: 5, date: '2026-09-05' },
+      };
+      const serverMap: Record<string, ExerciseBenchmarks> = {
+        [validUuid1]: {
+          lastSession: { date: '2026-09-05', summaryText: '185×5', sets: [] },
+          pr: { weight: 225, reps: 5, date: '2026-06-01' },
+        },
+      };
+
+      const resolved = resolveCardBenchmarks(
+        'Incline Bench Press',
+        serverMap,
+        localBenchmarks,
+        catalog,
+        undefined,
+        'weight',
+        'lb'
+      );
+
+      expect(resolved.pr?.weight).toBe(225);
+      expect(resolved.pr?.reps).toBe(5);
+    });
+
+    it('falls back to local benchmarks when server map is missing exercise', () => {
+      const localBenchmarks: ExerciseBenchmarks = {
+        lastSession: { date: '2026-09-05', summaryText: '185×5', sets: [] },
+        pr: { weight: 185, reps: 5, date: '2026-09-05' },
+      };
+
+      const resolved = resolveCardBenchmarks(
+        'Incline Bench Press',
+        {},
+        localBenchmarks,
+        catalog,
+        undefined,
+        'weight',
+        'lb'
+      );
+
+      expect(resolved.pr?.weight).toBe(185);
+    });
+
+    it('uses local PR when local PR is strictly higher than server PR (e.g. set logged today)', () => {
+      const localBenchmarks: ExerciseBenchmarks = {
+        lastSession: { date: '2026-09-05', summaryText: '185×5', sets: [] },
+        pr: { weight: 240, reps: 5, date: '2026-09-07' },
+      };
+      const serverMap: Record<string, ExerciseBenchmarks> = {
+        [validUuid1]: {
+          lastSession: { date: '2026-09-05', summaryText: '185×5', sets: [] },
+          pr: { weight: 225, reps: 5, date: '2026-06-01' },
+        },
+      };
+
+      const resolved = resolveCardBenchmarks(
+        'Incline Bench Press',
+        serverMap,
+        localBenchmarks,
+        catalog,
+        undefined,
+        'weight',
+        'lb'
+      );
+
+      expect(resolved.pr?.weight).toBe(240);
+    });
+  });
+
+  describe('resolveTargetUserId & resolveRestTimerSeconds', () => {
+    it('prefers explicitly provided user id or returns empty string', () => {
+      expect(resolveTargetUserId('explicit-id')).toBe('explicit-id');
+      expect(resolveTargetUserId(undefined)).toBe('');
+    });
+
+    it('resolves rest timer seconds within bounds or falls back to 90', () => {
+      expect(resolveRestTimerSeconds(120)).toBe(120);
+      expect(resolveRestTimerSeconds(null)).toBe(90);
+    });
+  });
+
+  describe('clearDraftForSet & performUnlogSet', () => {
+    it('clears draft by exerciseName and exerciseId', () => {
+      const prev = {
+        'Bench Press_1': { weight: '100', reps: '10' },
+        'ex-1_1': { weight: '100', reps: '10' },
+        'Squat_1': { weight: '200', reps: '5' },
+      };
+      const next = clearDraftForSet(prev, { exerciseName: 'Bench Press', exerciseId: 'ex-1', setIndex: 1 });
+      expect(next).toEqual({ 'Squat_1': { weight: '200', reps: '5' } });
+    });
+
+    it('performs unlog set correctly by restoring draft and invoking delete mutation', () => {
+      let deletedId = '';
+      let draftState: Record<string, { weight: string; reps: string }> = {};
+      const setInputDrafts = (fn: unknown) => {
+        draftState = typeof fn === 'function' ? (fn as (p: typeof draftState) => typeof draftState)(draftState) : (fn as typeof draftState);
+      };
+      performUnlogSet({
+        exIndex: 0,
+        rowIdx: 0,
+        activeExercises: ['Bench Press'],
+        getSetsForExerciseToday: () => [
+          { id: 'set-1', exercise_id: 'ex-1', set_index: 1, weight: 100, reps: 8, date: '2026-10-31' } as any,
+        ],
+        pendingSetId: null,
+        pendingDeletedSetIds: new Set(),
+        unit: 'lb',
+        setInputDrafts: setInputDrafts as any,
+        targetUserId: 'user-1',
+        workoutDate: '2026-10-31',
+        onDeleteSet: (id) => { deletedId = id; },
+      });
+
+      expect(deletedId).toBe('set-1');
+      expect(draftState['Bench Press_1']).toEqual({ weight: '100', reps: '8' });
     });
   });
 });

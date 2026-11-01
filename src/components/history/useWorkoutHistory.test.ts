@@ -107,6 +107,15 @@ describe('useWorkoutHistory Data Layer', () => {
       expect(afterMidnight).toBe('2026-08-29');
     });
 
+    it('computes 30d window across US DST fall-back (2026-11-02 in America/New_York)', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // 2026-11-02 23:15:00 EST (UTC-5) is 2026-11-03T04:15:00.000Z
+      vi.setSystemTime(new Date('2026-11-03T04:15:00.000Z'));
+
+      const since30 = computeHistorySince('30d', 'America/New_York');
+      expect(since30).toBe('2026-10-03');
+    });
+
     it('hook passes computed p_since to get_history_sessions_v2', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(new Date('2026-09-27T15:00:00.000Z')); // Tokyo Sept 28

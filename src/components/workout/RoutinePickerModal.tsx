@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import React, { useMemo, useContext } from 'react';
+import { useInfiniteQuery, QueryClientContext } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
-import { isValidUUID } from './workoutEngineHelpers';
+import { isValidUUID, isDefaultRoutineHidden } from './workoutEngineHelpers';
 import { resolveExerciseLabel } from '../../utils/exerciseLabel';
 import type { RoutineTemplate, Exercise } from '../../types/database';
 import type { DEFAULT_WORKOUT_TEMPLATES } from '../../utils/ghostSets';
@@ -20,6 +20,9 @@ export interface RoutinePickerModalProps {
   exercises: Exercise[];
   targetUserId?: string;
   isSelecting?: boolean;
+  hasLoadedCatalog?: boolean;
+  isCatalogPending?: boolean;
+  hiddenRoutineNames?: Set<string> | string[];
 }
 
 export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
@@ -34,6 +37,9 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
   exercises,
   targetUserId,
   isSelecting,
+  hasLoadedCatalog,
+  isCatalogPending,
+  hiddenRoutineNames,
 }) => {
   const {
     data,
@@ -98,23 +104,48 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
     return data?.pages.flatMap((page) => page) ?? [];
   }, [data]);
 
+  const queryClient = useContext(QueryClientContext);
+  const resolvedHiddenNames = useMemo(() => {
+    if (hiddenRoutineNames) {
+      if (hiddenRoutineNames instanceof Set) {
+        return new Set(Array.from(hiddenRoutineNames).map((name) => name.trim().toLowerCase()));
+      }
+      return new Set(hiddenRoutineNames.map((name) => name.trim().toLowerCase()));
+    }
+    const cached = queryClient?.getQueryData<RoutineTemplate[]>(['routine_templates', targetUserId, 'hidden']);
+    if (cached && Array.isArray(cached)) {
+      return new Set(cached.map((template) => template.name?.trim().toLowerCase()).filter(Boolean));
+    }
+    return new Set<string>();
+  }, [hiddenRoutineNames, queryClient, targetUserId]);
+
   if (!isOpen) return null;
 
   const templatesToDisplay = fetchedTemplates.length > 0 ? fetchedTemplates : customTemplates;
 
   const seenCustomNames = new Set<string>();
   const dedupedCustom: RoutineTemplate[] = [];
-  for (const t of templatesToDisplay) {
-    const norm = t.name.trim().toLowerCase();
+  for (const template of templatesToDisplay) {
+    const norm = template.name.trim().toLowerCase();
     if (!seenCustomNames.has(norm)) {
       seenCustomNames.add(norm);
-      dedupedCustom.push(t);
+      dedupedCustom.push(template);
     }
   }
 
-  const fallbackDefaults = defaultTemplates.filter(
-    (dt) => !seenCustomNames.has(dt.name.trim().toLowerCase())
-  );
+  const isLoaded =
+    hasLoadedCatalog !== undefined
+      ? hasLoadedCatalog
+      : (data !== undefined || (Boolean(targetUserId && isValidUUID(targetUserId)) && customTemplates.length > 0));
+  const canUseDefaults = !isCatalogPending;
+  const catalogToCheck = templatesToDisplay.length > 0 ? templatesToDisplay : customTemplates;
+  const fallbackDefaults = canUseDefaults
+    ? defaultTemplates.filter(
+        (defaultTemplate) =>
+          !seenCustomNames.has(defaultTemplate.name.trim().toLowerCase()) &&
+          !isDefaultRoutineHidden(defaultTemplate.name, catalogToCheck, resolvedHiddenNames, isLoaded, targetUserId)
+      )
+    : [];
 
   return (
     <AccessibleModal

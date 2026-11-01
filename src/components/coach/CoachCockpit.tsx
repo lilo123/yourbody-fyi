@@ -77,10 +77,13 @@ export const CoachCockpit: React.FC = () => {
     error: templatesError, refetch: refetchTemplates,
   } = useQuery({
     queryKey: ['routine_templates', user?.id, 'coach'],
+    enabled: Boolean(user?.id),
     queryFn: async () => {
+      if (!user?.id) return [];
       // payload-gate: accepted-list — coach routine templates list, measured 54223 B on /coach
       const { data, error } = await supabase.from('routine_templates')
         .select('id, user_id, name, is_master, assigned_to, days_of_week, created_at, exercises:template_exercises(id, template_id, exercise_id, order_index, target_sets, target_reps)')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false }).limit(100);
       if (error) throw error;
       return (data || []) as RoutineTemplate[];
@@ -270,6 +273,11 @@ export const CoachCockpit: React.FC = () => {
       await refreshAthletes();
       const remaining = athletes.filter((a) => a.id !== athleteToDisconnect);
       switchAthlete(remaining[0]?.id || '');
+      queryClient.invalidateQueries({ queryKey: queryKeys.coachActiveAthletesCount.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.coachAthletes.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workoutSets.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workouts.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.athleteProfile.all });
     } catch (err: unknown) {
       console.error('Failed to disconnect athlete:', err);
       const message = err instanceof Error ? err.message : (err as { message?: string })?.message || 'Failed to disconnect athlete';

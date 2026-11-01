@@ -85,4 +85,29 @@ describe('Open Graph & Twitter Share Image Configuration', () => {
       expect(viteConfigContent).toMatch(/globIgnores:\s*\[[^\]]*['"]\*\*\/og-image\.png['"][^\]]*\]/);
     });
   });
+
+  describe('(d) prerendered pages Open Graph image alt invariant (when dist exists)', () => {
+    it('sets og:image:alt to match route og:title across all prerendered html files', () => {
+      const distDir = path.join(rootDir, 'dist');
+      if (!fs.existsSync(distDir)) {
+        return;
+      }
+      for (const file of ['index.html', 'terms.html', 'privacy.html', 'refunds.html', 'login.html']) {
+        const filePath = path.join(distDir, file);
+        expect(fs.existsSync(filePath), `Expected prerender file ${file} to exist`).toBe(true);
+        const html = fs.readFileSync(filePath, 'utf8');
+
+        const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+        const ogAltMatch = html.match(/<meta\s+property=["']og:image:alt["']\s+content=["']([^"']+)["']/i);
+        expect(ogTitleMatch, `Expected og:title in ${file}`).not.toBeNull();
+        expect(ogAltMatch, `Expected og:image:alt in ${file}`).not.toBeNull();
+        expect(ogAltMatch?.[1], `og:image:alt in ${file} must match og:title`).toBe(ogTitleMatch?.[1]);
+
+        const twitterAltMatch = html.match(/<meta\s+(?:name|property)=["']twitter:image:alt["']\s+content=["']([^"']+)["']/i);
+        if (twitterAltMatch) {
+          expect(twitterAltMatch[1], `twitter:image:alt in ${file} must match og:title`).toBe(ogTitleMatch?.[1]);
+        }
+      }
+    });
+  });
 });

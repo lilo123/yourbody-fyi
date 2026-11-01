@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Sheet } from '../common/Sheet';
 import { Button } from '../common/Button';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -47,6 +47,7 @@ export const SyncStatusSheet: React.FC<SyncStatusSheetProps> = ({
   onClose,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const summary = useOutboxStatus(user?.id);
   const { ops: attentionOps, retry, discard } = useAttentionOps(user?.id);
@@ -72,7 +73,7 @@ export const SyncStatusSheet: React.FC<SyncStatusSheetProps> = ({
 
   const handleSignIn = () => {
     onClose();
-    navigate('/login');
+    navigate('/login', { state: { from: location } });
   };
 
   return (
