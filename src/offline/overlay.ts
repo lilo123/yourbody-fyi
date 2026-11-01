@@ -3,10 +3,14 @@ import type { HistorySession } from '../components/history/useWorkoutHistory';
 import type { OutboxOp, OutboxOpNutritionLog } from './types';
 import { getLocalDateStr } from '../utils/date';
 
-function getSetLocalDate(createdAt: string): string {
+function getSetLocalDate(createdAt?: string | null): string {
   if (!createdAt) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(createdAt)) return createdAt;
   return getLocalDateStr(new Date(createdAt)) || createdAt.slice(0, 10);
+}
+
+function getSessionDate(s: HistorySession): string {
+  return s.workout_date || s.civil_date || getSetLocalDate(s.date);
 }
 
 /**
@@ -252,6 +256,7 @@ export function applyPendingToHistory(
     createdSets: { id: string; weight: number; reps: number; set_type: string }[];
     updatedSets: Map<string, { weight?: number; reps?: number }>;
     deletedSetIds: Set<string>;
+    deletedSetVolumes: Map<string, number>;
   }
 
   const daySummaries = new Map<string, PendingDaySummary>();
@@ -266,6 +271,7 @@ export function applyPendingToHistory(
         createdSets: [],
         updatedSets: new Map(),
         deletedSetIds: new Set(),
+        deletedSetVolumes: new Map(),
       };
       daySummaries.set(date, summary);
     }
@@ -335,28 +341,40 @@ export function applyPendingToHistory(
           (s) =>
             s.sets?.some((st) => st.id === op.payload.id) ||
             (payloadRef && s.id === payloadRef) ||
-            (payloadDate &&
-              (s.workout_date === payloadDate ||
-                s.civil_date === payloadDate ||
-                s.date.startsWith(payloadDate)))
+            (payloadDate && getSessionDate(s) === payloadDate)
         );
 
         const date =
           payloadDate ||
-          (matchingSession
-            ? matchingSession.workout_date ||
-              matchingSession.civil_date ||
-              matchingSession.date.slice(0, 10)
-            : undefined) ||
+          (matchingSession ? getSessionDate(matchingSession) : undefined) ||
           (payloadRef ? workoutDateMap.get(payloadRef) : undefined);
+
+        const matchingSet = matchingSession?.sets?.find((st) => st.id === op.payload.id);
+        const payloadWithDetails = op.payload as {
+          weight?: number;
+          reps?: number;
+          set_type?: string;
+        };
+        const rawWeight = matchingSet?.weight ?? payloadWithDetails.weight;
+        const rawReps = matchingSet?.reps ?? payloadWithDetails.reps;
+        const rawSetType = matchingSet?.set_type || payloadWithDetails.set_type || 'working';
+
+        const weightNum = Number(rawWeight);
+        const repsNum = Number(rawReps);
+        const safeWeight = Number.isFinite(weightNum) && weightNum > 0 ? weightNum : 0;
+        const safeReps = Number.isFinite(repsNum) && repsNum > 0 ? repsNum : 0;
+        const isWorking = !rawSetType || rawSetType === 'working';
+        const deletedSetVolume = isWorking ? safeWeight * safeReps : 0;
 
         if (date) {
           const summary = getSummary(date, payloadRef || matchingSession?.id);
           summary.deletedSetIds.add(op.payload.id);
+          summary.deletedSetVolumes.set(op.payload.id, deletedSetVolume);
         } else {
           // Legacy queued ops with no date: keep original behaviour across active summaries
           for (const summary of daySummaries.values()) {
             summary.deletedSetIds.add(op.payload.id);
+            summary.deletedSetVolumes.set(op.payload.id, deletedSetVolume);
           }
         }
       }
@@ -372,7 +390,7 @@ export function applyPendingToHistory(
   // Now apply summaries to sessions
   for (const [date, summary] of daySummaries.entries()) {
     const existingIdx = result.findIndex(
-      (s) => s.workout_date === date || s.civil_date === date || s.date.startsWith(date)
+      (s) => getSessionDate(s) === date
     );
 
     if (existingIdx !== -1) {
@@ -384,8 +402,14 @@ export function applyPendingToHistory(
           deltaVolume += (s.weight || 0) * (s.reps || 0);
         }
       }
+      for (const vol of summary.deletedSetVolumes.values()) {
+        deltaVolume -= vol;
+      }
       session.set_count = Math.max(0, session.set_count + deltaSets);
       session.total_volume = Math.max(0, session.total_volume + deltaVolume);
+      if (session.sets && session.sets.length > 0) {
+        session.sets = session.sets.filter((st) => !st.id || !summary.deletedSetIds.has(st.id));
+      }
       if (summary.name) {
         session.name = summary.name;
       }
@@ -413,8 +437,8 @@ export function applyPendingToHistory(
   }
 
   return result.sort((a, b) => {
-    const dateA = a.workout_date || a.civil_date || a.date;
-    const dateB = b.workout_date || b.civil_date || b.date;
+    const dateA = getSessionDate(a);
+    const dateB = getSessionDate(b);
     return dateB.localeCompare(dateA);
   });
 }

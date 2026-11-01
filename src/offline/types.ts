@@ -71,6 +71,9 @@ export interface SetDeletePayload {
   id: string;
   workoutDate?: string;
   workoutRef?: string;
+  weight?: number;
+  reps?: number;
+  set_type?: SetTypeKind;
 }
 
 export interface NutritionLogPayload {
