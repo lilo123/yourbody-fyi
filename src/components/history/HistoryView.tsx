@@ -23,12 +23,12 @@ import { useHistoryData } from './useHistoryData';
 import {
   useWorkoutHistory,
   useExerciseStats,
+  computeHistorySince,
   type HistoryRange,
 } from './useWorkoutHistory';
 import { StatusBanner } from '../common/StatusBanner';
 import { groupNutritionDays } from '../../utils/nutritionDayGrouping';
 import { DEFAULT_EXERCISES_LIST } from '../../utils/ghostSets';
-import { normalizeDateStr } from '../../utils/ghostSets';
 import { fetchAllVisibleExercises, EXERCISE_SUMMARY_PROJECTION } from '../../lib/exercises';
 
 const DEFAULT_CATEGORY = 'All';
@@ -272,11 +272,8 @@ export const HistoryView: React.FC = () => {
   }, [nutritionLogs, effectiveTimeZone]);
 
   const filteredNutritionDays = useMemo(() => {
-    if (timeRange === 'all') return nutritionDays;
-    const now = new Date();
-    const days = timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
-    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    const cutoffStr = normalizeDateStr(cutoff, effectiveTimeZone);
+    const cutoffStr = computeHistorySince(timeRange, effectiveTimeZone);
+    if (!cutoffStr) return nutritionDays;
     return nutritionDays.filter((d) => d.date >= cutoffStr);
   }, [nutritionDays, timeRange, effectiveTimeZone]);
 
