@@ -492,3 +492,63 @@ describe('useMealEditor', () => {
     const { getRecordedTables } = await import('../../test/supabaseBuilderMock');
     expect(getRecordedTables()).not.toContain('custom_dishes');
   });
+
+  it('single-item meal: applyStagedItemChange keeps draft.servingSize and servingUnit in sync', () => {
+    const items = [makeComponent({ id: 'c1', name: 'Oatmeal', quantity: 100, unit: 'g', calories: 380 })];
+    const log = makeMeal(items, { serving_size: 100, serving_unit: 'g' });
+    const onClose = vi.fn();
+
+    const { result } = renderHook(
+      () =>
+        useMealEditor({
+          meal: log,
+          isOpen: true,
+          onClose,
+        }),
+      { wrapper: createWrapper() }
+    );
+
+    expect(result.current.draft?.servingSize).toBe(100);
+    expect(result.current.draft?.servingUnit).toBe('g');
+
+    act(() => {
+      result.current.applyStagedItemChange('c1', {
+        ...items[0],
+        quantity: 250,
+      });
+    });
+
+    expect(result.current.draft?.items[0].quantity).toBe(250);
+    expect(result.current.draft?.servingSize).toBe(250);
+    expect(result.current.draft?.servingUnit).toBe('g');
+  });
+
+  it('multi-item meal: deleting item down to single-item syncs servingSize and servingUnit to remaining item', () => {
+    const items = [
+      makeComponent({ id: 'c1', name: 'Oatmeal', quantity: 150, unit: 'g', calories: 570 }),
+      makeComponent({ id: 'c2', name: 'Milk', quantity: 200, unit: 'ml', calories: 100 }),
+    ];
+    const log = makeMeal(items, { serving_size: 1, serving_unit: 'serving' });
+    const onClose = vi.fn();
+
+    const { result } = renderHook(
+      () =>
+        useMealEditor({
+          meal: log,
+          isOpen: true,
+          onClose,
+        }),
+      { wrapper: createWrapper() }
+    );
+
+    expect(result.current.draft?.servingSize).toBe(1);
+    expect(result.current.draft?.servingUnit).toBe('serving');
+
+    act(() => {
+      result.current.handleDeleteItem('c2');
+    });
+
+    expect(result.current.draft?.items).toHaveLength(1);
+    expect(result.current.draft?.servingSize).toBe(150);
+    expect(result.current.draft?.servingUnit).toBe('g');
+  });

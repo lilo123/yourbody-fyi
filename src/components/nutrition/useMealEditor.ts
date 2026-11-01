@@ -27,6 +27,7 @@ import {
   recomputeStagedTotals,
   stagedToItem,
   stagedReference,
+  withSyncedServing,
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
@@ -310,8 +311,7 @@ export function useMealEditor({
           fiber: roundTo1Decimal(scaled.fiber),
         };
       });
-      const totals = recomputeStagedTotals(updated);
-      return { ...prev, items: updated, ...totals };
+      return withSyncedServing(prev, updated);
     });
   }, []);
 
@@ -319,8 +319,7 @@ export function useMealEditor({
     setDraft((prev) => {
       if (!prev) return prev;
       const updated = prev.items.filter((it) => it.id !== id);
-      const totals = recomputeStagedTotals(updated);
-      return { ...prev, items: updated, ...totals };
+      return withSyncedServing(prev, updated);
     });
   }, []);
 

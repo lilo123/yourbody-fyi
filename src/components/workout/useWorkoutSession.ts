@@ -13,6 +13,9 @@ import {
   isUUID,
   resolveRoutineAndExercises,
   checkIsScheduledRoutineDirty,
+  isOwnOrAssignedRoutine,
+  shouldHideStarterRoutines,
+  isDefaultRoutineHidden,
 } from './workoutEngineHelpers';
 import { fetchTemplateDetail } from './useWorkoutQueries';
 import {
@@ -103,7 +106,8 @@ export function useWorkoutSession({
     customTemplates,
     catalogLoaded,
     catalogPending,
-    resolvedHiddenNames
+    resolvedHiddenNames,
+    targetUserId
   );
 
   const [activeRoutineName, setActiveRoutineName] = useState<string>(initialState.activeRoutineName);
@@ -190,7 +194,8 @@ export function useWorkoutSession({
         exercises,
         [],
         catalogLoaded,
-        resolvedHiddenNames
+        resolvedHiddenNames,
+        targetUserId
       );
 
       const isToday = workoutDate === getLocalDateStr(new Date());
@@ -266,7 +271,8 @@ export function useWorkoutSession({
       exercises,
       [],
       catalogLoaded,
-      resolvedHiddenNames
+      resolvedHiddenNames,
+      targetUserId
     );
 
     const isToday = workoutDate === getLocalDateStr(new Date());
@@ -350,7 +356,7 @@ export function useWorkoutSession({
     let resolvedReps: Record<string, number> = {};
 
     try {
-      if (routineName === 'Rest Day' || routineName === 'Free Workout') {
+      if (routineName === 'Rest Day' || (routineName === 'Free Workout' && todaySets.length === 0)) {
         if (seq !== routineSelectionSeqRef.current) {
           if (inFlightRoutineSelectionSeqRef.current === seq) {
             manualSelectionDateRef.current = prevManualDate;
@@ -366,7 +372,15 @@ export function useWorkoutSession({
         setExpandedExercises(new Set());
       } else {
         const customTpl = selectedTemplate || findMatchingTemplate(customTemplates, routineName);
-        const defTpl = findMatchingTemplate(DEFAULT_WORKOUT_TEMPLATES, routineName);
+        const startersHidden = shouldHideStarterRoutines(customTemplates, targetUserId, catalogLoaded);
+        const defTpl = startersHidden
+          ? undefined
+          : findMatchingTemplate(
+              DEFAULT_WORKOUT_TEMPLATES.filter(
+                (t) => !isDefaultRoutineHidden(t.name, customTemplates, resolvedHiddenNames, catalogLoaded, targetUserId)
+              ),
+              routineName
+            );
 
         let templateExercises = customTpl?.exercises;
         if (customTpl && templateExercises === undefined) {
@@ -403,6 +417,44 @@ export function useWorkoutSession({
         resolvedExList = extracted.resolvedExList;
         resolvedTargets = extracted.resolvedTargets;
         resolvedReps = extracted.resolvedReps;
+
+        if (todaySets.length > 0) {
+          const loggedExercises = Array.from(
+            new Set(
+              todaySets
+                .map(
+                  (s) =>
+                    s.exercise?.name ||
+                    exercises.find((ex) => ex.id === s.exercise_id)?.name ||
+                    DEFAULT_EXERCISES_LIST.find((ex) => ex.id === s.exercise_id)?.name ||
+                    s.exercise_name ||
+                    s.exercise_id
+                )
+                .filter(Boolean)
+            )
+          );
+          const distinctLoggedNotInBase = loggedExercises.filter(
+            (name) =>
+              !resolvedExList.some(
+                (baseName) => baseName.trim().toLowerCase() === name.trim().toLowerCase()
+              )
+          );
+
+          if (distinctLoggedNotInBase.length > 0) {
+            resolvedExList = [...resolvedExList, ...distinctLoggedNotInBase];
+            distinctLoggedNotInBase.forEach((name) => {
+              if (targetRepCounts[name]) {
+                resolvedReps[name] = targetRepCounts[name];
+              }
+            });
+          }
+
+          resolvedExList.forEach((exName) => {
+            const loggedSetsForEx = filterSetsForExercise(exName, todaySets, exercises);
+            const currentTarget = resolvedTargets[exName] || targetSetCounts[exName] || 3;
+            resolvedTargets[exName] = Math.max(currentTarget, loggedSetsForEx.length);
+          });
+        }
 
         setActiveRoutineName(routineName);
         setActiveExercises(resolvedExList);
@@ -468,7 +520,10 @@ export function useWorkoutSession({
     resolvedKeyRef.current = null;
 
     const dayAbbr = getDayOfWeekAbbr(workoutDate);
-    const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
+    const scheduledOwn = customTemplates.find(
+      (t) => isOwnOrAssignedRoutine(t, targetUserId) && t.days_of_week?.includes(dayAbbr)
+    );
+    const scheduledCustom = scheduledOwn || customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
     let customWithExercises = customTemplates;
     if (scheduledCustom && (!scheduledCustom.exercises || scheduledCustom.exercises.length === 0)) {
       try {
@@ -492,7 +547,8 @@ export function useWorkoutSession({
       exercises,
       [],
       catalogLoaded,
-      resolvedHiddenNames
+      resolvedHiddenNames,
+      targetUserId
     );
 
     const isToday = workoutDate === getLocalDateStr(new Date());
@@ -632,11 +688,22 @@ export function useWorkoutSession({
       ...prev,
       [removed.exerciseName]: removed.targetSetCount,
     }));
+    workoutSessionStore.updateTargetSets(
+      targetUserId,
+      workoutDate,
+      removed.exerciseName,
+      removed.targetSetCount
+    );
     if (removed.targetRepCount !== undefined) {
       setTargetRepCounts((prev) => ({
         ...prev,
         [removed.exerciseName]: removed.targetRepCount!,
       }));
+      const session = workoutSessionStore.getSession(targetUserId, workoutDate);
+      if (session) {
+        session.targetRepCounts[removed.exerciseName] = removed.targetRepCount;
+        workoutSessionStore.saveSession(session, workoutDate === getLocalDateStr(new Date()));
+      }
     }
     setInputDrafts((prev) => {
       const next = { ...prev, ...removed.drafts };
@@ -752,8 +819,9 @@ export function useWorkoutSession({
       targetRepCounts,
       hasLoadedCatalog: catalogLoaded,
       hiddenRoutineNames: resolvedHiddenNames,
+      targetUserId,
     });
-  }, [workoutDate, activeRoutineName, activeExercises, customTemplates, exercises, inputDrafts, targetSetCounts, targetRepCounts, catalogLoaded, resolvedHiddenNames]);
+  }, [workoutDate, activeRoutineName, activeExercises, customTemplates, exercises, inputDrafts, targetSetCounts, targetRepCounts, catalogLoaded, resolvedHiddenNames, targetUserId]);
 
   const isWholeWorkoutCompleted =
     activeExercises.length > 0 &&

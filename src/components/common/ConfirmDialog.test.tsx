@@ -61,4 +61,28 @@ describe('ConfirmDialog', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(handleCancel).toHaveBeenCalledTimes(1);
   });
+
+  it('does NOT trigger onCancel on Escape or backdrop click when isLoading is true', () => {
+    const handleCancel = vi.fn();
+
+    render(
+      <ConfirmDialog
+        isOpen={true}
+        isLoading={true}
+        onConfirm={vi.fn()}
+        onCancel={handleCancel}
+        title="Delete Workout Session"
+        consequence="This action cannot be undone."
+      />
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(handleCancel).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole('dialog');
+    const overlay = dialog.parentElement;
+    expect(overlay).not.toBeNull();
+    fireEvent.click(overlay!);
+    expect(handleCancel).not.toHaveBeenCalled();
+  });
 });

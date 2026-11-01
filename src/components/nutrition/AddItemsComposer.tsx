@@ -11,7 +11,7 @@ import type { CustomDish } from '../../types/database';
 import { formatFileSize } from '../../utils/imageCompression';
 import { StatusBanner } from '../common/StatusBanner';
 import { getScrollBehavior, type StagedItem } from './nutritionEngineHelpers';
-import { parseNutrition, formatQuotaExceededMessage } from './parseNutrition';
+import { parseNutrition, formatQuotaExceededMessage, type AiQuotaInfo } from './parseNutrition';
 import { useNutritionPhotoPicker } from './useNutritionPhotoPicker';
 import { useFeatureFlag } from '../../hooks/useFeatureFlag';
 
@@ -20,7 +20,7 @@ const UpgradeSheet = React.lazy(() => import('../billing/UpgradeSheet'));
 export interface AddItemsComposerProps {
   customDishes?: CustomDish[];
   scrollMarginBottom?: number;
-  onParsed: (items: StagedItem[]) => void;
+  onParsed: (items: StagedItem[], quota?: AiQuotaInfo) => void;
   onEnterManually: () => void;
   onCancel: () => void;
 }
@@ -90,7 +90,11 @@ export const AddItemsComposer: React.FC<AddItemsComposerProps> = memo(({
       });
 
       if (isCancelledRef.current) return;
-      onParsed(result.items);
+      if (result.quota !== undefined) {
+        onParsed(result.items, result.quota);
+      } else {
+        onParsed(result.items);
+      }
     } catch (err: any) {
       if (isCancelledRef.current) return;
       if (err?.code === 'quota_exceeded') {

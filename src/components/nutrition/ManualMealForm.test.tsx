@@ -391,6 +391,65 @@ describe('ManualMealForm', () => {
       });
       expect(onStageMeal).not.toHaveBeenCalled();
     });
+
+    it('resets serving size and unit to their initial defaults', () => {
+      const onStageMeal = vi.fn();
+      const { result } = renderHook(() =>
+        useManualMealForm({
+          onStageMeal,
+        })
+      );
+
+      act(() => {
+        result.current.setManualDishName('Rice Bowl');
+        result.current.setManualCalories(500);
+        result.current.setManualServingSize(250);
+        result.current.setManualServingUnit('g');
+      });
+
+      expect(result.current.manualServingSize).toBe(250);
+      expect(result.current.manualServingUnit).toBe('g');
+
+      act(() => {
+        result.current.resetManualForm();
+      });
+
+      expect(result.current.manualDishName).toBe('');
+      expect(result.current.manualCalories).toBe('');
+      expect(result.current.manualServingSize).toBe(1);
+      expect(result.current.manualServingUnit).toBe('serving');
+    });
+
+    it('resets serving size and unit to their initial defaults after prefill', () => {
+      const onStageMeal = vi.fn();
+      const { result } = renderHook(() =>
+        useManualMealForm({
+          onStageMeal,
+        })
+      );
+
+      act(() => {
+        result.current.prefillForm({
+          name: 'Protein Shake',
+          calories: 200,
+          servingSize: 300,
+          servingUnit: 'ml',
+        });
+      });
+
+      expect(result.current.manualServingSize).toBe(300);
+      expect(result.current.manualServingUnit).toBe('ml');
+
+      act(() => {
+        result.current.resetManualForm();
+      });
+
+      expect(result.current.manualDishName).toBe('');
+      expect(result.current.manualCalories).toBe('');
+      expect(result.current.manualServingSize).toBe(1);
+      expect(result.current.manualServingUnit).toBe('serving');
+    });
+
     it('soft kcal-vs-macros hint appears/disappears as values change and does not block submit', () => {
       const onSubmit = vi.fn();
       const { rerender } = renderForm({

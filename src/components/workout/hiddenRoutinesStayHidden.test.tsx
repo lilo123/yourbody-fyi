@@ -436,4 +436,200 @@ describe('Hidden routines stay hidden (confirm-first tests)', () => {
       expect(screen.getByText('Push, Quads, & Core - Reduced')).toBeDefined();
     });
   });
+
+  describe('(6) starter routines hide once user has own or assigned routines', () => {
+    const ownerUserId = '00000000-0000-0000-0000-000000000042';
+    const coachUserId = '00000000-0000-0000-0000-000000000099';
+    const athleteUserId = '00000000-0000-0000-0000-000000000077';
+
+    const ownerBulkA: RoutineTemplate = {
+      id: 'tpl-owner-bulk-a',
+      user_id: ownerUserId,
+      name: 'Workout A: Push, Quads & Core - Bulk',
+      is_master: false,
+      assigned_to: null,
+      days_of_week: ['Sun', 'Wed'],
+    };
+
+    const ownerBulkB: RoutineTemplate = {
+      id: 'tpl-owner-bulk-b',
+      user_id: ownerUserId,
+      name: 'Workout B: Pull, Hamstrings & Core - Bulk',
+      is_master: false,
+      assigned_to: null,
+      days_of_week: ['Mon', 'Thu'],
+    };
+
+    it('owner case: picker shows only his 2 routines + Free/Rest (all starters hidden)', () => {
+      // 1. Picker modal shows only owner's 2 custom routines, Free Workout, and Rest Day (0 starters)
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[ownerBulkA, ownerBulkB]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            targetUserId={ownerUserId}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set<string>()}
+          />
+        </QueryClientProvider>
+      );
+
+      // His 2 routines must be visible
+      expect(screen.getByText('Workout A: Push, Quads & Core - Bulk')).toBeDefined();
+      expect(screen.getByText('Workout B: Pull, Hamstrings & Core - Bulk')).toBeDefined();
+      expect(screen.getByText('Free Workout')).toBeDefined();
+      expect(screen.getByText('Rest Day')).toBeDefined();
+
+      // ALL 4 default starters must be hidden
+      expect(screen.queryByText('Push, Quads, & Core - Reduced')).toBeNull();
+      expect(screen.queryByText('Pull, Hamstring, & Core - Reduced')).toBeNull();
+      expect(screen.queryByText('Workout A (Push, Quads & Core)')).toBeNull();
+      expect(screen.queryByText('Workout B (Pull, Hamstrings & Core)')).toBeNull();
+    });
+
+    it('owner case: Monday auto-schedule picks his Workout B Bulk over starter claiming Monday', () => {
+      // Monday 2026-10-19: owner's Workout B is Mon/Thu, starter Push is also Mon/Thu
+      const res = resolveRoutineAndExercises(
+        '2026-10-19', // Monday
+        [],
+        [ownerBulkA, ownerBulkB],
+        mockCatalog,
+        [],
+        true,
+        new Set<string>(),
+        ownerUserId
+      );
+      expect(res.routineName).toBe('Workout B: Pull, Hamstrings & Core - Bulk');
+    });
+
+    it('smoke case: catalog [] and hides [] shows Workout A starter and it is selectable', () => {
+      const onSelect = vi.fn();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={onSelect}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            targetUserId="00000000-0000-0000-0000-000000000088"
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set<string>()}
+          />
+        </QueryClientProvider>
+      );
+
+      const workoutABtn = screen.getByText('Workout A (Push, Quads & Core)');
+      expect(workoutABtn).toBeDefined();
+      workoutABtn.click();
+      expect(onSelect).toHaveBeenCalledWith('Workout A (Push, Quads & Core)');
+    });
+
+    it('athlete with coach\'s unassigned master only: starters are shown', () => {
+      const coachUnassignedMaster: RoutineTemplate = {
+        id: 'tpl-coach-unassigned',
+        user_id: coachUserId,
+        name: 'Coach Shared Master',
+        is_master: true,
+        assigned_to: null,
+        days_of_week: ['Tue'],
+        exercises: [],
+      };
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Tue"
+            customTemplates={[coachUnassignedMaster]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            targetUserId={athleteUserId}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set<string>()}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.getByText('Coach Shared Master')).toBeDefined();
+      expect(screen.getByText('Workout A (Push, Quads & Core)')).toBeDefined();
+      expect(screen.getByText('Push, Quads, & Core - Reduced')).toBeDefined();
+    });
+
+    it('athlete with a coach-ASSIGNED routine: starters are hidden', () => {
+      const coachAssignedRoutine: RoutineTemplate = {
+        id: 'tpl-coach-assigned-1',
+        user_id: coachUserId,
+        name: 'Assigned Athlete Routine',
+        is_master: false,
+        assigned_to: athleteUserId,
+        days_of_week: ['Mon'],
+        exercises: [],
+      };
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[coachAssignedRoutine]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            targetUserId={athleteUserId}
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set<string>()}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.getByText('Assigned Athlete Routine')).toBeDefined();
+      // Starters must be hidden
+      expect(screen.queryByText('Workout A (Push, Quads & Core)')).toBeNull();
+      expect(screen.queryByText('Push, Quads, & Core - Reduced')).toBeNull();
+      expect(screen.queryByText('Pull, Hamstring, & Core - Reduced')).toBeNull();
+    });
+
+    it('hidden starter stays hidden even when user has no own routines', () => {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RoutinePickerModal
+            isOpen={true}
+            onClose={() => {}}
+            onReloadScheduledRoutine={() => {}}
+            onSelectRoutine={() => {}}
+            activeRoutineName="Rest Day"
+            currentDayAbbr="Mon"
+            customTemplates={[]}
+            defaultTemplates={DEFAULT_WORKOUT_TEMPLATES}
+            exercises={mockCatalog}
+            targetUserId="00000000-0000-0000-0000-000000000088"
+            hasLoadedCatalog={true}
+            hiddenRoutineNames={new Set(['workout a (push, quads & core)'])}
+          />
+        </QueryClientProvider>
+      );
+
+      expect(screen.queryByText('Workout A (Push, Quads & Core)')).toBeNull();
+      expect(screen.getByText('Workout B (Pull, Hamstrings & Core)')).toBeDefined();
+    });
+  });
 });
