@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HistoryView } from './HistoryView';
@@ -363,4 +363,46 @@ describe('HistoryView Filters & Range Integration', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/workout');
     });
   });
+
+  describe('Calendar Jump Filter Clearing', () => {
+    it('clears session search query and category filter when picking a date from calendar', async () => {
+      renderComponent();
+
+      // Initially both sessions are visible
+      expect(screen.getByText('Heavy Chest Day')).toBeDefined();
+      expect(screen.getByText('Leg Day Volume')).toBeDefined();
+
+      // Filter by search query "Chest"
+      const searchInput = screen.getByTestId('session-search-input') as HTMLInputElement;
+      fireEvent.change(searchInput, { target: { value: 'Chest' } });
+
+      // Select category "Chest"
+      const chestChip = screen.getByRole('button', { name: 'Chest' });
+      fireEvent.click(chestChip);
+      expect(chestChip).toHaveAttribute('aria-pressed', 'true');
+
+      // Only Heavy Chest Day is shown, Leg Day Volume is filtered out
+      expect(screen.getByText('Heavy Chest Day')).toBeDefined();
+      expect(screen.queryByText('Leg Day Volume')).toBeNull();
+
+      // Open calendar sheet
+      fireEvent.click(screen.getByTestId('open-calendar-btn'));
+      expect(screen.getByTestId('history-calendar-sheet')).toBeDefined();
+
+      // Pick date 2026-09-10 (Leg Day Volume) from the calendar
+      const targetDateBtn = document.querySelector('button[data-date="2026-09-10"]');
+      expect(targetDateBtn).not.toBeNull();
+      fireEvent.click(targetDateBtn!);
+
+      // Search query must be cleared and category must be reset to All
+      expect(searchInput.value).toBe('');
+      const toolbar = screen.getByTestId('history-session-toolbar');
+      const allCatChip = within(toolbar).getByRole('button', { name: 'All' });
+      expect(allCatChip).toHaveAttribute('aria-pressed', 'true');
+
+      // Leg Day Volume must now be visible in the session list
+      expect(screen.getByText('Leg Day Volume')).toBeDefined();
+    });
+  });
 });
+

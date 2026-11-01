@@ -31,6 +31,8 @@ import { DEFAULT_EXERCISES_LIST } from '../../utils/ghostSets';
 import { normalizeDateStr } from '../../utils/ghostSets';
 import { fetchAllVisibleExercises, EXERCISE_SUMMARY_PROJECTION } from '../../lib/exercises';
 
+const DEFAULT_CATEGORY = 'All';
+
 export const HistoryView: React.FC = () => {
   const { user, isCoachMode } = useAuth();
   const navigate = useNavigate();
@@ -44,9 +46,9 @@ export const HistoryView: React.FC = () => {
   const [historyDomain, setHistoryDomain] = useState<'workouts' | 'nutrition'>('workouts');
   const [viewMode, setViewMode] = useState<'session' | 'exercise'>('session');
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
-  const [sessionCategory, setSessionCategory] = useState('All');
+  const [sessionCategory, setSessionCategory] = useState(DEFAULT_CATEGORY);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState(DEFAULT_CATEGORY);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [editingMealLog, setEditingMealLog] = useState<NutritionLog | null>(null);
   const [editingSet, setEditingSet] = useState<(WorkoutSet & { workout_date?: string; workout_name?: string }) | null>(null);
@@ -173,8 +175,17 @@ export const HistoryView: React.FC = () => {
   const handleClearFilters = useCallback(() => {
     setTimeRange('all');
     setSessionSearchQuery('');
-    setSessionCategory('All');
+    setSessionCategory(DEFAULT_CATEGORY);
   }, []);
+
+  const handleCalendarSelectDate = useCallback(
+    (civilDate: string) => {
+      setSessionSearchQuery('');
+      setSessionCategory(DEFAULT_CATEGORY);
+      handleSelectDate(civilDate);
+    },
+    [handleSelectDate]
+  );
 
   // Nutrition Data hook (window infinite query)
   const {
@@ -452,7 +463,7 @@ export const HistoryView: React.FC = () => {
         userId={targetUserId}
         timeZone={effectiveTimeZone}
         sessionDates={sessionDates}
-        onSelectDate={handleSelectDate}
+        onSelectDate={handleCalendarSelectDate}
       />
 
       {/* Edit Meal Sheet */}
