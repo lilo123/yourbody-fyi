@@ -483,6 +483,54 @@ describe('CustomDishesModal', () => {
     expect(errorBanner).toBeDefined();
     expect(errorBanner.textContent).toContain('Failed to save custom dish: Server error');
   });
+
+  it('does NOT close on header close button, Escape, or backdrop click when isSaving is true', () => {
+    const onClose = vi.fn();
+    render(
+      <CustomDishesModal
+        isOpen={true}
+        onClose={onClose}
+        editingDish={null}
+        dishModalName="Protein Oatmeal"
+        setDishModalName={vi.fn()}
+        dishModalCalories={300}
+        setDishModalCalories={vi.fn()}
+        dishModalProtein={10}
+        setDishModalProtein={vi.fn()}
+        dishModalCarbs={54}
+        setDishModalCarbs={vi.fn()}
+        dishModalFat={5}
+        setDishModalFat={vi.fn()}
+        dishModalFiber={8}
+        setDishModalFiber={vi.fn()}
+        dishModalItems={[mockItem]}
+        setDishModalItems={vi.fn()}
+        onSaveDish={vi.fn()}
+        onDeleteDish={vi.fn()}
+        isSaving={true}
+        isDeleting={false}
+        customDishes={[]}
+        onOpenEditDishModal={vi.fn()}
+      />
+    );
+
+    // 1. Header close button must be disabled and not trigger onClose
+    const closeBtn = screen.getByLabelText('Close dialog');
+    expect(closeBtn).toBeDisabled();
+    fireEvent.click(closeBtn);
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 2. Escape key must not trigger onClose
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 3. Backdrop click must not trigger onClose
+    const modal = screen.getByTestId('custom-dish-modal');
+    const overlay = modal.parentElement;
+    expect(overlay).not.toBeNull();
+    fireEvent.click(overlay!);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 

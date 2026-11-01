@@ -6,7 +6,7 @@ import { getDishIcon } from '../../utils/dishIcons';
 import { Star, X, Trash2, Edit2 } from 'lucide-react';
 import { CustomDishEditor } from './CustomDishEditor';
 import { NotesField } from './NotesField';
-import { useModalA11y } from '../../hooks/useModalA11y';
+import { AccessibleModal } from '../common/AccessibleModal';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { StatusBanner } from '../common/StatusBanner';
 
@@ -71,37 +71,44 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
   const baseId = useId();
   const nameId = `${baseId}-dish-name`;
 
-  const dishModalRef = useModalA11y(isOpen, onClose);
   const isOnline = useOnlineStatus();
 
   const recipeNeedsIngredient = dishModalItems.length === 0;
 
+  const handleClose = () => {
+    if (isSaving) {
+      return;
+    }
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div
-        ref={dishModalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dish-modal-title"
-        data-testid="custom-dish-modal"
-        className="bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom,1.25rem))] max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
-      >
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-          <h3 id="dish-modal-title" className="text-sm font-bold text-white flex items-center gap-2">
-            <Star className="w-4 h-4 text-amber-400" />
-            {editingDish ? 'Edit Custom Dish' : 'New Custom Dish'}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="text-zinc-400 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      titleId="dish-modal-title"
+      testId="custom-dish-modal"
+      dismissible={!isSaving}
+      closeOnBackdropClick={!isSaving}
+      className="bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom,1.25rem))] max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+    >
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <h3 id="dish-modal-title" className="text-sm font-bold text-white flex items-center gap-2">
+          <Star className="w-4 h-4 text-amber-400" />
+          {editingDish ? 'Edit Custom Dish' : 'New Custom Dish'}
+        </h3>
+        <button
+          type="button"
+          onClick={handleClose}
+          disabled={isSaving}
+          aria-label="Close dialog"
+          className="text-zinc-400 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
 
         {saveError && (
           <StatusBanner
@@ -178,8 +185,9 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
               )}
               <button
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-bold text-zinc-400 hover:bg-zinc-800 transition touch-manipulation"
+                onClick={handleClose}
+                disabled={isSaving}
+                className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-bold text-zinc-400 hover:bg-zinc-800 transition touch-manipulation disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -274,8 +282,7 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </AccessibleModal>
   );
 });
 

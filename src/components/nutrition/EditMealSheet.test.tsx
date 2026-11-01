@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EditMealSheet } from './EditMealSheet';
 import type { NutritionLog } from '../../types/database';
@@ -437,4 +437,71 @@ describe('EditMealSheet', () => {
     // Save button must remain enabled because name was edited!
     expect(screen.getByTestId('save-edit-meal-btn')).not.toBeDisabled();
   });
+
+  it('does NOT close on header close button, Escape, or backdrop click while save is pending', async () => {
+    const client = createClient();
+    const currentMeal = meal([component()]);
+    const onClose = vi.fn();
+
+    let pendingResolve: any;
+    const pendingPromise = new Promise((resolve) => {
+      pendingResolve = resolve;
+    });
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      const builder = createSupabaseBuilder(table, [{ id: 'log-1' }]);
+      builder.update = vi.fn(() => {
+        const updateBuilder = createSupabaseBuilder(table, [{ id: 'log-1' }]);
+        updateBuilder.select = vi.fn(() => pendingPromise as any);
+        return updateBuilder;
+      }) as any;
+      return builder;
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <EditMealSheet
+          isOpen={true}
+          meal={currentMeal}
+          onClose={onClose}
+        />
+      </QueryClientProvider>
+    );
+
+    // Make draft dirty so save button is enabled
+    const nameInput = screen.getByTestId('dish-name-input');
+    fireEvent.change(nameInput, { target: { value: 'Saving Meal Name' } });
+
+    const saveBtn = screen.getByTestId('save-edit-meal-btn');
+    expect(saveBtn).not.toBeDisabled();
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    // Save is now pending
+    await waitFor(() => {
+      expect(screen.getByText('Saving...')).toBeInTheDocument();
+    });
+
+    // 1. Header close button must be disabled and not trigger onClose
+    const closeBtn = screen.getByTestId('close-edit-meal-sheet-btn');
+    expect(closeBtn).toBeDisabled();
+    fireEvent.click(closeBtn);
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 2. Escape must not trigger onClose
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 3. Backdrop click must not trigger onClose
+    const overlay = screen.getByTestId('edit-meal-sheet-overlay');
+    fireEvent.click(overlay);
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Clean up pending promise
+    await act(async () => {
+      pendingResolve({ data: [{ id: 'log-1' }], error: null });
+    });
+  });
 });
+
