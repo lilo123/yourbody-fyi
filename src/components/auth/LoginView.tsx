@@ -12,6 +12,45 @@ const InAppBrowserBanner = React.lazy(() =>
 
 type AuthMode = 'signin' | 'register' | 'check_email' | 'forgot_password';
 
+export function getSafeRedirectPath(from: unknown, userRole?: string): string | null {
+  let candidate = '';
+  if (typeof from === 'string') {
+    candidate = from.trim();
+  } else if (typeof from === 'object' && from !== null) {
+    const fromLocation = from as { pathname?: unknown; search?: unknown };
+    const pathname = typeof fromLocation.pathname === 'string' ? fromLocation.pathname : '';
+    const search = typeof fromLocation.search === 'string' ? fromLocation.search : '';
+    candidate = `${pathname}${search}`.trim();
+  }
+
+  if (!candidate) {
+    return null;
+  }
+
+  // Must be a relative path: starts with '/', not '//', no backslashes, no scheme
+  if (!candidate.startsWith('/') || candidate.startsWith('//') || candidate.includes('\\')) {
+    return null;
+  }
+
+  // Reject URLs with schemes (e.g. 'https://evil.com', 'javascript:...', etc.)
+  const [pathOnly] = candidate.split('?');
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate) || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(pathOnly)) {
+    return null;
+  }
+
+  // Must not redirect to /login
+  if (pathOnly === '/login' || pathOnly.startsWith('/login/')) {
+    return null;
+  }
+
+  // Role permissions: a non-coach must not be sent to /coach
+  if ((pathOnly === '/coach' || pathOnly.startsWith('/coach/')) && userRole !== 'coach') {
+    return null;
+  }
+
+  return candidate;
+}
+
 export interface LoginViewProps {
   prerenderDisabled?: boolean;
 }
@@ -113,12 +152,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ prerenderDisabled = false 
       }
     } else if (mode === 'signin') {
       const res = await signIn(email, password);
-      // Wait, need to route coach to /coach and athlete to /workout on signIn according to the test!
       if (res.success) {
         if (res.role === 'coach') {
           navigate('/coach');
         } else {
-          navigate('/workout');
+          const fromState = (location.state as { from?: unknown } | null)?.from;
+          const returnTo = getSafeRedirectPath(fromState, res.role);
+          if (returnTo) {
+            navigate(returnTo);
+          } else {
+            navigate('/workout');
+          }
         }
       } else {
         setError(res.error || 'Failed to sign in');

@@ -119,6 +119,16 @@ try {
         /<meta\s+property=["']og:url["']\s+content=["'][^"']*["']\s*\/?>/i,
         `<meta property="og:url" content="https://www.yourbody.fyi${route.path}" />`
       );
+      html = html.replace(
+        /<meta\s+property=["']og:image:alt["']\s+content=["'][^"']*["']\s*\/?>/i,
+        `<meta property="og:image:alt" content="${route.title}" />`
+      );
+      if (/<meta\s+(?:name|property)=["']twitter:image:alt["']/i.test(html)) {
+        html = html.replace(
+          /<meta\s+(?:name|property)=["']twitter:image:alt["']\s+content=["'][^"']*["']\s*\/?>/i,
+          `<meta name="twitter:image:alt" content="${route.title}" />`
+        );
+      }
     }
 
     const outFilePath = path.resolve(distDir, route.outFile);

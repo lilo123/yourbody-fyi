@@ -500,9 +500,10 @@ test.describe('Library Acceptance Proofs', () => {
 
     await startRoutineBtn.click();
 
-    // Verify URL navigation to /workout?routine=<id>
-    await page.waitForURL((url) => url.pathname === '/workout' && url.searchParams.get('routine') === tplId);
-    expect(page.url()).toContain(`/workout?routine=${tplId}`);
+    // Verify navigation to /workout, routine applied to DOM, and routine param consumed
+    await page.waitForURL((url) => url.pathname === '/workout');
+    await expect(page.locator('[data-testid="routine-select-btn"]')).toContainText(tplName, { timeout: 15000 });
+    await expect(page).not.toHaveURL(/routine=/);
   });
 
   // Proof 7: (7) at 320px: no horizontal overflow (scrollWidth<=clientWidth), all visible buttons in the list >=44x44, search input font-size >=16px

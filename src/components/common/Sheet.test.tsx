@@ -51,4 +51,46 @@ describe('Sheet', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
+
+  it('disables close button and does not trigger onClose when dismissible is false', async () => {
+    const handleClose = vi.fn();
+    const { container } = render(
+      <Sheet
+        isOpen={true}
+        onClose={handleClose}
+        title="Saving Sheet"
+        dismissible={false}
+      >
+        <p>Saving in progress</p>
+      </Sheet>
+    );
+
+    const closeBtn = screen.getByRole('button', { name: 'Close Saving Sheet' });
+    expect(closeBtn).toBeDisabled();
+
+    fireEvent.click(closeBtn);
+    expect(handleClose).not.toHaveBeenCalled();
+
+    await expectNoA11yViolations(container);
+  });
+
+  it('disables close button and does not trigger onClose when dismissible function returns false', () => {
+    const handleClose = vi.fn();
+    render(
+      <Sheet
+        isOpen={true}
+        onClose={handleClose}
+        title="Dynamic Dismissible Sheet"
+        dismissible={() => false}
+      >
+        <p>Saving in progress</p>
+      </Sheet>
+    );
+
+    const closeBtn = screen.getByRole('button', { name: 'Close Dynamic Dismissible Sheet' });
+    expect(closeBtn).toBeDisabled();
+
+    fireEvent.click(closeBtn);
+    expect(handleClose).not.toHaveBeenCalled();
+  });
 });

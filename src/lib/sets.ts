@@ -441,7 +441,7 @@ export async function updateSet(
 export async function deleteSet(
   _client: SupabaseClient,
   setId: string,
-  optionsOrUserId?: string | { workoutDate?: string; targetUserId?: string }
+  optionsOrUserId?: string | { workoutDate?: string; targetUserId?: string; workoutRef?: string }
 ): Promise<void> {
   if (!setId) throw new Error('setId is required');
 
@@ -450,9 +450,18 @@ export async function deleteSet(
       ? optionsOrUserId
       : optionsOrUserId?.targetUserId || getActiveUserId() || '';
 
+  const workoutDate =
+    typeof optionsOrUserId === 'object' ? optionsOrUserId?.workoutDate : undefined;
+  const workoutRef =
+    typeof optionsOrUserId === 'object' ? optionsOrUserId?.workoutRef : undefined;
+
   await enqueueAndAwait({
     userId: targetUserId,
     kind: 'set.delete',
-    payload: { id: setId },
+    payload: {
+      id: setId,
+      ...(workoutDate ? { workoutDate } : {}),
+      ...(workoutRef ? { workoutRef } : {}),
+    },
   });
 }

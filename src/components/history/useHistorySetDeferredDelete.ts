@@ -114,10 +114,43 @@ export function useHistorySetDeferredDelete({
   );
 
   const displayedSessionsWithSets = useMemo(() => {
-    const pendingId = pending?.item.id;
+    const pendingItem = pending?.item;
+    const pendingId = pendingItem?.id;
     return displayedSessions.map((s) => {
       const rawSets = sessionSetsMap[s.id] || s.sets || [];
+      const hasPendingSet = Boolean(
+        pendingId &&
+          (pendingItem?.workout_id === s.id || rawSets.some((item) => item.id === pendingId))
+      );
       const sets = pendingId ? rawSets.filter((item) => item.id !== pendingId) : rawSets;
+
+      if (hasPendingSet && pendingItem) {
+        const isWorkingSet = !pendingItem.set_type || pendingItem.set_type === 'working';
+        const weightNum = Number(pendingItem.weight);
+        const repsNum = Number(pendingItem.reps);
+        const safeWeight = Number.isFinite(weightNum) && weightNum > 0 ? weightNum : 0;
+        const safeReps = Number.isFinite(repsNum) && repsNum > 0 ? repsNum : 0;
+        const setVolume = isWorkingSet ? safeWeight * safeReps : 0;
+
+        const baseSetCount =
+          s.set_count != null
+            ? Number(s.set_count) || 0
+            : rawSets.filter((item) => !item.set_type || item.set_type === 'working').length;
+        const baseTotalVolume =
+          s.total_volume != null
+            ? Number(s.total_volume) || 0
+            : rawSets
+                .filter((item) => !item.set_type || item.set_type === 'working')
+                .reduce((sum, item) => sum + (Number(item.weight) || 0) * (Number(item.reps) || 0), 0);
+
+        return {
+          ...s,
+          sets,
+          set_count: isWorkingSet ? Math.max(0, baseSetCount - 1) : baseSetCount,
+          total_volume: Math.max(0, baseTotalVolume - setVolume),
+        };
+      }
+
       return {
         ...s,
         sets,
