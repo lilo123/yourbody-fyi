@@ -515,6 +515,150 @@ describe('overlay', () => {
       expect(dayB!.set_count).toBe(2); // unchanged
     });
 
+    it('lowers total_volume as well as set_count when a server set is deleted offline with weight/reps in payload', () => {
+      const existingHistory: HistorySession[] = [
+        {
+          id: 'hist-a',
+          date: '2026-03-28T10:00:00Z',
+          workout_date: '2026-03-28',
+          civil_date: '2026-03-28',
+          name: 'Day A Workout',
+          set_count: 3,
+          total_volume: 3000,
+          sets: [],
+        },
+      ];
+
+      const ops: OutboxOp[] = [
+        {
+          opId: 'op-del-a1',
+          userId: 'u1',
+          seq: 1,
+          createdAt: '2026-03-29T11:00:00Z',
+          kind: 'set.delete',
+          payload: {
+            id: 'server-set-a1',
+            workoutDate: '2026-03-28',
+            workoutRef: 'hist-a',
+            weight: 200,
+            reps: 5,
+            set_type: 'working',
+          } as any,
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      const updatedHistory = applyPendingToHistory(existingHistory, ops);
+      const dayA = updatedHistory.find((s) => s.id === 'hist-a');
+
+      expect(dayA).toBeDefined();
+      expect(dayA!.set_count).toBe(2);
+      expect(dayA!.total_volume).toBe(2000); // 3000 - (200 * 5)
+      expect(dayA!.pending).toBe(true);
+    });
+
+    it('lowers total_volume when server set is deleted and weight/reps are resolved from session.sets', () => {
+      const existingHistory: HistorySession[] = [
+        {
+          id: 'hist-a',
+          date: '2026-03-28T10:00:00Z',
+          workout_date: '2026-03-28',
+          civil_date: '2026-03-28',
+          name: 'Day A Workout',
+          set_count: 3,
+          total_volume: 3000,
+          sets: [
+            {
+              id: 'server-set-a1',
+              workout_id: 'hist-a',
+              exercise_id: 'bench',
+              weight: 200,
+              reps: 5,
+              set_index: 0,
+              set_type: 'working',
+              workout_date: '2026-03-28',
+              workout_name: 'Day A Workout',
+              created_at: '2026-03-28T10:00:00Z',
+            },
+          ],
+        },
+      ];
+
+      const ops: OutboxOp[] = [
+        {
+          opId: 'op-del-a1',
+          userId: 'u1',
+          seq: 1,
+          createdAt: '2026-03-29T11:00:00Z',
+          kind: 'set.delete',
+          payload: {
+            id: 'server-set-a1',
+            workoutDate: '2026-03-28',
+            workoutRef: 'hist-a',
+          },
+          state: 'pending',
+          attempts: 0,
+        },
+      ];
+
+      const updatedHistory = applyPendingToHistory(existingHistory, ops);
+      const dayA = updatedHistory.find((s) => s.id === 'hist-a');
+
+      expect(dayA).toBeDefined();
+      expect(dayA!.set_count).toBe(2);
+      expect(dayA!.total_volume).toBe(2000); // 3000 - (200 * 5)
+      expect(dayA!.sets).toHaveLength(0); // removed from session.sets
+      expect(dayA!.pending).toBe(true);
+    });
+
+    it('lowers total_volume and set_count matching session local civil date in evening west of UTC', () => {
+      const prevTz = process.env.TZ;
+      process.env.TZ = 'America/Los_Angeles';
+      try {
+        // 18:30 PDT on 2026-10-31 -> UTC timestamp is 2026-11-01T01:30:00Z
+        const isoDate = '2026-11-01T01:30:00.000Z';
+        const existingHistory: HistorySession[] = [
+          {
+            id: 'session-evening',
+            date: isoDate,
+            name: 'Evening Workout',
+            set_count: 2,
+            total_volume: 2000,
+            sets: [],
+          },
+        ];
+
+        const ops: OutboxOp[] = [
+          {
+            opId: 'op-del-evening',
+            userId: 'u1',
+            seq: 1,
+            createdAt: isoDate,
+            kind: 'set.delete',
+            payload: {
+              id: 'evening-set-1',
+              workoutDate: '2026-10-31', // Local civil date in America/Los_Angeles
+              workoutRef: 'session-evening',
+              weight: 100,
+              reps: 10,
+              set_type: 'working',
+            } as any,
+            state: 'pending',
+            attempts: 0,
+          },
+        ];
+
+        const updatedHistory = applyPendingToHistory(existingHistory, ops);
+        expect(updatedHistory).toHaveLength(1);
+        expect(updatedHistory[0].set_count).toBe(1);
+        expect(updatedHistory[0].total_volume).toBe(1000);
+        expect(updatedHistory[0].pending).toBe(true);
+      } finally {
+        process.env.TZ = prevTz;
+      }
+    });
+
     it('does not lower set count of day B when an offline-created set on day A is deleted', () => {
       const existingHistory: HistorySession[] = [
         {
