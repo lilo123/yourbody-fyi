@@ -1,4 +1,4 @@
-import React, { useState, useId, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import type { UserProfile, UserRole } from '../../types/database';
@@ -222,6 +222,24 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
   const displayNameId = useId();
   const restTimerLabelId = useId();
   const restDurationSelectId = useId();
+
+  useEffect(() => {
+    if (profile?.username !== undefined) {
+      setUsername(profile.username || '');
+    }
+  }, [profile?.username]);
+
+  useEffect(() => {
+    if (profile?.auto_rest_timer !== undefined) {
+      setAutoRestTimer(profile.auto_rest_timer);
+    }
+  }, [profile?.auto_rest_timer]);
+
+  useEffect(() => {
+    if (profile?.rest_timer_seconds !== undefined && profile.rest_timer_seconds !== null) {
+      setRestTimerSeconds(profile.rest_timer_seconds);
+    }
+  }, [profile?.rest_timer_seconds]);
 
   // Coach Mode capability
   const hasCoachCapability = Boolean(profile?.role === 'coach' || profile?.is_coach_mode || isCoachMode);

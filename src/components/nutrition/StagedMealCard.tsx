@@ -19,6 +19,7 @@ import {
   type StagedItem,
   type StagedMeal,
 } from './nutritionEngineHelpers';
+import type { AiQuotaInfo } from './parseNutrition';
 import type { CustomDish } from '../../types/database';
 import { AddItemForm, type AddItemFormData } from './AddItemForm';
 import { AddItemsComposer } from './AddItemsComposer';
@@ -46,33 +47,43 @@ export interface StagedMealCardProps {
   onDiscardStagedMeal: (e?: React.MouseEvent<HTMLButtonElement>) => void;
   isPending: boolean;
   customDishes?: CustomDish[];
-  onAddParsedItems?: (items: StagedItem[], mealAtStart?: StagedMeal) => void;
+  onAddParsedItems?: (items: StagedItem[], mealAtStart?: StagedMeal, quota?: AiQuotaInfo) => void;
+  onQuotaUpdate?: (quota: AiQuotaInfo) => void;
   onAnalyzeWithAiInstead?: () => void;
   isAnalyzing?: boolean;
 }
 
+function syncMealAfterItemChange(
+  stagedMeal: StagedMeal,
+  updatedItems: StagedItem[]
+): StagedMeal {
+  const totals = recomputeStagedTotals(updatedItems);
+  const single = updatedItems.length === 1 ? updatedItems[0] : null;
+  return {
+    ...stagedMeal,
+    items: updatedItems,
+    ...totals,
+    ...(single
+      ? {
+          explanation: `${formatCalories(totals.calories)} kcal (${stagedMeal.name})`,
+          ...(single.quantity > 0
+            ? {
+                servingSize: single.quantity,
+                servingUnit: single.unit,
+              }
+            : {}),
+        }
+      : {}),
+  };
+}
+
 export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
-  mode = 'stage',
-  isDirty = false,
-  date,
-  onDateChange,
-  onCancel,
-  stagedMeal,
-  dailyTotals,
-  targets,
-  onUpdateStagedMeal,
-  onApplyStagedItemChange,
-  onDeleteItem,
-  onSaveItemAsCustomDish,
-  onLogStagedMeal,
-  onSaveStagedAsCustomDish,
-  onDiscardStagedMeal,
-  isPending,
-  customDishes = [],
-  onAddParsedItems,
-  onAnalyzeWithAiInstead,
-  isAnalyzing = false,
-  navHeight: navHeightProp,
+  mode = 'stage', isDirty = false, date, onDateChange, onCancel,
+  stagedMeal, dailyTotals, targets,
+  onUpdateStagedMeal, onApplyStagedItemChange, onDeleteItem,
+  onSaveItemAsCustomDish, onLogStagedMeal, onSaveStagedAsCustomDish, onDiscardStagedMeal,
+  isPending, customDishes = [], onAddParsedItems, onQuotaUpdate,
+  onAnalyzeWithAiInstead, isAnalyzing = false, navHeight: navHeightProp,
 }) => {
   const isOnline = useOnlineStatus();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -174,17 +185,14 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
     wasComposerOpenRef.current = isComposerOpen;
   }, [newlyAddedItemId, isAddingItem, isComposerOpen]);
 
-  const handleAddParsed = (items: StagedItem[]) => {
+  const handleAddParsed = (items: StagedItem[], quota?: AiQuotaInfo) => {
     if (onAddParsedItems) {
-      onAddParsedItems(items, stagedMeal);
+      onAddParsedItems(items, stagedMeal, quota);
     } else {
+      if (quota && onQuotaUpdate) onQuotaUpdate(quota);
       const merged = mergeOrAppendStagedItems(stagedMeal.items, items);
       const totals = recomputeStagedTotals(merged);
-      onUpdateStagedMeal({
-        ...stagedMeal,
-        items: merged,
-        ...totals,
-      });
+      onUpdateStagedMeal({ ...stagedMeal, items: merged, ...totals, ...(quota ? { quota } : {}) });
     }
     setIsComposerOpen(false);
   };
@@ -397,24 +405,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                   const updatedItems = stagedMeal.items.map((it) =>
                     it.id === item.id ? reanchorStagedItem(it, next) : it
                   );
-                  const totals = recomputeStagedTotals(updatedItems);
-                  const single = updatedItems.length === 1 ? updatedItems[0] : null;
-                  onUpdateStagedMeal({
-                    ...stagedMeal,
-                    items: updatedItems,
-                    ...totals,
-                    ...(single
-                      ? {
-                          explanation: `${formatCalories(totals.calories)} kcal (${stagedMeal.name})`,
-                          ...(single.quantity > 0
-                            ? {
-                                servingSize: single.quantity,
-                                servingUnit: single.unit,
-                              }
-                            : {}),
-                        }
-                      : {}),
-                  });
+                  onUpdateStagedMeal(syncMealAfterItemChange(stagedMeal, updatedItems));
                 }}
                 onRemove={() => onDeleteItem(item.id)}
                 onSaveToQuickLog={() => onSaveItemAsCustomDish(item)}
@@ -422,12 +413,7 @@ export const StagedMealCard: React.FC<StagedMealCardProps> = memo(({
                   const updatedItems = stagedMeal.items.map((it) =>
                     it.id === item.id ? updateStagedItemNutrition(it, edited) : it
                   );
-                  const totals = recomputeStagedTotals(updatedItems);
-                  onUpdateStagedMeal({
-                    ...stagedMeal,
-                    items: updatedItems,
-                    ...totals,
-                  });
+                  onUpdateStagedMeal(syncMealAfterItemChange(stagedMeal, updatedItems));
                 }}
               />
               {item.calorieCorrection && (

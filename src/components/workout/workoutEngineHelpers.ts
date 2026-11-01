@@ -1,4 +1,5 @@
-import type { WorkoutSet, Exercise, RoutineTemplate } from '../../types/database';
+import type React from 'react';
+import type { WorkoutSet, Exercise, RoutineTemplate, ExerciseBenchmarks } from '../../types/database';
 import {
   getDayOfWeekAbbr,
   getLocalDateStr,
@@ -7,6 +8,9 @@ import {
 } from '../../utils/ghostSets';
 
 import { UUID_REGEX, isValidUUID, isUUID } from '../../utils/uuid';
+import { formatSet, toDisplayWeight, type WeightUnit } from '../../utils/weight';
+import { workoutSessionStore, type SetDraftInput } from '../../utils/workoutSessionStore';
+import { comparePrSets, type PrMode } from '../../lib/prComparator';
 export { UUID_REGEX, isValidUUID, isUUID };
 
 export function resolveCleanExerciseName(
@@ -52,15 +56,67 @@ export interface ResolvedRoutineResult {
   targetReps: Record<string, number>;
 }
 
+export function isOwnOrAssignedRoutine(
+  template?: RoutineTemplate | null,
+  targetUserId?: string | null
+): boolean {
+  if (!template || !targetUserId) return false;
+  return template.user_id === targetUserId || template.assigned_to === targetUserId;
+}
+
+export function hasOwnOrAssignedRoutines(
+  catalog?: RoutineTemplate[] | null,
+  targetUserId?: string | null
+): boolean {
+  if (!targetUserId || !catalog || catalog.length === 0) return false;
+  return catalog.some((t) => isOwnOrAssignedRoutine(t, targetUserId));
+}
+
+export function shouldHideStarterRoutines(
+  catalog?: RoutineTemplate[] | null,
+  targetUserId?: string | null,
+  hasLoadedCatalog?: boolean
+): boolean {
+  if (!hasLoadedCatalog) return false;
+  return hasOwnOrAssignedRoutines(catalog, targetUserId);
+}
+
+export function isDefaultRoutineHidden(
+  templateName: string,
+  customTemplates?: RoutineTemplate[],
+  hiddenRoutineNames?: Set<string> | string[] | null,
+  hasLoadedCatalog?: boolean,
+  targetUserId?: string | null
+): boolean {
+  const normName = templateName.trim().toLowerCase();
+
+  // Explicitly in hiddenRoutineNames
+  if (hiddenRoutineNames) {
+    if (hiddenRoutineNames instanceof Set) {
+      if (hiddenRoutineNames.has(normName)) return true;
+    } else if (Array.isArray(hiddenRoutineNames)) {
+      if (hiddenRoutineNames.some((name) => name.trim().toLowerCase() === normName)) return true;
+    }
+  }
+
+  // Hide all starters once the loaded catalog contains at least one own or assigned routine
+  if (shouldHideStarterRoutines(customTemplates, targetUserId, hasLoadedCatalog)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function resolveRoutineAndExercises(
   workoutDate: string,
   todaySets: WorkoutSet[],
   customTemplates: RoutineTemplate[],
   exerciseCatalog: Exercise[],
   removedExercises: string[] = [],
-  hasLoadedCatalog?: boolean
+  hasLoadedCatalog?: boolean,
+  hiddenRoutineNames?: Set<string> | string[],
+  targetUserId?: string | null
 ): ResolvedRoutineResult {
-  const hasCatalog = Boolean(hasLoadedCatalog);
   let resolvedRoutine = 'Rest Day';
   let resolvedExList: string[] = [];
   let resolvedTargets: Record<string, number> = {};
@@ -81,24 +137,22 @@ export function resolveRoutineAndExercises(
     const loggedRoutineName =
       todaySets[0].workout_name || (todaySets[0] as any)?.workouts?.name || '';
     const normLoggedName = loggedRoutineName.trim().toLowerCase();
-    const matchedCustom = customTemplates.find((t) => {
-      const tNorm = t.name.trim().toLowerCase();
+    const matchedCustom = customTemplates.find((template) => {
+      const tNorm = template.name.trim().toLowerCase();
       return (
         tNorm === normLoggedName ||
         (normLoggedName.length > 0 &&
           (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
       );
     });
-    const matchedDef = !hasCatalog
-      ? DEFAULT_WORKOUT_TEMPLATES.find((t) => {
-          const tNorm = t.name.trim().toLowerCase();
-          return (
-            tNorm === normLoggedName ||
-            (normLoggedName.length > 0 &&
-              (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
-          );
-        })
-      : undefined;
+    const matchedDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
+      const tNorm = template.name.trim().toLowerCase();
+      return (
+        tNorm === normLoggedName ||
+        (normLoggedName.length > 0 &&
+          (tNorm.startsWith(normLoggedName) || normLoggedName.startsWith(tNorm)))
+      );
+    });
 
     let baseExercises: string[] = [];
     const setTargets: Record<string, number> = {};
@@ -191,30 +245,37 @@ export function resolveRoutineAndExercises(
       resolvedTargets[exName] = Math.max(currentTarget, loggedSetsForEx.length);
     });
   } else {
+    const hasCatalog = Boolean(hasLoadedCatalog);
     const dayAbbr = getDayOfWeekAbbr(workoutDate);
-    const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
-    const scheduledDef = !hasCatalog
-      ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
-          t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
-        )
-      : undefined;
+    const scheduledOwn = customTemplates.find(
+      (template) => isOwnOrAssignedRoutine(template, targetUserId) && template.days_of_week?.includes(dayAbbr)
+    );
+    const scheduledCustom = scheduledOwn || customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
+    const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
+      if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog, targetUserId)) {
+        return false;
+      }
+      return template.days.some((day) => day === dayAbbr || day.slice(0, 3) === dayAbbr);
+    });
 
-    if (scheduledCustom && scheduledCustom.exercises) {
+    if (scheduledCustom) {
       resolvedRoutine = scheduledCustom.name;
-      const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-      sorted.forEach((e) => {
-        const name =
-          e.exercise?.name ||
-          e.exercise_name ||
-          exerciseCatalog.find((ex) => ex.id === e.exercise_id)?.name ||
-          DEFAULT_EXERCISES_LIST.find((ex) => ex.id === e.exercise_id)?.name ||
-          e.exercise_id;
-        if (name) {
-          resolvedExList.push(name);
-          resolvedTargets[name] = e.target_sets || 3;
-          resolvedReps[name] = e.target_reps || 10;
-        }
-      });
+      if (scheduledCustom.exercises) {
+        const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+        sorted.forEach((e) => {
+          const name =
+            e.exercise?.name ||
+            e.exercise_name ||
+            exerciseCatalog.find((ex) => ex.id === e.exercise_id)?.name ||
+            DEFAULT_EXERCISES_LIST.find((ex) => ex.id === e.exercise_id)?.name ||
+            e.exercise_id;
+          if (name) {
+            resolvedExList.push(name);
+            resolvedTargets[name] = e.target_sets || 3;
+            resolvedReps[name] = e.target_reps || 10;
+          }
+        });
+      }
     } else if (scheduledDef) {
       resolvedRoutine = scheduledDef.name;
       resolvedExList = [...scheduledDef.exercises];
@@ -241,6 +302,8 @@ export function checkIsScheduledRoutineDirty({
   targetSetCounts,
   targetRepCounts,
   hasLoadedCatalog,
+  hiddenRoutineNames,
+  targetUserId,
 }: {
   workoutDate: string;
   activeRoutineName: string;
@@ -251,15 +314,21 @@ export function checkIsScheduledRoutineDirty({
   targetSetCounts?: Record<string, number>;
   targetRepCounts?: Record<string, number>;
   hasLoadedCatalog?: boolean;
+  hiddenRoutineNames?: Set<string> | string[];
+  targetUserId?: string | null;
 }): boolean {
   const hasCatalog = Boolean(hasLoadedCatalog);
   const dayAbbr = getDayOfWeekAbbr(workoutDate);
-  const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
-  const scheduledDef = !hasCatalog
-    ? DEFAULT_WORKOUT_TEMPLATES.find((t) =>
-        t.days.some((d) => d === dayAbbr || d.slice(0, 3) === dayAbbr)
-      )
-    : undefined;
+  const scheduledOwn = customTemplates.find(
+    (template) => isOwnOrAssignedRoutine(template, targetUserId) && template.days_of_week?.includes(dayAbbr)
+  );
+  const scheduledCustom = scheduledOwn || customTemplates.find((template) => template.days_of_week?.includes(dayAbbr));
+  const scheduledDef = DEFAULT_WORKOUT_TEMPLATES.find((template) => {
+    if (isDefaultRoutineHidden(template.name, customTemplates, hiddenRoutineNames, hasCatalog, targetUserId)) {
+      return false;
+    }
+    return template.days.some((day) => day === dayAbbr || day.slice(0, 3) === dayAbbr);
+  });
   const scheduledName = scheduledCustom?.name || scheduledDef?.name || 'Rest Day';
   if (activeRoutineName !== scheduledName) return true;
 
@@ -272,18 +341,20 @@ export function checkIsScheduledRoutineDirty({
   const scheduledTargetSets: Record<string, number> = {};
   const scheduledTargetReps: Record<string, number> = {};
 
-  if (scheduledCustom && scheduledCustom.exercises) {
-    const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-    scheduledExercises = sorted
-      .map((e) => {
-        const name = e.exercise?.name || e.exercise_name || exercises.find((ex) => ex.id === e.exercise_id)?.name || e.exercise_id;
-        if (name) {
-          scheduledTargetSets[name] = e.target_sets || 3;
-          if (e.target_reps) scheduledTargetReps[name] = e.target_reps;
-        }
-        return name;
-      })
-      .filter(Boolean);
+  if (scheduledCustom) {
+    if (scheduledCustom.exercises) {
+      const sorted = [...scheduledCustom.exercises].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+      scheduledExercises = sorted
+        .map((e) => {
+          const name = e.exercise?.name || e.exercise_name || exercises.find((ex) => ex.id === e.exercise_id)?.name || e.exercise_id;
+          if (name) {
+            scheduledTargetSets[name] = e.target_sets || 3;
+            if (e.target_reps) scheduledTargetReps[name] = e.target_reps;
+          }
+          return name;
+        })
+        .filter(Boolean);
+    }
   } else if (scheduledDef) {
     scheduledExercises = [...scheduledDef.exercises];
     Object.assign(scheduledTargetSets, scheduledDef.targetSets);
@@ -314,3 +385,159 @@ export function checkIsScheduledRoutineDirty({
 
   return false;
 }
+
+export function resolveExerciseId(
+  exerciseName: string,
+  exercisesCatalog: Exercise[],
+  customTemplates?: RoutineTemplate[]
+): string | undefined {
+  const normalizedName = exerciseName.trim().toLowerCase();
+  const matchedExercise = exercisesCatalog.find(
+    (item) => item.name.trim().toLowerCase() === normalizedName || item.id === exerciseName
+  ) || DEFAULT_EXERCISES_LIST.find(
+    (item) => item.name.trim().toLowerCase() === normalizedName || item.id === exerciseName
+  );
+  if (matchedExercise?.id && isValidUUID(matchedExercise.id)) {
+    return matchedExercise.id;
+  }
+  if (isValidUUID(exerciseName)) {
+    return exerciseName;
+  }
+  if (customTemplates) {
+    for (const template of customTemplates) {
+      for (const item of template.exercises || []) {
+        const itemName = item.exercise?.name || (item as any).exercise_name;
+        if (itemName && itemName.trim().toLowerCase() === normalizedName && isValidUUID(item.exercise_id)) {
+          return item.exercise_id;
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+export function resolveCardBenchmarks(
+  exerciseName: string,
+  serverBenchmarksMap: Record<string, ExerciseBenchmarks> | undefined,
+  localBenchmarks: ExerciseBenchmarks,
+  exercisesCatalog: Exercise[],
+  customTemplates: RoutineTemplate[] | undefined,
+  prRankingMode: PrMode,
+  weightUnit: WeightUnit
+): ExerciseBenchmarks {
+  const exerciseId = resolveExerciseId(exerciseName, exercisesCatalog, customTemplates);
+  const serverBenchmark = (exerciseId ? serverBenchmarksMap?.[exerciseId] : undefined) || serverBenchmarksMap?.[exerciseName];
+
+  if (!serverBenchmark) {
+    return localBenchmarks;
+  }
+
+  const bestPr = (() => {
+    if (!serverBenchmark.pr) return localBenchmarks.pr;
+    if (!localBenchmarks.pr) return serverBenchmark.pr;
+    return comparePrSets(localBenchmarks.pr, serverBenchmark.pr, prRankingMode) < 0
+      ? localBenchmarks.pr
+      : serverBenchmark.pr;
+  })();
+
+  const lastSession = serverBenchmark.lastSession
+    ? {
+        ...serverBenchmark.lastSession,
+        summaryText: serverBenchmark.lastSession.sets && serverBenchmark.lastSession.sets.length > 0
+          ? serverBenchmark.lastSession.sets.map((singleSet) => formatSet(singleSet.weight, singleSet.reps, weightUnit)).join(', ')
+          : serverBenchmark.lastSession.summaryText,
+      }
+    : localBenchmarks.lastSession;
+
+  return {
+    lastSession,
+    pr: bestPr,
+  };
+}
+
+export function resolveTargetUserId(userId?: string | null): string {
+  if (userId) return userId;
+  try {
+    return JSON.parse(localStorage.getItem('yourbody_user') || '{}')?.id || '';
+  } catch {
+    return '';
+  }
+}
+
+export function resolveRestTimerSeconds(profileSeconds?: number | null): number {
+  if (profileSeconds !== undefined && profileSeconds !== null) return profileSeconds;
+  const localVal = typeof localStorage !== 'undefined' ? localStorage.getItem('yourbody_rest_timer_seconds') : null;
+  const parsed = localVal ? Number(localVal) : 90;
+  return Number.isFinite(parsed) && parsed >= 15 && parsed <= 600 ? parsed : 90;
+}
+
+export function clearDraftForSet(
+  prev: Record<string, SetDraftInput>,
+  variables: { exerciseName?: string; exerciseId?: string; setIndex: number }
+): Record<string, SetDraftInput> {
+  const next = { ...prev };
+  if (variables.exerciseName) delete next[`${variables.exerciseName}_${variables.setIndex}`];
+  if (variables.exerciseId) delete next[`${variables.exerciseId}_${variables.setIndex}`];
+  return next;
+}
+
+export interface PerformUnlogSetParams {
+  exIndex: number;
+  rowIdx: number;
+  activeExercises: string[];
+  getSetsForExerciseToday: (name: string) => WorkoutSet[];
+  pendingSetId: string | null;
+  pendingDeletedSetIds: Set<string>;
+  unit: WeightUnit;
+  setInputDrafts: React.Dispatch<React.SetStateAction<Record<string, SetDraftInput>>>;
+  targetUserId: string;
+  workoutDate: string;
+  onDeleteSet: (id: string) => void;
+}
+
+export function performUnlogSet({
+  exIndex,
+  rowIdx,
+  activeExercises,
+  getSetsForExerciseToday,
+  pendingSetId,
+  pendingDeletedSetIds,
+  unit,
+  setInputDrafts,
+  targetUserId,
+  workoutDate,
+  onDeleteSet,
+}: PerformUnlogSetParams): void {
+  const exName = activeExercises[exIndex];
+  if (!exName) return;
+  const rawSets = getSetsForExerciseToday(exName);
+  const exerciseSetsToday = rawSets.filter(
+    (s) => s.id !== pendingSetId && (!s.id || !pendingDeletedSetIds.has(s.id))
+  );
+  const targetSet = exerciseSetsToday[rowIdx];
+  if (!targetSet) return;
+
+  const setIndex = targetSet.set_index ?? (rowIdx + 1);
+  const draftKey = `${exName}_${setIndex}`;
+  const draftWeight = typeof targetSet.weight === 'number'
+    ? String(toDisplayWeight(targetSet.weight, unit))
+    : '';
+  const draftReps = targetSet.reps != null ? String(targetSet.reps) : '';
+
+  setInputDrafts((prev) => {
+    const updated: SetDraftInput = {
+      weight: draftWeight,
+      reps: draftReps,
+    };
+    workoutSessionStore.setDraftInput(targetUserId, workoutDate, exName, setIndex, updated);
+    return {
+      ...prev,
+      [draftKey]: updated,
+    };
+  });
+
+  if (targetSet.id) {
+    onDeleteSet(targetSet.id);
+  }
+}
+

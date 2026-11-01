@@ -515,5 +515,56 @@ describe('useCustomDishModal', () => {
     expect(dishPayload.items[0].quantity).toBe(80);
     expect(dishPayload.items[0].unit).toBe('g');
   });
+
+  it('keeps modal open with typed fields intact when save fails', async () => {
+    const onSaveDish = vi.fn().mockRejectedValue(new Error('Server error'));
+    const { result } = renderHook(() =>
+      useCustomDishModal({
+        onSaveDish,
+        onDeleteDish: vi.fn(),
+        onDismissToast: vi.fn(),
+      })
+    );
+
+    act(() => {
+      result.current.handleOpenNewDishModal();
+    });
+
+    expect(result.current.showDishModal).toBe(true);
+
+    act(() => {
+      result.current.setDishModalName('Family Lasagna');
+      result.current.setDishModalCalories(850);
+      result.current.setDishModalProtein(45);
+      result.current.setDishModalCarbs(70);
+      result.current.setDishModalFat(35);
+      result.current.setDishModalNotes('Secret family recipe');
+    });
+
+    await act(async () => {
+      await result.current.handleSaveCustomDishModal({ preventDefault: vi.fn() } as any);
+    });
+
+    expect(onSaveDish).toHaveBeenCalled();
+    // On failure, modal must stay open and user inputs must remain intact
+    expect(result.current.showDishModal).toBe(true);
+    expect(result.current.dishModalName).toBe('Family Lasagna');
+    expect(result.current.dishModalCalories).toBe(850);
+    expect(result.current.dishModalProtein).toBe(45);
+    expect(result.current.dishModalCarbs).toBe(70);
+    expect(result.current.dishModalFat).toBe(35);
+    expect(result.current.dishModalNotes).toBe('Secret family recipe');
+    expect((result.current as any).dishSaveError).toBe('Failed to save custom dish: Server error');
+
+    // On subsequent successful save, modal closes, fields reset, error clears
+    onSaveDish.mockResolvedValueOnce(undefined);
+    await act(async () => {
+      await result.current.handleSaveCustomDishModal({ preventDefault: vi.fn() } as any);
+    });
+
+    expect(result.current.showDishModal).toBe(false);
+    expect(result.current.dishModalName).toBe('');
+    expect((result.current as any).dishSaveError).toBeNull();
+  });
 });
 

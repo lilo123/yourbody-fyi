@@ -13,6 +13,9 @@ import {
   isUUID,
   resolveRoutineAndExercises,
   checkIsScheduledRoutineDirty,
+  isOwnOrAssignedRoutine,
+  shouldHideStarterRoutines,
+  isDefaultRoutineHidden,
 } from './workoutEngineHelpers';
 import { fetchTemplateDetail } from './useWorkoutQueries';
 import {
@@ -42,6 +45,7 @@ export interface UseWorkoutSessionOptions {
   unit?: WeightUnit;
   hasLoadedCatalog?: boolean;
   isCatalogPending?: boolean;
+  hiddenRoutineNames?: Set<string> | string[];
 }
 
 export function useWorkoutSession({
@@ -55,6 +59,7 @@ export function useWorkoutSession({
   unit = 'lb',
   hasLoadedCatalog,
   isCatalogPending,
+  hiddenRoutineNames,
 }: UseWorkoutSessionOptions) {
   const queryClient = useContext(QueryClientContext);
   const { show: showToast } = useToast();
@@ -62,6 +67,20 @@ export function useWorkoutSession({
 
   const catalogLoaded = hasLoadedCatalog !== undefined ? hasLoadedCatalog : templatesFetched;
   const catalogPending = isCatalogPending !== undefined ? isCatalogPending : (!catalogLoaded && isOnline);
+
+  const resolvedHiddenNames = useMemo(() => {
+    if (hiddenRoutineNames) {
+      if (hiddenRoutineNames instanceof Set) {
+        return new Set(Array.from(hiddenRoutineNames).map((name) => name.trim().toLowerCase()));
+      }
+      return new Set(hiddenRoutineNames.map((name) => name.trim().toLowerCase()));
+    }
+    const cached = queryClient?.getQueryData<RoutineTemplate[]>(['routine_templates', targetUserId, 'hidden']);
+    if (cached && Array.isArray(cached)) {
+      return new Set(cached.map((template) => template.name?.trim().toLowerCase()).filter(Boolean));
+    }
+    return new Set<string>();
+  }, [hiddenRoutineNames, queryClient, targetUserId]);
 
   const [workoutDate, setWorkoutDate] = useState<string>(() => {
     const activeSession = workoutSessionStore.getActiveSession(targetUserId);
@@ -86,7 +105,9 @@ export function useWorkoutSession({
     workoutDate,
     customTemplates,
     catalogLoaded,
-    catalogPending
+    catalogPending,
+    resolvedHiddenNames,
+    targetUserId
   );
 
   const [activeRoutineName, setActiveRoutineName] = useState<string>(initialState.activeRoutineName);
@@ -172,7 +193,9 @@ export function useWorkoutSession({
         customTemplates,
         exercises,
         [],
-        catalogLoaded
+        catalogLoaded,
+        resolvedHiddenNames,
+        targetUserId
       );
 
       const isToday = workoutDate === getLocalDateStr(new Date());
@@ -247,7 +270,9 @@ export function useWorkoutSession({
       customTemplates,
       exercises,
       [],
-      catalogLoaded
+      catalogLoaded,
+      resolvedHiddenNames,
+      targetUserId
     );
 
     const isToday = workoutDate === getLocalDateStr(new Date());
@@ -272,7 +297,7 @@ export function useWorkoutSession({
       setInputDrafts({});
       setExpandedExercises(resolved.exercises.length > 0 ? new Set([resolved.exercises[0]]) : new Set());
     }
-  }, [workoutDate, targetUserId, templatesFetched, logsFetched, exercisesFetched, customTemplates, todaySets, exercises, getSetsForExerciseToday, activeRoutineName, activeExercises.length, unit, catalogLoaded]);
+  }, [workoutDate, targetUserId, templatesFetched, logsFetched, exercisesFetched, customTemplates, todaySets, exercises, getSetsForExerciseToday, activeRoutineName, activeExercises.length, unit, catalogLoaded, resolvedHiddenNames]);
 
   const {
     toggleAccordion,
@@ -331,7 +356,7 @@ export function useWorkoutSession({
     let resolvedReps: Record<string, number> = {};
 
     try {
-      if (routineName === 'Rest Day' || routineName === 'Free Workout') {
+      if (routineName === 'Rest Day' || (routineName === 'Free Workout' && todaySets.length === 0)) {
         if (seq !== routineSelectionSeqRef.current) {
           if (inFlightRoutineSelectionSeqRef.current === seq) {
             manualSelectionDateRef.current = prevManualDate;
@@ -347,7 +372,15 @@ export function useWorkoutSession({
         setExpandedExercises(new Set());
       } else {
         const customTpl = selectedTemplate || findMatchingTemplate(customTemplates, routineName);
-        const defTpl = findMatchingTemplate(DEFAULT_WORKOUT_TEMPLATES, routineName);
+        const startersHidden = shouldHideStarterRoutines(customTemplates, targetUserId, catalogLoaded);
+        const defTpl = startersHidden
+          ? undefined
+          : findMatchingTemplate(
+              DEFAULT_WORKOUT_TEMPLATES.filter(
+                (t) => !isDefaultRoutineHidden(t.name, customTemplates, resolvedHiddenNames, catalogLoaded, targetUserId)
+              ),
+              routineName
+            );
 
         let templateExercises = customTpl?.exercises;
         if (customTpl && templateExercises === undefined) {
@@ -384,6 +417,44 @@ export function useWorkoutSession({
         resolvedExList = extracted.resolvedExList;
         resolvedTargets = extracted.resolvedTargets;
         resolvedReps = extracted.resolvedReps;
+
+        if (todaySets.length > 0) {
+          const loggedExercises = Array.from(
+            new Set(
+              todaySets
+                .map(
+                  (s) =>
+                    s.exercise?.name ||
+                    exercises.find((ex) => ex.id === s.exercise_id)?.name ||
+                    DEFAULT_EXERCISES_LIST.find((ex) => ex.id === s.exercise_id)?.name ||
+                    s.exercise_name ||
+                    s.exercise_id
+                )
+                .filter(Boolean)
+            )
+          );
+          const distinctLoggedNotInBase = loggedExercises.filter(
+            (name) =>
+              !resolvedExList.some(
+                (baseName) => baseName.trim().toLowerCase() === name.trim().toLowerCase()
+              )
+          );
+
+          if (distinctLoggedNotInBase.length > 0) {
+            resolvedExList = [...resolvedExList, ...distinctLoggedNotInBase];
+            distinctLoggedNotInBase.forEach((name) => {
+              if (targetRepCounts[name]) {
+                resolvedReps[name] = targetRepCounts[name];
+              }
+            });
+          }
+
+          resolvedExList.forEach((exName) => {
+            const loggedSetsForEx = filterSetsForExercise(exName, todaySets, exercises);
+            const currentTarget = resolvedTargets[exName] || targetSetCounts[exName] || 3;
+            resolvedTargets[exName] = Math.max(currentTarget, loggedSetsForEx.length);
+          });
+        }
 
         setActiveRoutineName(routineName);
         setActiveExercises(resolvedExList);
@@ -449,7 +520,10 @@ export function useWorkoutSession({
     resolvedKeyRef.current = null;
 
     const dayAbbr = getDayOfWeekAbbr(workoutDate);
-    const scheduledCustom = customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
+    const scheduledOwn = customTemplates.find(
+      (t) => isOwnOrAssignedRoutine(t, targetUserId) && t.days_of_week?.includes(dayAbbr)
+    );
+    const scheduledCustom = scheduledOwn || customTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
     let customWithExercises = customTemplates;
     if (scheduledCustom && (!scheduledCustom.exercises || scheduledCustom.exercises.length === 0)) {
       try {
@@ -472,7 +546,9 @@ export function useWorkoutSession({
       customWithExercises,
       exercises,
       [],
-      catalogLoaded
+      catalogLoaded,
+      resolvedHiddenNames,
+      targetUserId
     );
 
     const isToday = workoutDate === getLocalDateStr(new Date());
@@ -612,11 +688,22 @@ export function useWorkoutSession({
       ...prev,
       [removed.exerciseName]: removed.targetSetCount,
     }));
+    workoutSessionStore.updateTargetSets(
+      targetUserId,
+      workoutDate,
+      removed.exerciseName,
+      removed.targetSetCount
+    );
     if (removed.targetRepCount !== undefined) {
       setTargetRepCounts((prev) => ({
         ...prev,
         [removed.exerciseName]: removed.targetRepCount!,
       }));
+      const session = workoutSessionStore.getSession(targetUserId, workoutDate);
+      if (session) {
+        session.targetRepCounts[removed.exerciseName] = removed.targetRepCount;
+        workoutSessionStore.saveSession(session, workoutDate === getLocalDateStr(new Date()));
+      }
     }
     setInputDrafts((prev) => {
       const next = { ...prev, ...removed.drafts };
@@ -731,8 +818,10 @@ export function useWorkoutSession({
       targetSetCounts,
       targetRepCounts,
       hasLoadedCatalog: catalogLoaded,
+      hiddenRoutineNames: resolvedHiddenNames,
+      targetUserId,
     });
-  }, [workoutDate, activeRoutineName, activeExercises, customTemplates, exercises, inputDrafts, targetSetCounts, targetRepCounts, catalogLoaded]);
+  }, [workoutDate, activeRoutineName, activeExercises, customTemplates, exercises, inputDrafts, targetSetCounts, targetRepCounts, catalogLoaded, resolvedHiddenNames, targetUserId]);
 
   const isWholeWorkoutCompleted =
     activeExercises.length > 0 &&
