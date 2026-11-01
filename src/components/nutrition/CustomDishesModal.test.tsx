@@ -448,6 +448,41 @@ describe('CustomDishesModal', () => {
     expect(screen.getByTitle('Edit').className).toContain('min-h-[44px]');
     expect(screen.getByTitle('Delete').className).toContain('min-h-[44px]');
   });
+
+  it('renders save error in StatusBanner when saveError is provided', () => {
+    render(
+      <CustomDishesModal
+        isOpen={true}
+        onClose={vi.fn()}
+        editingDish={null}
+        dishModalName="Protein Oatmeal"
+        setDishModalName={vi.fn()}
+        dishModalCalories={300}
+        setDishModalCalories={vi.fn()}
+        dishModalProtein={10}
+        setDishModalProtein={vi.fn()}
+        dishModalCarbs={54}
+        setDishModalCarbs={vi.fn()}
+        dishModalFat={5}
+        setDishModalFat={vi.fn()}
+        dishModalFiber={8}
+        setDishModalFiber={vi.fn()}
+        dishModalItems={[mockItem]}
+        setDishModalItems={vi.fn()}
+        onSaveDish={vi.fn()}
+        onDeleteDish={vi.fn()}
+        isSaving={false}
+        isDeleting={false}
+        customDishes={[]}
+        onOpenEditDishModal={vi.fn()}
+        saveError="Failed to save custom dish: Server error"
+      />
+    );
+
+    const errorBanner = screen.getByTestId('custom-dish-save-error');
+    expect(errorBanner).toBeDefined();
+    expect(errorBanner.textContent).toContain('Failed to save custom dish: Server error');
+  });
 });
 
 

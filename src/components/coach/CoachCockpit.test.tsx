@@ -7,6 +7,7 @@ import { CoachProvider } from '../../context/CoachContext';
 import { supabase } from '../../lib/supabase';
 import { createSupabaseBuilder, getRecordedSelects, getRecordedTables, clearMockHistory } from '../../test/supabaseBuilderMock';
 import { COACH_SETS_PER_WORKOUT_LIMIT } from '../workout/useWorkoutQueries';
+import { queryKeys } from '../../lib/queryKeys';
 
 const { mockSession } = vi.hoisted(() => ({
   mockSession: {
@@ -410,6 +411,85 @@ describe('CoachCockpit', () => {
       expect(screen.queryByText('Alex Johnson')).toBeNull();
       expect(screen.getByText('Sam Taylor')).toBeDefined();
     });
+  });
+
+  it('invalidates coach active athletes count, roster, athlete profile, workout sets, and workouts queries when disconnect is confirmed', async () => {
+    let currentLinks = [
+      {
+        athlete_id: 'ath-1',
+        status: 'active',
+        linked_at: '2026-09-01T00:00:00Z',
+        athlete: { id: 'ath-1', username: 'Alex Johnson', email: 'alex@example.com', role: 'athlete' },
+      },
+    ];
+
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'coach_athlete_links') {
+        return createSupabaseBuilder('coach_athlete_links', {
+          resolver: () => currentLinks,
+        });
+      }
+      return defaultMock(table);
+    });
+
+    (supabase.rpc as any).mockImplementation((fn: string, args: any) => {
+      if (fn === 'disconnect_coach') {
+        currentLinks = currentLinks.filter((l) => l.athlete_id !== args.target_athlete_id);
+        return Promise.resolve({ data: { success: true }, error: null });
+      }
+      if (fn === 'get_exercise_catalog') {
+        return Promise.resolve({
+          data: [
+            { id: 'ex-1', name: 'Leg Extension Machine', body_parts: ['Legs'], is_master: true, equipment: null, is_archived: false, is_hidden: false, user_id: null },
+            { id: 'ex-2', name: 'Incline Bench Press', body_parts: ['Chest'], is_master: true, equipment: null, is_archived: false, is_hidden: false, user_id: null },
+          ],
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: { success: true, template_id: 'tpl-1' }, error: null });
+    });
+
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    queryClient.setQueryData(['coach_active_athletes_count', 'coach-id'], 1);
+    queryClient.setQueryData(['coach_athletes'], currentLinks);
+    queryClient.setQueryData(['athlete_profile', 'ath-2'], { id: 'ath-2', username: 'Other' });
+    queryClient.setQueryData(['workout_sets', 'ath-1', '2026-09-01'], [{ id: 's1' }]);
+    queryClient.setQueryData(queryKeys.workouts.all, [{ id: 'w1' }]);
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disconnect-athlete-btn')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('disconnect-athlete-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disconnect-athlete-confirm-dialog')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('disconnect-athlete-confirm-dialog-confirm'));
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith('disconnect_coach', {
+        target_athlete_id: 'ath-1',
+      });
+    });
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.coachActiveAthletesCount.all });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.coachAthletes.all });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.workoutSets.all });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.workouts.all });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.athleteProfile.all });
+    });
+
+    expect(queryClient.getQueryState(['coach_active_athletes_count', 'coach-id'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(['coach_athletes'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(['athlete_profile', 'ath-2'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(['workout_sets', 'ath-1', '2026-09-01'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(queryKeys.workouts.all)?.isInvalidated).toBe(true);
   });
 
   it('renders disconnect confirmation dialog outside hidden tab panels when on non-templates tab', async () => {
@@ -1287,6 +1367,37 @@ describe('CoachCockpit', () => {
     await waitFor(() => {
       expect((screen.getByTestId('athlete-macro-cal') as HTMLInputElement).value).toBe('1800');
     });
+  });
+
+  it('scopes routine templates query to current coach user_id', async () => {
+    let routineTemplatesBuilder: any;
+    (supabase.from as any).mockImplementation((table: string) => {
+      if (table === 'routine_templates') {
+        routineTemplatesBuilder = createSupabaseBuilder('routine_templates', {
+          resolver: (b: any) => {
+            const userIdFilter = b.filters.find((f: any) => f.column === 'user_id');
+            const allTemplates = [
+              { id: 'tpl-mine', user_id: 'coach-id', name: 'My Coach Routine', is_master: false, assigned_to: 'ath-1', days_of_week: [], exercises: [] },
+              { id: 'tpl-other', user_id: 'coach-other', name: 'Other Coach Routine', is_master: false, assigned_to: 'ath-1', days_of_week: [], exercises: [] },
+            ];
+            if (userIdFilter) {
+              return allTemplates.filter((t: any) => t.user_id === userIdFilter.value);
+            }
+            return allTemplates;
+          },
+        });
+        return routineTemplatesBuilder;
+      }
+      return defaultMock(table);
+    });
+
+    renderComponent();
+
+    await screen.findByText('My Coach Routine');
+    expect(screen.queryByText('Other Coach Routine')).toBeNull();
+    const userFilter = routineTemplatesBuilder.filters.find((f: any) => f.method === 'eq' && f.column === 'user_id');
+    expect(userFilter).toBeDefined();
+    expect(userFilter.value).toBe('coach-id');
   });
 
 });

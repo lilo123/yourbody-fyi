@@ -200,14 +200,14 @@ test.describe('History Suite (p5a-history)', () => {
     const scrollYBefore = await page.evaluate(() => window.scrollY);
     expect(scrollYBefore).toBeGreaterThanOrEqual(100);
 
-    // 4. Navigate to Workout tab via BottomNav (use force: true so Playwright does not scroll the fixed nav into view)
+    // 4. Navigate to Workout tab via BottomNav (dispatch click so Playwright does not scroll the fixed nav into view)
     const workoutNav = page.locator('[data-testid="nav-workout"]');
-    await workoutNav.click({ force: true });
+    await workoutNav.dispatchEvent('click');
     await page.waitForURL('**/workout');
 
     // 5. Navigate back to History tab via BottomNav
     const historyNav = page.locator('[data-testid="nav-history"]');
-    await historyNav.click({ force: true });
+    await historyNav.dispatchEvent('click');
     await page.waitForURL('**/history');
 
     // 6. Verify keep-alive state

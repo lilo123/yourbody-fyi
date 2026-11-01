@@ -14,7 +14,7 @@ import { fetchDishDetail as defaultFetchDishDetail } from './useNutritionData';
 import { mapLegacyUnit } from './legacyUnitMapping';
 
 export interface UseCustomDishModalOptions {
-  onSaveDish: (args: { dishPayload: Partial<CustomDishDetail>; editingDishId?: string }) => void;
+  onSaveDish: (args: { dishPayload: Partial<CustomDishDetail>; editingDishId?: string }) => Promise<unknown> | void;
   onDeleteDish: (dishId: string) => void;
   onDismissToast: () => void;
   fetchDishDetail?: (dishId: string) => Promise<CustomDishDetail | null>;
@@ -31,6 +31,7 @@ export function useCustomDishModal({
   const [showDishModal, setShowDishModal] = useState(false);
   const [editingDish, setEditingDish] = useState<CustomDishDetail | null>(null);
   const [dishFetchError, setDishFetchError] = useState<{ message: string; retry: () => void } | null>(null);
+  const [dishSaveError, setDishSaveError] = useState<string | null>(null);
   const [dishModalKind, setDishModalKind] = useState<CustomDishKind>('food');
   const [dishModalName, setDishModalName] = useState('');
   const [dishModalQuantity, setDishModalQuantity] = useState<number | ''>('');
@@ -64,6 +65,7 @@ export function useCustomDishModal({
   const handleOpenNewDishModal = () => {
     onDismissToast();
     setDishFetchError(null);
+    setDishSaveError(null);
     setEditingDish(null);
     resetDishModalFields();
     setShowDishModal(true);
@@ -72,6 +74,7 @@ export function useCustomDishModal({
   const handleOpenEditDishModal = async (dish: CustomDish) => {
     onDismissToast();
     setDishFetchError(null);
+    setDishSaveError(null);
     let detail: CustomDishDetail | null = null;
     const fetcher = fetchDishDetail || defaultFetchDishDetail;
     try {
@@ -332,6 +335,7 @@ export function useCustomDishModal({
     setShowDishModal(false);
     setEditingDish(null);
     setDishFetchError(null);
+    setDishSaveError(null);
     resetDishModalFields();
   };
 
@@ -404,21 +408,46 @@ export function useCustomDishModal({
     const kind: CustomDishKind =
       persistItems.length > 1 ? 'recipe' : (editingDish?.kind ?? dishModalKind ?? 'food');
 
-    onSaveDish({
-      dishPayload: {
-        name: dishModalName.trim(),
-        kind,
-        calories: parentCalories,
-        protein: parentProtein,
-        carbs: parentCarbs,
-        fat: parentFat,
-        fiber: parentFiber,
-        notes: dishModalNotes.trim() ? dishModalNotes.trim().slice(0, 500) : null,
-        items: persistItems,
-      },
-      editingDishId: editingDish?.id,
-    });
-    handleCloseDishModal();
+    try {
+      setDishSaveError(null);
+      const maybePromise = onSaveDish({
+        dishPayload: {
+          name: dishModalName.trim(),
+          kind,
+          calories: parentCalories,
+          protein: parentProtein,
+          carbs: parentCarbs,
+          fat: parentFat,
+          fiber: parentFiber,
+          notes: dishModalNotes.trim() ? dishModalNotes.trim().slice(0, 500) : null,
+          items: persistItems,
+        },
+        editingDishId: editingDish?.id,
+      });
+
+      if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
+        return (async () => {
+          try {
+            await maybePromise;
+            handleCloseDishModal();
+          } catch (err: any) {
+            const rawMsg = err?.message || 'Failed to save custom dish';
+            const msg = rawMsg.startsWith('Failed to save custom dish')
+              ? rawMsg
+              : `Failed to save custom dish: ${rawMsg}`;
+            setDishSaveError(msg);
+          }
+        })();
+      }
+
+      handleCloseDishModal();
+    } catch (err: any) {
+      const rawMsg = err?.message || 'Failed to save custom dish';
+      const msg = rawMsg.startsWith('Failed to save custom dish')
+        ? rawMsg
+        : `Failed to save custom dish: ${rawMsg}`;
+      setDishSaveError(msg);
+    }
   };
 
   const handleDeleteCustomDish = (dishId: string) => {
@@ -463,5 +492,7 @@ export function useCustomDishModal({
     handleDeleteCustomDish,
     dishFetchError,
     setDishFetchError,
+    dishSaveError,
+    setDishSaveError,
   };
 }
