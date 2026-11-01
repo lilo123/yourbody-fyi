@@ -69,6 +69,8 @@ export interface SetUpdatePayload {
 
 export interface SetDeletePayload {
   id: string;
+  workoutDate?: string;
+  workoutRef?: string;
 }
 
 export interface NutritionLogPayload {

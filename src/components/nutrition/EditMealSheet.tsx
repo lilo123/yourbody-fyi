@@ -4,7 +4,7 @@ import type { NutritionLog } from '../../types/database';
 import { AccessibleModal } from '../common/AccessibleModal';
 import { StatusBanner } from '../common/StatusBanner';
 import type { CustomDish } from '../../types/database';
-import { mergeOrAppendStagedItems, recomputeStagedTotals, type StagedItem, type StagedMeal } from './nutritionEngineHelpers';
+import { mergeOrAppendStagedItems, withSyncedServing, type StagedItem, type StagedMeal } from './nutritionEngineHelpers';
 import { StagedMealCard } from './StagedMealCard';
 import { useMealEditor } from './useMealEditor';
 import { useCustomDishSaving } from './useCustomDishSaving';
@@ -189,11 +189,9 @@ const EditMealSheetContent: React.FC<EditMealSheetContentProps> = ({
         if (!currentDraft) return null;
         if (mealAtStart && currentDraft !== mealAtStart) return currentDraft;
         const merged = mergeOrAppendStagedItems(currentDraft.items, items);
-        const tot = recomputeStagedTotals(merged);
+        const synced = withSyncedServing(currentDraft, merged);
         return {
-          ...currentDraft,
-          items: merged,
-          ...tot,
+          ...synced,
           explanation: currentDraft.explanation,
         };
       });

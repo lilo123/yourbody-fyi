@@ -1,6 +1,13 @@
 import type { WorkoutSet } from '../types/database';
 import type { HistorySession } from '../components/history/useWorkoutHistory';
 import type { OutboxOp, OutboxOpNutritionLog } from './types';
+import { getLocalDateStr } from '../utils/date';
+
+function getSetLocalDate(createdAt: string): string {
+  if (!createdAt) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(createdAt)) return createdAt;
+  return getLocalDateStr(new Date(createdAt)) || createdAt.slice(0, 10);
+}
 
 /**
  * Pure function: applies pending outbox operations to today's server sets.
@@ -38,7 +45,7 @@ export function applyPendingToDaySets(
     if (op.kind === 'set.create') {
       const { id, workoutRef, exercise_id, weight, reps, set_index, set_type, rpe, created_at } =
         op.payload;
-      const opDate = workoutDateMap.get(workoutRef) || created_at.slice(0, 10);
+      const opDate = workoutDateMap.get(workoutRef) || getSetLocalDate(created_at);
 
       if (opDate === targetDate) {
         const workoutName = workoutNameMap.get(workoutRef);
@@ -69,7 +76,7 @@ export function applyPendingToDaySets(
     } else if (op.kind === 'set.batchCreate') {
       const { workoutRef, sets } = op.payload;
       for (const s of sets) {
-        const opDate = workoutDateMap.get(workoutRef) || s.created_at.slice(0, 10);
+        const opDate = workoutDateMap.get(workoutRef) || getSetLocalDate(s.created_at);
         if (opDate === targetDate) {
           const workoutName = workoutNameMap.get(workoutRef);
           const newSet: WorkoutSet & { pending: boolean } = {
@@ -152,7 +159,7 @@ export function pendingSetsBefore(
     if (op.kind === 'set.create') {
       const { id, workoutRef, exercise_id, weight, reps, set_index, set_type, rpe, created_at } =
         op.payload;
-      const setDate = workoutDateMap.get(workoutRef) || created_at.slice(0, 10);
+      const setDate = workoutDateMap.get(workoutRef) || getSetLocalDate(created_at);
       if (setDate < targetDate) {
         setMap.set(id, {
           id,
@@ -171,7 +178,7 @@ export function pendingSetsBefore(
     } else if (op.kind === 'set.batchCreate') {
       const { workoutRef, sets } = op.payload;
       for (const s of sets) {
-        const setDate = workoutDateMap.get(workoutRef) || s.created_at.slice(0, 10);
+        const setDate = workoutDateMap.get(workoutRef) || getSetLocalDate(s.created_at);
         if (setDate < targetDate) {
           setMap.set(s.id, {
             id: s.id,
@@ -275,7 +282,7 @@ export function applyPendingToHistory(
       const summary = getSummary(op.payload.workout_date, op.payload.clientWorkoutId);
       if (op.payload.name) summary.name = op.payload.name;
     } else if (op.kind === 'set.create') {
-      const date = workoutDateMap.get(op.payload.workoutRef) || op.payload.created_at.slice(0, 10);
+      const date = workoutDateMap.get(op.payload.workoutRef) || getSetLocalDate(op.payload.created_at);
       const summary = getSummary(date, op.payload.workoutRef);
       summary.createdSets.push({
         id: op.payload.id,
@@ -286,7 +293,7 @@ export function applyPendingToHistory(
     } else if (op.kind === 'set.batchCreate') {
       const { workoutRef, sets } = op.payload;
       for (const s of sets) {
-        const date = workoutDateMap.get(workoutRef) || s.created_at.slice(0, 10);
+        const date = workoutDateMap.get(workoutRef) || getSetLocalDate(s.created_at);
         const summary = getSummary(date, workoutRef);
         summary.createdSets.push({
           id: s.id,
@@ -307,12 +314,50 @@ export function applyPendingToHistory(
         }
       }
     } else if (op.kind === 'set.delete') {
+      let matched = false;
       for (const summary of daySummaries.values()) {
         const idx = summary.createdSets.findIndex((s) => s.id === op.payload.id);
         if (idx !== -1) {
           summary.createdSets.splice(idx, 1);
-        } else {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        const payloadDate =
+          (op.payload as { workoutDate?: string; workout_date?: string }).workoutDate ||
+          (op.payload as { workoutDate?: string; workout_date?: string }).workout_date;
+        const payloadRef =
+          (op.payload as { workoutRef?: string; workout_id?: string }).workoutRef ||
+          (op.payload as { workoutRef?: string; workout_id?: string }).workout_id;
+
+        const matchingSession = sessions.find(
+          (s) =>
+            s.sets?.some((st) => st.id === op.payload.id) ||
+            (payloadRef && s.id === payloadRef) ||
+            (payloadDate &&
+              (s.workout_date === payloadDate ||
+                s.civil_date === payloadDate ||
+                s.date.startsWith(payloadDate)))
+        );
+
+        const date =
+          payloadDate ||
+          (matchingSession
+            ? matchingSession.workout_date ||
+              matchingSession.civil_date ||
+              matchingSession.date.slice(0, 10)
+            : undefined) ||
+          (payloadRef ? workoutDateMap.get(payloadRef) : undefined);
+
+        if (date) {
+          const summary = getSummary(date, payloadRef || matchingSession?.id);
           summary.deletedSetIds.add(op.payload.id);
+        } else {
+          // Legacy queued ops with no date: keep original behaviour across active summaries
+          for (const summary of daySummaries.values()) {
+            summary.deletedSetIds.add(op.payload.id);
+          }
         }
       }
     } else if (op.kind === 'workout.rename') {

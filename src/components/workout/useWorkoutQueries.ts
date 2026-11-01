@@ -14,7 +14,7 @@ import {
 } from '../../utils/ghostSets';
 import { formatSet } from '../../utils/weight';
 import type { ExerciseBenchmarks } from '../../types/database';
-import { isValidUUID, isDefaultRoutineHidden } from './workoutEngineHelpers';
+import { isValidUUID, isDefaultRoutineHidden, isOwnOrAssignedRoutine } from './workoutEngineHelpers';
 import { fetchAllVisibleExercises } from '../../lib/exercises';
 import {
   applyPendingToDaySets,
@@ -719,7 +719,10 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
       return matched ? matched.id : null;
     }
     const dayAbbr = getDayOfWeekAbbr(workoutDate) || currentDayAbbr;
-    const scheduled = rawTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
+    const scheduledOwn = rawTemplates.find(
+      (t) => isOwnOrAssignedRoutine(t, targetUserId) && t.days_of_week?.includes(dayAbbr)
+    );
+    const scheduled = scheduledOwn || rawTemplates.find((t) => t.days_of_week?.includes(dayAbbr));
     return scheduled ? scheduled.id : null;
   }, [rawTemplates, rawTemplatesFetched, todaySets, logsFetched, workoutDate, currentDayAbbr]);
 
@@ -825,7 +828,13 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
       ? DEFAULT_WORKOUT_TEMPLATES.filter(
           (defaultTemplate) =>
             !seenCustomNames.has(defaultTemplate.name.trim().toLowerCase()) &&
-            !isDefaultRoutineHidden(defaultTemplate.name, customTemplates, hiddenRoutineNames, hasCatalogLoaded)
+            !isDefaultRoutineHidden(
+              defaultTemplate.name,
+              customTemplates,
+              hiddenRoutineNames,
+              hasCatalogLoaded,
+              targetUserId
+            )
         )
       : [];
 
@@ -833,7 +842,7 @@ export function useWorkoutQueries(targetUserId: string, workoutDate: string) {
       custom: dedupedCustom,
       defaults: fallbackDefaults,
     };
-  }, [customTemplates, hasCatalogLoaded, isCatalogPending, hiddenRoutineNames]);
+  }, [customTemplates, hasCatalogLoaded, isCatalogPending, hiddenRoutineNames, targetUserId]);
 
   return {
     exercises,
