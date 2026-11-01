@@ -23,13 +23,17 @@ import { useHistoryData } from './useHistoryData';
 import {
   useWorkoutHistory,
   useExerciseStats,
+  computeHistorySince,
   type HistoryRange,
 } from './useWorkoutHistory';
 import { StatusBanner } from '../common/StatusBanner';
 import { groupNutritionDays } from '../../utils/nutritionDayGrouping';
 import { DEFAULT_EXERCISES_LIST } from '../../utils/ghostSets';
-import { normalizeDateStr } from '../../utils/ghostSets';
 import { fetchAllVisibleExercises, EXERCISE_SUMMARY_PROJECTION } from '../../lib/exercises';
+import { onSynced } from '../../offline';
+import { invalidateWorkoutDerived, invalidateNutritionDerived } from '../../lib/invalidate';
+
+const DEFAULT_CATEGORY = 'All';
 
 export const HistoryView: React.FC = () => {
   const { user, isCoachMode } = useAuth();
@@ -44,9 +48,9 @@ export const HistoryView: React.FC = () => {
   const [historyDomain, setHistoryDomain] = useState<'workouts' | 'nutrition'>('workouts');
   const [viewMode, setViewMode] = useState<'session' | 'exercise'>('session');
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
-  const [sessionCategory, setSessionCategory] = useState('All');
+  const [sessionCategory, setSessionCategory] = useState(DEFAULT_CATEGORY);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState(DEFAULT_CATEGORY);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [editingMealLog, setEditingMealLog] = useState<NutritionLog | null>(null);
   const [editingSet, setEditingSet] = useState<(WorkoutSet & { workout_date?: string; workout_name?: string }) | null>(null);
@@ -68,6 +72,14 @@ export const HistoryView: React.FC = () => {
   const effectiveTimeZone = isInspectingAthlete
     ? selectedAthlete?.timezone || undefined
     : undefined;
+
+  React.useEffect(() => {
+    const unsubscribe = onSynced(() => {
+      void invalidateWorkoutDerived(queryClient, targetUserId);
+      void invalidateNutritionDerived(queryClient, targetUserId);
+    });
+    return unsubscribe;
+  }, [queryClient, targetUserId]);
 
   // Workout History hook (v2 RPC, keyset pagination, range filtering)
   const {
@@ -173,8 +185,17 @@ export const HistoryView: React.FC = () => {
   const handleClearFilters = useCallback(() => {
     setTimeRange('all');
     setSessionSearchQuery('');
-    setSessionCategory('All');
+    setSessionCategory(DEFAULT_CATEGORY);
   }, []);
+
+  const handleCalendarSelectDate = useCallback(
+    (civilDate: string) => {
+      setSessionSearchQuery('');
+      setSessionCategory(DEFAULT_CATEGORY);
+      handleSelectDate(civilDate);
+    },
+    [handleSelectDate]
+  );
 
   // Nutrition Data hook (window infinite query)
   const {
@@ -261,11 +282,8 @@ export const HistoryView: React.FC = () => {
   }, [nutritionLogs, effectiveTimeZone]);
 
   const filteredNutritionDays = useMemo(() => {
-    if (timeRange === 'all') return nutritionDays;
-    const now = new Date();
-    const days = timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
-    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    const cutoffStr = normalizeDateStr(cutoff, effectiveTimeZone);
+    const cutoffStr = computeHistorySince(timeRange, effectiveTimeZone);
+    if (!cutoffStr) return nutritionDays;
     return nutritionDays.filter((d) => d.date >= cutoffStr);
   }, [nutritionDays, timeRange, effectiveTimeZone]);
 
@@ -452,7 +470,7 @@ export const HistoryView: React.FC = () => {
         userId={targetUserId}
         timeZone={effectiveTimeZone}
         sessionDates={sessionDates}
-        onSelectDate={handleSelectDate}
+        onSelectDate={handleCalendarSelectDate}
       />
 
       {/* Edit Meal Sheet */}

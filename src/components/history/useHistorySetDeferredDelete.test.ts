@@ -203,7 +203,7 @@ describe('useHistorySetDeferredDelete (toast detail & weight units)', () => {
         expect.objectContaining({
           userId: 'athlete-user-456',
           kind: 'set.delete',
-          payload: { id: 'set-offline-1' },
+          payload: { id: 'set-offline-1', workoutDate: '2026-10-18' },
         })
       );
 

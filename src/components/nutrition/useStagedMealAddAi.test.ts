@@ -221,4 +221,48 @@ describe('useStagedMealAddAi', () => {
     expect(setStagedMeal).not.toHaveBeenCalled();
     expect(triggerToast).not.toHaveBeenCalled();
   });
+
+  it('updates stagedMeal.quota and invokes onQuotaUpdate when quota is provided', () => {
+    const initialQuota = {
+      remaining: 5,
+      limit: 10,
+      used: 5,
+      period: 'day',
+      resetsAt: '2026-10-31T00:00:00Z',
+    };
+    const currentMeal: StagedMeal = {
+      ...baseMeal,
+      quota: initialQuota,
+    };
+    const setStagedMeal = vi.fn();
+    const onQuotaUpdate = vi.fn();
+
+    const { result } = renderHook(() =>
+      useStagedMealAddAi({
+        stagedMeal: currentMeal,
+        setStagedMeal,
+        onQuotaUpdate,
+      })
+    );
+
+    const newItem = buildStagedItem({ name: 'Apple', calories: 60 });
+    const nextQuota = {
+      remaining: 4,
+      limit: 10,
+      used: 6,
+      period: 'day',
+      resetsAt: '2026-10-31T00:00:00Z',
+    };
+
+    act(() => {
+      result.current.handleAddParsedItems([newItem], currentMeal, nextQuota);
+    });
+
+    expect(onQuotaUpdate).toHaveBeenCalledWith(nextQuota);
+    expect(setStagedMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quota: nextQuota,
+      })
+    );
+  });
 });
