@@ -276,13 +276,13 @@ export const TemplateListTab: React.FC<TemplateListTabProps> = ({
           visibleTemplates.map((tpl) => {
             const isMaster = Boolean(tpl.is_master);
             const isForked = !isMaster && Boolean(tpl.source_template_id);
-            const isOwner = tpl.user_id === (selectedAthleteId || user?.id);
+            const isOwner = Boolean(user?.id && tpl.user_id === user.id);
             const isOwnMaster = isMaster && Boolean(isCoach && user?.id && tpl.user_id === user.id);
             const isDirectMasterEdit = isMaster && isCoach && (!selectedAthleteId || isOwnMaster);
             const isMasterHidable = isMaster && !isOwnMaster;
-            const canEdit = !isMaster ? (isOwner || isCoach) : true;
+            const canEdit = !isMaster ? isOwner : true;
             const canCustomize = (isMaster && (!isCoach || Boolean(selectedAthleteId))) || (!isMaster && !isOwner && !isCoach);
-            const canDelete = !isMaster ? (isOwner || isCoach) : true;
+            const canDelete = !isMaster ? isOwner : true;
 
             const isExpanded = Boolean(expandedIds[tpl.id]);
             const exerciseCount = tpl.exercises?.length || 0;

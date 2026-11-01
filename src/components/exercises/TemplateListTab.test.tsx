@@ -1261,5 +1261,123 @@ describe('TemplateListTab - Routine Features', () => {
       const call = mockRpc.mock.calls.find((c) => c[0] === 'save_routine_template');
       expect(call?.[1]?.p_assigned_to).toBeUndefined();
     });
+
+    it('(f) coach viewing athlete Routines tab does not see Edit or Delete for routines owned by athlete', async () => {
+      mockUser.id = 'user-coach-1';
+      mockCoachState.isCoach = true;
+      mockCoachState.selectedAthleteId = 'user-athlete-1';
+
+      const mockAthleteTemplate: RoutineTemplate = {
+        id: 'tpl-athlete-owned-1',
+        user_id: 'user-athlete-1',
+        name: "Athlete's Custom Routine",
+        is_master: false,
+        assigned_to: null,
+        days_of_week: ['Mon'],
+        exercises: [
+          {
+            id: 'te-a1',
+            template_id: 'tpl-athlete-owned-1',
+            exercise_id: 'ex-bench',
+            order_index: 0,
+            target_sets: 3,
+            target_reps: 10,
+            exercise: { name: 'Barbell Bench Press' },
+          },
+        ],
+      };
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockAthleteTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ targetUserId: 'user-athlete-1' });
+
+      expect(await screen.findByText("Athlete's Custom Routine")).toBeDefined();
+      expect(screen.queryByTestId('edit-template-tpl-athlete-owned-1')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-athlete-owned-1')).toBeNull();
+    });
+
+    it('(g) coach viewing athlete Routines tab sees Edit and Delete for routines owned by coach', async () => {
+      mockUser.id = 'user-coach-1';
+      mockCoachState.isCoach = true;
+      mockCoachState.selectedAthleteId = 'user-athlete-1';
+
+      const mockCoachAssignedTemplate: RoutineTemplate = {
+        id: 'tpl-coach-assigned-1',
+        user_id: 'user-coach-1',
+        name: 'Coach Assigned Routine',
+        is_master: false,
+        assigned_to: 'user-athlete-1',
+        days_of_week: ['Tue'],
+        exercises: [
+          {
+            id: 'te-c1',
+            template_id: 'tpl-coach-assigned-1',
+            exercise_id: 'ex-bench',
+            order_index: 0,
+            target_sets: 3,
+            target_reps: 10,
+            exercise: { name: 'Barbell Bench Press' },
+          },
+        ],
+      };
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockCoachAssignedTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ targetUserId: 'user-athlete-1' });
+
+      expect(await screen.findByText('Coach Assigned Routine')).toBeDefined();
+      expect(screen.getByTestId('edit-template-tpl-coach-assigned-1')).toBeDefined();
+      expect(screen.getByTestId('delete-template-tpl-coach-assigned-1')).toBeDefined();
+    });
+
+    it('(h) athlete viewing Routines tab does not see Edit or Delete for routines assigned by coach, but sees Duplicate & Customize', async () => {
+      mockUser.id = 'user-athlete-1';
+      mockCoachState.isCoach = false;
+      mockCoachState.selectedAthleteId = null;
+
+      const mockCoachAssignedTemplate: RoutineTemplate = {
+        id: 'tpl-coach-assigned-2',
+        user_id: 'user-coach-1',
+        name: 'Coach Program for Athlete',
+        is_master: false,
+        assigned_to: 'user-athlete-1',
+        days_of_week: ['Wed'],
+        exercises: [
+          {
+            id: 'te-c2',
+            template_id: 'tpl-coach-assigned-2',
+            exercise_id: 'ex-bench',
+            order_index: 0,
+            target_sets: 3,
+            target_reps: 10,
+            exercise: { name: 'Barbell Bench Press' },
+          },
+        ],
+      };
+
+      (supabase.rpc as any).mockImplementation((fn: string) => {
+        if (fn === 'get_routine_catalog') {
+          return Promise.resolve({ data: [mockCoachAssignedTemplate], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      renderComponent({ targetUserId: 'user-athlete-1' });
+
+      expect(await screen.findByText('Coach Program for Athlete')).toBeDefined();
+      expect(screen.queryByTestId('edit-template-tpl-coach-assigned-2')).toBeNull();
+      expect(screen.queryByTestId('delete-template-tpl-coach-assigned-2')).toBeNull();
+      expect(screen.getByTestId('fork-template-tpl-coach-assigned-2')).toBeDefined();
+    });
   });
 });
