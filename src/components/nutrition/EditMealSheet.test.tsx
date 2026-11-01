@@ -193,6 +193,32 @@ describe('EditMealSheet', () => {
     expect(screen.getByTestId('save-edit-meal-btn')).toBeDisabled();
   });
 
+  it('Escape inside the add-item form cancels the add-item form and keeps the sheet open', () => {
+    const client = createClient();
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={client}>
+        <EditMealSheet isOpen={true} meal={meal([component()])} onClose={onClose} />
+      </QueryClientProvider>
+    );
+
+    fireEvent.click(screen.getByTestId('add-item-button'));
+    fireEvent.click(screen.getByTestId('enter-manually-button'));
+
+    expect(screen.getByTestId('add-item-form')).toBeInTheDocument();
+    const nameInput = screen.getByTestId('add-item-name-input');
+    fireEvent.change(nameInput, { target: { value: 'Avocado' } });
+    fireEvent.keyDown(nameInput, { key: 'Escape' });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByTestId('add-item-form')).toBeNull();
+
+    // Subsequent Escape closes the sheet (draft is not dirty)
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('Scale x0.5 marks the draft dirty, scale x1 makes it clean again, and Save writes the scaled item', async () => {
     const client = createClient();
     render(

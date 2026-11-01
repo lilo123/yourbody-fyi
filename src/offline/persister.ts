@@ -2,6 +2,7 @@ import type { Persister, PersistedClient } from '@tanstack/react-query-persist-c
 import type { Query } from '@tanstack/react-query';
 import { getOfflineDb, isDbClosedError } from './db';
 import { queryKeys } from '../lib/queryKeys';
+import { getLocalDateStr } from '../utils/date';
 
 export const PERSIST_BUSTER = 'rq-v1';
 export const PERSIST_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000; // 8 days
@@ -31,7 +32,7 @@ export function getCivilDateInTz(date: Date = new Date(), timeZone?: string): st
       // fallback if invalid timezone
     }
   }
-  return date.toISOString().slice(0, 10);
+  return getLocalDateStr(date);
 }
 
 export function getCivilDayDifference(targetDateStr: string, baseDateStr: string): number {

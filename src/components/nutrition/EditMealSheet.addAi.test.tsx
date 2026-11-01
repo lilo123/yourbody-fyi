@@ -209,4 +209,64 @@ describe('EditMealSheet Add Items with AI', () => {
     // Sheet remains closed without errors
     expect(screen.queryByTestId('edit-meal-sheet')).toBeNull();
   });
+
+  it('adding item to single-item meal resyncs serving to 1 serving on save', async () => {
+    const client = createClient();
+    const currentMeal = sampleMeal([component()], {
+      serving_size: 200,
+      serving_unit: 'g',
+    });
+    const onClose = vi.fn();
+
+    (supabase.functions.invoke as any).mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            name: 'Baked Potato',
+            portion: '1 medium',
+            quantity: 1,
+            unit: 'unit',
+            calories: 160,
+            protein: 4,
+            carbs: 37,
+            fat: 0.2,
+            fiber: 4,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <EditMealSheet
+          isOpen={true}
+          meal={currentMeal}
+          onClose={onClose}
+        />
+      </QueryClientProvider>
+    );
+
+    // Open composer and add item
+    fireEvent.click(screen.getByTestId('add-item-button'));
+    const textarea = screen.getByPlaceholderText('e.g. a banana and 200 ml oat milk');
+    fireEvent.change(textarea, { target: { value: '1 baked potato' } });
+    fireEvent.click(screen.getByTestId('analyze-items-button'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('add-items-composer')).toBeNull();
+      expect(screen.getByTestId('staged-meal-card').textContent).toContain('Baked Potato');
+    });
+
+    // Save changes
+    fireEvent.click(screen.getByTestId('save-edit-meal-btn'));
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    const payload = mockUpdate.mock.calls[0][0];
+    expect(payload.serving_size).toBe(1);
+    expect(payload.serving_unit).toBe('serving');
+  });
 });
