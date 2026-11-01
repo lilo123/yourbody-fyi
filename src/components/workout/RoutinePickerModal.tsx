@@ -138,11 +138,12 @@ export const RoutinePickerModal: React.FC<RoutinePickerModalProps> = ({
       ? hasLoadedCatalog
       : (data !== undefined || (Boolean(targetUserId && isValidUUID(targetUserId)) && customTemplates.length > 0));
   const canUseDefaults = !isCatalogPending;
+  const catalogToCheck = templatesToDisplay.length > 0 ? templatesToDisplay : customTemplates;
   const fallbackDefaults = canUseDefaults
     ? defaultTemplates.filter(
         (defaultTemplate) =>
           !seenCustomNames.has(defaultTemplate.name.trim().toLowerCase()) &&
-          !isDefaultRoutineHidden(defaultTemplate.name, customTemplates, resolvedHiddenNames, isLoaded)
+          !isDefaultRoutineHidden(defaultTemplate.name, catalogToCheck, resolvedHiddenNames, isLoaded, targetUserId)
       )
     : [];
 

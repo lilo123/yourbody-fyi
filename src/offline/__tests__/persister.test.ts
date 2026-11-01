@@ -13,6 +13,7 @@ import { closeAllOfflineDbs, deleteOfflineDb } from '../db';
 import { QueryClient, type Query } from '@tanstack/react-query';
 import type { PersistedClient } from '@tanstack/react-query-persist-client';
 import { queryKeys } from '../../lib/queryKeys';
+import { getLocalDateStr } from '../../utils/date';
 
 describe('Cache Persister & Whitelist (§A3, §A9, §D)', () => {
   const userId = 'user-persist-1';
@@ -109,6 +110,32 @@ describe('Cache Persister & Whitelist (§A3, §A9, §D)', () => {
       expect(shouldDehydrateQuery(createMockQuery(['nutrition_logs', userId, minus8, tz]))).toBe(false);
       expect(shouldDehydrateQuery(createMockQuery(['nutrition_logs', userId, plus1, tz]))).toBe(true);
       expect(shouldDehydrateQuery(createMockQuery(['nutrition_logs', userId, plus2, tz]))).toBe(false);
+    });
+
+    it('uses local civil date for no-timezone fallback in evening west of UTC', () => {
+      // In America/New_York (UTC-4 EDT): 2026-11-01T00:30:00Z is 20:30 EDT on 2026-10-31
+      const eveningInstant = new Date('2026-11-01T00:30:00.000Z');
+      const expectedCivilDate = getLocalDateStr(eveningInstant);
+      expect(getCivilDateInTz(eveningInstant, undefined)).toBe(expectedCivilDate);
+    });
+
+    it('preserves today-7 in shouldDehydrateQuery when logged in evening without explicit tz', () => {
+      vi.useFakeTimers();
+      try {
+        const eveningInstant = new Date('2026-11-01T00:30:00.000Z');
+        vi.setSystemTime(eveningInstant);
+
+        const localToday = getLocalDateStr(eveningInstant);
+        const [year, month, day] = localToday.split('-').map(Number);
+        const sevenDaysAgo = new Date(year, month - 1, day - 7);
+        const sevenDaysAgoStr = getLocalDateStr(sevenDaysAgo);
+
+        // Query key without explicit timezone: ['nutrition_logs', userId, dateStr]
+        const q7 = createMockQuery(['nutrition_logs', userId, sevenDaysAgoStr]);
+        expect(shouldDehydrateQuery(q7)).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

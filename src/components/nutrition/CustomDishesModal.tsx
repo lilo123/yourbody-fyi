@@ -8,6 +8,7 @@ import { CustomDishEditor } from './CustomDishEditor';
 import { NotesField } from './NotesField';
 import { useModalA11y } from '../../hooks/useModalA11y';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { StatusBanner } from '../common/StatusBanner';
 
 export interface CustomDishesModalProps {
   isOpen: boolean;
@@ -46,6 +47,7 @@ export interface CustomDishesModalProps {
   isDeleting: boolean;
   customDishes: CustomDish[];
   onOpenEditDishModal: (dish: CustomDish) => void;
+  saveError?: string | null;
 }
 
 export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
@@ -64,6 +66,7 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
   isDeleting,
   customDishes,
   onOpenEditDishModal,
+  saveError,
 }) => {
   const baseId = useId();
   const nameId = `${baseId}-dish-name`;
@@ -99,6 +102,14 @@ export const CustomDishesModal: React.FC<CustomDishesModalProps> = memo(({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {saveError && (
+          <StatusBanner
+            message={saveError}
+            tone="error"
+            testId="custom-dish-save-error"
+          />
+        )}
 
         <form onSubmit={onSaveDish} className="space-y-3">
           <div>
